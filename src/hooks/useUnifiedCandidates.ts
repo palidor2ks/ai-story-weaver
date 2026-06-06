@@ -74,7 +74,12 @@ const buildCandidate = (
   const api = rep ?? civic;
 
   const name = db?.name ?? api?.name ?? 'Unknown';
-  const office = db?.office ?? api?.office ?? '';
+  // The civic feed is the live authority on whether someone still holds office.
+  // When it explicitly marks a federal executive as "Former …" (President/VP
+  // who left office), trust that label — and the not-incumbent flag — over a
+  // stale DB row that may still read "President" / incumbent from their term.
+  const civicMarksFormer = !!civic?.office && /^former\b/i.test(civic.office);
+  const office = (civicMarksFormer ? civic!.office : db?.office) ?? api?.office ?? '';
   const party = (db?.party ?? api?.party ?? 'Other') as Candidate['party'];
   const state = db?.state ?? api?.state ?? '';
   const district = db?.district ?? api?.district ?? undefined;
@@ -95,7 +100,7 @@ const buildCandidate = (
   const coverageTier = (db?.coverage_tier ?? apiExtra?.coverage_tier ?? 'tier_3') as CoverageTier;
   const confidence = (db?.confidence ?? apiExtra?.confidence ?? 'medium') as ConfidenceLevel;
 
-  const isIncumbent = db?.is_incumbent ?? api?.is_incumbent ?? true;
+  const isIncumbent = civicMarksFormer ? false : (db?.is_incumbent ?? api?.is_incumbent ?? true);
 
   let level: CandidateLevel = 'federal';
   if (civic) level = civicLevelToGovLevel(civic.level);
@@ -139,6 +144,8 @@ export interface UnifiedCandidatesResult {
   myReps: Candidate[];
   congress: Candidate[];
   federalExec: Candidate[];
+  /** Recent former Presidents & VPs — surfaced in the directory, not "my reps". */
+  formerExec: Candidate[];
   stateExec: Candidate[];
   stateLeg: Candidate[];
   local: Candidate[];
@@ -170,14 +177,15 @@ export const useUnifiedCandidates = ({
 
   const userReps = repsData?.representatives ?? [];
   const federalExecRaw = civicData?.federalExecutive ?? [];
+  const formerExecRaw = civicData?.formerFederalExecutive ?? [];
   const stateExecRaw = civicData?.stateExecutive ?? [];
   const stateLegRaw = civicData?.stateLegislative ?? [];
   const localRaw = civicData?.local ?? [];
 
   // Combined civic list, memoized so downstream useMemos don't churn
   const civicAll = useMemo(
-    () => [...federalExecRaw, ...stateExecRaw, ...stateLegRaw, ...localRaw],
-    [federalExecRaw, stateExecRaw, stateLegRaw, localRaw],
+    () => [...federalExecRaw, ...formerExecRaw, ...stateExecRaw, ...stateLegRaw, ...localRaw],
+    [federalExecRaw, formerExecRaw, stateExecRaw, stateLegRaw, localRaw],
   );
 
   // Build O(1) lookup maps once per data change
@@ -295,6 +303,7 @@ export const useUnifiedCandidates = ({
     };
 
     const federalExec = buildCivicGroup(federalExecRaw);
+    const formerExec = buildCivicGroup(formerExecRaw);
     const stateExec = buildCivicGroup(stateExecRaw);
     const stateLeg = buildCivicGroup(stateLegRaw);
     const local = buildCivicGroup(localRaw);
@@ -305,7 +314,7 @@ export const useUnifiedCandidates = ({
     // DB-only candidates: in DB but not matched by id or name to any above
     const knownIds = new Set<string>();
     const knownNames = new Set<string>();
-    for (const c of [...congressList, ...federalExec, ...stateExec, ...stateLeg, ...local]) {
+    for (const c of [...congressList, ...federalExec, ...formerExec, ...stateExec, ...stateLeg, ...local]) {
       knownIds.add(c.id);
       knownNames.add(nameKey(c.name, c.office));
     }
@@ -339,6 +348,7 @@ export const useUnifiedCandidates = ({
     for (const c of dbOnly) push(c);
     for (const c of congressList) push(c);
     for (const c of federalExec) push(c);
+    for (const c of formerExec) push(c);
     for (const c of stateExec) push(c);
     for (const c of stateLeg) push(c);
     for (const c of local) push(c);
@@ -357,6 +367,7 @@ export const useUnifiedCandidates = ({
       myReps,
       congress: congressList,
       federalExec,
+      formerExec,
       stateExec,
       stateLeg,
       local,
@@ -373,6 +384,7 @@ export const useUnifiedCandidates = ({
     allPoliticians,
     userReps,
     federalExecRaw,
+    formerExecRaw,
     stateExecRaw,
     stateLegRaw,
     localRaw,

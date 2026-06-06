@@ -87,6 +87,7 @@ export const Candidates = () => {
 
   const allCandidates = unified.all;
   const federalExecutiveCandidates = unified.federalExec;
+  const formerExecutiveCandidates = unified.formerExec;
   const stateExecutiveCandidates = unified.stateExec;
   const stateLegislativeCandidates = unified.stateLeg;
   const localCandidates = unified.local;
@@ -125,7 +126,7 @@ export const Candidates = () => {
       case 'my-reps':
         return myRepsCombined;
       case 'executive':
-        return [...federalExecutiveCandidates, ...stateExecutiveCandidates];
+        return [...federalExecutiveCandidates, ...formerExecutiveCandidates, ...stateExecutiveCandidates];
       case 'senators':
         return allCandidates.filter(c => normalizeOfficeName(c.office) === 'U.S. Senate');
       case 'representatives':
@@ -138,7 +139,7 @@ export const Candidates = () => {
       default:
         return allCandidates;
     }
-  }, [activeTab, myRepsCombined, federalExecutiveCandidates, stateExecutiveCandidates, stateLegislativeCandidates, localCandidates, allCandidates]);
+  }, [activeTab, myRepsCombined, federalExecutiveCandidates, formerExecutiveCandidates, stateExecutiveCandidates, stateLegislativeCandidates, localCandidates, allCandidates]);
 
   const { isHidden } = useHiddenStates();
 
@@ -234,7 +235,7 @@ export const Candidates = () => {
   const reposLoading = unified.civicLoading || unified.repsLoading;
 
   // Count for tabs
-  const executiveCount = federalExecutiveCandidates.length + stateExecutiveCandidates.length;
+  const executiveCount = federalExecutiveCandidates.length + formerExecutiveCandidates.length + stateExecutiveCandidates.length;
   const stateCount = stateExecutiveCandidates.length + stateLegislativeCandidates.length;
   const localCount = localCandidates.length;
 

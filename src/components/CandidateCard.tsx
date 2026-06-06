@@ -56,6 +56,9 @@ export const CandidateCard = ({
   // Incumbency + transition status from candidate (with defaults)
   const isIncumbent = candidate.isIncumbent ?? true;
   const transitionStatus = candidate.transitionStatus;
+  // Former office holders (e.g. "Former President") are flagged via their office
+  // label so the badge reads "Former" rather than the misleading "Challenger".
+  const isFormer = /^former\b/i.test(candidate.office ?? '');
 
   const handleCardClick = (e: React.MouseEvent) => {
     if (compareMode && onToggleSelect) {
@@ -145,12 +148,14 @@ export const CandidateCard = ({
                   variant="outline"
                   className={cn(
                     "h-5 px-2 py-0 text-[10px] font-semibold",
-                    isIncumbent
-                      ? "border-green-500/40 bg-green-500/10 text-green-600"
-                      : "border-border bg-muted text-muted-foreground"
+                    isFormer
+                      ? "border-amber-500/40 bg-amber-500/10 text-amber-600"
+                      : isIncumbent
+                        ? "border-green-500/40 bg-green-500/10 text-green-600"
+                        : "border-border bg-muted text-muted-foreground"
                   )}
                 >
-                  {isIncumbent ? 'Incumbent' : 'Challenger'}
+                  {isFormer ? 'Former' : isIncumbent ? 'Incumbent' : 'Challenger'}
                 </Badge>
               </div>
 
