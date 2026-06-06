@@ -47,6 +47,7 @@ const SocialHandles = lazy(() => import("./pages/admin/SocialHandles"));
 const StatCardRender = lazy(() => import("./pages/StatCardRender"));
 const SocialPosts = lazy(() => import("./pages/admin/SocialPosts"));
 const Onboarding = lazy(() => import("./pages/Onboarding").then((m) => ({ default: m.Onboarding })));
+const PoliticalCompassTest = lazy(() => import("./pages/PoliticalCompassTest"));
 
 // Root route: route users based on auth + onboarding status
 const RootRedirect = () => {
@@ -152,6 +153,7 @@ const AppRoutes = () => (
       <Route path="/onboarding" element={<RouteGuard requireAuth requireOnboarding={false}><Onboarding /></RouteGuard>} />
       <Route path="/results" element={<RouteGuard requireAuth requireOnboarding><QuizResults /></RouteGuard>} />
       <Route path="/feed" element={<Navigate to="/profile" replace />} />
+      <Route path="/political-compass-test" element={<RouteGuard requireAuth={false} requireOnboarding={false}><PoliticalCompassTest /></RouteGuard>} />
       <Route path="/candidates" element={<RouteGuard requireAuth={false} requireOnboarding={false}><Candidates /></RouteGuard>} />
       <Route path="/donors" element={<RouteGuard requireAuth={false} requireOnboarding={false}><Donors /></RouteGuard>} />
       <Route path="/committees" element={<RouteGuard requireAuth={false} requireOnboarding={false}><Committees /></RouteGuard>} />
