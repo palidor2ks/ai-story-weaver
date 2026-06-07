@@ -47,6 +47,7 @@ const SUBJECT_TYPE_LABELS: Record<string, string> = {
   ai_analysis: 'AI Analysis',
   committee_spender: 'Top PAC Spender',
   top_donor: 'Top Donor',
+  race_comparison: 'Race Comparison',
 };
 const subjectTypeLabel = (t: string | null | undefined): string => SUBJECT_TYPE_LABELS[t ?? ''] ?? 'Rep Profile';
 
@@ -54,7 +55,7 @@ const subjectTypeLabel = (t: string | null | undefined): string => SUBJECT_TYPE_
 // admin "Render" button renders them via the render-social-card function instead
 // of capturing a DOM node.
 const isServerRenderedType = (t: string | null | undefined): boolean =>
-  t === 'committee_spender' || t === 'top_donor';
+  t === 'committee_spender' || t === 'top_donor' || t === 'race_comparison';
 
 interface PlatformRow {
   id: string;
@@ -138,6 +139,124 @@ function usePlatformRows(postIds: string[]) {
       return (data ?? []) as PlatformRow[];
     },
   });
+}
+
+interface RaceOption {
+  state: string;
+  office: string;
+  year: number;
+  candidate_count: number;
+}
+
+function useRaceOptions() {
+  return useQuery({
+    queryKey: ['race-options'],
+    queryFn: async (): Promise<RaceOption[]> => {
+      const { data, error } = await supabase.rpc('get_race_options');
+      if (error) throw error;
+      return (data ?? []) as RaceOption[];
+    },
+    staleTime: 5 * 60_000,
+  });
+}
+
+// Manual "Race Comparison" card generator: pick a state, office/district and year,
+// choose a head-to-head mode, and draft a comparison card for that race.
+function RaceComparisonGenerator() {
+  const qc = useQueryClient();
+  const { data: races, isLoading } = useRaceOptions();
+  const [state, setState] = useState<string>('');
+  const [office, setOffice] = useState<string>('');
+  const [year, setYear] = useState<string>('');
+  const [mode, setMode] = useState<'dvr' | 'money'>('dvr');
+
+  const states = useMemo(
+    () => Array.from(new Set((races ?? []).map((r) => r.state))).sort(),
+    [races],
+  );
+  const offices = useMemo(
+    () => Array.from(new Set((races ?? []).filter((r) => r.state === state).map((r) => r.office))).sort(),
+    [races, state],
+  );
+  const years = useMemo(
+    () => Array.from(new Set((races ?? []).filter((r) => r.state === state && r.office === office).map((r) => r.year))).sort(),
+    [races, state, office],
+  );
+
+  const generate = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke('draft-race-comparison', {
+        body: { state, office, year: Number(year), mode },
+      });
+      if (error) throw error;
+      if ((data as { error?: string } | undefined)?.error) throw new Error(JSON.stringify((data as { error: unknown }).error));
+      return data as { ok?: boolean; created?: { label: string }; skipped?: string };
+    },
+    onSuccess: (j) => {
+      if (j.ok && j.created) toast.success(`Race draft created — ${j.created.label}`);
+      else toast.warning(`No draft created — ${(j.skipped ?? 'unknown').replace(/_/g, ' ')}`);
+      qc.invalidateQueries({ queryKey: ['social-posts'] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const ready = !!state && !!office && !!year;
+
+  return (
+    <div className="space-y-3 rounded-lg border p-4">
+      <div>
+        <p className="text-sm font-medium">Race Comparison</p>
+        <p className="text-sm text-muted-foreground">
+          Pick a state, office/district and election year to draft a head-to-head card comparing the race&apos;s
+          two leading candidates — money raised, who&apos;s funding them and what those donors care about, outside
+          spending, and where they stand.
+        </p>
+      </div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div>
+          <Label className="text-xs">State</Label>
+          <Select value={state} onValueChange={(v) => { setState(v); setOffice(''); setYear(''); }}>
+            <SelectTrigger><SelectValue placeholder={isLoading ? 'Loading…' : 'State'} /></SelectTrigger>
+            <SelectContent>
+              {states.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="text-xs">Office / District</Label>
+          <Select value={office} onValueChange={(v) => { setOffice(v); setYear(''); }} disabled={!state}>
+            <SelectTrigger><SelectValue placeholder="Office" /></SelectTrigger>
+            <SelectContent>
+              {offices.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="text-xs">Year</Label>
+          <Select value={year} onValueChange={setYear} disabled={!office}>
+            <SelectTrigger><SelectValue placeholder="Year" /></SelectTrigger>
+            <SelectContent>
+              {years.map((y) => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="text-xs">Compare</Label>
+          <Select value={mode} onValueChange={(v) => setMode(v as 'dvr' | 'money')}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="dvr">Leading D vs R</SelectItem>
+              <SelectItem value="money">Top 2 by money</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <Button variant="outline" onClick={() => generate.mutate()} disabled={!ready || generate.isPending}>
+        {generate.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Play className="h-4 w-4 mr-2" />}
+        Generate Race Comparison
+      </Button>
+    </div>
+  );
 }
 
 // ---------- Subcomponents ----------
@@ -284,6 +403,7 @@ function SettingsTab() {
             ))}
           </div>
         </div>
+        <RaceComparisonGenerator />
       </div>
     </div>
   );

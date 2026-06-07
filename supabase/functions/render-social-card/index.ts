@@ -49,7 +49,7 @@ Deno.serve(async (req) => {
 
     const { data: post } = await admin
       .from('social_posts')
-      .select('id, subject_id, subject_label, subject_type')
+      .select('id, subject_id, subject_label, subject_type, stat_payload')
       .eq('id', parsed.data.post_id)
       .maybeSingle();
     if (!post) return json({ error: 'post_not_found' }, 404);

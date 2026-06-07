@@ -159,6 +159,8 @@ project_id = "ornnzinjrcyigazecctf"
     verify_jwt = true
   [functions.pick-daily-stat-card]
     verify_jwt = false
+  [functions.draft-race-comparison]
+    verify_jwt = false
   [functions.generate-social-caption]
     verify_jwt = true
   [functions.compose-candidate-caption]

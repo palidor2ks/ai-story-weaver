@@ -19,6 +19,7 @@ import {
 } from './finance-caption.ts';
 import { type DonorCardFacts, fetchDonorCardFacts } from './donor-card.ts';
 import { type CommitteeCardFacts, fetchCommitteeCardFacts } from './committee-card.ts';
+import { type RaceCardFacts, type RaceCandidateFacts, type RaceParams, fetchRaceCardFacts, raceTitle, raceCardDescription } from './race-card.ts';
 
 const RESVG_WASM_URL = 'https://esm.sh/@resvg/resvg-wasm@2.6.2/index_bg.wasm';
 const CARD_SIZE = 1080;
@@ -511,6 +512,162 @@ export async function renderCommitteeSpenderCardPng(f: CommitteeCardFacts): Prom
   return rasterize(buildCommitteeSpenderSvg(f));
 }
 
+// ---------- race-comparison card (the manual `race_comparison` post type) ----------
+//
+// A head-to-head between TWO candidates in one election (state + office + year),
+// two columns split by a center "VS" rule. Each column: name + party chip, the
+// big money-raised figure, a funding-character line, outside money for/against,
+// the standout donor (with cause), and the top policy positions. Photos are shown
+// only when BOTH candidates have one (so the layout never looks lopsided).
+
+const fmtScoreLR = (score: number): string => {
+  const r = Math.round(score * 10) / 10;
+  if (r === 0) return 'Center';
+  return r < 0 ? `L${Math.abs(r).toFixed(1)}` : `R${r.toFixed(1)}`;
+};
+
+function raceFundingLine(c: RaceCandidateFacts): string | null {
+  const fu = c.finance?.funding;
+  if (!fu) return null;
+  if (fu.self_funded > 0 && fu.self_funded >= (c.raised ?? 0) * 0.4) return `${fmtMoney(fu.self_funded)} self-funded`;
+  if (fu.pac_pct >= 40) return `${fu.pac_pct}% PAC-funded`;
+  if (fu.small_pct >= 50) return `${fu.small_pct}% small-dollar`;
+  if (fu.large_pct >= 55) return `${fu.large_pct}% large-donor`;
+  return null;
+}
+
+// One candidate column. x0 is the column's left edge; colW its width.
+function raceColumn(c: RaceCandidateFacts, x0: number, colW: number, photo: string | null): string {
+  const cx = x0 + colW / 2;
+  const pColor = partyColor(c.party);
+  const parts: string[] = [];
+
+  // Optional avatar (only when both columns have a photo — caller passes null otherwise).
+  let y = 300;
+  if (photo) {
+    const r = 60;
+    parts.push(
+      `<circle cx="${cx}" cy="${y + r}" r="${r + 5}" fill="none" stroke="${pColor}" stroke-width="5" />
+       <clipPath id="ra${x0}"><circle cx="${cx}" cy="${y + r}" r="${r}" /></clipPath>
+       <image href="${photo}" x="${cx - r}" y="${y}" width="${r * 2}" height="${r * 2}" preserveAspectRatio="xMidYMid slice" clip-path="url(#ra${x0})" />`,
+    );
+    y += r * 2 + 24;
+  }
+
+  // Name (fit to the column width) + party / incumbent line.
+  const name = tidyName(c.name) || c.name;
+  const nameFont = name.length > 22 ? 30 : name.length > 16 ? 36 : 42;
+  parts.push(`<text x="${cx}" y="${y}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="${nameFont}" fill="#f8fafc">${escapeXml(truncate(name, 26))}</text>`);
+  y += 40;
+  const partyLine = `${(c.party || 'Nonpartisan')}${c.incumbent ? ' · Incumbent' : ''}`;
+  parts.push(`<text x="${cx}" y="${y}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="24" fill="${pColor}">${escapeXml(truncate(partyLine, 28))}</text>`);
+  y += 64;
+
+  // Money raised — the column's hook.
+  parts.push(`<text x="${cx}" y="${y}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="22" fill="#94a3b8" letter-spacing="3">RAISED</text>`);
+  y += 58;
+  parts.push(`<text x="${cx}" y="${y}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="60" fill="#22c55e">${escapeXml(fmtMoney(c.raised) ?? '$0')}</text>`);
+  y += 34;
+  const fundLine = raceFundingLine(c);
+  if (fundLine) {
+    parts.push(`<text x="${cx}" y="${y}" text-anchor="middle" font-family="Inter" font-weight="400" font-size="24" fill="#cbd5e1">${escapeXml(fundLine)}</text>`);
+  }
+  y += 44;
+
+  // Outside money for/against (only when present).
+  const sup = c.finance?.ie_support ?? 0;
+  const opp = c.finance?.ie_oppose ?? 0;
+  if (sup > 0 || opp > 0) {
+    parts.push(`<text x="${cx}" y="${y}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="20" fill="#94a3b8" letter-spacing="2">OUTSIDE MONEY</text>`);
+    y += 34;
+    parts.push(`<text x="${cx}" y="${y}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="26" fill="#e2e8f0"><tspan fill="#22c55e">${escapeXml(fmtMoney(sup) ?? '$0')}</tspan> for · <tspan fill="#ef4444">${escapeXml(fmtMoney(opp) ?? '$0')}</tspan> against</text>`);
+    y += 44;
+  }
+
+  // Standout donor + cause chip.
+  const donor = c.top_donors.find((d) => (d.amount ?? 0) > 0);
+  if (donor) {
+    parts.push(`<text x="${cx}" y="${y}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="20" fill="#94a3b8" letter-spacing="2">TOP DONOR</text>`);
+    y += 34;
+    parts.push(`<text x="${cx}" y="${y}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="26" fill="#f8fafc">${escapeXml(truncate(tidyName(donor.name), 24))}</text>`);
+    y += 30;
+    parts.push(`<text x="${cx}" y="${y}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="24" fill="#fbbf24">${escapeXml(fmtMoney(donor.amount) ?? '$0')}</text>`);
+    y += 18;
+    if (donor.cause) {
+      const ch = chip(cx, y, donor.cause, '#60a5fa', 22);
+      parts.push(ch.svg);
+      y += 64;
+    } else {
+      y += 28;
+    }
+  }
+
+  // Top policy positions (topic + L/R score).
+  const positions = c.positions.slice(0, 2);
+  if (positions.length > 0) {
+    parts.push(`<text x="${cx}" y="${y}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="20" fill="#94a3b8" letter-spacing="2">POSITIONS</text>`);
+    y += 34;
+    for (const p of positions) {
+      const sColor = p.score < 0 ? '#3b82f6' : p.score > 0 ? '#ef4444' : '#9ca3af';
+      parts.push(`<text x="${x0 + 16}" y="${y}" font-family="Inter" font-weight="400" font-size="22" fill="#cbd5e1">${escapeXml(truncate(p.topic, 22))}</text>
+        <text x="${x0 + colW - 16}" y="${y}" text-anchor="end" font-family="Inter" font-weight="700" font-size="22" fill="${sColor}">${escapeXml(fmtScoreLR(p.score))}</text>`);
+      y += 36;
+    }
+  }
+
+  return parts.join('\n');
+}
+
+function buildRaceComparisonSvg(f: RaceCardFacts, photos: (string | null)[]): string {
+  const cx = CARD_SIZE / 2;
+  const margin = 64;
+  const colGap = 44;
+  const colW = (CARD_SIZE - margin * 2 - colGap) / 2;
+  const leftX = margin;
+  const rightX = margin + colW + colGap;
+  const title = raceTitle(f);
+  const titleFont = title.length > 28 ? 44 : title.length > 20 ? 54 : 62;
+  const [a, b] = f.candidates;
+
+  return `<svg width="${CARD_SIZE}" height="${CARD_SIZE}" viewBox="0 0 ${CARD_SIZE} ${CARD_SIZE}" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0b1220" />
+      <stop offset="1" stop-color="#111d3a" />
+    </linearGradient>
+  </defs>
+
+  <rect width="${CARD_SIZE}" height="${CARD_SIZE}" fill="url(#bg)" />
+
+  <text x="72" y="96" font-family="Inter" font-weight="700" font-size="40" fill="#f8fafc">PoliPulse</text>
+  <text x="${CARD_SIZE - 72}" y="96" text-anchor="end" font-family="Inter" font-weight="400" font-size="26" fill="#94a3b8">Follow the Money</text>
+
+  <text x="${cx}" y="176" text-anchor="middle" font-family="Inter" font-weight="700" font-size="26" fill="#94a3b8" letter-spacing="4">RACE COMPARISON</text>
+  <text x="${cx}" y="${title.length > 28 ? 240 : 248}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="${titleFont}" fill="#f8fafc">${escapeXml(truncate(title, 36))}</text>
+
+  ${raceColumn(a, leftX, colW, photos[0])}
+  ${raceColumn(b, rightX, colW, photos[1])}
+
+  <line x1="${cx}" y1="288" x2="${cx}" y2="980" stroke="#1f2a44" stroke-width="3" />
+  <circle cx="${cx}" cy="300" r="34" fill="#0f1a30" stroke="#1f2a44" stroke-width="3" />
+  <text x="${cx}" y="310" text-anchor="middle" font-family="Inter" font-weight="700" font-size="26" fill="#fbbf24">VS</text>
+
+  <text x="${cx}" y="1048" text-anchor="middle" font-family="Inter" font-weight="400" font-size="22" fill="#64748b">polipulseapp.com — Follow the money</text>
+</svg>`;
+}
+
+export async function renderRaceComparisonCardPng(f: RaceCardFacts): Promise<Uint8Array> {
+  // Show photos only when BOTH candidates have one, so a one-sided photo never
+  // makes the head-to-head look lopsided.
+  const [a, b] = f.candidates;
+  let photos: (string | null)[] = [null, null];
+  if (a.image_url && b.image_url) {
+    photos = await Promise.all([fetchImageDataUri(a.image_url), fetchImageDataUri(b.image_url)]);
+    if (!photos[0] || !photos[1]) photos = [null, null];
+  }
+  return rasterize(buildRaceComparisonSvg(f, photos));
+}
+
 async function rasterize(svg: string): Promise<Uint8Array> {
   const [regular, bold] = await Promise.all([loadInter(400), loadInter(700)]);
   await ensureWasm();
@@ -566,7 +723,7 @@ export interface RenderedCard {
 // server-side equivalent of the browser's captureAndUpload + render mutation.
 export async function renderAndStoreCard(
   admin: ReturnType<typeof createClient>,
-  post: { id: string; subject_id: string; subject_label: string | null; subject_type?: string | null },
+  post: { id: string; subject_id: string; subject_label: string | null; subject_type?: string | null; stat_payload?: Record<string, unknown> | null },
 ): Promise<RenderedCard> {
   const supaUrl = Deno.env.get('SUPABASE_URL')!;
   const subjectType = post.subject_type ?? 'rep_profile';
@@ -576,7 +733,24 @@ export async function renderAndStoreCard(
   let ogTitle: string;
   let ogDescription: string;
 
-  if (subjectType === 'top_donor') {
+  if (subjectType === 'race_comparison') {
+    // Race head-to-head card: NOT candidate-anchored. The race (state/office/year/mode)
+    // lives in stat_payload; re-fetch verified facts so the card reflects current data.
+    const sp = post.stat_payload ?? {};
+    const params: RaceParams = {
+      state: String(sp.state ?? ''),
+      office: String(sp.office ?? ''),
+      year: Number(sp.year ?? 0),
+      mode: String(sp.mode ?? 'dvr'),
+    };
+    const facts = await fetchRaceCardFacts(admin, params);
+    if (!facts) throw new Error('race_not_found');
+    png = await renderRaceComparisonCardPng(facts);
+    // Deep-link to the better-funded candidate's public profile for the unfurl.
+    targetUrl = `${PUBLIC_SITE_URL}/candidate/${encodeURIComponent(facts.candidates[0].id)}`;
+    ogTitle = (post.subject_label ?? raceTitle(facts)).slice(0, 200);
+    ogDescription = raceCardDescription(facts);
+  } else if (subjectType === 'top_donor') {
     // Donor-ENTITY card: anchored on a donor, NOT a candidate. Never touches the
     // candidates table; deep-links to /donor/:id.
     const facts = await fetchDonorCardFacts(admin, post.subject_id);
