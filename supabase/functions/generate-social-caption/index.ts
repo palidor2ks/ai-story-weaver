@@ -14,6 +14,7 @@ import {
 } from '../_shared/finance-caption.ts';
 import { composeDonorEntityCaption } from '../_shared/donor-card.ts';
 import { composeCommitteeSpenderCaption } from '../_shared/committee-card.ts';
+import { composeRaceComparisonCaption } from '../_shared/race-card.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -79,6 +80,20 @@ Deno.serve(async (req) => {
       const c = await composeCommitteeSpenderCaption(admin, aiKey, post.subject_id, platform, post.subject_label ?? null);
       if (c) return await save(c.caption, c.source);
       return await save(`${post.subject_label ?? 'This committee'} on PoliPulse. Follow the money.`, 'static_committee');
+    }
+
+    // Race-comparison card: NOT candidate-anchored. The race (state/office/year/mode)
+    // lives in stat_payload; compose a "follow the money" comparison caption and
+    // return early (subject_id is a synthetic race key, not a candidate id).
+    if (post.subject_type === 'race_comparison') {
+      const r = await composeRaceComparisonCaption(admin, aiKey, {
+        state: String(stat.state ?? ''),
+        office: String(stat.office ?? ''),
+        year: Number(stat.year ?? 0),
+        mode: String(stat.mode ?? 'dvr'),
+      }, platform);
+      if (r) return await save(r.caption, r.source);
+      return await save(`${post.subject_label ?? 'This race'} on PoliPulse. Follow the money.`, 'static_race');
     }
 
     // The remaining rotation types are candidate-anchored, so build the shared meta once.
