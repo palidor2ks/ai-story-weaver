@@ -17,8 +17,18 @@ CREATE POLICY ny_contributions_admin_read ON public.ny_contributions
   FOR SELECT TO authenticated
   USING (public.has_role(auth.uid(), 'admin'));
 
--- claude_migration_log: enable RLS and admin-only read
-ALTER TABLE public.claude_migration_log ENABLE ROW LEVEL SECURITY;
-CREATE POLICY claude_migration_log_admin_read ON public.claude_migration_log
-  FOR SELECT TO authenticated
-  USING (public.has_role(auth.uid(), 'admin'));
+-- claude_migration_log: enable RLS and admin-only read.
+-- This table is provisioned out-of-band (by the migration tooling) and is NOT
+-- created by any migration, so it is absent on fresh/preview databases. Guard
+-- the RLS + policy so the migration is a no-op where the table doesn't exist
+-- and still locks it down where it does (prod). DROP first keeps it idempotent.
+DO $$
+BEGIN
+  IF to_regclass('public.claude_migration_log') IS NOT NULL THEN
+    ALTER TABLE public.claude_migration_log ENABLE ROW LEVEL SECURITY;
+    DROP POLICY IF EXISTS claude_migration_log_admin_read ON public.claude_migration_log;
+    CREATE POLICY claude_migration_log_admin_read ON public.claude_migration_log
+      FOR SELECT TO authenticated
+      USING (public.has_role(auth.uid(), 'admin'));
+  END IF;
+END $$;
