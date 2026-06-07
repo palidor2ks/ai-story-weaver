@@ -5,6 +5,19 @@ import { CoverageTier, ConfidenceLevel } from '@/lib/scoreFormat';
 export type CandidateSource = 'federal' | 'civic';
 export type GovernmentLevel = 'federal_executive' | 'federal_legislative' | 'state_executive' | 'state_legislative' | 'local' | 'unknown';
 
+// District values are stored inconsistently across sources — some carry leading
+// zeros ("03") and some don't ("3"). Collapse purely-numeric districts to their
+// canonical zero-stripped form so "03" and "3" are treated as the same value in
+// both the table and the filter. Non-numeric districts (e.g. "At-Large") are
+// preserved as-is.
+export function normalizeDistrict(district: string | null | undefined): string | null {
+  if (district == null) return null;
+  const trimmed = String(district).trim();
+  if (trimmed === '') return null;
+  if (/^\d+$/.test(trimmed)) return String(parseInt(trimmed, 10));
+  return trimmed;
+}
+
 export interface CandidateAnswerCoverage {
   id: string;
   name: string;
@@ -144,7 +157,7 @@ function makeCivicCoverage(
     party: c.party || 'Unknown',
     office: c.office || 'Unknown',
     state: c.state || '',
-    district: c.district ?? null,
+    district: normalizeDistrict(c.district),
     answerCount,
     totalQuestions,
     percentage,
@@ -528,7 +541,7 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
           party: c.party,
           office: c.office,
           state: c.state,
-          district: c.district ?? null,
+          district: normalizeDistrict(c.district),
           answerCount,
           totalQuestions: federalQuestions,
           percentage,
@@ -953,9 +966,11 @@ export function useUniqueDistricts(state?: string) {
       const { data, error } = await query;
       if (error) throw error;
 
-      const districts = [...new Set((data || []).map(c => c.district))]
-        .filter((d): d is string => !!d)
-        .sort(compareDistricts);
+      const districts = [...new Set(
+        (data || [])
+          .map(c => normalizeDistrict(c.district))
+          .filter((d): d is string => !!d)
+      )].sort(compareDistricts);
       return districts;
     },
     staleTime: 60000,
