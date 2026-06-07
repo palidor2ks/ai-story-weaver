@@ -541,6 +541,21 @@ const fmtScoreLR = (score: number): string => {
 const leanColor = (score: number | null | undefined): string =>
   score == null ? '#9ca3af' : score < 0 ? '#3b82f6' : score > 0 ? '#ef4444' : '#9ca3af';
 
+// A mini left–right political spectrum: a blue→grey→red gradient track (fill via
+// the shared `spectrum` gradient) with a marker dot at the score's position on
+// the −10…+10 axis. Returns just the track + centre tick + marker so the caller
+// controls placement; pairs with leanColor for the marker fill.
+function scoreSpectrum(score: number, x0: number, x1: number, cy: number): string {
+  const w = x1 - x0;
+  const s = Math.max(-10, Math.min(10, score));
+  const mx = x0 + ((s + 10) / 20) * w;
+  const h = 12;
+  const midX = x0 + w / 2;
+  return `<rect x="${x0}" y="${cy - h / 2}" width="${w}" height="${h}" rx="${h / 2}" fill="url(#spectrum)" opacity="0.9" />
+    <line x1="${midX}" y1="${cy - h / 2 - 2}" x2="${midX}" y2="${cy + h / 2 + 2}" stroke="#0b1220" stroke-width="2" opacity="0.5" />
+    <circle cx="${mx}" cy="${cy}" r="8" fill="${leanColor(score)}" stroke="#f8fafc" stroke-width="2.5" />`;
+}
+
 function raceFundingLine(c: RaceCandidateFacts): string | null {
   const fu = c.finance?.funding;
   if (!fu) return null;
@@ -645,12 +660,34 @@ function racePositionsGrid(f: RaceCardFacts, top: number, margin: number): strin
 
   const parts: string[] = [];
   parts.push(`<text x="${cx}" y="${top}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="22" fill="#94a3b8" letter-spacing="3">PRIMARY POSITIONS — L MORE LEFT · R MORE RIGHT</text>`);
+
+  // A fixed centre zone holds the topic; each candidate's score becomes a mini
+  // spectrum filling the flank, with a compact number at the outer edge. Bar
+  // geometry is computed once (independent of the score) so every row aligns.
+  const centerHalf = 168;            // half-width of the centred topic zone
+  const labelW = 64;                 // room reserved for the outer numeric score
+  const gap = 14;
+  const leftBarX0 = margin + labelW;
+  const leftBarX1 = cx - centerHalf - gap;
+  const rightBarX0 = cx + centerHalf + gap;
+  const rightBarX1 = CARD_SIZE - margin - labelW;
+
   let y = top + 46;
   const step = 38;
   for (const r of rows) {
-    parts.push(`<text x="${margin}" y="${y}" font-family="Inter" font-weight="700" font-size="26" fill="${leanColor(r.a)}">${escapeXml(r.a != null ? fmtScoreLR(r.a) : '—')}</text>
-      <text x="${cx}" y="${y}" text-anchor="middle" font-family="Inter" font-weight="400" font-size="24" fill="#e2e8f0">${escapeXml(truncate(r.topic, 30))}</text>
-      <text x="${CARD_SIZE - margin}" y="${y}" text-anchor="end" font-family="Inter" font-weight="700" font-size="26" fill="${leanColor(r.b)}">${escapeXml(r.b != null ? fmtScoreLR(r.b) : '—')}</text>`);
+    const cy = y - 8;                // visual centre of the row's cap height
+    // Left candidate: number at the outer-left edge, spectrum inboard.
+    parts.push(r.a != null
+      ? `<text x="${margin}" y="${y}" font-family="Inter" font-weight="700" font-size="20" fill="${leanColor(r.a)}">${escapeXml(fmtScoreLR(r.a))}</text>
+        ${scoreSpectrum(r.a, leftBarX0, leftBarX1, cy)}`
+      : `<text x="${(leftBarX0 + leftBarX1) / 2}" y="${y}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="22" fill="#9ca3af">—</text>`);
+    // Topic, centred between the two spectrums.
+    parts.push(`<text x="${cx}" y="${y}" text-anchor="middle" font-family="Inter" font-weight="400" font-size="22" fill="#e2e8f0">${escapeXml(truncate(r.topic, 30))}</text>`);
+    // Right candidate: spectrum inboard, number at the outer-right edge.
+    parts.push(r.b != null
+      ? `${scoreSpectrum(r.b, rightBarX0, rightBarX1, cy)}
+        <text x="${CARD_SIZE - margin}" y="${y}" text-anchor="end" font-family="Inter" font-weight="700" font-size="20" fill="${leanColor(r.b)}">${escapeXml(fmtScoreLR(r.b))}</text>`
+      : `<text x="${(rightBarX0 + rightBarX1) / 2}" y="${y}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="22" fill="#9ca3af">—</text>`);
     y += step;
   }
   return parts.join('\n');
@@ -704,6 +741,11 @@ function buildRaceComparisonSvg(f: RaceCardFacts, analysis: string | null): stri
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#0b1220" />
       <stop offset="1" stop-color="#111d3a" />
+    </linearGradient>
+    <linearGradient id="spectrum" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#3b82f6" />
+      <stop offset="0.5" stop-color="#64748b" />
+      <stop offset="1" stop-color="#ef4444" />
     </linearGradient>
   </defs>
 
