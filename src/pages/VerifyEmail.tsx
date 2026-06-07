@@ -49,6 +49,7 @@ export default function VerifyEmail() {
         path="/verify-email"
         noIndex
       />
+      <h1 className="sr-only">Verify your email address</h1>
       <Card className="w-full max-w-md shadow-elevated">
         <CardHeader className="text-center">
           <div className="w-14 h-14 rounded-2xl bg-primary/10 mx-auto mb-3 flex items-center justify-center">
