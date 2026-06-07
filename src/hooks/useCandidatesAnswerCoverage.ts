@@ -11,6 +11,7 @@ export interface CandidateAnswerCoverage {
   party: string;
   office: string;
   state: string;
+  district: string | null;
   answerCount: number;
   totalQuestions: number;
   percentage: number;
@@ -130,7 +131,7 @@ function inferLevel(office: string, source: CandidateSource): GovernmentLevel {
 }
 
 function makeCivicCoverage(
-  c: { candidate_id: string; name: string | null; party: string | null; office: string | null; state: string | null; overall_score: number | null; coverage_tier: string | null; confidence: string | null },
+  c: { candidate_id: string; name: string | null; party: string | null; office: string | null; state: string | null; district?: string | null; overall_score: number | null; coverage_tier: string | null; confidence: string | null },
   answerCount: number,
   sourcedCount: number,
   totalQuestions: number,
@@ -143,6 +144,7 @@ function makeCivicCoverage(
     party: c.party || 'Unknown',
     office: c.office || 'Unknown',
     state: c.state || '',
+    district: c.district ?? null,
     answerCount,
     totalQuestions,
     percentage,
@@ -219,7 +221,7 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
       // Get candidates with coverage tier and confidence
       let candidatesQuery = supabase
         .from('candidates')
-        .select('id, name, party, office, state, overall_score, coverage_tier, confidence, fec_candidate_id, fec_committee_id, last_donor_sync')
+        .select('id, name, party, office, state, district, overall_score, coverage_tier, confidence, fec_candidate_id, fec_committee_id, last_donor_sync')
         .order('name', { ascending: true });
 
       if (filters.party && filters.party !== 'all') {
@@ -526,6 +528,7 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
           party: c.party,
           office: c.office,
           state: c.state,
+          district: c.district ?? null,
           answerCount,
           totalQuestions: federalQuestions,
           percentage,
@@ -621,7 +624,7 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
           : ['openstates_', 'nj_', 'ny_', 'ca_', 'tx_', 'fl_', 'pa_', 'exec_'];
         let civicQuery = supabase
           .from('candidate_overrides')
-          .select('candidate_id, name, party, office, state, overall_score, coverage_tier, confidence')
+          .select('candidate_id, name, party, office, state, district, overall_score, coverage_tier, confidence')
           .not('name', 'is', null)
           .or(overridePrefixes.map(p => `candidate_id.like.${p}%`).join(','));
 
@@ -679,7 +682,7 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
       if (!skipCivic) {
         let staticQuery = supabase
           .from('static_officials')
-          .select('id, name, party, office, state, level, coverage_tier, confidence')
+          .select('id, name, party, office, state, district, level, coverage_tier, confidence')
           .eq('is_active', true);
 
         // When the directory is narrowed to Federal Executive, only that level's
@@ -745,6 +748,7 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
                 party: s.party,
                 office: s.office,
                 state: s.state,
+                district: s.district ?? null,
                 overall_score: ov?.overall_score ?? null,
                 coverage_tier: ov?.coverage_tier ?? s.coverage_tier,
                 confidence: ov?.confidence ?? s.confidence,
@@ -913,6 +917,46 @@ export function useUniqueStates() {
 
       const states = [...new Set((data || []).map(c => c.state))].filter(Boolean);
       return states;
+    },
+    staleTime: 60000,
+  });
+}
+
+// Sort districts so numeric districts order naturally (1, 2, 10) and named
+// districts (e.g. "At-Large") fall to the end alphabetically.
+function compareDistricts(a: string, b: string): number {
+  const na = Number(a);
+  const nb = Number(b);
+  const aNum = !Number.isNaN(na);
+  const bNum = !Number.isNaN(nb);
+  if (aNum && bNum) return na - nb;
+  if (aNum) return -1;
+  if (bNum) return 1;
+  return a.localeCompare(b);
+}
+
+// Distinct district values for the coverage filter. Optionally scoped to a
+// single state so the dropdown only offers districts that exist there.
+export function useUniqueDistricts(state?: string) {
+  return useQuery({
+    queryKey: ['unique-districts', state ?? 'all'],
+    queryFn: async () => {
+      let query = supabase
+        .from('candidates')
+        .select('district')
+        .not('district', 'is', null);
+
+      if (state && state !== 'all') {
+        query = query.eq('state', state);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      const districts = [...new Set((data || []).map(c => c.district))]
+        .filter((d): d is string => !!d)
+        .sort(compareDistricts);
+      return districts;
     },
     staleTime: 60000,
   });
