@@ -894,6 +894,19 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+    // Auth: a valid cron shared-secret (x-sync-secret, validated against Vault
+    // via a service-role-only RPC) may stand in for an admin JWT, so the
+    // sync-legislator-votes orchestrator can drive this function under pg_cron.
+    let cronAuthorized = false;
+    {
+      const syncSecret = req.headers.get('x-sync-secret');
+      if (syncSecret) {
+        const svc = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+        const { data: ok } = await svc.rpc('check_vote_sync_secret', { p_token: syncSecret });
+        cronAuthorized = ok === true;
+      }
+    }
+    if (!cronAuthorized) {
     // Admin auth check
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
@@ -910,6 +923,7 @@ serve(async (req) => {
     const { data: roleData } = await adminCheckClient.from('user_roles').select('role').eq('user_id', user.id).eq('role', 'admin').maybeSingle();
     if (!roleData) {
       return new Response(JSON.stringify({ error: 'Forbidden: admin role required' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
     }
 
 
