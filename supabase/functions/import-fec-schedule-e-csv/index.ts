@@ -94,17 +94,31 @@ function normalizeRow(row: Record<string, any>) {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   try {
-    const auth = req.headers.get('Authorization') ?? '';
-    const userClient = createClient(SUPABASE_URL, ANON_KEY, { global: { headers: { Authorization: auth } } });
-    const { data: userData } = await userClient.auth.getUser();
-    const user = userData?.user;
-    if (!user) {
-      return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-    }
+    // Auth: a Vault-backed shared secret (x-sync-secret) may stand in for an
+    // admin JWT, so the headless Drive importer can drive this without an
+    // expiring user token. The existing admin-JWT path is unchanged.
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
-    const { data: isAdmin } = await admin.rpc('has_role', { _user_id: user.id, _role: 'admin' });
-    if (!isAdmin) {
-      return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    let user: { id: string } | null = null;
+    let secretAuthorized = false;
+    {
+      const syncSecret = req.headers.get('x-sync-secret');
+      if (syncSecret) {
+        const { data: ok } = await admin.rpc('check_import_sync_secret', { p_token: syncSecret });
+        secretAuthorized = ok === true;
+      }
+    }
+    if (!secretAuthorized) {
+      const auth = req.headers.get('Authorization') ?? '';
+      const userClient = createClient(SUPABASE_URL, ANON_KEY, { global: { headers: { Authorization: auth } } });
+      const { data: userData } = await userClient.auth.getUser();
+      user = userData?.user ?? null;
+      if (!user) {
+        return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      const { data: isAdmin } = await admin.rpc('has_role', { _user_id: user.id, _role: 'admin' });
+      if (!isAdmin) {
+        return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
     }
 
     const body = await req.json();
@@ -173,7 +187,7 @@ Deno.serve(async (req) => {
         detected_cycle: detectedCycle,
         status: 'running',
         started_at: new Date().toISOString(),
-        created_by: user.id,
+        created_by: user?.id ?? null,
       }, { onConflict: 'id' });
     }
 

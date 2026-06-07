@@ -222,6 +222,20 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+    // Auth: a Vault-backed shared secret (x-sync-secret) may stand in for an
+    // admin JWT, so the headless Drive importer can drive this without an
+    // expiring user token. The existing admin-JWT path is unchanged.
+    let user: { id: string } | null = null;
+    let secretAuthorized = false;
+    {
+      const syncSecret = req.headers.get('x-sync-secret');
+      if (syncSecret) {
+        const svc = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+        const { data: ok } = await svc.rpc('check_import_sync_secret', { p_token: syncSecret });
+        secretAuthorized = ok === true;
+      }
+    }
+    if (!secretAuthorized) {
     // Admin auth check
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
@@ -230,14 +244,16 @@ Deno.serve(async (req) => {
     const userClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, {
       global: { headers: { Authorization: authHeader } },
     });
-    const { data: { user }, error: authError } = await userClient.auth.getUser();
-    if (authError || !user) {
+    const { data: { user: authedUser }, error: authError } = await userClient.auth.getUser();
+    if (authError || !authedUser) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
+    user = authedUser;
     const adminCheckClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
     const { data: roleData } = await adminCheckClient.from('user_roles').select('role').eq('user_id', user.id).eq('role', 'admin').maybeSingle();
     if (!roleData) {
       return new Response(JSON.stringify({ error: 'Forbidden: admin role required' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
     }
 
 
@@ -307,7 +323,7 @@ Deno.serve(async (req) => {
           filename: filename || null,
           multi_committee: !!multiCommittee,
           detected_cycle: dominantCycle,
-          started_by: user.id,
+          started_by: user?.id ?? null,
           status: 'running'
         }, { onConflict: 'id' });
       if (sessErr) console.error('[CSV-IMPORT] session insert error:', sessErr.message);

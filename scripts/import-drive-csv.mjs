@@ -107,9 +107,12 @@ const ANON_KEY =
   '';
 if (!ANON_KEY) die('anon key not set (env SUPABASE_ANON_KEY or .env VITE_SUPABASE_PUBLISHABLE_KEY)');
 
+// Auth: either a short-lived admin JWT (SUPABASE_ADMIN_TOKEN) or the durable
+// Vault-backed import secret (SUPABASE_SYNC_SECRET, sent as x-sync-secret).
 const ADMIN_TOKEN = process.env.SUPABASE_ADMIN_TOKEN || args['admin-token'] || '';
-if (!ADMIN_TOKEN) {
-  die('SUPABASE_ADMIN_TOKEN not set — supply a short-lived admin session JWT');
+const SYNC_SECRET = process.env.SUPABASE_SYNC_SECRET || args['sync-secret'] || '';
+if (!ADMIN_TOKEN && !SYNC_SECRET) {
+  die('provide SUPABASE_SYNC_SECRET (preferred) or SUPABASE_ADMIN_TOKEN');
 }
 
 const CYCLE = args.cycle ? String(args.cycle) : null;
@@ -164,13 +167,15 @@ function detectSchedECycle(rows) {
 }
 
 async function invoke(body) {
+  const headers = {
+    'Content-Type': 'application/json',
+    apikey: ANON_KEY,
+  };
+  if (ADMIN_TOKEN) headers.Authorization = `Bearer ${ADMIN_TOKEN}`;
+  if (SYNC_SECRET) headers['x-sync-secret'] = SYNC_SECRET;
   const res = await fetch(FN_URL, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      apikey: ANON_KEY,
-      Authorization: `Bearer ${ADMIN_TOKEN}`,
-    },
+    headers,
     body: JSON.stringify(body),
   });
   let data = null;
