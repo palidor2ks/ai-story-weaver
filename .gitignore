@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Working dir for CSVs pulled from Drive before import (scripts/import-drive-csv.mjs)
+tmp/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
