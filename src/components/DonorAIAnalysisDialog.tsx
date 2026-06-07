@@ -147,56 +147,46 @@ export const DonorAIAnalysisDialog = ({ id, name, type, cycle, profileHref, trig
     <Dialog onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto overflow-x-hidden p-4 sm:p-6 [&>button:last-child]:hidden">
-        <DialogHeader className="sticky top-0 z-10 bg-background pb-2 border-b border-border">
-          <div className="flex items-start justify-between gap-3">
-            <div className="space-y-1.5 min-w-0">
-              <DialogTitle className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-primary" />
-                {name}
-              </DialogTitle>
-              <DialogDescription>
-                AI-generated donor analysis grounded in campaign-finance data and broader public context.
-              </DialogDescription>
-            </div>
-            {analysis && !isLoading && (
-              <div className="flex items-center gap-2 shrink-0">
-                {!analysis.insufficient_information && (
-                  <ShareAIAnalysisButton
-                    subjectName={name}
-                    subtitle="Donor Analysis"
-                    subjectKind="donor"
-                    summary={analysis.summary}
-                    confidence={analysis.confidence}
-                    dataCoverage={analysis.data_coverage}
-                    causes={analysis.causes}
-                    partySupport={analysis.party_support?.map((p) => ({ party: p.party, share: p.share }))}
-                    profileUrl={
-                      typeof window !== 'undefined'
-                        ? `${window.location.origin}${profileHref ?? `/donor/${id}`}`
-                        : undefined
-                    }
-                  />
-                )}
-                <Button size="sm" variant="outline" onClick={() => fetchAnalysis(true)}>
-
-                  <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-                  Regenerate
-                </Button>
-                <DialogClose asChild>
-                  <Button size="icon" variant="ghost" aria-label="Close analysis dialog">
-                    <X className="h-4 w-4" />
-                  </Button>
-                </DialogClose>
-              </div>
-            )}
-            {!analysis && (
-              <DialogClose asChild>
-                <Button size="icon" variant="ghost" aria-label="Close analysis dialog" className="shrink-0">
-                  <X className="h-4 w-4" />
-                </Button>
-              </DialogClose>
-            )}
+        <DialogHeader className="sticky top-0 z-10 bg-background pb-2 border-b border-border text-left">
+          <DialogClose asChild>
+            <Button size="icon" variant="ghost" aria-label="Close analysis dialog" className="absolute right-0 top-0 shrink-0">
+              <X className="h-4 w-4" />
+            </Button>
+          </DialogClose>
+          <div className="space-y-1.5 min-w-0 pr-10">
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 shrink-0 text-primary" />
+              {name}
+            </DialogTitle>
+            <DialogDescription>
+              AI-generated donor analysis grounded in campaign-finance data and broader public context.
+            </DialogDescription>
           </div>
+          {analysis && !isLoading && (
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              {!analysis.insufficient_information && (
+                <ShareAIAnalysisButton
+                  subjectName={name}
+                  subtitle="Donor Analysis"
+                  subjectKind="donor"
+                  summary={analysis.summary}
+                  confidence={analysis.confidence}
+                  dataCoverage={analysis.data_coverage}
+                  causes={analysis.causes}
+                  partySupport={analysis.party_support?.map((p) => ({ party: p.party, share: p.share }))}
+                  profileUrl={
+                    typeof window !== 'undefined'
+                      ? `${window.location.origin}${profileHref ?? `/donor/${id}`}`
+                      : undefined
+                  }
+                />
+              )}
+              <Button size="sm" variant="outline" onClick={() => fetchAnalysis(true)}>
+                <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                Regenerate
+              </Button>
+            </div>
+          )}
         </DialogHeader>
 
         {isLoading && (
