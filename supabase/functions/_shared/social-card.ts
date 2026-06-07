@@ -554,19 +554,21 @@ function planRaceColumn(f: RaceCardFacts): RaceYPlan {
   const showFunding = f.candidates.some((c) => raceFundingLine(c) !== null);
   const showOutside = f.candidates.some((c) => (c.finance?.ie_support ?? 0) > 0 || (c.finance?.ie_oppose ?? 0) > 0);
   const showCause = f.candidates.some((c) => c.top_donors.find((d) => (d.amount ?? 0) > 0)?.cause);
-  let y = 320;
-  const name = y; y += 42;
+  // Generous, non-overlapping vertical rhythm (each delta clears the taller row's
+  // cap-height). There is ample room below, so the block can breathe.
+  let y = 316;
+  const name = y; y += 38;
   const party = y; y += 34;
-  const overall = y; y += 50;
-  const raisedLabel = y; y += 30;
-  const raisedFig = y; y += 48;
-  const funding = showFunding ? y : null; if (showFunding) y += 36;
-  const outsideLabel = showOutside ? y : null; if (showOutside) y += 28;
-  const outsideVal = showOutside ? y : null; if (showOutside) y += 42;
-  const donorLabel = y; y += 28;
-  const donorName = y; y += 30;
-  const donorAmt = y; y += showCause ? 20 : 16;
-  const cause = showCause ? y : null; if (showCause) y += 46;
+  const overall = y; y += 38;
+  const raisedLabel = y; y += 48;       // clear the big figure's cap height
+  const raisedFig = y; y += 42;         // figure font 46
+  const funding = showFunding ? y : null; if (showFunding) y += 38;
+  const outsideLabel = showOutside ? y : null; if (showOutside) y += 30;
+  const outsideVal = showOutside ? y : null; if (showOutside) y += 40;
+  const donorLabel = y; y += 32;
+  const donorName = y; y += 32;
+  const donorAmt = y; y += showCause ? 22 : 12;
+  const cause = showCause ? y : null; if (showCause) y += 56;  // chip rect + gap
   return { name, party, overall, raisedLabel, raisedFig, funding, outsideLabel, outsideVal, donorLabel, donorName, donorAmt, cause, bottom: y };
 }
 
@@ -589,7 +591,7 @@ function raceColumn(c: RaceCandidateFacts, x0: number, colW: number, Y: RaceYPla
 
   // Money raised — the column's hook.
   parts.push(`<text x="${cx}" y="${Y.raisedLabel}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="22" fill="#94a3b8" letter-spacing="3">RAISED</text>`);
-  parts.push(`<text x="${cx}" y="${Y.raisedFig}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="54" fill="#22c55e">${escapeXml(fmtMoney(c.raised) ?? '$0')}</text>`);
+  parts.push(`<text x="${cx}" y="${Y.raisedFig}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="46" fill="#22c55e">${escapeXml(fmtMoney(c.raised) ?? '$0')}</text>`);
   const fundLine = raceFundingLine(c);
   if (fundLine && Y.funding != null) {
     parts.push(`<text x="${cx}" y="${Y.funding}" text-anchor="middle" font-family="Inter" font-weight="400" font-size="24" fill="#cbd5e1">${escapeXml(fundLine)}</text>`);
@@ -634,8 +636,8 @@ function racePositionsGrid(f: RaceCardFacts, top: number, margin: number): strin
 
   const parts: string[] = [];
   parts.push(`<text x="${cx}" y="${top}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="22" fill="#94a3b8" letter-spacing="3">PRIMARY POSITIONS — L MORE LEFT · R MORE RIGHT</text>`);
-  let y = top + 44;
-  const step = 36;
+  let y = top + 46;
+  const step = 38;
   for (const r of rows) {
     parts.push(`<text x="${margin}" y="${y}" font-family="Inter" font-weight="700" font-size="26" fill="${leanColor(r.a)}">${escapeXml(r.a != null ? fmtScoreLR(r.a) : '—')}</text>
       <text x="${cx}" y="${y}" text-anchor="middle" font-family="Inter" font-weight="400" font-size="24" fill="#e2e8f0">${escapeXml(truncate(r.topic, 30))}</text>
@@ -681,12 +683,12 @@ function buildRaceComparisonSvg(f: RaceCardFacts, analysis: string | null): stri
   const Y = planRaceColumn(f);
 
   // Short AI analysis of primary positions, under the title (up to 2 lines).
-  const analysisLines = analysis ? wrapLines(analysis, 84, 2) : [];
+  const analysisLines = analysis ? wrapLines(analysis, 86, 2) : [];
   const analysisSvg = analysisLines
-    .map((ln, i) => `<text x="${cx}" y="${240 + i * 28}" text-anchor="middle" font-family="Inter" font-weight="400" font-size="21" fill="#93a5c0">${escapeXml(ln)}</text>`)
+    .map((ln, i) => `<text x="${cx}" y="${244 + i * 26}" text-anchor="middle" font-family="Inter" font-weight="400" font-size="20" fill="#9fb0c8">${escapeXml(ln)}</text>`)
     .join('\n');
 
-  const gridTop = Y.bottom + 34;
+  const gridTop = Y.bottom + 30;
 
   return `<svg width="${CARD_SIZE}" height="${CARD_SIZE}" viewBox="0 0 ${CARD_SIZE} ${CARD_SIZE}" xmlns="http://www.w3.org/2000/svg">
   <defs>
@@ -701,8 +703,8 @@ function buildRaceComparisonSvg(f: RaceCardFacts, analysis: string | null): stri
   <text x="72" y="96" font-family="Inter" font-weight="700" font-size="40" fill="#f8fafc">PoliPulse</text>
   <text x="${CARD_SIZE - 72}" y="96" text-anchor="end" font-family="Inter" font-weight="400" font-size="26" fill="#94a3b8">Follow the Money</text>
 
-  <text x="${cx}" y="166" text-anchor="middle" font-family="Inter" font-weight="700" font-size="26" fill="#94a3b8" letter-spacing="4">RACE COMPARISON</text>
-  <text x="${cx}" y="212" text-anchor="middle" font-family="Inter" font-weight="700" font-size="${titleFont}" fill="#f8fafc">${escapeXml(truncate(title, 36))}</text>
+  <text x="${cx}" y="158" text-anchor="middle" font-family="Inter" font-weight="700" font-size="26" fill="#94a3b8" letter-spacing="4">RACE COMPARISON</text>
+  <text x="${cx}" y="204" text-anchor="middle" font-family="Inter" font-weight="700" font-size="${titleFont}" fill="#f8fafc">${escapeXml(truncate(title, 36))}</text>
   ${analysisSvg}
 
   ${raceColumn(a, leftX, colW, Y)}
