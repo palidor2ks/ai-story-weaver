@@ -53,7 +53,10 @@ export interface RaceParams {
   state: string;
   office: string;
   year: number;
-  mode: string; // 'dvr' | 'money'
+  mode: string; // 'dvr' | 'money' | 'pick'
+  // When both are set, the card compares exactly these two candidates (overrides mode).
+  candA?: string | null;
+  candB?: string | null;
 }
 
 function toNum(v: unknown): number | null {
@@ -94,6 +97,8 @@ export async function fetchRaceCardFacts(
     _office: params.office,
     _year: params.year,
     _mode: params.mode || 'dvr',
+    _cand_a: params.candA ?? null,
+    _cand_b: params.candB ?? null,
   });
   const raw = (data ?? null) as Record<string, unknown> | null;
   if (!raw || !Array.isArray(raw.candidates) || raw.candidates.length < 2) return null;

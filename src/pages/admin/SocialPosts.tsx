@@ -148,6 +148,15 @@ interface RaceOption {
   candidate_count: number;
 }
 
+interface RaceCandidate {
+  id: string;
+  name: string;
+  party: string;
+  incumbent: boolean;
+  raised: number;
+  has_image: boolean;
+}
+
 function useRaceOptions() {
   return useQuery({
     queryKey: ['race-options'],
@@ -160,15 +169,35 @@ function useRaceOptions() {
   });
 }
 
+function useRaceCandidates(state: string, office: string, year: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ['race-candidates', state, office, year],
+    enabled: enabled && !!state && !!office && !!year,
+    queryFn: async (): Promise<RaceCandidate[]> => {
+      const { data, error } = await supabase.rpc('get_race_candidates', { _state: state, _office: office, _year: Number(year) });
+      if (error) throw error;
+      return (data ?? []) as RaceCandidate[];
+    },
+    staleTime: 5 * 60_000,
+  });
+}
+
+const tidyCandidateName = (n: string): string =>
+  n === n.toUpperCase() ? n.split(/\s+/).map((w) => w.charAt(0) + w.slice(1).toLowerCase()).join(' ') : n;
+const fmtRaised = (n: number): string =>
+  n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(1)}M` : n >= 1_000 ? `$${Math.round(n / 1_000)}K` : `$${n}`;
+
 // Manual "Race Comparison" card generator: pick a state, office/district and year,
-// choose a head-to-head mode, and draft a comparison card for that race.
+// choose a head-to-head mode (auto, or pick the two candidates yourself), and draft.
 function RaceComparisonGenerator() {
   const qc = useQueryClient();
   const { data: races, isLoading } = useRaceOptions();
   const [state, setState] = useState<string>('');
   const [office, setOffice] = useState<string>('');
   const [year, setYear] = useState<string>('');
-  const [mode, setMode] = useState<'dvr' | 'money'>('dvr');
+  const [mode, setMode] = useState<'dvr' | 'money' | 'pick'>('dvr');
+  const [candA, setCandA] = useState<string>('');
+  const [candB, setCandB] = useState<string>('');
 
   const states = useMemo(
     () => Array.from(new Set((races ?? []).map((r) => r.state))).sort(),
@@ -183,11 +212,18 @@ function RaceComparisonGenerator() {
     [races, state, office],
   );
 
+  const resetRace = () => { setOffice(''); setYear(''); setCandA(''); setCandB(''); };
+  const { data: candidates } = useRaceCandidates(state, office, year, mode === 'pick');
+  const candidateOptions = useMemo(
+    () => (candidates ?? []).slice().sort((a, b) => b.raised - a.raised),
+    [candidates],
+  );
+
   const generate = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke('draft-race-comparison', {
-        body: { state, office, year: Number(year), mode },
-      });
+      const body: Record<string, unknown> = { state, office, year: Number(year), mode };
+      if (mode === 'pick') { body.candidate_a = candA; body.candidate_b = candB; }
+      const { data, error } = await supabase.functions.invoke('draft-race-comparison', { body });
       if (error) throw error;
       if ((data as { error?: string } | undefined)?.error) throw new Error(JSON.stringify((data as { error: unknown }).error));
       return data as { ok?: boolean; created?: { label: string }; skipped?: string };
@@ -200,22 +236,28 @@ function RaceComparisonGenerator() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const ready = !!state && !!office && !!year;
+  const ready = !!state && !!office && !!year && (mode !== 'pick' || (!!candA && !!candB && candA !== candB));
+
+  const candItem = (c: RaceCandidate) => (
+    <SelectItem key={c.id} value={c.id}>
+      {tidyCandidateName(c.name)} ({c.party?.[0] ?? '?'}{c.incumbent ? ', inc' : ''}) · {fmtRaised(c.raised)}
+    </SelectItem>
+  );
 
   return (
     <div className="space-y-3 rounded-lg border p-4">
       <div>
         <p className="text-sm font-medium">Race Comparison</p>
         <p className="text-sm text-muted-foreground">
-          Pick a state, office/district and election year to draft a head-to-head card comparing the race&apos;s
-          two leading candidates — money raised, who&apos;s funding them and what those donors care about, outside
-          spending, and where they stand.
+          Pick a state, office/district and election year to draft a head-to-head card — money raised, who&apos;s
+          funding each candidate and what those donors care about, outside spending, and where they stand. Choose two
+          candidates automatically, or pick them yourself (e.g. a primary match-up).
         </p>
       </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div>
           <Label className="text-xs">State</Label>
-          <Select value={state} onValueChange={(v) => { setState(v); setOffice(''); setYear(''); }}>
+          <Select value={state} onValueChange={(v) => { setState(v); resetRace(); }}>
             <SelectTrigger><SelectValue placeholder={isLoading ? 'Loading…' : 'State'} /></SelectTrigger>
             <SelectContent>
               {states.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
@@ -224,7 +266,7 @@ function RaceComparisonGenerator() {
         </div>
         <div>
           <Label className="text-xs">Office / District</Label>
-          <Select value={office} onValueChange={(v) => { setOffice(v); setYear(''); }} disabled={!state}>
+          <Select value={office} onValueChange={(v) => { setOffice(v); setYear(''); setCandA(''); setCandB(''); }} disabled={!state}>
             <SelectTrigger><SelectValue placeholder="Office" /></SelectTrigger>
             <SelectContent>
               {offices.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
@@ -233,7 +275,7 @@ function RaceComparisonGenerator() {
         </div>
         <div>
           <Label className="text-xs">Year</Label>
-          <Select value={year} onValueChange={setYear} disabled={!office}>
+          <Select value={year} onValueChange={(v) => { setYear(v); setCandA(''); setCandB(''); }} disabled={!office}>
             <SelectTrigger><SelectValue placeholder="Year" /></SelectTrigger>
             <SelectContent>
               {years.map((y) => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
@@ -242,15 +284,38 @@ function RaceComparisonGenerator() {
         </div>
         <div>
           <Label className="text-xs">Compare</Label>
-          <Select value={mode} onValueChange={(v) => setMode(v as 'dvr' | 'money')}>
+          <Select value={mode} onValueChange={(v) => setMode(v as 'dvr' | 'money' | 'pick')}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="dvr">Leading D vs R</SelectItem>
               <SelectItem value="money">Top 2 by money</SelectItem>
+              <SelectItem value="pick">Pick candidates</SelectItem>
             </SelectContent>
           </Select>
         </div>
       </div>
+      {mode === 'pick' && (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div>
+            <Label className="text-xs">Candidate A</Label>
+            <Select value={candA} onValueChange={setCandA} disabled={!year}>
+              <SelectTrigger><SelectValue placeholder={year ? 'Candidate A' : 'Pick a race first'} /></SelectTrigger>
+              <SelectContent>
+                {candidateOptions.filter((c) => c.id !== candB).map(candItem)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-xs">Candidate B</Label>
+            <Select value={candB} onValueChange={setCandB} disabled={!year}>
+              <SelectTrigger><SelectValue placeholder={year ? 'Candidate B' : 'Pick a race first'} /></SelectTrigger>
+              <SelectContent>
+                {candidateOptions.filter((c) => c.id !== candA).map(candItem)}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      )}
       <Button variant="outline" onClick={() => generate.mutate()} disabled={!ready || generate.isPending}>
         {generate.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Play className="h-4 w-4 mr-2" />}
         Generate Race Comparison

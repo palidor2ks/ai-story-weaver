@@ -91,6 +91,8 @@ Deno.serve(async (req) => {
         office: String(stat.office ?? ''),
         year: Number(stat.year ?? 0),
         mode: String(stat.mode ?? 'dvr'),
+        candA: stat.candidate_a != null ? String(stat.candidate_a) : null,
+        candB: stat.candidate_b != null ? String(stat.candidate_b) : null,
       }, platform);
       if (r) return await save(r.caption, r.source);
       return await save(`${post.subject_label ?? 'This race'} on PoliPulse. Follow the money.`, 'static_race');
