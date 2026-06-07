@@ -806,6 +806,8 @@ export async function renderAndStoreCard(
       office: String(sp.office ?? ''),
       year: Number(sp.year ?? 0),
       mode: String(sp.mode ?? 'dvr'),
+      candA: sp.candidate_a != null ? String(sp.candidate_a) : null,
+      candB: sp.candidate_b != null ? String(sp.candidate_b) : null,
     };
     const facts = await fetchRaceCardFacts(admin, params);
     if (!facts) throw new Error('race_not_found');

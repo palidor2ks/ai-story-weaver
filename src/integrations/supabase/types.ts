@@ -5473,8 +5473,26 @@ export type Database = {
           selected_option_id: string
         }[]
       }
+      get_race_candidates: {
+        Args: { _state: string; _office: string; _year: number }
+        Returns: {
+          id: string
+          name: string
+          party: string
+          incumbent: boolean
+          raised: number
+          has_image: boolean
+        }[]
+      }
       get_race_card_facts: {
-        Args: { _state: string; _office: string; _year: number; _mode?: string }
+        Args: {
+          _state: string
+          _office: string
+          _year: number
+          _mode?: string
+          _cand_a?: string
+          _cand_b?: string
+        }
         Returns: Json
       }
       get_race_options: {
