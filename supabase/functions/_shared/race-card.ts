@@ -199,6 +199,45 @@ export async function composeRaceComparisonCaption(
   return { caption: raceTemplateCaption(f, cfg.max), source: 'race_comparison_template' };
 }
 
+// Left/right wording for a topic score (the app's convention: negative = left).
+function leanWord(score: number): string {
+  const a = Math.abs(score);
+  const dir = score < 0 ? 'left' : 'right';
+  if (a >= 6) return `strongly ${dir}`;
+  if (a >= 2) return dir;
+  return 'centrist';
+}
+
+// Compact, prompt-ready summary of each candidate's strongest positions.
+function positionsBlock(f: RaceCardFacts): string {
+  return f.candidates.map((c) => {
+    const tops = c.positions.slice(0, 4).map((p) => `${p.topic} (${leanWord(p.score)})`).join(', ');
+    return `${tidyName(c.name)} (${partyFull(c.party)}): ${tops || 'no scored positions'}.`;
+  }).join('\n');
+}
+
+// A SHORT, neutral AI analysis of how the two candidates' PRIMARY policy positions
+// compare — printed on the card. Returns null when the model is unavailable (the
+// caller falls back to a deterministic line).
+export async function composeRaceAnalysis(
+  aiKey: string | undefined,
+  f: RaceCardFacts,
+): Promise<string | null> {
+  const max = 170;
+  const prompt = `You are a neutral political analyst. Two candidates are running in the ${raceTitle(f)}. Their strongest scored policy positions (on a left–right scale) are:
+${positionsBlock(f)}
+
+Write ONE short, neutral sentence (well under ${max} characters) summarizing how their PRIMARY policy positions compare — where they align and where they differ. Use plain "left"/"right" leanings, name both candidates by surname, no party cheerleading. Plain text only — no emoji, no markdown, no hashtags, no preamble, no quotes.`;
+  const ai = await aiCaption(aiKey, prompt, max);
+  if (ai) return ai;
+  // Deterministic fallback: name each candidate's single strongest topic.
+  const parts = f.candidates.map((c) => {
+    const top = c.positions[0];
+    return top ? `${tidyName(c.name).split(',')[0]} leans ${leanWord(top.score)} on ${top.topic}` : null;
+  }).filter(Boolean);
+  return parts.length ? summarizeForSocial(`${parts.join('; ')}.`, max) : null;
+}
+
 // One-line OG description for the share-card unfurl.
 export function raceCardDescription(f: RaceCardFacts): string {
   const [a, b] = f.candidates;

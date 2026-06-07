@@ -19,7 +19,9 @@ import {
 } from './finance-caption.ts';
 import { type DonorCardFacts, fetchDonorCardFacts } from './donor-card.ts';
 import { type CommitteeCardFacts, fetchCommitteeCardFacts } from './committee-card.ts';
-import { type RaceCardFacts, type RaceCandidateFacts, type RaceParams, fetchRaceCardFacts, raceTitle, raceCardDescription } from './race-card.ts';
+import { type RaceCardFacts, type RaceCandidateFacts, type RaceParams, fetchRaceCardFacts, raceTitle, raceCardDescription, composeRaceAnalysis } from './race-card.ts';
+
+const RACE_AI_KEY = Deno.env.get('LOVABLE_API_KEY');
 
 const RESVG_WASM_URL = 'https://esm.sh/@resvg/resvg-wasm@2.6.2/index_bg.wasm';
 const CARD_SIZE = 1080;
@@ -515,16 +517,20 @@ export async function renderCommitteeSpenderCardPng(f: CommitteeCardFacts): Prom
 // ---------- race-comparison card (the manual `race_comparison` post type) ----------
 //
 // A head-to-head between TWO candidates in one election (state + office + year),
-// two columns split by a center "VS" rule. Each column: name + party chip, the
-// big money-raised figure, a funding-character line, outside money for/against,
-// the standout donor (with cause), and the top policy positions. Photos are shown
-// only when BOTH candidates have one (so the layout never looks lopsided).
+// two columns split by a center "VS" rule. Each column shows: name + party, the
+// candidate's overall lean, the big money-raised figure, a funding-character line,
+// outside money for/against, and the standout donor (with cause). Below the columns,
+// a full-width grid compares every FEDERAL policy position side by side, and a short
+// AI analysis of their primary positions sits under the title.
 
 const fmtScoreLR = (score: number): string => {
   const r = Math.round(score * 10) / 10;
-  if (r === 0) return 'Center';
+  if (r === 0) return 'C';
   return r < 0 ? `L${Math.abs(r).toFixed(1)}` : `R${r.toFixed(1)}`;
 };
+// Blue (left) / red (right) / grey (center or missing) for a score value.
+const leanColor = (score: number | null | undefined): string =>
+  score == null ? '#9ca3af' : score < 0 ? '#3b82f6' : score > 0 ? '#ef4444' : '#9ca3af';
 
 function raceFundingLine(c: RaceCandidateFacts): string | null {
   const fu = c.finance?.funding;
@@ -536,89 +542,133 @@ function raceFundingLine(c: RaceCandidateFacts): string | null {
   return null;
 }
 
-// One candidate column. x0 is the column's left edge; colW its width.
-function raceColumn(c: RaceCandidateFacts, x0: number, colW: number, photo: string | null): string {
+// Shared vertical plan for the two columns, so optional rows (funding / outside money
+// / donor cause) keep BOTH columns aligned. Computed once from global flags.
+interface RaceYPlan {
+  name: number; party: number; overall: number; raisedLabel: number; raisedFig: number;
+  funding: number | null; outsideLabel: number | null; outsideVal: number | null;
+  donorLabel: number; donorName: number; donorAmt: number; cause: number | null;
+  bottom: number;
+}
+function planRaceColumn(f: RaceCardFacts): RaceYPlan {
+  const showFunding = f.candidates.some((c) => raceFundingLine(c) !== null);
+  const showOutside = f.candidates.some((c) => (c.finance?.ie_support ?? 0) > 0 || (c.finance?.ie_oppose ?? 0) > 0);
+  const showCause = f.candidates.some((c) => c.top_donors.find((d) => (d.amount ?? 0) > 0)?.cause);
+  let y = 320;
+  const name = y; y += 42;
+  const party = y; y += 34;
+  const overall = y; y += 50;
+  const raisedLabel = y; y += 30;
+  const raisedFig = y; y += 48;
+  const funding = showFunding ? y : null; if (showFunding) y += 36;
+  const outsideLabel = showOutside ? y : null; if (showOutside) y += 28;
+  const outsideVal = showOutside ? y : null; if (showOutside) y += 42;
+  const donorLabel = y; y += 28;
+  const donorName = y; y += 30;
+  const donorAmt = y; y += showCause ? 20 : 16;
+  const cause = showCause ? y : null; if (showCause) y += 46;
+  return { name, party, overall, raisedLabel, raisedFig, funding, outsideLabel, outsideVal, donorLabel, donorName, donorAmt, cause, bottom: y };
+}
+
+// One candidate column rendered against the shared y-plan.
+function raceColumn(c: RaceCandidateFacts, x0: number, colW: number, Y: RaceYPlan): string {
   const cx = x0 + colW / 2;
   const pColor = partyColor(c.party);
   const parts: string[] = [];
 
-  // Optional avatar (only when both columns have a photo — caller passes null otherwise).
-  let y = 300;
-  if (photo) {
-    const r = 60;
-    parts.push(
-      `<circle cx="${cx}" cy="${y + r}" r="${r + 5}" fill="none" stroke="${pColor}" stroke-width="5" />
-       <clipPath id="ra${x0}"><circle cx="${cx}" cy="${y + r}" r="${r}" /></clipPath>
-       <image href="${photo}" x="${cx - r}" y="${y}" width="${r * 2}" height="${r * 2}" preserveAspectRatio="xMidYMid slice" clip-path="url(#ra${x0})" />`,
-    );
-    y += r * 2 + 24;
-  }
-
-  // Name (fit to the column width) + party / incumbent line.
   const name = tidyName(c.name) || c.name;
   const nameFont = name.length > 22 ? 30 : name.length > 16 ? 36 : 42;
-  parts.push(`<text x="${cx}" y="${y}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="${nameFont}" fill="#f8fafc">${escapeXml(truncate(name, 26))}</text>`);
-  y += 40;
+  parts.push(`<text x="${cx}" y="${Y.name}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="${nameFont}" fill="#f8fafc">${escapeXml(truncate(name, 26))}</text>`);
   const partyLine = `${(c.party || 'Nonpartisan')}${c.incumbent ? ' · Incumbent' : ''}`;
-  parts.push(`<text x="${cx}" y="${y}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="24" fill="${pColor}">${escapeXml(truncate(partyLine, 28))}</text>`);
-  y += 64;
+  parts.push(`<text x="${cx}" y="${Y.party}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="24" fill="${pColor}">${escapeXml(truncate(partyLine, 28))}</text>`);
+
+  // Overall lean (the candidate's headline score).
+  if (c.score != null && Number.isFinite(c.score)) {
+    parts.push(`<text x="${cx}" y="${Y.overall}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="22" fill="#94a3b8">Overall lean <tspan font-weight="700" fill="${leanColor(c.score)}">${escapeXml(fmtScoreLR(c.score))}</tspan></text>`);
+  }
 
   // Money raised — the column's hook.
-  parts.push(`<text x="${cx}" y="${y}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="22" fill="#94a3b8" letter-spacing="3">RAISED</text>`);
-  y += 58;
-  parts.push(`<text x="${cx}" y="${y}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="60" fill="#22c55e">${escapeXml(fmtMoney(c.raised) ?? '$0')}</text>`);
-  y += 34;
+  parts.push(`<text x="${cx}" y="${Y.raisedLabel}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="22" fill="#94a3b8" letter-spacing="3">RAISED</text>`);
+  parts.push(`<text x="${cx}" y="${Y.raisedFig}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="54" fill="#22c55e">${escapeXml(fmtMoney(c.raised) ?? '$0')}</text>`);
   const fundLine = raceFundingLine(c);
-  if (fundLine) {
-    parts.push(`<text x="${cx}" y="${y}" text-anchor="middle" font-family="Inter" font-weight="400" font-size="24" fill="#cbd5e1">${escapeXml(fundLine)}</text>`);
+  if (fundLine && Y.funding != null) {
+    parts.push(`<text x="${cx}" y="${Y.funding}" text-anchor="middle" font-family="Inter" font-weight="400" font-size="24" fill="#cbd5e1">${escapeXml(fundLine)}</text>`);
   }
-  y += 44;
 
-  // Outside money for/against (only when present).
+  // Outside money for/against (slot present when EITHER candidate has it).
   const sup = c.finance?.ie_support ?? 0;
   const opp = c.finance?.ie_oppose ?? 0;
-  if (sup > 0 || opp > 0) {
-    parts.push(`<text x="${cx}" y="${y}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="20" fill="#94a3b8" letter-spacing="2">OUTSIDE MONEY</text>`);
-    y += 34;
-    parts.push(`<text x="${cx}" y="${y}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="26" fill="#e2e8f0"><tspan fill="#22c55e">${escapeXml(fmtMoney(sup) ?? '$0')}</tspan> for · <tspan fill="#ef4444">${escapeXml(fmtMoney(opp) ?? '$0')}</tspan> against</text>`);
-    y += 44;
+  if (Y.outsideLabel != null && Y.outsideVal != null && (sup > 0 || opp > 0)) {
+    parts.push(`<text x="${cx}" y="${Y.outsideLabel}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="20" fill="#94a3b8" letter-spacing="2">OUTSIDE MONEY</text>`);
+    parts.push(`<text x="${cx}" y="${Y.outsideVal}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="26" fill="#e2e8f0"><tspan fill="#22c55e">${escapeXml(fmtMoney(sup) ?? '$0')}</tspan> for · <tspan fill="#ef4444">${escapeXml(fmtMoney(opp) ?? '$0')}</tspan> against</text>`);
   }
 
   // Standout donor + cause chip.
   const donor = c.top_donors.find((d) => (d.amount ?? 0) > 0);
   if (donor) {
-    parts.push(`<text x="${cx}" y="${y}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="20" fill="#94a3b8" letter-spacing="2">TOP DONOR</text>`);
-    y += 34;
-    parts.push(`<text x="${cx}" y="${y}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="26" fill="#f8fafc">${escapeXml(truncate(tidyName(donor.name), 24))}</text>`);
-    y += 30;
-    parts.push(`<text x="${cx}" y="${y}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="24" fill="#fbbf24">${escapeXml(fmtMoney(donor.amount) ?? '$0')}</text>`);
-    y += 18;
-    if (donor.cause) {
-      const ch = chip(cx, y, donor.cause, '#60a5fa', 22);
-      parts.push(ch.svg);
-      y += 64;
-    } else {
-      y += 28;
-    }
-  }
-
-  // Top policy positions (topic + L/R score).
-  const positions = c.positions.slice(0, 2);
-  if (positions.length > 0) {
-    parts.push(`<text x="${cx}" y="${y}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="20" fill="#94a3b8" letter-spacing="2">POSITIONS</text>`);
-    y += 34;
-    for (const p of positions) {
-      const sColor = p.score < 0 ? '#3b82f6' : p.score > 0 ? '#ef4444' : '#9ca3af';
-      parts.push(`<text x="${x0 + 16}" y="${y}" font-family="Inter" font-weight="400" font-size="22" fill="#cbd5e1">${escapeXml(truncate(p.topic, 22))}</text>
-        <text x="${x0 + colW - 16}" y="${y}" text-anchor="end" font-family="Inter" font-weight="700" font-size="22" fill="${sColor}">${escapeXml(fmtScoreLR(p.score))}</text>`);
-      y += 36;
+    parts.push(`<text x="${cx}" y="${Y.donorLabel}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="20" fill="#94a3b8" letter-spacing="2">TOP DONOR</text>`);
+    parts.push(`<text x="${cx}" y="${Y.donorName}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="26" fill="#f8fafc">${escapeXml(truncate(tidyName(donor.name), 24))}</text>`);
+    parts.push(`<text x="${cx}" y="${Y.donorAmt}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="24" fill="#fbbf24">${escapeXml(fmtMoney(donor.amount) ?? '$0')}</text>`);
+    if (donor.cause && Y.cause != null) {
+      parts.push(chip(cx, Y.cause, donor.cause, '#60a5fa', 22).svg);
     }
   }
 
   return parts.join('\n');
 }
 
-function buildRaceComparisonSvg(f: RaceCardFacts, photos: (string | null)[]): string {
+// Full-width grid comparing every federal policy position side by side:
+// [A score]      Topic      [B score], one row per topic (union of both candidates),
+// ordered by salience (strongest lean first).
+function racePositionsGrid(f: RaceCardFacts, top: number, margin: number): string {
+  const cx = CARD_SIZE / 2;
+  const [a, b] = f.candidates;
+  const map = new Map<string, { a?: number; b?: number }>();
+  a.positions.forEach((p) => { const e = map.get(p.topic) ?? {}; e.a = p.score; map.set(p.topic, e); });
+  b.positions.forEach((p) => { const e = map.get(p.topic) ?? {}; e.b = p.score; map.set(p.topic, e); });
+  const rows = [...map.entries()]
+    .map(([topic, v]) => ({ topic, a: v.a, b: v.b, sal: Math.max(Math.abs(v.a ?? 0), Math.abs(v.b ?? 0)) }))
+    .sort((x, y) => y.sal - x.sal)
+    .slice(0, 6);
+  if (rows.length === 0) return '';
+
+  const parts: string[] = [];
+  parts.push(`<text x="${cx}" y="${top}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="22" fill="#94a3b8" letter-spacing="3">PRIMARY POSITIONS — L MORE LEFT · R MORE RIGHT</text>`);
+  let y = top + 44;
+  const step = 36;
+  for (const r of rows) {
+    parts.push(`<text x="${margin}" y="${y}" font-family="Inter" font-weight="700" font-size="26" fill="${leanColor(r.a)}">${escapeXml(r.a != null ? fmtScoreLR(r.a) : '—')}</text>
+      <text x="${cx}" y="${y}" text-anchor="middle" font-family="Inter" font-weight="400" font-size="24" fill="#e2e8f0">${escapeXml(truncate(r.topic, 30))}</text>
+      <text x="${CARD_SIZE - margin}" y="${y}" text-anchor="end" font-family="Inter" font-weight="700" font-size="26" fill="${leanColor(r.b)}">${escapeXml(r.b != null ? fmtScoreLR(r.b) : '—')}</text>`);
+    y += step;
+  }
+  return parts.join('\n');
+}
+
+// Word-wrap plain text into at most maxLines lines of ~maxChars, ellipsizing overflow.
+function wrapLines(text: string, maxChars: number, maxLines: number): string[] {
+  const words = (text ?? '').replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+  const lines: string[] = [];
+  let cur = '';
+  for (const w of words) {
+    if (((cur ? cur + ' ' : '') + w).length <= maxChars) {
+      cur = cur ? `${cur} ${w}` : w;
+    } else {
+      if (cur) lines.push(cur);
+      cur = w;
+      if (lines.length === maxLines) break;
+    }
+  }
+  if (lines.length < maxLines && cur) lines.push(cur);
+  if (lines.length === maxLines) {
+    // If words remain unconsumed, mark the last line as truncated.
+    const consumed = lines.join(' ').split(' ').length;
+    if (consumed < words.length) lines[maxLines - 1] = lines[maxLines - 1].replace(/[\s,;:.!?-]+$/, '') + '…';
+  }
+  return lines.slice(0, maxLines);
+}
+
+function buildRaceComparisonSvg(f: RaceCardFacts, analysis: string | null): string {
   const cx = CARD_SIZE / 2;
   const margin = 64;
   const colGap = 44;
@@ -628,6 +678,15 @@ function buildRaceComparisonSvg(f: RaceCardFacts, photos: (string | null)[]): st
   const title = raceTitle(f);
   const titleFont = title.length > 28 ? 44 : title.length > 20 ? 54 : 62;
   const [a, b] = f.candidates;
+  const Y = planRaceColumn(f);
+
+  // Short AI analysis of primary positions, under the title (up to 2 lines).
+  const analysisLines = analysis ? wrapLines(analysis, 84, 2) : [];
+  const analysisSvg = analysisLines
+    .map((ln, i) => `<text x="${cx}" y="${240 + i * 28}" text-anchor="middle" font-family="Inter" font-weight="400" font-size="21" fill="#93a5c0">${escapeXml(ln)}</text>`)
+    .join('\n');
+
+  const gridTop = Y.bottom + 34;
 
   return `<svg width="${CARD_SIZE}" height="${CARD_SIZE}" viewBox="0 0 ${CARD_SIZE} ${CARD_SIZE}" xmlns="http://www.w3.org/2000/svg">
   <defs>
@@ -642,30 +701,33 @@ function buildRaceComparisonSvg(f: RaceCardFacts, photos: (string | null)[]): st
   <text x="72" y="96" font-family="Inter" font-weight="700" font-size="40" fill="#f8fafc">PoliPulse</text>
   <text x="${CARD_SIZE - 72}" y="96" text-anchor="end" font-family="Inter" font-weight="400" font-size="26" fill="#94a3b8">Follow the Money</text>
 
-  <text x="${cx}" y="176" text-anchor="middle" font-family="Inter" font-weight="700" font-size="26" fill="#94a3b8" letter-spacing="4">RACE COMPARISON</text>
-  <text x="${cx}" y="${title.length > 28 ? 240 : 248}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="${titleFont}" fill="#f8fafc">${escapeXml(truncate(title, 36))}</text>
+  <text x="${cx}" y="166" text-anchor="middle" font-family="Inter" font-weight="700" font-size="26" fill="#94a3b8" letter-spacing="4">RACE COMPARISON</text>
+  <text x="${cx}" y="212" text-anchor="middle" font-family="Inter" font-weight="700" font-size="${titleFont}" fill="#f8fafc">${escapeXml(truncate(title, 36))}</text>
+  ${analysisSvg}
 
-  ${raceColumn(a, leftX, colW, photos[0])}
-  ${raceColumn(b, rightX, colW, photos[1])}
+  ${raceColumn(a, leftX, colW, Y)}
+  ${raceColumn(b, rightX, colW, Y)}
 
-  <line x1="${cx}" y1="288" x2="${cx}" y2="980" stroke="#1f2a44" stroke-width="3" />
-  <circle cx="${cx}" cy="300" r="34" fill="#0f1a30" stroke="#1f2a44" stroke-width="3" />
-  <text x="${cx}" y="310" text-anchor="middle" font-family="Inter" font-weight="700" font-size="26" fill="#fbbf24">VS</text>
+  <line x1="${cx}" y1="${Y.name - 18}" x2="${cx}" y2="${Y.bottom - 6}" stroke="#1f2a44" stroke-width="3" />
+  <circle cx="${cx}" cy="${Y.overall - 6}" r="30" fill="#0f1a30" stroke="#1f2a44" stroke-width="3" />
+  <text x="${cx}" y="${Y.overall + 3}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="24" fill="#fbbf24">VS</text>
 
-  <text x="${cx}" y="1048" text-anchor="middle" font-family="Inter" font-weight="400" font-size="22" fill="#64748b">polipulseapp.com — Follow the money</text>
+  ${racePositionsGrid(f, gridTop, margin)}
+
+  <text x="${cx}" y="1052" text-anchor="middle" font-family="Inter" font-weight="400" font-size="22" fill="#64748b">polipulseapp.com — Follow the money</text>
 </svg>`;
 }
 
 export async function renderRaceComparisonCardPng(f: RaceCardFacts): Promise<Uint8Array> {
-  // Show photos only when BOTH candidates have one, so a one-sided photo never
-  // makes the head-to-head look lopsided.
-  const [a, b] = f.candidates;
-  let photos: (string | null)[] = [null, null];
-  if (a.image_url && b.image_url) {
-    photos = await Promise.all([fetchImageDataUri(a.image_url), fetchImageDataUri(b.image_url)]);
-    if (!photos[0] || !photos[1]) photos = [null, null];
+  // Generate the short positions-focused AI analysis at render time so it always
+  // reflects current data (best-effort — a null falls back to no analysis line).
+  let analysis: string | null = null;
+  try {
+    analysis = await composeRaceAnalysis(RACE_AI_KEY, f);
+  } catch (e) {
+    console.warn('race analysis failed', e);
   }
-  return rasterize(buildRaceComparisonSvg(f, photos));
+  return rasterize(buildRaceComparisonSvg(f, analysis));
 }
 
 async function rasterize(svg: string): Promise<Uint8Array> {
