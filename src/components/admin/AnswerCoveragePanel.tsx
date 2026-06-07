@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/pagination";
 
 const PAGE_SIZE = 20;
-import { useCandidatesAnswerCoverageProgressive, useUniqueStates, useRecalculateCoverageTiers, CandidateAnswerCoverage } from "@/hooks/useCandidatesAnswerCoverage";
+import { useCandidatesAnswerCoverageProgressive, useUniqueStates, useUniqueDistricts, useRecalculateCoverageTiers, CandidateAnswerCoverage } from "@/hooks/useCandidatesAnswerCoverage";
 import { useFinanceCycles } from "@/hooks/useFinanceCycles";
 import { usePopulateCandidateAnswers } from "@/hooks/usePopulateCandidateAnswers";
 import { useEnrichCandidateSources } from "@/hooks/useCandidateAnswers";
@@ -133,6 +133,17 @@ export function AnswerCoveragePanel() {
   useEffect(() => {
     if (stateFilter !== 'all' && isStateHidden(stateFilter)) setStateFilter('all');
   }, [stateFilter, isStateHidden]);
+  const [districtFilter, setDistrictFilter] = useState<string>('all');
+  // District options are scoped to the selected state so the dropdown only
+  // offers districts that actually exist there.
+  const { data: districts } = useUniqueDistricts(stateFilter);
+  // When the state changes, a previously selected district may no longer exist;
+  // reset it so we don't silently filter everything out.
+  useEffect(() => {
+    if (districtFilter !== 'all' && districts && !districts.includes(districtFilter)) {
+      setDistrictFilter('all');
+    }
+  }, [districts, districtFilter]);
   const [coverageFilter, setCoverageFilter] = useState<'all' | 'none' | 'low' | 'full'>('all');
   const [levelFilter, setLevelFilter] = useState<string>('all');
   const [financeFilter, setFinanceFilter] = useState<'all' | 'mismatch'>('all');
@@ -209,9 +220,10 @@ export function AnswerCoveragePanel() {
   const [currentPage, setCurrentPage] = useState(1);
 
   // Check if any filter is selected (defer loading until filter is applied)
-  const hasSelectedFilters = partyFilter !== 'all' || 
-    stateFilter !== 'all' || 
-    coverageFilter !== 'all' || 
+  const hasSelectedFilters = partyFilter !== 'all' ||
+    stateFilter !== 'all' ||
+    districtFilter !== 'all' ||
+    coverageFilter !== 'all' ||
     levelFilter !== 'all' ||
     searchQuery.length > 0 ||
     financeFilter !== 'all' ||
@@ -422,7 +434,12 @@ export function AnswerCoveragePanel() {
 
   const filteredCandidates = useMemo(() => {
     let result = baseFilteredCandidates;
-    
+
+    // Apply district filter (client-side; options scoped to selected state)
+    if (districtFilter !== 'all') {
+      result = result.filter(c => c.district === districtFilter);
+    }
+
     // Apply finance filter
     if (financeFilter === 'mismatch') {
       result = result.filter(candidate => {
@@ -506,7 +523,7 @@ export function AnswerCoveragePanel() {
     }
     
     return result;
-  }, [baseFilteredCandidates, financeFilter, deltaFilter, syncFilter, scoreFilter, tierFilter, fecIdFilter]);
+  }, [baseFilteredCandidates, districtFilter, financeFilter, deltaFilter, syncFilter, scoreFilter, tierFilter, fecIdFilter]);
 
   const filteredCandidatesWithFecId = useMemo(() =>
     filteredCandidates.filter(c => !!c.fecCandidateId),
@@ -521,7 +538,7 @@ export function AnswerCoveragePanel() {
   );
 
   // Reset to page 1 when any filter changes
-  const filterDependencies = [partyFilter, stateFilter, coverageFilter, levelFilter, searchQuery, financeFilter, deltaFilter, syncFilter, scoreFilter, tierFilter, fecIdFilter];
+  const filterDependencies = [partyFilter, stateFilter, districtFilter, coverageFilter, levelFilter, searchQuery, financeFilter, deltaFilter, syncFilter, scoreFilter, tierFilter, fecIdFilter];
   useMemo(() => {
     setCurrentPage(1);
   }, filterDependencies);
@@ -2001,7 +2018,22 @@ export function AnswerCoveragePanel() {
               </SelectContent>
             </Select>
           </div>
-          
+
+          <div className="flex items-center gap-1">
+            <span className="text-xs font-medium text-muted-foreground">District:</span>
+            <Select value={districtFilter} onValueChange={setDistrictFilter}>
+              <SelectTrigger className="w-[90px] h-7 text-xs bg-background">
+                <SelectValue placeholder="All" />
+              </SelectTrigger>
+              <SelectContent className="bg-popover max-h-[300px]">
+                <SelectItem value="all">All</SelectItem>
+                {(districts ?? []).map(d => (
+                  <SelectItem key={d} value={d}>{d}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           <div className="flex items-center gap-1">
             <span className="text-xs font-medium text-muted-foreground">Coverage:</span>
             <Select value={coverageFilter} onValueChange={(v) => setCoverageFilter(v as typeof coverageFilter)}>
@@ -2164,6 +2196,7 @@ export function AnswerCoveragePanel() {
                   <TableHead className="px-2 py-2 max-w-[140px]">Name</TableHead>
                   <TableHead className="w-[50px] px-2 py-2">Party</TableHead>
                   <TableHead className="w-[55px] px-2 py-2">State</TableHead>
+                  <TableHead className="w-[60px] px-2 py-2">District</TableHead>
                   <TableHead className="text-center w-[70px] px-2 py-2">Answers</TableHead>
                   <TableHead className="w-[55px] px-2 py-2">Score</TableHead>
                   <TableHead className="w-[52px] px-2 py-2">Tier</TableHead>
@@ -2314,6 +2347,7 @@ export function AnswerCoveragePanel() {
                             </Badge>
                           </TableCell>
                           <TableCell className="px-2 py-2">{candidate.state}</TableCell>
+                          <TableCell className="px-2 py-2 text-muted-foreground">{candidate.district || '—'}</TableCell>
                           <TableCell className="text-center px-2 py-2">
                             <button 
                               className="hover:opacity-80 transition-opacity cursor-pointer"
