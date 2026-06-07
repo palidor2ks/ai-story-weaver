@@ -12,6 +12,11 @@
 \set ON_ERROR_STOP on
 \set sess 'fec-bulk-':cycle
 
+-- Refresh: drop this cycle's *bulk-loaded* contributions before reloading, so a
+-- corrected re-upload replaces cleanly. API-imported rows (other session ids)
+-- and other cycles are untouched.
+delete from public.contributions where import_session_id = :'sess';
+
 -- ── 1) Individual contributions (indiv/itcont) → contributions ───────────────
 insert into public.contributions
   (identity_hash, fec_transaction_id, fec_committee_transaction_id, contributor_name,
