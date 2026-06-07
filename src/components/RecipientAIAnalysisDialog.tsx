@@ -127,7 +127,7 @@ export const RecipientAIAnalysisDialog = ({
   return (
     <Dialog onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto [&>button:last-child]:hidden">
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto overflow-x-hidden p-4 sm:p-6 [&>button:last-child]:hidden">
         <DialogHeader className="sticky top-0 z-10 bg-background pb-2 border-b border-border">
           <div className="flex items-start justify-between gap-3">
             <div className="space-y-1.5 min-w-0">
@@ -209,7 +209,7 @@ export const RecipientAIAnalysisDialog = ({
         )}
 
         {analysis && !isLoading && (
-          <div className="space-y-5 text-sm">
+          <div className="space-y-5 text-sm min-w-0 break-words">
             {analysis.insufficient_information && (
               <div className="flex items-start gap-2 p-3 rounded-md border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300">
                 <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
@@ -389,10 +389,10 @@ export const RecipientAIAnalysisDialog = ({
                         href={s.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-primary hover:underline inline-flex items-center gap-1"
+                        className="text-primary hover:underline inline-flex items-start gap-1 max-w-full align-top"
                       >
-                        <ExternalLink className="h-3 w-3" />
-                        [{i + 1}] {s.title}
+                        <ExternalLink className="h-3 w-3 mt-0.5 shrink-0" />
+                        <span className="min-w-0 break-words">[{i + 1}] {s.title}</span>
                       </a>
                     </li>
                   ))}
