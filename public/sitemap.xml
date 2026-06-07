@@ -126,6 +126,11 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00624270</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00775890</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -147,6 +152,11 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00477745</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00841130</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -176,12 +186,17 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00340448</loc>
+    <loc>https://www.polipulseapp.com/committee/C00701243</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00559393</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00340448</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -221,7 +236,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00624270</loc>
+    <loc>https://www.polipulseapp.com/committee/C00565283</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -236,7 +251,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00568402</loc>
+    <loc>https://www.polipulseapp.com/committee/C00448910</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -271,32 +286,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00701243</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00565283</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00904144</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00448910</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00376608</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00400861</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -311,11 +301,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00382622</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00494062</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -326,7 +311,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00648493</loc>
+    <loc>https://www.polipulseapp.com/committee/C00376608</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -421,7 +406,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00338319</loc>
+    <loc>https://www.polipulseapp.com/committee/C00618512</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -431,17 +416,27 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00557264</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00536318</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00338319</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00497321</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00557264</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00540971</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -456,12 +451,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00541821</loc>
+    <loc>https://www.polipulseapp.com/committee/C00400861</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00540971</loc>
+    <loc>https://www.polipulseapp.com/committee/C00541821</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -476,27 +471,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00577999</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00618512</loc>
+    <loc>https://www.polipulseapp.com/committee/C00382622</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00497933</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00461152</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00577924</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -526,7 +506,17 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00553487</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00408161</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00369033</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -542,6 +532,11 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00829465</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00621003</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -571,11 +566,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00491357</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00705566</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -587,6 +577,11 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00550871</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00565556</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -616,22 +611,17 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00517326</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00701953</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00553487</loc>
+    <loc>https://www.polipulseapp.com/committee/C00517326</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00565556</loc>
+    <loc>https://www.polipulseapp.com/committee/C00461152</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -666,27 +656,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00621003</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00855353</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00454504</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00857805</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00545145</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -731,17 +706,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00370296</loc>
+    <loc>https://www.polipulseapp.com/committee/C00503185</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00447060</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00565051</loc>
+    <loc>https://www.polipulseapp.com/committee/C00617357</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -766,7 +736,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00851790</loc>
+    <loc>https://www.polipulseapp.com/committee/C00427047</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -781,7 +751,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00541839</loc>
+    <loc>https://www.polipulseapp.com/committee/C00370296</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -811,7 +781,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00427047</loc>
+    <loc>https://www.polipulseapp.com/committee/C00453258</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00447060</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -821,12 +796,17 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00541839</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00546648</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00482984</loc>
+    <loc>https://www.polipulseapp.com/committee/C00565051</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -851,16 +831,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00453258</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00617357</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00828541</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -871,12 +841,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00563130</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00492785</loc>
+    <loc>https://www.polipulseapp.com/committee/C00614420</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -886,22 +851,17 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00405456</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00354688</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00716720</loc>
+    <loc>https://www.polipulseapp.com/committee/C00501387</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00546622</loc>
+    <loc>https://www.polipulseapp.com/committee/C00568451</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -916,27 +876,22 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00454116</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00279851</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00792341</loc>
+    <loc>https://www.polipulseapp.com/committee/C00545145</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00545848</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00568451</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00609255</loc>
+    <loc>https://www.polipulseapp.com/committee/C00405456</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -946,7 +901,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00427518</loc>
+    <loc>https://www.polipulseapp.com/committee/C00563130</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -961,17 +916,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00552703</loc>
+    <loc>https://www.polipulseapp.com/committee/C00437277</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00614420</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00563783</loc>
+    <loc>https://www.polipulseapp.com/committee/C00545848</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -981,12 +931,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00459099</loc>
+    <loc>https://www.polipulseapp.com/committee/C00492785</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00501387</loc>
+    <loc>https://www.polipulseapp.com/committee/C00552703</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1006,32 +956,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00588764</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00390724</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00564203</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00454116</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00843763</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00588772</loc>
+    <loc>https://www.polipulseapp.com/committee/C00609255</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1041,7 +971,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00543967</loc>
+    <loc>https://www.polipulseapp.com/committee/C00459099</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1061,7 +991,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00547554</loc>
+    <loc>https://www.polipulseapp.com/committee/C00561357</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1086,12 +1016,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00409581</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00786822</loc>
+    <loc>https://www.polipulseapp.com/committee/C00524678</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1111,11 +1036,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00561357</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00327023</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -1126,7 +1046,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00786194</loc>
+    <loc>https://www.polipulseapp.com/committee/C00443689</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1151,6 +1071,11 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00577841</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00623330</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -1161,7 +1086,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00846501</loc>
+    <loc>https://www.polipulseapp.com/committee/C00499384</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1171,7 +1096,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00524678</loc>
+    <loc>https://www.polipulseapp.com/committee/C00567941</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00547554</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1186,7 +1116,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00577841</loc>
+    <loc>https://www.polipulseapp.com/committee/C00476622</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1196,12 +1126,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00476622</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00499384</loc>
+    <loc>https://www.polipulseapp.com/committee/C00685057</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1212,11 +1137,6 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00648253</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00685057</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1241,17 +1161,12 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00608398</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00702548</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00574889</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00695353</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1296,7 +1211,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00540500</loc>
+    <loc>https://www.polipulseapp.com/committee/C00622456</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1311,6 +1226,11 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00695353</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00498121</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -1321,7 +1241,22 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00570994</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00480780</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00859041</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00568634</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1341,17 +1276,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00622456</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00436386</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00568634</loc>
+    <loc>https://www.polipulseapp.com/committee/C00485946</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1367,16 +1297,6 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00573758</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00480780</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00485946</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1416,7 +1336,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00466078</loc>
+    <loc>https://www.polipulseapp.com/committee/C00427518</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1426,12 +1346,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00632257</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00781443</loc>
+    <loc>https://www.polipulseapp.com/committee/C00454504</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1486,12 +1401,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00575126</loc>
+    <loc>https://www.polipulseapp.com/committee/C00818880</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00818880</loc>
+    <loc>https://www.polipulseapp.com/committee/C00416594</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1516,12 +1431,17 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00608075</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00873166</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00608075</loc>
+    <loc>https://www.polipulseapp.com/committee/C00546788</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1551,22 +1471,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00565960</loc>
+    <loc>https://www.polipulseapp.com/committee/C00431353</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00519405</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00506394</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00495382</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1581,7 +1491,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00568808</loc>
+    <loc>https://www.polipulseapp.com/committee/C00614768</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1616,6 +1526,11 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00460378</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00671925</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -1626,17 +1541,17 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00620823</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00924969</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00775080</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00716720</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1656,17 +1571,17 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00566984</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00493817</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00285171</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00726042</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1686,11 +1601,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00460378</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00672295</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -1701,12 +1611,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00566984</loc>
+    <loc>https://www.polipulseapp.com/committee/C00466078</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00567941</loc>
+    <loc>https://www.polipulseapp.com/committee/C00568808</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1721,7 +1631,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00308676</loc>
+    <loc>https://www.polipulseapp.com/committee/C00620823</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1761,11 +1671,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00563403</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00745224</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -1786,7 +1691,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00568477</loc>
+    <loc>https://www.polipulseapp.com/committee/C00485532</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1797,6 +1702,11 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00721431</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00546622</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1827,6 +1737,16 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00858415</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00674770</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00568477</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1876,12 +1796,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00674770</loc>
+    <loc>https://www.polipulseapp.com/committee/C00257642</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00485532</loc>
+    <loc>https://www.polipulseapp.com/committee/C00563403</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1891,17 +1811,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00765099</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00822767</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00548479</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00637363</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1926,7 +1841,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00566661</loc>
+    <loc>https://www.polipulseapp.com/committee/C00652719</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1966,7 +1881,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00614768</loc>
+    <loc>https://www.polipulseapp.com/committee/C00506394</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1996,6 +1911,11 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00566661</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00856237</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -2006,7 +1926,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00652719</loc>
+    <loc>https://www.polipulseapp.com/committee/C00843763</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -2026,12 +1946,22 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00789404</loc>
+    <loc>https://www.polipulseapp.com/committee/C00815415</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00668608</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00460162</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00652727</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -2071,17 +2001,17 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00575522</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00566786</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00452227</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00492645</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -2116,7 +2046,17 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00543967</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00764449</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00143743</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -2126,7 +2066,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00143743</loc>
+    <loc>https://www.polipulseapp.com/committee/C00670034</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -2151,6 +2091,16 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00730531</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00786822</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00502401</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -2166,7 +2116,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00634253</loc>
+    <loc>https://www.polipulseapp.com/committee/C00495382</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -2186,7 +2136,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00511279</loc>
+    <loc>https://www.polipulseapp.com/committee/C00686741</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -2226,7 +2176,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00492421</loc>
+    <loc>https://www.polipulseapp.com/committee/C00563783</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00469197</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -2246,12 +2201,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00686741</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00844159</loc>
+    <loc>https://www.polipulseapp.com/committee/C00822767</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -2291,7 +2241,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00469197</loc>
+    <loc>https://www.polipulseapp.com/committee/C00492421</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -2302,6 +2252,11 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00842765</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00511279</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -2317,16 +2272,6 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00527416</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00467571</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00670034</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -2351,17 +2296,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00921783</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00667493</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00591263</loc>
+    <loc>https://www.polipulseapp.com/committee/C00561845</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -2371,12 +2306,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00439760</loc>
+    <loc>https://www.polipulseapp.com/committee/C00609370</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00609370</loc>
+    <loc>https://www.polipulseapp.com/committee/C00439760</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -2396,16 +2331,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00561845</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00681163</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00488650</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -2416,12 +2341,22 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00564203</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00462002</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00702522</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00681163</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -2466,7 +2401,17 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00568402</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00238865</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00667493</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -2511,12 +2456,17 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00566083</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00806547</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00619932</loc>
+    <loc>https://www.polipulseapp.com/committee/C00786194</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -2532,11 +2482,6 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00796672</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00566083</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -2561,16 +2506,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00652727</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00458828</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00551630</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -2581,7 +2516,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00872473</loc>
+    <loc>https://www.polipulseapp.com/committee/C00619932</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00308676</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -2601,7 +2541,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00619551</loc>
+    <loc>https://www.polipulseapp.com/committee/C00563973</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -2616,12 +2556,17 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00327734</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00857094</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00563973</loc>
+    <loc>https://www.polipulseapp.com/committee/C00863217</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -2631,12 +2576,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00903690</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00863217</loc>
+    <loc>https://www.polipulseapp.com/committee/C00591263</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -2671,7 +2611,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00549360</loc>
+    <loc>https://www.polipulseapp.com/committee/C00619551</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -2682,6 +2622,11 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00579896</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00549360</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -2721,22 +2666,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00527770</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00450460</loc>
+    <loc>https://www.polipulseapp.com/committee/C00582817</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00376244</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00582817</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -2771,12 +2706,22 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00336974</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00343871</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00197822</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00527770</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -2807,6 +2752,11 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00818328</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00450460</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -2916,11 +2866,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00893321</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00479063</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -2937,6 +2882,11 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00512277</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00575522</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -2961,17 +2911,22 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00523977</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00512749</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00497149</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00461913</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00465229</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -3007,6 +2962,11 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00511634</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00523977</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -3051,17 +3011,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00461913</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00680918</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00465229</loc>
+    <loc>https://www.polipulseapp.com/committee/C00565960</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -3087,6 +3042,16 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00625434</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00610428</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00568683</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -3122,11 +3087,6 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00561936</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00610428</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -3176,7 +3136,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00568683</loc>
+    <loc>https://www.polipulseapp.com/committee/C00455089</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -3266,11 +3226,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00455089</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00864488</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -3326,27 +3281,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00449306</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00502740</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00507368</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00449967</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00523985</loc>
+    <loc>https://www.polipulseapp.com/committee/C00574889</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -3356,12 +3291,52 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00507368</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00546259</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00523985</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00487538</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00449967</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00540302</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00449306</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00468744</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00918284</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00502740</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -3376,7 +3351,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00605592</loc>
+    <loc>https://www.polipulseapp.com/committee/C00565127</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -3401,42 +3376,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00487538</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00787648</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00540302</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00468744</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00565127</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00338582</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00327734</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00336974</loc>
+    <loc>https://www.polipulseapp.com/committee/C00787648</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -3451,12 +3396,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00614198</loc>
+    <loc>https://www.polipulseapp.com/committee/C00907055</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00907055</loc>
+    <loc>https://www.polipulseapp.com/committee/C00633073</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -3477,6 +3422,16 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00305425</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00621409</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00436998</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -3506,17 +3461,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00359034</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00621409</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00648238</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00359034</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -3526,12 +3476,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00691576</loc>
+    <loc>https://www.polipulseapp.com/committee/C00614198</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00436998</loc>
+    <loc>https://www.polipulseapp.com/committee/C00691576</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -3551,17 +3501,17 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00633073</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00893289</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00793976</loc>
+    <loc>https://www.polipulseapp.com/committee/C00789404</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00652628</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -3581,11 +3531,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00614776</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00582304</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -3596,17 +3541,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00806174</loc>
+    <loc>https://www.polipulseapp.com/committee/C00527382</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00376939</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00527382</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -3631,12 +3571,17 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00855288</loc>
+    <loc>https://www.polipulseapp.com/committee/C00540500</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00662601</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00765099</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -3661,12 +3606,32 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00784389</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00934455</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00795252</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00775015</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00614776</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00806174</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -3721,11 +3686,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00718866</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00856963</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -3741,22 +3701,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00487330</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00913277</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00913376</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00908855</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -3772,6 +3722,11 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00906883</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00487330</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -3796,7 +3751,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00719294</loc>
+    <loc>https://www.polipulseapp.com/committee/C00837484</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00718866</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -3807,6 +3767,11 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00397505</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00908855</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -3846,11 +3811,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00519223</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00458125</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -3861,12 +3821,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00793760</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00822445</loc>
+    <loc>https://www.polipulseapp.com/committee/C00548396</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -3916,17 +3871,17 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00523191</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00916452</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00866426</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00781443</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -3941,12 +3896,27 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00548396</loc>
+    <loc>https://www.polipulseapp.com/committee/C00519223</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00793976</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00523191</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00311357</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00822445</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -3986,12 +3956,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00637173</loc>
+    <loc>https://www.polipulseapp.com/committee/C00855288</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00856955</loc>
+    <loc>https://www.polipulseapp.com/committee/C00562751</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -4021,11 +3991,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00499921</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00567677</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -4041,12 +4006,27 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00637173</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00802298</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00499921</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00855361</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00384750</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -4086,16 +4066,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00562751</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00384750</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00662767</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -4116,17 +4086,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00706002</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00718627</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00682021</loc>
+    <loc>https://www.polipulseapp.com/committee/C00546168</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -4181,7 +4141,22 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00575126</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00706002</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00441774</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00682021</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -4196,7 +4171,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00410100</loc>
+    <loc>https://www.polipulseapp.com/committee/C00543595</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -4211,12 +4186,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00546168</loc>
+    <loc>https://www.polipulseapp.com/committee/C00935874</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00935874</loc>
+    <loc>https://www.polipulseapp.com/committee/C00718627</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -4231,7 +4206,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00543595</loc>
+    <loc>https://www.polipulseapp.com/committee/C00410100</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00545871</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -4246,27 +4226,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00545871</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00471706</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00799767</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00561852</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00528604</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -4291,12 +4256,22 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00471706</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00773184</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00543975</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00467571</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -4311,27 +4286,22 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00566133</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00566794</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00571893</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00568121</loc>
+    <loc>https://www.polipulseapp.com/committee/C00566133</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00561803</loc>
+    <loc>https://www.polipulseapp.com/committee/C00610709</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00528604</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -4342,6 +4312,11 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00895276</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00566794</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -4361,17 +4336,22 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00479139</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00610709</loc>
+    <loc>https://www.polipulseapp.com/committee/C00568121</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00543926</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00561803</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00479139</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -4396,12 +4376,17 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00562033</loc>
+    <loc>https://www.polipulseapp.com/committee/C00706267</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00549709</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00544601</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -4421,22 +4406,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00549667</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00907519</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00548586</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00552893</loc>
+    <loc>https://www.polipulseapp.com/committee/C00915645</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -4446,7 +4421,22 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00548586</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00527457</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00549667</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00562033</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -4456,12 +4446,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00919936</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00544601</loc>
+    <loc>https://www.polipulseapp.com/committee/C00552893</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -4471,12 +4456,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00451807</loc>
+    <loc>https://www.polipulseapp.com/committee/C00919936</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00897892</loc>
+    <loc>https://www.polipulseapp.com/committee/C00451807</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -4486,17 +4471,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00546788</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00440362</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00900431</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -4531,17 +4506,17 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00495846</loc>
+    <loc>https://www.polipulseapp.com/committee/C00909705</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00492249</loc>
+    <loc>https://www.polipulseapp.com/committee/C00527549</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00402958</loc>
+    <loc>https://www.polipulseapp.com/committee/C00900431</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -4551,12 +4526,32 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00897892</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00588780</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00492249</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00940445</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00402958</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00495846</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -4571,11 +4566,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00616979</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00924258</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -4586,12 +4576,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00587378</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00611384</loc>
+    <loc>https://www.polipulseapp.com/committee/C00459131</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -4676,7 +4661,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00459131</loc>
+    <loc>https://www.polipulseapp.com/committee/C00587378</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00616979</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -4687,6 +4677,11 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00795005</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00611384</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -4706,12 +4701,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00548412</loc>
+    <loc>https://www.polipulseapp.com/committee/C00858688</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00858688</loc>
+    <loc>https://www.polipulseapp.com/committee/C00591594</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -4731,12 +4726,22 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00897165</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00384057</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00593525</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00525295</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -4751,22 +4756,17 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00931527</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00648626</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00729954</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00503052</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00565648</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -4781,7 +4781,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00509729</loc>
+    <loc>https://www.polipulseapp.com/committee/C00548412</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -4806,7 +4806,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00857359</loc>
+    <loc>https://www.polipulseapp.com/committee/C00503052</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00565648</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -4817,11 +4822,6 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00511642</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00591594</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -4837,11 +4837,6 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00923565</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00397299</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -4862,21 +4857,6 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00544684</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00797795</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00895763</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00510164</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -4906,7 +4886,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00834028</loc>
+    <loc>https://www.polipulseapp.com/committee/C00726042</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -4926,17 +4906,17 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00730531</loc>
+    <loc>https://www.polipulseapp.com/committee/C00397299</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00570994</loc>
+    <loc>https://www.polipulseapp.com/committee/C00834028</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00503185</loc>
+    <loc>https://www.polipulseapp.com/committee/C00719294</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -4961,7 +4941,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00518860</loc>
+    <loc>https://www.polipulseapp.com/committee/C00765800</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -4972,6 +4952,11 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00773259</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00568048</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -4996,16 +4981,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00460584</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00852137</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00779603</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -5016,7 +4991,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00568048</loc>
+    <loc>https://www.polipulseapp.com/committee/C00568162</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -5036,22 +5011,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00573360</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00568162</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00506832</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00361980</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -5061,12 +5021,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00573469</loc>
+    <loc>https://www.polipulseapp.com/committee/C00361980</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00765800</loc>
+    <loc>https://www.polipulseapp.com/committee/C00573469</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -5076,7 +5036,27 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00904466</loc>
+    <loc>https://www.polipulseapp.com/committee/C00460584</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00573360</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00518860</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00657833</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00852137</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -5106,12 +5086,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00843425</loc>
+    <loc>https://www.polipulseapp.com/committee/C00558577</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00558577</loc>
+    <loc>https://www.polipulseapp.com/committee/C00843425</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -5136,7 +5116,17 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00620518</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00696526</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00656926</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -5156,7 +5146,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00656926</loc>
+    <loc>https://www.polipulseapp.com/committee/C00904466</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -5221,6 +5211,11 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00605592</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00694778</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -5271,17 +5266,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00776120</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00247767</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00547893</loc>
+    <loc>https://www.polipulseapp.com/committee/C00580696</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -5291,7 +5281,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00580696</loc>
+    <loc>https://www.polipulseapp.com/committee/C00857359</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -5311,7 +5301,27 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00636803</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00527713</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00741090</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00511659</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00547893</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -5337,6 +5347,11 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00711549</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00637165</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -5401,6 +5416,11 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00634352</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00882886</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -5446,11 +5466,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00909705</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00452003</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -5476,12 +5491,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00796144</loc>
+    <loc>https://www.polipulseapp.com/committee/C00660795</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00477091</loc>
+    <loc>https://www.polipulseapp.com/committee/C00796144</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -5491,12 +5506,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00660795</loc>
+    <loc>https://www.polipulseapp.com/committee/C00575050</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00575050</loc>
+    <loc>https://www.polipulseapp.com/committee/C00477091</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -5507,6 +5522,11 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00923110</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00648071</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -5571,12 +5591,17 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00528802</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00840165</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00657833</loc>
+    <loc>https://www.polipulseapp.com/committee/C00657569</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -5586,7 +5611,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00326801</loc>
+    <loc>https://www.polipulseapp.com/committee/C00662916</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00666917</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -5641,11 +5671,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00498956</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00496539</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -5681,12 +5706,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00608695</loc>
+    <loc>https://www.polipulseapp.com/committee/C00683094</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00683094</loc>
+    <loc>https://www.polipulseapp.com/committee/C00577924</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -5696,7 +5721,27 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00608695</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00680066</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00326801</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00484360</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00498956</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -5722,6 +5767,16 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00536409</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00510164</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00409581</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -5781,21 +5836,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00437277</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00511659</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00479949</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00451716</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -5826,12 +5866,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00482729</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00494617</loc>
+    <loc>https://www.polipulseapp.com/committee/C00655662</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -5936,12 +5971,37 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00482729</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00499376</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00307439</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00510347</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00920009</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00172619</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00494617</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -5966,7 +6026,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00499376</loc>
+    <loc>https://www.polipulseapp.com/committee/C00674192</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -5977,16 +6037,6 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00791897</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00307439</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00510347</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -6026,7 +6076,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00528802</loc>
+    <loc>https://www.polipulseapp.com/committee/C00486100</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00615989</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -6066,17 +6121,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00486100</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00550814</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00653857</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -6096,27 +6141,22 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00653857</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00423582</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00634352</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00615989</loc>
+    <loc>https://www.polipulseapp.com/committee/C00648493</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00410761</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00428938</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -6136,6 +6176,11 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00490607</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00831321</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -6146,17 +6191,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00488890</loc>
+    <loc>https://www.polipulseapp.com/committee/C00662114</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00365759</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00485763</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -6167,6 +6207,11 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00462069</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00486761</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -6186,7 +6231,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00490607</loc>
+    <loc>https://www.polipulseapp.com/committee/C00428938</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00633578</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -6211,11 +6261,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00851980</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00732826</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -6226,17 +6271,22 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00486761</loc>
+    <loc>https://www.polipulseapp.com/committee/C00488890</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00701003</loc>
+    <loc>https://www.polipulseapp.com/committee/C00630467</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00492074</loc>
+    <loc>https://www.polipulseapp.com/committee/C00485763</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00505214</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -6246,12 +6296,22 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00487975</loc>
+    <loc>https://www.polipulseapp.com/committee/C00918292</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00918292</loc>
+    <loc>https://www.polipulseapp.com/committee/C00492074</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00672527</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00487975</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -6266,7 +6326,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00620518</loc>
+    <loc>https://www.polipulseapp.com/committee/C00506980</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -6292,11 +6352,6 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00374751</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00506980</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -6356,11 +6411,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00450221</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00939132</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -6372,6 +6422,16 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00901967</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00450221</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00512269</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -6391,22 +6451,17 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00447466</loc>
+    <loc>https://www.polipulseapp.com/committee/C00572388</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00837484</loc>
+    <loc>https://www.polipulseapp.com/committee/C00428672</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00544148</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00447441</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -6426,7 +6481,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00476648</loc>
+    <loc>https://www.polipulseapp.com/committee/C00447466</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -6451,42 +6506,17 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00476648</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00934174</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00428672</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00572388</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00512269</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00662114</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00648071</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00630467</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00394957</loc>
+    <loc>https://www.polipulseapp.com/committee/C00447441</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -6521,12 +6551,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00926295</loc>
+    <loc>https://www.polipulseapp.com/committee/C00394957</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00559328</loc>
+    <loc>https://www.polipulseapp.com/committee/C00926295</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -6536,17 +6566,17 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00851790</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00609248</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00485193</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00380261</loc>
+    <loc>https://www.polipulseapp.com/committee/C00559328</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -6556,7 +6586,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00322883</loc>
+    <loc>https://www.polipulseapp.com/committee/C00380261</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -6566,12 +6596,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00831537</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00498345</loc>
+    <loc>https://www.polipulseapp.com/committee/C00322883</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -6581,17 +6606,22 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00410803</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00485193</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00774281</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00931527</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00314575</loc>
+    <loc>https://www.polipulseapp.com/committee/C00498345</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -6617,11 +6647,6 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00924746</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00539940</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -6691,11 +6716,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00519736</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00546499</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -6706,32 +6726,22 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00439794</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00527549</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00434266</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00434381</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00706614</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00431353</loc>
+    <loc>https://www.polipulseapp.com/committee/C00831537</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00519736</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00539940</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -6742,11 +6752,6 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00901389</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00410803</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -6776,27 +6781,17 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00524728</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00568212</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00897330</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00547125</loc>
+    <loc>https://www.polipulseapp.com/committee/C00770818</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00770818</loc>
+    <loc>https://www.polipulseapp.com/committee/C00634253</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -6821,7 +6816,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00546382</loc>
+    <loc>https://www.polipulseapp.com/committee/C00568212</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00547125</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -6831,17 +6831,22 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00639146</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00668228</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00196774</loc>
+    <loc>https://www.polipulseapp.com/committee/C00524728</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00546382</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00639146</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -6861,11 +6866,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00451286</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00935742</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -6877,6 +6877,11 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00860098</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00907667</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -6946,12 +6951,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00907667</loc>
+    <loc>https://www.polipulseapp.com/committee/C00906321</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00906321</loc>
+    <loc>https://www.polipulseapp.com/committee/C00451286</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -6966,22 +6971,17 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00401158</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00941161</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00548909</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00470682</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00551945</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -6996,17 +6996,17 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00399576</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00742247</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00401158</loc>
+    <loc>https://www.polipulseapp.com/committee/C00548909</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00547240</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -7016,12 +7016,17 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00797795</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00502294</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00405977</loc>
+    <loc>https://www.polipulseapp.com/committee/C00027466</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -7041,11 +7046,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00893776</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00676965</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -7061,12 +7061,22 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00547240</loc>
+    <loc>https://www.polipulseapp.com/committee/C00902643</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00902643</loc>
+    <loc>https://www.polipulseapp.com/committee/C00405977</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00399576</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00551945</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -7111,11 +7121,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00585224</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00923540</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -7146,6 +7151,11 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00440008</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00378000</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -7156,27 +7166,27 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00381947</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00487561</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00440008</loc>
+    <loc>https://www.polipulseapp.com/committee/C00793703</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00585224</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00381947</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00566398</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00793703</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -7251,6 +7261,11 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00872473</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00318915</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -7262,11 +7277,6 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00451690</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00665638</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -7286,7 +7296,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00369033</loc>
+    <loc>https://www.polipulseapp.com/committee/C00665638</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -7446,11 +7456,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00506865</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00340141</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -7476,11 +7481,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00571596</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00576652</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -7501,12 +7501,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00413914</loc>
+    <loc>https://www.polipulseapp.com/committee/C00495663</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00495663</loc>
+    <loc>https://www.polipulseapp.com/committee/C00506865</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -7517,6 +7517,11 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00640045</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00571596</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -7601,6 +7606,11 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00632257</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00937623</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -7641,16 +7651,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00672527</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00676676</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00525360</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -7676,11 +7676,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00542423</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00725465</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -7696,6 +7691,11 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00492728</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00856088</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -7706,12 +7706,22 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00582718</loc>
+    <loc>https://www.polipulseapp.com/committee/C00676676</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00791392</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00582718</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00542423</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -7731,27 +7741,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00492728</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00655662</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00576801</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00520510</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00631705</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -7767,6 +7762,11 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00544114</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00631705</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -7812,11 +7812,6 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00570200</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00615807</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -7891,6 +7886,11 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00615807</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00426650</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -7901,22 +7901,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00422550</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00480798</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00921809</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00543983</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -7961,11 +7951,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00590927</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00856526</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -8001,7 +7986,22 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00499988</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00543983</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00438267</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00590927</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -8116,6 +8116,11 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00434563</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00865592</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -8127,11 +8132,6 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00915124</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00434563</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -8201,11 +8201,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00529040</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00921601</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -8222,6 +8217,11 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00876557</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00529040</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -8306,6 +8306,11 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00577999</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00908095</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -8346,12 +8351,17 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00479949</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00323998</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00443689</loc>
+    <loc>https://www.polipulseapp.com/committee/C00588764</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -8361,12 +8371,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00027466</loc>
+    <loc>https://www.polipulseapp.com/committee/C00588772</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00573717</loc>
+    <loc>https://www.polipulseapp.com/committee/C00422550</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -8376,12 +8386,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00488981</loc>
+    <loc>https://www.polipulseapp.com/committee/C00573717</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00896019</loc>
+    <loc>https://www.polipulseapp.com/committee/C00488981</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -8396,7 +8406,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00568485</loc>
+    <loc>https://www.polipulseapp.com/committee/C00679217</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -8431,11 +8441,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00679217</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00244707</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -8461,7 +8466,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00675348</loc>
+    <loc>https://www.polipulseapp.com/committee/C00568485</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -8471,7 +8476,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00511063</loc>
+    <loc>https://www.polipulseapp.com/committee/C00675348</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -8496,7 +8501,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00608398</loc>
+    <loc>https://www.polipulseapp.com/committee/C00511063</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00776120</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -8517,11 +8527,6 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00937078</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00526533</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -8576,6 +8581,11 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00526533</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00531574</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -8591,22 +8601,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00815415</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00652628</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00668608</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00784389</loc>
+    <loc>https://www.polipulseapp.com/committee/C00728238</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -8617,11 +8612,6 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00536680</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00565580</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -8651,7 +8641,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00416594</loc>
+    <loc>https://www.polipulseapp.com/committee/C00856955</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00907923</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -8666,22 +8661,42 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00637363</loc>
+    <loc>https://www.polipulseapp.com/committee/C00851980</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00728238</loc>
+    <loc>https://www.polipulseapp.com/committee/C00565580</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00775015</loc>
+    <loc>https://www.polipulseapp.com/committee/C00893776</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00492645</loc>
+    <loc>https://www.polipulseapp.com/committee/C00893321</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00793760</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00458828</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00701003</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00903690</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -8701,7 +8716,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00502468</loc>
+    <loc>https://www.polipulseapp.com/committee/C00936559</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -8716,12 +8731,37 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00269332</loc>
+    <loc>https://www.polipulseapp.com/committee/C00509729</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00844159</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00502468</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00413914</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00510057</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00555888</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00269332</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -8736,22 +8776,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00915645</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00577940</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00499392</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00510057</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -8796,6 +8826,11 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00921783</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00611749</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -8811,7 +8846,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00897165</loc>
+    <loc>https://www.polipulseapp.com/committee/C00434381</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -8821,12 +8856,27 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00706267</loc>
+    <loc>https://www.polipulseapp.com/committee/C00492991</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00492991</loc>
+    <loc>https://www.polipulseapp.com/committee/C00495358</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00896019</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00846501</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00196774</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -8836,22 +8886,12 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00792341</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00496893</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00907923</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00257642</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00495358</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -8867,11 +8907,6 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00461822</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00390377</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -8896,7 +8931,32 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00390377</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00482984</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00439794</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00439448</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00434266</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00895763</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -8916,12 +8976,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00629659</loc>
+    <loc>https://www.polipulseapp.com/committee/C00550806</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00936559</loc>
+    <loc>https://www.polipulseapp.com/committee/C00629659</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -8946,22 +9006,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00550806</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00437004</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00499988</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00736876</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -8977,6 +9022,11 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00569384</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00736876</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -9001,7 +9051,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00496075</loc>
+    <loc>https://www.polipulseapp.com/committee/C00834853</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -9021,6 +9071,21 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00491357</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00496075</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00440040</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00562975</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -9031,7 +9096,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00440040</loc>
+    <loc>https://www.polipulseapp.com/committee/C00314575</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -9266,17 +9331,17 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/W000830</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/candidate/S000929</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/H0NJ06214</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/candidate/H000601</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -9316,7 +9381,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/H000601</loc>
+    <loc>https://www.polipulseapp.com/candidate/W000830</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -9421,11 +9486,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/V000136</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/candidate/H6NJ04224</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -9451,6 +9511,11 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/candidate/V000136</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/candidate/G000591</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -9472,6 +9537,11 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/F000466</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/candidate/P40013039</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -9751,22 +9821,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/M001190</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/candidate/H6FL23154</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/candidate/A000380</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/candidate/C001117</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -9796,6 +9851,11 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/candidate/K000384</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/candidate/D000618</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -9821,7 +9881,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/K000384</loc>
+    <loc>https://www.polipulseapp.com/candidate/M001190</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -9847,6 +9907,16 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/T000460</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/candidate/C001117</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/candidate/H6FL23154</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -9931,6 +10001,11 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/candidate/M001196</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/candidate/S001200</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -9947,11 +10022,6 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/M001217</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/candidate/M001196</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -10016,17 +10086,17 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/candidate/L000593</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/candidate/H6NY12172</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/F000450</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/candidate/L000593</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -10606,11 +10676,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/H001076</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/candidate/M000871</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -10622,11 +10687,6 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/M001223</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/candidate/T000491</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -10681,6 +10741,11 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/candidate/T000491</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/candidate/C001068</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -10721,6 +10786,11 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/candidate/H001076</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/candidate/H4NY03192</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -10742,6 +10812,11 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/M001233</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/candidate/C001103</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -10781,11 +10856,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/C001103</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/candidate/H6PA17203</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -10821,11 +10891,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/J000311</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/candidate/K000402</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -10836,7 +10901,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/U000040</loc>
+    <loc>https://www.polipulseapp.com/candidate/J000311</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -10862,6 +10927,11 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/H001052</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/candidate/U000040</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -11146,11 +11216,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/H001090</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/candidate/G000359</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -11172,6 +11237,11 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/L000603</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/candidate/H001090</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -11201,17 +11271,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/D000634</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/candidate/F000475</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/candidate/C001108</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -11271,6 +11331,11 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/candidate/D000634</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/candidate/D000616</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -11286,7 +11351,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/B001327</loc>
+    <loc>https://www.polipulseapp.com/candidate/C001108</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -11317,6 +11382,11 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/M001224</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/candidate/B001327</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -11391,12 +11461,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/H001047</loc>
+    <loc>https://www.polipulseapp.com/candidate/D000617</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/M001241</loc>
+    <loc>https://www.polipulseapp.com/candidate/H001047</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -11416,17 +11486,17 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/candidate/M001241</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/candidate/G000583</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/M001111</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/candidate/D000617</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -11472,11 +11542,6 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/G000601</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/candidate/B000825</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -11552,6 +11617,11 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/H6FL25043</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/candidate/B000825</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -11831,12 +11901,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/A000148</loc>
+    <loc>https://www.polipulseapp.com/candidate/M001237</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/G000598</loc>
+    <loc>https://www.polipulseapp.com/candidate/A000148</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -11846,7 +11916,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/M001237</loc>
+    <loc>https://www.polipulseapp.com/candidate/G000598</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -11971,12 +12041,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/W000437</loc>
+    <loc>https://www.polipulseapp.com/candidate/G000555</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/G000555</loc>
+    <loc>https://www.polipulseapp.com/candidate/W000437</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -12056,6 +12126,11 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/candidate/H001046</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/candidate/B001296</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -12107,11 +12182,6 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/H6NY21157</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/candidate/H001046</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -12182,6 +12252,11 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/V000128</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/candidate/J000289</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -12257,11 +12332,6 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/O000172</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/candidate/J000289</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -12356,17 +12426,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/H6PA07162</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/candidate/S6KY00278</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/candidate/S001218</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -12377,6 +12437,11 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/H6IA02211</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/candidate/H6PA07162</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -12402,6 +12467,11 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/H6FL20119</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/candidate/S001218</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -12456,12 +12526,17 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/C001120</loc>
+    <loc>https://www.polipulseapp.com/candidate/S001216</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/Y000067</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/candidate/C001120</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -12477,6 +12552,11 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/K000397</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/candidate/H6NJ07201</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -12506,27 +12586,17 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/H6FL15168</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/candidate/S001216</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/candidate/H6IA02179</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/candidate/S6IA00298</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/H6NJ07201</loc>
+    <loc>https://www.polipulseapp.com/candidate/H6FL15168</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/candidate/H6IA02179</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -12547,11 +12617,6 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/H6PA11081</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/candidate/S6KY00302</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -12666,7 +12731,17 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/candidate/S6KY00302</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/candidate/H6FL05201</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/candidate/H6NY12347</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -12692,11 +12767,6 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/S001211</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/candidate/G000600</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -12736,6 +12806,11 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/candidate/G000600</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/candidate/H6FL07215</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -12747,11 +12822,6 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/T000469</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/candidate/H6NY12347</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -12896,6 +12966,11 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/candidate/H6NY17163</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/candidate/C001091</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -12937,11 +13012,6 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/H6FL25035</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/candidate/H6NY17163</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
