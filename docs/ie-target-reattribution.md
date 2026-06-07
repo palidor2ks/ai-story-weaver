@@ -63,17 +63,40 @@ that no `BIDEN`-named filing matches the Harris pattern.
 
 ## Known deferred items
 
-Small cross-person mis-codes remain where the correct target has **no candidate
-record** yet, so they can't be reattributed without first creating one:
+The small cross-person mis-codes are now handled (migrations `20260607140000`
+and `20260607150000`):
 
-- `DESANTIS` coded to Haley's `P40010977` (~$122K)
-- `KAINE` coded to Casey's `S6PA00217` (~$2K)
-- `BALDWIN` coded to Alsobrooks' `S4MD00327` (~$1K)
-- `TRUMP` coded to Biden's `P80000722` (~$3K)
+- `DESANTIS` coded to Haley's `P40010977` (~$122K) → DeSantis
+- `KAINE` coded to Casey's `S6PA00217` (~$2K) → Kaine
+- `BALDWIN` coded to Alsobrooks' `S4MD00327` (~$1K) → Baldwin
+- `TRUMP` coded to Biden's `P80000722` (~$3K) → Trump
+
+Three of those targets needed linkage work first: Baldwin (`B001230`) and Kaine
+(`K000384`) already had profiles but Baldwin's Senate FEC id `S2WI00219` wasn't
+aliased (~$60M of IEs unattributed); DeSantis had no record at all because he
+withdrew and so never appeared in the active-candidate sweep. He was onboarded
+through the shared candidate funnel via the **`onboard-fec-candidate`** edge
+function (`{"fec_ids":["P40013039"]}`), which is the reusable path for any
+withdrawn/missing candidate the discovery sweep skips.
+
+What's left unattributed is only the uncoded long tail — IE rows with no FEC
+candidate id at all (e.g. ~$45M named DeSantis, ~$1.5M named Baldwin). These show
+under no profile (not *mis*-attributed) and can't be linked without an id.
 
 Same-person name variants/typos (e.g. `WHITESIDES`/`WHITESIDE`,
 `KRISHNAMOORTHI`/`KRIISHNAMOORTHI`, `PAULINA LUNA`/`LUNA`) need **no** correction:
 they share one FEC id, so canonical-`candidate_id` grouping already merges them.
+
+## Onboarding a missing candidate
+
+When a candidate that IEs reference has no profile (typically because they
+withdrew, so the `candidate_status=C` sweep skips them), invoke
+`onboard-fec-candidate` with their FEC id(s). It runs the same
+`resolveAndUpsertCandidate` funnel as `discover-fec-candidates` (person
+resolution, dedup, skeleton row at `pending_research`) but without the
+visible-states gate, and records the `candidate_fec_ids` alias so the importer
+links their spending. Then add an IE backfill migration guarded by
+`EXISTS (SELECT 1 FROM candidates WHERE id = '<fec_id>')`.
 
 ## Adding a new correction
 
