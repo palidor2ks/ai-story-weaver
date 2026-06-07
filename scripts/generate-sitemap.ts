@@ -113,13 +113,14 @@ async function main() {
     if (c?.id) entries.push({ path: `/candidate/${c.id}`, changefreq: "weekly", priority: "0.6" });
   }
 
-  // Intentionally omitted from sitemap (auth-only or private):
-  //   /donor/:id        — RLS authenticated-only, >1M rows, not indexable
-  //   /profile          — user's own profile, requires auth
-  //   /quiz             — requires auth + completed onboarding
-  //   /admin, /admin/*  — admin-only surfaces, not for public crawlers
-  //   /admin/users/:id  — admin-only
-  //   /admin/x-composer — admin-only
+  // Intentionally omitted from sitemap (auth-only, admin-only, or private):
+  //   /donor/:id              — RLS authenticated-only, >1M rows, not indexable
+  //   /profile                — user's own profile, requires auth
+  //   /quiz                   — requires auth + completed onboarding
+  //   /admin, /admin/*        — admin-only surfaces, not for public crawlers
+  //   /admin/users/:id        — admin-only
+  //   /admin/x-composer       — admin-only
+  //   /r/card/:candidateId    — share-card render endpoint (image generation only, not for users)
 
   writeFileSync(resolve("public/sitemap.xml"), xml(entries));
   console.log(`sitemap.xml written (${entries.length} entries)`);
