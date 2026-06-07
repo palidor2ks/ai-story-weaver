@@ -73,6 +73,7 @@ export default function Unsubscribe() {
         path="/unsubscribe"
         noIndex
       />
+      <h1 className="sr-only">Unsubscribe from PoliPulse emails</h1>
       <Card className="max-w-md w-full">
         <CardHeader>
           <CardTitle>Unsubscribe from PoliPulse emails</CardTitle>
