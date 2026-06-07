@@ -106,6 +106,36 @@ function getCycleDateRange(cycle: string): string {
   return `Jan ${startYear} – Dec ${cycleYear}`;
 }
 
+// Reconciliation rows are refreshed by the drain-fec-finance cron once they are
+// older than this many days (mirrors the function's stalenessDays default). Used
+// to flag a row whose FEC/Local/Delta numbers are overdue for a refresh.
+const RECONCILIATION_STALE_DAYS = 7;
+
+/** Compact "time ago" for a narrow table cell: "3h", "5d", "2w", "4mo". */
+function formatCompactAge(iso: string | null): string {
+  if (!iso) return '—';
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return '—';
+  const secs = Math.max(0, Math.floor((Date.now() - then) / 1000));
+  if (secs < 60) return `${secs}s`;
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins}m`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d`;
+  if (days < 30) return `${Math.floor(days / 7)}w`;
+  if (days < 365) return `${Math.floor(days / 30)}mo`;
+  return `${Math.floor(days / 365)}y`;
+}
+
+function isReconciliationStale(iso: string | null): boolean {
+  if (!iso) return true;
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return true;
+  return Date.now() - then > RECONCILIATION_STALE_DAYS * 24 * 60 * 60 * 1000;
+}
+
 // Removed TopicCoverageItem - no longer needed
 
 export function AnswerCoveragePanel() {
@@ -2264,6 +2294,25 @@ export function AnswerCoveragePanel() {
                     </TooltipProvider>
                   </TableHead>
                   <TableHead className="w-[65px] px-2 py-2">Delta</TableHead>
+                  <TableHead className="w-[64px] px-2 py-2">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger className="flex items-center gap-1 cursor-help">
+                          Synced
+                          <HelpCircle className="h-3 w-3 text-muted-foreground" />
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="max-w-[280px]">
+                          <p className="font-medium mb-1">Finance last synced</p>
+                          <p className="text-xs text-muted-foreground">
+                            When this row's FEC, Local &amp; Delta were last recomputed by reconciliation.
+                            The <span className="font-mono">drain-fec-finance</span> cron refreshes rows
+                            older than {RECONCILIATION_STALE_DAYS} days every 10 minutes; amber marks an
+                            overdue row. Use FEC Actions → Run Reconciliation to refresh now.
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </TableHead>
                   <TableHead className="w-[75px] px-2 py-2">FEC ID</TableHead>
                   <TableHead className="text-right w-[40px] px-2 py-2"></TableHead>
                 </TableRow>
@@ -2660,6 +2709,39 @@ export function AnswerCoveragePanel() {
                               individualDeltaPct={candidate.individualDeltaPct}
                               pacDeltaPct={candidate.pacDeltaPct}
                             />
+                          </TableCell>
+                          <TableCell className="px-2 py-2 whitespace-nowrap">
+                            {candidate.reconciliationCheckedAt ? (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger className="cursor-help">
+                                    <span
+                                      className={cn(
+                                        "text-[11px] tabular-nums",
+                                        isReconciliationStale(candidate.reconciliationCheckedAt)
+                                          ? "text-amber-600"
+                                          : "text-muted-foreground"
+                                      )}
+                                    >
+                                      {formatCompactAge(candidate.reconciliationCheckedAt)}
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="top">
+                                    <p className="text-xs text-muted-foreground">FEC / Local / Delta last recomputed</p>
+                                    <p className="text-xs font-medium">
+                                      {new Date(candidate.reconciliationCheckedAt).toLocaleString()}
+                                    </p>
+                                    {isReconciliationStale(candidate.reconciliationCheckedAt) && (
+                                      <p className="text-[11px] text-amber-600 mt-0.5">
+                                        Overdue (&gt;{RECONCILIATION_STALE_DAYS}d) — pending cron refresh
+                                      </p>
+                                    )}
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            ) : (
+                              <span className="text-muted-foreground/50 text-[10px]">—</span>
+                            )}
                           </TableCell>
                           <TableCell className="px-2 py-2">
                             {hasFecId ? (
