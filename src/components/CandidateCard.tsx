@@ -12,6 +12,7 @@ import { useAuth } from '@/context/AuthContext';
 import { IESummaryInline } from './IESummaryInline';
 import type { IETotals } from '@/hooks/useIndependentExpenditures';
 import { normalizeOfficeName } from '@/lib/officeLabel';
+import { formatPersonName } from '@/lib/nameFormat';
 
 interface CandidateCardProps {
   candidate: Candidate;
@@ -34,6 +35,7 @@ export const CandidateCard = ({
   const navigate = useNavigate();
   const hasAIAnswers = candidate.hasAIAnswers ?? false;
   const answerCount = candidate.answerCount;
+  const displayName = formatPersonName(candidate.name);
 
   const getPartyColor = (party: string) => {
     switch (party) {
@@ -98,7 +100,7 @@ export const CandidateCard = ({
                   checked={isSelected}
                   onCheckedChange={() => onToggleSelect?.(candidate)}
                   className="w-5 h-5"
-                  aria-label={`Compare ${candidate.name}`}
+                  aria-label={`Compare ${displayName}`}
                 />
               </div>
             )}
@@ -106,7 +108,7 @@ export const CandidateCard = ({
             {/* Compact Avatar */}
             <OfficialAvatar
               imageUrl={candidate.imageUrl}
-              name={candidate.name}
+              name={displayName}
               party={candidate.party}
               size="md"
             />
@@ -115,7 +117,7 @@ export const CandidateCard = ({
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <h3 className="font-display text-base font-semibold text-foreground group-hover:text-primary transition-colors line-clamp-2 break-words">
-                  {candidate.name}
+                  {displayName}
                 </h3>
                 <span className={cn("text-xs font-bold flex-shrink-0", getPartyColor(candidate.party))}>
                   ({getPartyInitial(candidate.party)})

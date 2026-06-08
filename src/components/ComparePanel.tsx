@@ -14,6 +14,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useFinanceCycles } from '@/hooks/useFinanceCycles';
 import { useCandidatesIE } from '@/hooks/useIndependentExpenditures';
 import { normalizeOfficeName } from '@/lib/officeLabel';
+import { formatPersonName } from '@/lib/nameFormat';
 import { IESummaryInline } from './IESummaryInline';
 
 interface ComparePanelProps {
@@ -210,6 +211,7 @@ export const ComparePanel = ({
             {visibleCandidates.map((candidate) => {
               const finance = financeByCandidate[candidate.id];
               const diffFromUser = Math.abs((candidate.overallScore ?? 0) - userScore);
+              const displayName = formatPersonName(candidate.name);
 
               return (
                 <div
@@ -218,16 +220,16 @@ export const ComparePanel = ({
                 >
                   <button
                     onClick={() => onRemove(candidate.id)}
-                    aria-label={`Remove ${candidate.name} from compare`}
+                    aria-label={`Remove ${displayName} from compare`}
                     className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center text-xs hover:bg-destructive/80 transition-colors"
                   >
                     <X className="w-3 h-3" />
                   </button>
 
                   <div className="flex items-center gap-2 mb-3">
-                    <OfficialAvatar imageUrl={candidate.imageUrl} name={candidate.name} party={candidate.party} size="sm" />
+                    <OfficialAvatar imageUrl={candidate.imageUrl} name={displayName} party={candidate.party} size="sm" />
                     <div className="flex-1 min-w-0">
-                      <h4 className="font-semibold text-sm text-foreground truncate">{candidate.name}</h4>
+                      <h4 className="font-semibold text-sm text-foreground truncate">{displayName}</h4>
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="text-xs text-muted-foreground truncate">{normalizeOfficeName(candidate.office)}</span>
                         <Badge variant="outline" className={cn('text-[10px] px-1 py-0', getPartyColor(candidate.party))}>

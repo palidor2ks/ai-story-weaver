@@ -10,6 +10,7 @@ import { useCivicOfficials, CivicOfficial } from './useCivicOfficials';
 import { useCandidateScoreMap } from './useCandidateScoreMap';
 import { useUserQuizQuestionIds, useRepresentativeAnswersAndScores } from './useRepresentativeScores';
 import { resolveCandidateImageUrl } from '@/lib/candidateImages';
+import { formatPersonName } from '@/lib/nameFormat';
 
 /**
  * SINGLE SOURCE OF TRUTH for candidate cards across the app.
@@ -73,7 +74,7 @@ const buildCandidate = (
   const { db, rep, civic } = sources;
   const api = rep ?? civic;
 
-  const name = db?.name ?? api?.name ?? 'Unknown';
+  const name = formatPersonName(db?.name ?? api?.name ?? 'Unknown');
   // The civic feed is the live authority on whether someone still holds office.
   // When it explicitly marks a federal executive as "Former …" (President/VP
   // who left office), trust that label — and the not-incumbent flag — over a

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
+import { formatPersonName } from '@/lib/nameFormat';
 
 interface OfficialAvatarProps {
   imageUrl?: string | null;
@@ -40,7 +41,7 @@ const getPartyTextColor = (party: string) => {
 };
 
 const getInitials = (name: string) => {
-  const parts = name.split(' ').filter(Boolean);
+  const parts = formatPersonName(name).split(' ').filter(Boolean);
   if (parts.length >= 2) {
     return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
   }
