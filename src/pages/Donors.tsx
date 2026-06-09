@@ -91,9 +91,17 @@ export const Donors = () => {
     return (
       <div className="min-h-screen bg-background">
         <Header />
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
+        <main className="container py-8 px-4">
+          <div className="mb-8">
+            <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground mb-2">
+              Campaign Donors
+            </h1>
+            <div className="h-5 w-96 bg-muted rounded animate-pulse" />
+          </div>
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        </main>
       </div>
     );
   }

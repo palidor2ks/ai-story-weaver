@@ -244,10 +244,18 @@ export const Candidates = () => {
     return (
       <div className="min-h-screen bg-background">
         <Header />
-        <div className="flex flex-col items-center justify-center py-20 gap-4">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-          <p className="text-muted-foreground text-sm">Loading all officials...</p>
-        </div>
+        <main className="container py-8 px-4">
+          <div className="mb-8">
+            <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground mb-2">
+              All Politicians
+            </h1>
+            <div className="h-5 w-72 bg-muted rounded animate-pulse" />
+          </div>
+          <div className="flex flex-col items-center justify-center py-20 gap-4">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+            <p className="text-muted-foreground text-sm">Loading all officials...</p>
+          </div>
+        </main>
       </div>
     );
   }
