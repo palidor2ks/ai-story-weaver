@@ -1937,6 +1937,69 @@ export type Database = {
         }
         Relationships: []
       }
+      fec_candidates: {
+        Row: {
+          city: string | null
+          cycle: string
+          election_year: string | null
+          fec_candidate_id: string
+          incumbent_challenger: string | null
+          name: string | null
+          office: string | null
+          office_district: string | null
+          office_state: string | null
+          party: string | null
+          principal_committee_id: string | null
+          source: string
+          state: string | null
+          status: string | null
+          street_1: string | null
+          street_2: string | null
+          updated_at: string
+          zip: string | null
+        }
+        Insert: {
+          city?: string | null
+          cycle: string
+          election_year?: string | null
+          fec_candidate_id: string
+          incumbent_challenger?: string | null
+          name?: string | null
+          office?: string | null
+          office_district?: string | null
+          office_state?: string | null
+          party?: string | null
+          principal_committee_id?: string | null
+          source?: string
+          state?: string | null
+          status?: string | null
+          street_1?: string | null
+          street_2?: string | null
+          updated_at?: string
+          zip?: string | null
+        }
+        Update: {
+          city?: string | null
+          cycle?: string
+          election_year?: string | null
+          fec_candidate_id?: string
+          incumbent_challenger?: string | null
+          name?: string | null
+          office?: string | null
+          office_district?: string | null
+          office_state?: string | null
+          party?: string | null
+          principal_committee_id?: string | null
+          source?: string
+          state?: string | null
+          status?: string | null
+          street_1?: string | null
+          street_2?: string | null
+          updated_at?: string
+          zip?: string | null
+        }
+        Relationships: []
+      }
       fec_committee_sync_status: {
         Row: {
           completed_at: string | null
@@ -1970,6 +2033,180 @@ export type Database = {
           total_fetched?: number
           total_upserted?: number
           triggered_by?: string | null
+        }
+        Relationships: []
+      }
+      fec_committee_transactions: {
+        Row: {
+          amendment_ind: string | null
+          amount: number | null
+          city: string | null
+          committee_id: string | null
+          created_at: string
+          cycle: string
+          employer: string | null
+          entity_type: string | null
+          file_num: string | null
+          image_num: string | null
+          memo_code: string | null
+          memo_text: string | null
+          name: string | null
+          occupation: string | null
+          other_id: string | null
+          report_type: string | null
+          source: string
+          state: string | null
+          sub_id: string
+          tran_id: string | null
+          transaction_date: string | null
+          transaction_pgi: string | null
+          transaction_type: string | null
+          zip: string | null
+        }
+        Insert: {
+          amendment_ind?: string | null
+          amount?: number | null
+          city?: string | null
+          committee_id?: string | null
+          created_at?: string
+          cycle: string
+          employer?: string | null
+          entity_type?: string | null
+          file_num?: string | null
+          image_num?: string | null
+          memo_code?: string | null
+          memo_text?: string | null
+          name?: string | null
+          occupation?: string | null
+          other_id?: string | null
+          report_type?: string | null
+          source?: string
+          state?: string | null
+          sub_id: string
+          tran_id?: string | null
+          transaction_date?: string | null
+          transaction_pgi?: string | null
+          transaction_type?: string | null
+          zip?: string | null
+        }
+        Update: {
+          amendment_ind?: string | null
+          amount?: number | null
+          city?: string | null
+          committee_id?: string | null
+          created_at?: string
+          cycle?: string
+          employer?: string | null
+          entity_type?: string | null
+          file_num?: string | null
+          image_num?: string | null
+          memo_code?: string | null
+          memo_text?: string | null
+          name?: string | null
+          occupation?: string | null
+          other_id?: string | null
+          report_type?: string | null
+          source?: string
+          state?: string | null
+          sub_id?: string
+          tran_id?: string | null
+          transaction_date?: string | null
+          transaction_pgi?: string | null
+          transaction_type?: string | null
+          zip?: string | null
+        }
+        Relationships: []
+      }
+      fec_operating_expenditures: {
+        Row: {
+          amendment_ind: string | null
+          amount: number | null
+          back_ref_tran_id: string | null
+          category: string | null
+          category_desc: string | null
+          city: string | null
+          committee_id: string | null
+          created_at: string
+          cycle: string
+          entity_type: string | null
+          file_num: string | null
+          form_type: string | null
+          image_num: string | null
+          line_number: string | null
+          memo_code: string | null
+          memo_text: string | null
+          payee_name: string | null
+          purpose: string | null
+          report_type: string | null
+          report_year: string | null
+          schedule_type: string | null
+          source: string
+          state: string | null
+          sub_id: string
+          tran_id: string | null
+          transaction_date: string | null
+          transaction_pgi: string | null
+          zip: string | null
+        }
+        Insert: {
+          amendment_ind?: string | null
+          amount?: number | null
+          back_ref_tran_id?: string | null
+          category?: string | null
+          category_desc?: string | null
+          city?: string | null
+          committee_id?: string | null
+          created_at?: string
+          cycle: string
+          entity_type?: string | null
+          file_num?: string | null
+          form_type?: string | null
+          image_num?: string | null
+          line_number?: string | null
+          memo_code?: string | null
+          memo_text?: string | null
+          payee_name?: string | null
+          purpose?: string | null
+          report_type?: string | null
+          report_year?: string | null
+          schedule_type?: string | null
+          source?: string
+          state?: string | null
+          sub_id: string
+          tran_id?: string | null
+          transaction_date?: string | null
+          transaction_pgi?: string | null
+          zip?: string | null
+        }
+        Update: {
+          amendment_ind?: string | null
+          amount?: number | null
+          back_ref_tran_id?: string | null
+          category?: string | null
+          category_desc?: string | null
+          city?: string | null
+          committee_id?: string | null
+          created_at?: string
+          cycle?: string
+          entity_type?: string | null
+          file_num?: string | null
+          form_type?: string | null
+          image_num?: string | null
+          line_number?: string | null
+          memo_code?: string | null
+          memo_text?: string | null
+          payee_name?: string | null
+          purpose?: string | null
+          report_type?: string | null
+          report_year?: string | null
+          schedule_type?: string | null
+          source?: string
+          state?: string | null
+          sub_id?: string
+          tran_id?: string | null
+          transaction_date?: string | null
+          transaction_pgi?: string | null
+          zip?: string | null
         }
         Relationships: []
       }
@@ -2344,6 +2581,48 @@ export type Database = {
           undo_summary?: Json | null
           undone_at?: string | null
           updated_rows?: number
+        }
+        Relationships: []
+      }
+      ie_target_overrides: {
+        Row: {
+          corrected_candidate_id: string
+          corrected_target_candidate_name: string | null
+          corrected_target_fec_candidate_id: string | null
+          created_at: string
+          id: string
+          match_cycle: string | null
+          match_name_pattern: string | null
+          match_target_candidate_name: string | null
+          match_target_fec_candidate_id: string | null
+          note: string | null
+          spending_committee_fec_id: string | null
+        }
+        Insert: {
+          corrected_candidate_id: string
+          corrected_target_candidate_name?: string | null
+          corrected_target_fec_candidate_id?: string | null
+          created_at?: string
+          id?: string
+          match_cycle?: string | null
+          match_name_pattern?: string | null
+          match_target_candidate_name?: string | null
+          match_target_fec_candidate_id?: string | null
+          note?: string | null
+          spending_committee_fec_id?: string | null
+        }
+        Update: {
+          corrected_candidate_id?: string
+          corrected_target_candidate_name?: string | null
+          corrected_target_fec_candidate_id?: string | null
+          created_at?: string
+          id?: string
+          match_cycle?: string | null
+          match_name_pattern?: string | null
+          match_target_candidate_name?: string | null
+          match_target_fec_candidate_id?: string | null
+          note?: string | null
+          spending_committee_fec_id?: string | null
         }
         Relationships: []
       }
@@ -5218,9 +5497,11 @@ export type Database = {
       cancel_job: { Args: { p_id: string }; Returns: undefined }
       check_fl_sync_secret: { Args: { p_token: string }; Returns: boolean }
       check_ie_sync_secret: { Args: { p_token: string }; Returns: boolean }
+      check_import_sync_secret: { Args: { p_token: string }; Returns: boolean }
       check_nj_sync_secret: { Args: { p_token: string }; Returns: boolean }
       check_ny_sync_secret: { Args: { p_token: string }; Returns: boolean }
       check_photo_enrich_secret: { Args: { p_token: string }; Returns: boolean }
+      check_vote_sync_secret: { Args: { p_token: string }; Returns: boolean }
       claim_anon_poll_responses: {
         Args: { p_anon_session_id: string }
         Returns: number
@@ -5474,34 +5755,34 @@ export type Database = {
         }[]
       }
       get_race_candidates: {
-        Args: { _state: string; _office: string; _year: number }
+        Args: { _office: string; _state: string; _year: number }
         Returns: {
+          has_image: boolean
           id: string
+          incumbent: boolean
           name: string
           party: string
-          incumbent: boolean
           raised: number
-          has_image: boolean
         }[]
       }
       get_race_card_facts: {
         Args: {
-          _state: string
-          _office: string
-          _year: number
-          _mode?: string
           _cand_a?: string
           _cand_b?: string
+          _mode?: string
+          _office: string
+          _state: string
+          _year: number
         }
         Returns: Json
       }
       get_race_options: {
         Args: never
         Returns: {
-          state: string
-          office: string
-          year: number
           candidate_count: number
+          office: string
+          state: string
+          year: number
         }[]
       }
       get_top_committee_spenders: {

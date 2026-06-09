@@ -86,8 +86,11 @@ export const useCommitteeIE = (
         if (r.support_oppose_indicator === 'S') totals.support_amount += amt;
         else totals.oppose_amount += amt;
 
+        // Group by the canonical candidate first so the same person filed under
+        // different FEC candidate IDs collapses into one recipient. Fall back to
+        // the raw FEC id, then the filer-supplied name.
         const key =
-          r.target_fec_candidate_id ?? r.candidate_id ?? r.target_candidate_name ?? 'unknown';
+          r.candidate_id ?? r.target_fec_candidate_id ?? r.target_candidate_name ?? 'unknown';
         const cur: IETargetSummary =
           map.get(key) ??
           {

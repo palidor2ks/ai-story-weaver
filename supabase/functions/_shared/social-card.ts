@@ -126,6 +126,20 @@ function partyColor(party: string | null): string {
   return '#9ca3af';
 }
 
+// Short party tag (D/R/I/L/G…) for inline labels next to a candidate's name.
+// Returns null when the party is unknown so callers can omit the tag entirely.
+function partyAbbrev(party: string | null): string | null {
+  const p = (party ?? '').trim();
+  if (!p) return null;
+  const u = p.toUpperCase();
+  if (u.startsWith('R')) return 'R';
+  if (u.startsWith('D')) return 'D';
+  if (u.startsWith('L')) return 'L';
+  if (u.startsWith('G')) return 'G';
+  if (u.startsWith('I')) return 'I';
+  return u.charAt(0);
+}
+
 async function fetchImageDataUri(url: string | null): Promise<string | null> {
   if (!url) return null;
   try {
@@ -254,14 +268,6 @@ export async function renderCandidateCardPng(c: CardCandidate): Promise<Uint8Arr
 }
 
 // ---------- shared money-card helpers (donor + committee entity cards) ----------
-
-// A stroked 24-viewBox icon scaled and centred horizontally at the given top y.
-function centredIcon(paths: string, topY: number, size: number, color: string): string {
-  const s = size / 24;
-  const x = CARD_SIZE / 2 - size / 2;
-  return `<g transform="translate(${x},${topY}) scale(${s})" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</g>`;
-}
-const ICON_LANDMARK = '<path d="M3 22h18"/><path d="M6 18v-7"/><path d="M10 18v-7"/><path d="M14 18v-7"/><path d="M18 18v-7"/><path d="M12 2 21 8H3z"/>';
 
 // A horizontal multi-segment proportion bar (for "for vs against" or the funding mix).
 function segmentBar(y: number, segments: { value: number; color: string }[]): string {
@@ -444,12 +450,10 @@ function buildCommitteeSpenderSvg(f: CommitteeCardFacts): string {
   const chipsY = 268;
   const causeChipSvg = f.cause ? chip(cx, chipsY, f.cause.label, '#60a5fa').svg : '';
 
-  // Big total-spent figure (the hook), with an eyebrow + landmark icon above it.
+  // Big total-spent figure (the hook), with an eyebrow label above it.
   const eyebrowY = f.cause ? chipsY + 96 : chipsY + 16;
-  const iconTopY = eyebrowY + 18;
-  const figureY = iconTopY + 154;
+  const figureY = eyebrowY + 132;
   const figure = `<text x="${cx}" y="${eyebrowY}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="26" fill="#94a3b8" letter-spacing="3">TOTAL OUTSIDE SPENDING</text>
-    ${centredIcon(ICON_LANDMARK, iconTopY, 64, ACCENT)}
     <text x="${cx}" y="${figureY}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="118" fill="${ACCENT}">${escapeXml(fmtMoney(f.total_spent) ?? '$0')}</text>`;
 
   // For/against split bar.
@@ -479,7 +483,12 @@ function buildCommitteeSpenderSvg(f: CommitteeCardFacts): string {
       const sub = race
         ? `<text x="${margin}" y="${ry + 30}" font-family="Inter" font-weight="400" font-size="24" fill="#94a3b8">${escapeXml(truncate(race, 30))}</text>`
         : '';
-      targetBlock += `<text x="${margin}" y="${ry}" font-family="Inter" font-weight="700" font-size="34" fill="#f8fafc">${escapeXml(truncate(tidyName(t.name), 24))}</text>
+      // Party tag in the candidate's party color, inline right after the name.
+      const abbr = partyAbbrev(t.party);
+      const partyTag = abbr
+        ? `<tspan font-size="28" fill="${partyColor(t.party)}"> (${escapeXml(abbr)})</tspan>`
+        : '';
+      targetBlock += `<text x="${margin}" y="${ry}" font-family="Inter" font-weight="700" font-size="34" fill="#f8fafc">${escapeXml(truncate(tidyName(t.name), 22))}${partyTag}</text>
         ${sub}
         <text x="${CARD_SIZE - margin}" y="${ry}" text-anchor="end" font-family="Inter" font-weight="700" font-size="34" fill="${color}">${escapeXml(fmtMoney(t.amount) ?? '$0')} ${verb}</text>`;
     });

@@ -97,7 +97,7 @@ export default function PoliticalCompassTest() {
   return (
     <div className="min-h-screen bg-background">
       <Seo
-        title="Political Compass Test — Free Candidate Alignment Quiz | Pulse"
+        title="Political Compass Test — Free Candidate Alignment | Pulse"
         description="Take a free political compass test and compare your political alignment with candidates, parties, voting records, donors, and committees on Pulse."
         path="/political-compass-test"
         jsonLd={jsonLd}

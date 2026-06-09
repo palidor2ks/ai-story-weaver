@@ -127,68 +127,58 @@ export const RecipientAIAnalysisDialog = ({
   return (
     <Dialog onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto [&>button:last-child]:hidden">
-        <DialogHeader className="sticky top-0 z-10 bg-background pb-2 border-b border-border">
-          <div className="flex items-start justify-between gap-3">
-            <div className="space-y-1.5 min-w-0">
-              <DialogTitle className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-primary" />
-                {analysis?.alias_canonical_name || entityName}
-              </DialogTitle>
-              <DialogDescription>
-                AI-generated analysis of this {entityKind}'s positions, goals, and political activity — grounded in live web search.
-              </DialogDescription>
-              {analysis?.aliased_fec_ids && analysis.aliased_fec_ids.length > 1 && (
-                <div className="flex items-center gap-1.5 flex-wrap pt-1">
-                  <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
-                    Combined across:
-                  </span>
-                  {analysis.aliased_fec_ids.map((id) => (
-                    <Badge key={id} variant="secondary" className="font-mono text-[10px]">
-                      {id}
-                    </Badge>
-                  ))}
-                </div>
-              )}
-            </div>
-            {analysis && !isLoading && (
-              <div className="flex items-center gap-2 shrink-0">
-                {!analysis.insufficient_information && (
-                  <ShareAIAnalysisButton
-                    subjectName={analysis.alias_canonical_name || entityName}
-                    subtitle={entityKind === 'committee' ? 'Committee Analysis' : 'Candidate Analysis'}
-                    subjectKind={entityKind}
-                    summary={analysis.summary}
-                    confidence={analysis.confidence}
-                    dataCoverage={analysis.data_coverage}
-                    causes={analysis.causes}
-                    profileUrl={
-                      typeof window !== 'undefined'
-                        ? `${window.location.origin}/${entityKind === 'committee' ? 'committee' : 'candidate'}/${entityId}`
-                        : undefined
-                    }
-                  />
-                )}
-                <Button size="sm" variant="outline" onClick={() => fetchAnalysis(true)}>
-
-                  <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-                  Regenerate
-                </Button>
-                <DialogClose asChild>
-                  <Button size="icon" variant="ghost" aria-label="Close analysis dialog">
-                    <X className="h-4 w-4" />
-                  </Button>
-                </DialogClose>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto overflow-x-hidden p-4 sm:p-6 [&>button:last-child]:hidden">
+        <DialogHeader className="sticky top-0 z-10 bg-background pb-2 border-b border-border text-left">
+          <DialogClose asChild>
+            <Button size="icon" variant="ghost" aria-label="Close analysis dialog" className="absolute right-0 top-0 shrink-0">
+              <X className="h-4 w-4" />
+            </Button>
+          </DialogClose>
+          <div className="space-y-1.5 min-w-0 pr-10">
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 shrink-0 text-primary" />
+              {analysis?.alias_canonical_name || entityName}
+            </DialogTitle>
+            <DialogDescription>
+              AI-generated analysis of this {entityKind}'s positions, goals, and political activity — grounded in live web search.
+            </DialogDescription>
+            {analysis?.aliased_fec_ids && analysis.aliased_fec_ids.length > 1 && (
+              <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
+                  Combined across:
+                </span>
+                {analysis.aliased_fec_ids.map((id) => (
+                  <Badge key={id} variant="secondary" className="font-mono text-[10px]">
+                    {id}
+                  </Badge>
+                ))}
               </div>
             )}
-            {!analysis && (
-              <DialogClose asChild>
-                <Button size="icon" variant="ghost" aria-label="Close analysis dialog" className="shrink-0">
-                  <X className="h-4 w-4" />
-                </Button>
-              </DialogClose>
-            )}
           </div>
+          {analysis && !isLoading && (
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              {!analysis.insufficient_information && (
+                <ShareAIAnalysisButton
+                  subjectName={analysis.alias_canonical_name || entityName}
+                  subtitle={entityKind === 'committee' ? 'Committee Analysis' : 'Candidate Analysis'}
+                  subjectKind={entityKind}
+                  summary={analysis.summary}
+                  confidence={analysis.confidence}
+                  dataCoverage={analysis.data_coverage}
+                  causes={analysis.causes}
+                  profileUrl={
+                    typeof window !== 'undefined'
+                      ? `${window.location.origin}/${entityKind === 'committee' ? 'committee' : 'candidate'}/${entityId}`
+                      : undefined
+                  }
+                />
+              )}
+              <Button size="sm" variant="outline" onClick={() => fetchAnalysis(true)}>
+                <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                Regenerate
+              </Button>
+            </div>
+          )}
         </DialogHeader>
 
         {isLoading && (
@@ -209,7 +199,7 @@ export const RecipientAIAnalysisDialog = ({
         )}
 
         {analysis && !isLoading && (
-          <div className="space-y-5 text-sm">
+          <div className="space-y-5 text-sm min-w-0 break-words">
             {analysis.insufficient_information && (
               <div className="flex items-start gap-2 p-3 rounded-md border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300">
                 <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
@@ -389,10 +379,10 @@ export const RecipientAIAnalysisDialog = ({
                         href={s.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-primary hover:underline inline-flex items-center gap-1"
+                        className="text-primary hover:underline inline-flex items-start gap-1 max-w-full align-top"
                       >
-                        <ExternalLink className="h-3 w-3" />
-                        [{i + 1}] {s.title}
+                        <ExternalLink className="h-3 w-3 mt-0.5 shrink-0" />
+                        <span className="min-w-0 break-words">[{i + 1}] {s.title}</span>
                       </a>
                     </li>
                   ))}

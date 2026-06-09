@@ -318,6 +318,19 @@ serve(async (req) => {
   }
 
   try {
+    // Auth: a Vault-backed shared secret (x-sync-secret) may stand in for an
+    // admin JWT, so the headless Drive importer can drive this without an
+    // expiring user token. The existing admin-JWT path is unchanged.
+    let secretAuthorized = false;
+    {
+      const syncSecret = req.headers.get('x-sync-secret');
+      if (syncSecret) {
+        const svc = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+        const { data: ok } = await svc.rpc('check_import_sync_secret', { p_token: syncSecret });
+        secretAuthorized = ok === true;
+      }
+    }
+    if (!secretAuthorized) {
     // Admin auth check
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
@@ -334,6 +347,7 @@ serve(async (req) => {
     const { data: roleData } = await adminCheckClient.from('user_roles').select('role').eq('user_id', user.id).eq('role', 'admin').maybeSingle();
     if (!roleData) {
       return new Response(JSON.stringify({ error: 'Forbidden: admin role required' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
     }
     const { rows, congress = 119 } = await req.json() as { rows: ExcelRow[]; congress?: number };
     

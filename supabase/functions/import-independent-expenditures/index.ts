@@ -127,6 +127,59 @@ serve(async (req) => {
       }
     });
 
+    // Manual target corrections for filings whose FEC-coded candidate is wrong
+    // or missing (e.g. pro-Harris IEs mis-coded to Biden's P80000722). Scoped by
+    // committee/cycle/filer-name so we never remap a shared FEC ID globally.
+    interface IETargetOverride {
+      spending_committee_fec_id: string | null;
+      match_cycle: string | null;
+      match_target_fec_candidate_id: string | null;
+      match_target_candidate_name: string | null;
+      match_name_pattern: string | null;
+      corrected_candidate_id: string;
+      corrected_target_fec_candidate_id: string | null;
+      corrected_target_candidate_name: string | null;
+    }
+    const { data: overrideRows } = await supabase
+      .from("ie_target_overrides")
+      .select(
+        "spending_committee_fec_id, match_cycle, match_target_fec_candidate_id, match_target_candidate_name, match_name_pattern, corrected_candidate_id, corrected_target_fec_candidate_id, corrected_target_candidate_name",
+      );
+    const overrides = (overrideRows ?? []) as IETargetOverride[];
+    const normName = (s: string | null | undefined) => (s ?? "").trim().toUpperCase();
+    // Pre-compile name patterns once (case-insensitive). Invalid patterns are
+    // treated as non-matching rather than throwing.
+    const patternCache = new Map<string, RegExp | null>();
+    const compilePattern = (p: string): RegExp | null => {
+      if (!patternCache.has(p)) {
+        try {
+          patternCache.set(p, new RegExp(p, "i"));
+        } catch {
+          patternCache.set(p, null);
+        }
+      }
+      return patternCache.get(p) ?? null;
+    };
+    const findOverride = (
+      spendingFec: string,
+      rowCycle: string,
+      targetFec: string | null,
+      name: string | null,
+    ): IETargetOverride | null => {
+      for (const o of overrides) {
+        if (o.spending_committee_fec_id && o.spending_committee_fec_id !== spendingFec) continue;
+        if (o.match_cycle && o.match_cycle !== rowCycle) continue;
+        if (o.match_target_fec_candidate_id && o.match_target_fec_candidate_id !== targetFec) continue;
+        if (o.match_target_candidate_name && normName(o.match_target_candidate_name) !== normName(name)) continue;
+        if (o.match_name_pattern) {
+          const re = compilePattern(o.match_name_pattern);
+          if (!re || !re.test(name ?? "")) continue;
+        }
+        return o;
+      }
+      return null;
+    };
+
     let inserted = 0;
     let updated = 0;
     let skipped = 0;
@@ -176,8 +229,18 @@ serve(async (req) => {
             skipped += 1;
             return null;
           }
-          const targetFec = r.candidate_id ?? null;
-          const candidateId = targetFec ? candidateIdByFec.get(targetFec) ?? null : null;
+          let targetFec = r.candidate_id ?? null;
+          let candidateId = targetFec ? candidateIdByFec.get(targetFec) ?? null : null;
+          let targetName = r.candidate_name ?? null;
+          // Apply manual corrections before recording attribution.
+          const override = findOverride(spendingFec, cycle, targetFec, targetName);
+          if (override) {
+            candidateId = override.corrected_candidate_id;
+            targetFec = override.corrected_target_fec_candidate_id ?? targetFec;
+            if (override.corrected_target_candidate_name) {
+              targetName = override.corrected_target_candidate_name;
+            }
+          }
           if (!candidateId) {
             if (targetFec) unmappedCandidates.add(targetFec);
           }
@@ -196,7 +259,7 @@ serve(async (req) => {
             spending_committee_fec_id: spendingFec,
             spending_committee_name: r.committee?.name ?? null,
             target_fec_candidate_id: targetFec,
-            target_candidate_name: r.candidate_name ?? null,
+            target_candidate_name: targetName,
             candidate_id: candidateId,
             state: r.candidate_office_state ?? null,
             office: r.candidate_office ?? null,
