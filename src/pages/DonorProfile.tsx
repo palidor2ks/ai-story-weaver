@@ -91,6 +91,13 @@ interface PACContributor {
   contributionCount: number;
   byCycle: Record<string, { totalAmount: number; contributionCount: number }>;
 }
+
+interface CommitteeAlias {
+  id: string;
+  canonical_name: string;
+  fec_committee_ids: string[];
+  is_active: boolean;
+}
 const getPartyColor = (party: string) => {
   switch (party) {
     case 'Democrat':
@@ -307,6 +314,26 @@ const DonorProfile = () => {
   });
 
 
+  const { data: committeeAliases = [] } = useQuery({
+    queryKey: ['active-committee-aliases'],
+    queryFn: async (): Promise<CommitteeAlias[]> => {
+      const { data, error } = await supabase
+        .from('committee_aliases')
+        .select('id, canonical_name, fec_committee_ids, is_active')
+        .eq('is_active', true);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const committeeAliasById = useMemo(() => {
+    const map = new Map<string, CommitteeAlias>();
+    committeeAliases.forEach((alias) => {
+      alias.fec_committee_ids.forEach((fecId) => map.set(fecId.toUpperCase(), alias));
+    });
+    return map;
+  }, [committeeAliases]);
+
   const { data: pacContributors = [] } = useQuery({
     queryKey: ['pac-contributors', id, donor?.name, displayName, aliasInfo?.id, nameVariations.join('|')],
     queryFn: async () => {
@@ -397,6 +424,7 @@ const DonorProfile = () => {
       amount: number;
       candidates?: DonorRecord['candidates'];
       recipient_committee_name?: string | null;
+      recipient_committee_id?: string | null;
     }>();
 
     if (contributions.length > 0) {
@@ -404,16 +432,22 @@ const DonorProfile = () => {
         ? contributions
         : contributions.filter(c => c.cycle === profileCycleFilter);
       src.forEach((contribution) => {
-        const key = contribution.candidate_id || contribution.recipient_committee_id || contribution.recipient_committee_name || `unknown-${contribution.id}`;
+        const recipientAlias = contribution.recipient_committee_id
+          ? committeeAliasById.get(contribution.recipient_committee_id.toUpperCase())
+          : undefined;
+        const key = recipientAlias
+          ? `alias:${recipientAlias.id}`
+          : contribution.candidate_id || contribution.recipient_committee_id || contribution.recipient_committee_name || `unknown-${contribution.id}`;
         const existing = grouped.get(key);
         if (existing) {
           existing.amount += contribution.amount;
         } else {
           grouped.set(key, {
-            candidate_id: contribution.candidate_id,
+            candidate_id: recipientAlias ? null : contribution.candidate_id,
             amount: contribution.amount,
-            candidates: contribution.candidates || undefined,
-            recipient_committee_name: contribution.recipient_committee_name,
+            candidates: recipientAlias ? undefined : contribution.candidates || undefined,
+            recipient_committee_name: recipientAlias?.canonical_name || contribution.recipient_committee_name,
+            recipient_committee_id: contribution.recipient_committee_id,
           });
         }
       });
@@ -422,23 +456,29 @@ const DonorProfile = () => {
         ? donorRecords
         : donorRecords.filter(r => r.cycle === profileCycleFilter);
       src.forEach((record) => {
-        const key = record.candidate_id || record.recipient_committee_name || `unknown-${record.id}`;
+        const recipientAlias = record.recipient_committee_id
+          ? committeeAliasById.get(record.recipient_committee_id.toUpperCase())
+          : undefined;
+        const key = recipientAlias
+          ? `alias:${recipientAlias.id}`
+          : record.candidate_id || record.recipient_committee_id || record.recipient_committee_name || `unknown-${record.id}`;
         const existing = grouped.get(key);
         if (existing) {
           existing.amount += record.amount;
         } else {
           grouped.set(key, {
-            candidate_id: record.candidate_id,
+            candidate_id: recipientAlias ? null : record.candidate_id,
             amount: record.amount,
-            candidates: record.candidates,
-            recipient_committee_name: record.recipient_committee_name,
+            candidates: recipientAlias ? undefined : record.candidates,
+            recipient_committee_name: recipientAlias?.canonical_name || record.recipient_committee_name,
+            recipient_committee_id: record.recipient_committee_id,
           });
         }
       });
     }
 
     return Array.from(grouped.values()).sort((a, b) => b.amount - a.amount);
-  }, [contributions, donorRecords, profileCycleFilter]);
+  }, [committeeAliasById, contributions, donorRecords, profileCycleFilter]);
 
   // Get unique cycles for filter (contributions/recipients panel)
   const availableCycles = useMemo(() => {
@@ -530,13 +570,19 @@ const DonorProfile = () => {
     const totalTransactions = donorRecords.reduce((sum, r) => sum + (r.transaction_count || 1), 0);
     const contributionRecipients = new Set(
       contributions
-        .map(c => c.candidate_id || c.recipient_committee_id || c.recipient_committee_name)
+        .map(c => {
+          const alias = c.recipient_committee_id ? committeeAliasById.get(c.recipient_committee_id.toUpperCase()) : undefined;
+          return alias ? `alias:${alias.id}` : c.candidate_id || c.recipient_committee_id || c.recipient_committee_name;
+        })
         .filter((v): v is string => Boolean(v))
     ).size;
 
     const donorRecipients = new Set(
       donorRecords
-        .map(r => r.candidate_id || r.recipient_committee_name)
+        .map(r => {
+          const alias = r.recipient_committee_id ? committeeAliasById.get(r.recipient_committee_id.toUpperCase()) : undefined;
+          return alias ? `alias:${alias.id}` : r.candidate_id || r.recipient_committee_id || r.recipient_committee_name;
+        })
         .filter((v): v is string => Boolean(v))
     ).size;
 
@@ -551,7 +597,7 @@ const DonorProfile = () => {
     })).sort((a, b) => b.amount - a.amount);
     
     return { totalAmount, totalTransactions, uniqueRecipients, uniqueCycles, uniqueTypes, byType };
-  }, [contributions, donorRecords]);
+  }, [committeeAliasById, contributions, donorRecords]);
 
   // NJ state (ELEC) giving for this donor, matched by the same name variations.
   const njNames = useMemo(() => {
