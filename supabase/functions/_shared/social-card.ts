@@ -525,14 +525,21 @@ export async function renderCommitteeSpenderCardPng(f: CommitteeCardFacts): Prom
 
 // ---------- race-comparison card (the manual `race_comparison` post type) ----------
 //
-// A head-to-head between TWO candidates in one election (state + office + year).
-// Top half: each candidate's identity + money (raised, funding character, top donor
-// with cause, outside money). Bottom half — "Where they stand": every Pulse score
-// (the overall lean and each FEDERAL topic position) is drawn as a left→right
-// spectrum bar with a party-coloured marker, not a number. A short AI analysis of
-// their primary positions sits under the title.
+// A head-to-head between TWO candidates in one election (state + office + year),
+// two columns split by a center "VS" rule. Each column shows: name + party, the
+// candidate's overall lean, the big money-raised figure, a funding-character line,
+// outside money for/against, and the standout donor (with cause). Below the columns,
+// a full-width grid compares every FEDERAL policy position side by side, and a short
+// AI analysis of their primary positions sits under the title.
 
-const SPECTRUM_BAR_W = 200;
+const fmtScoreLR = (score: number): string => {
+  const r = Math.round(score * 10) / 10;
+  if (r === 0) return 'C';
+  return r < 0 ? `L${Math.abs(r).toFixed(1)}` : `R${r.toFixed(1)}`;
+};
+// Blue (left) / red (right) / grey (center or missing) for a score value.
+const leanColor = (score: number | null | undefined): string =>
+  score == null ? '#9ca3af' : score < 0 ? '#3b82f6' : score > 0 ? '#ef4444' : '#9ca3af';
 
 function raceFundingLine(c: RaceCandidateFacts): string | null {
   const fu = c.finance?.funding;
@@ -544,84 +551,75 @@ function raceFundingLine(c: RaceCandidateFacts): string | null {
   return null;
 }
 
-// The candidate's short name for the spectrum-section column headers.
-function surname(name: string): string {
-  const t = tidyName(name) || name;
-  if (t.includes(',')) return t.split(',')[0].trim();
-  const parts = t.trim().split(/\s+/);
-  return parts[parts.length - 1] || t;
-}
-
-// A left→right ideology spectrum bar with a marker dot at `score` (-10..10).
-// No marker when the score is missing.
-function spectrumBar(x0: number, yTop: number, w: number, score: number | null | undefined, color: string): string {
-  const h = 12;
-  const cyc = yTop + h / 2;
-  const tickX = x0 + w / 2;
-  let marker = '';
-  if (score != null && Number.isFinite(score)) {
-    const s = Math.max(-10, Math.min(10, score));
-    const mx = x0 + ((s + 10) / 20) * w;
-    marker = `<circle cx="${mx.toFixed(1)}" cy="${cyc}" r="9" fill="${color}" stroke="#ffffff" stroke-width="3" />`;
-  }
-  return `<rect x="${x0}" y="${yTop}" width="${w}" height="${h}" rx="6" fill="url(#spectrum)" opacity="0.85" />
-    <line x1="${tickX}" y1="${yTop - 3}" x2="${tickX}" y2="${yTop + h + 3}" stroke="#0b1220" stroke-width="2" opacity="0.5" />
-    ${marker}`;
-}
-
-// Shared vertical plan for the two money columns, so optional rows (funding /
-// outside money / donor cause) keep BOTH columns aligned.
+// Shared vertical plan for the two columns, so optional rows (funding / outside money
+// / donor cause) keep BOTH columns aligned. Computed once from global flags.
 interface RaceYPlan {
-  name: number; party: number; raised: number;
-  funding: number | null; outside: number | null;
-  donor: number; cause: number | null; bottom: number;
+  name: number; party: number; overall: number; raisedLabel: number; raisedFig: number;
+  funding: number | null; outsideLabel: number | null; outsideVal: number | null;
+  donorLabel: number; donorName: number; donorAmt: number; cause: number | null;
+  bottom: number;
 }
 function planRaceColumn(f: RaceCardFacts): RaceYPlan {
   const showFunding = f.candidates.some((c) => raceFundingLine(c) !== null);
   const showOutside = f.candidates.some((c) => (c.finance?.ie_support ?? 0) > 0 || (c.finance?.ie_oppose ?? 0) > 0);
   const showCause = f.candidates.some((c) => c.top_donors.find((d) => (d.amount ?? 0) > 0)?.cause);
-  let y = 300;
-  const name = y; y += 34;
-  const party = y; y += 54;
-  const raised = y; y += 40;
+  // Generous, non-overlapping vertical rhythm (each delta clears the taller row's
+  // cap-height). There is ample room below, so the block can breathe.
+  let y = 316;
+  const name = y; y += 38;
+  const party = y; y += 34;
+  const overall = y; y += 38;
+  const raisedLabel = y; y += 48;       // clear the big figure's cap height
+  const raisedFig = y; y += 42;         // figure font 46
   const funding = showFunding ? y : null; if (showFunding) y += 38;
-  const outside = showOutside ? y : null; if (showOutside) y += 38;
-  const donor = y; y += showCause ? 22 : 14;
-  const cause = showCause ? y : null; if (showCause) y += 52;
-  return { name, party, raised, funding, outside, donor, cause, bottom: y };
+  const outsideLabel = showOutside ? y : null; if (showOutside) y += 30;
+  const outsideVal = showOutside ? y : null; if (showOutside) y += 40;
+  const donorLabel = y; y += 32;
+  const donorName = y; y += 32;
+  const donorAmt = y; y += showCause ? 22 : 12;
+  const cause = showCause ? y : null; if (showCause) y += 56;  // chip rect + gap
+  return { name, party, overall, raisedLabel, raisedFig, funding, outsideLabel, outsideVal, donorLabel, donorName, donorAmt, cause, bottom: y };
 }
 
-// One candidate's identity + money column (no Pulse numbers — those move to the
-// spectrum section). Light, low-contrast captions instead of loud uppercase labels.
+// One candidate column rendered against the shared y-plan.
 function raceColumn(c: RaceCandidateFacts, x0: number, colW: number, Y: RaceYPlan): string {
   const cx = x0 + colW / 2;
   const pColor = partyColor(c.party);
   const parts: string[] = [];
-  const muted = '#6b7a90';
 
   const name = tidyName(c.name) || c.name;
-  const nameFont = name.length > 22 ? 28 : name.length > 16 ? 34 : 40;
-  parts.push(`<text x="${cx}" y="${Y.name}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="${nameFont}" fill="#f8fafc">${escapeXml(truncate(name, 28))}</text>`);
+  const nameFont = name.length > 22 ? 30 : name.length > 16 ? 36 : 42;
+  parts.push(`<text x="${cx}" y="${Y.name}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="${nameFont}" fill="#f8fafc">${escapeXml(truncate(name, 26))}</text>`);
   const partyLine = `${(c.party || 'Nonpartisan')}${c.incumbent ? ' · Incumbent' : ''}`;
-  parts.push(`<text x="${cx}" y="${Y.party}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="22" fill="${pColor}">${escapeXml(truncate(partyLine, 28))}</text>`);
+  parts.push(`<text x="${cx}" y="${Y.party}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="24" fill="${pColor}">${escapeXml(truncate(partyLine, 28))}</text>`);
+
+  // Overall lean (the candidate's headline score).
+  if (c.score != null && Number.isFinite(c.score)) {
+    parts.push(`<text x="${cx}" y="${Y.overall}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="22" fill="#94a3b8">Overall lean <tspan font-weight="700" fill="${leanColor(c.score)}">${escapeXml(fmtScoreLR(c.score))}</tspan></text>`);
+  }
 
   // Money raised — the column's hook.
-  parts.push(`<text x="${cx}" y="${Y.raised}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="44" fill="#22c55e">${escapeXml(fmtMoney(c.raised) ?? '$0')}<tspan font-family="Inter" font-weight="400" font-size="20" fill="${muted}"> raised</tspan></text>`);
-
+  parts.push(`<text x="${cx}" y="${Y.raisedLabel}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="22" fill="#94a3b8" letter-spacing="3">RAISED</text>`);
+  parts.push(`<text x="${cx}" y="${Y.raisedFig}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="46" fill="#22c55e">${escapeXml(fmtMoney(c.raised) ?? '$0')}</text>`);
   const fundLine = raceFundingLine(c);
   if (fundLine && Y.funding != null) {
-    parts.push(`<text x="${cx}" y="${Y.funding}" text-anchor="middle" font-family="Inter" font-weight="400" font-size="22" fill="#cbd5e1">${escapeXml(fundLine)}</text>`);
+    parts.push(`<text x="${cx}" y="${Y.funding}" text-anchor="middle" font-family="Inter" font-weight="400" font-size="24" fill="#cbd5e1">${escapeXml(fundLine)}</text>`);
   }
 
+  // Outside money for/against (slot present when EITHER candidate has it).
   const sup = c.finance?.ie_support ?? 0;
   const opp = c.finance?.ie_oppose ?? 0;
-  if (Y.outside != null && (sup > 0 || opp > 0)) {
-    parts.push(`<text x="${cx}" y="${Y.outside}" text-anchor="middle" font-family="Inter" font-weight="400" font-size="20" fill="${muted}">Outside <tspan font-weight="700" fill="#22c55e">${escapeXml(fmtMoney(sup) ?? '$0')}</tspan> for · <tspan font-weight="700" fill="#ef4444">${escapeXml(fmtMoney(opp) ?? '$0')}</tspan> against</text>`);
+  if (Y.outsideLabel != null && Y.outsideVal != null && (sup > 0 || opp > 0)) {
+    parts.push(`<text x="${cx}" y="${Y.outsideLabel}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="20" fill="#94a3b8" letter-spacing="2">OUTSIDE MONEY</text>`);
+    parts.push(`<text x="${cx}" y="${Y.outsideVal}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="26" fill="#e2e8f0"><tspan fill="#22c55e">${escapeXml(fmtMoney(sup) ?? '$0')}</tspan> for · <tspan fill="#ef4444">${escapeXml(fmtMoney(opp) ?? '$0')}</tspan> against</text>`);
   }
 
+  // Standout donor + cause chip.
   const donor = c.top_donors.find((d) => (d.amount ?? 0) > 0);
   if (donor) {
-    parts.push(`<text x="${cx}" y="${Y.donor}" text-anchor="middle" font-family="Inter" font-weight="400" font-size="20" fill="${muted}">Top donor <tspan font-weight="700" fill="#f8fafc">${escapeXml(truncate(tidyName(donor.name), 20))}</tspan> <tspan font-weight="700" fill="#fbbf24">${escapeXml(fmtMoney(donor.amount) ?? '$0')}</tspan></text>`);
+    parts.push(`<text x="${cx}" y="${Y.donorLabel}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="20" fill="#94a3b8" letter-spacing="2">TOP DONOR</text>`);
+    parts.push(`<text x="${cx}" y="${Y.donorName}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="26" fill="#f8fafc">${escapeXml(truncate(tidyName(donor.name), 24))}</text>`);
+    parts.push(`<text x="${cx}" y="${Y.donorAmt}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="24" fill="#fbbf24">${escapeXml(fmtMoney(donor.amount) ?? '$0')}</text>`);
     if (donor.cause && Y.cause != null) {
       parts.push(chip(cx, Y.cause, donor.cause, '#60a5fa', 22).svg);
     }
@@ -630,43 +628,29 @@ function raceColumn(c: RaceCandidateFacts, x0: number, colW: number, Y: RaceYPla
   return parts.join('\n');
 }
 
-// "Where they stand": the overall lean + every federal topic, each rendered as a
-// pair of spectrum bars (left bar = left candidate, right bar = right candidate).
-function raceSpectrumSection(f: RaceCardFacts, top: number, margin: number): string {
+// Full-width grid comparing every federal policy position side by side:
+// [A score]      Topic      [B score], one row per topic (union of both candidates),
+// ordered by salience (strongest lean first).
+function racePositionsGrid(f: RaceCardFacts, top: number, margin: number): string {
   const cx = CARD_SIZE / 2;
   const [a, b] = f.candidates;
-  const aColor = partyColor(a.party);
-  const bColor = partyColor(b.party);
-  const barW = SPECTRUM_BAR_W;
-  const leftX = margin;
-  const rightX = CARD_SIZE - margin - barW;
-
-  // Rows: overall lean first, then each topic (union of both, by salience).
   const map = new Map<string, { a?: number; b?: number }>();
   a.positions.forEach((p) => { const e = map.get(p.topic) ?? {}; e.a = p.score; map.set(p.topic, e); });
   b.positions.forEach((p) => { const e = map.get(p.topic) ?? {}; e.b = p.score; map.set(p.topic, e); });
-  const topicRows = [...map.entries()]
+  const rows = [...map.entries()]
     .map(([topic, v]) => ({ topic, a: v.a, b: v.b, sal: Math.max(Math.abs(v.a ?? 0), Math.abs(v.b ?? 0)) }))
     .sort((x, y) => y.sal - x.sal)
     .slice(0, 6);
-  const rows: { topic: string; a: number | null | undefined; b: number | null | undefined }[] = [
-    { topic: 'Overall lean', a: a.score, b: b.score },
-    ...topicRows,
-  ];
+  if (rows.length === 0) return '';
 
   const parts: string[] = [];
-  // Section header: title + the two candidates above their bar columns + a left/right hint.
-  parts.push(`<text x="${cx}" y="${top}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="24" fill="#f8fafc" letter-spacing="2">WHERE THEY STAND</text>`);
-  parts.push(`<text x="${leftX + barW / 2}" y="${top + 34}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="20" fill="${aColor}">${escapeXml(truncate(surname(a.name), 16))}</text>`);
-  parts.push(`<text x="${rightX + barW / 2}" y="${top + 34}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="20" fill="${bColor}">${escapeXml(truncate(surname(b.name), 16))}</text>`);
-  parts.push(`<text x="${cx}" y="${top + 34}" text-anchor="middle" font-family="Inter" font-weight="400" font-size="18" fill="#6b7a90">◀ more left · more right ▶</text>`);
-
-  let y = top + 70;
-  const step = Math.min(54, Math.floor((1010 - (top + 70)) / rows.length));
+  parts.push(`<text x="${cx}" y="${top}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="22" fill="#94a3b8" letter-spacing="3">PRIMARY POSITIONS — L MORE LEFT · R MORE RIGHT</text>`);
+  let y = top + 46;
+  const step = 38;
   for (const r of rows) {
-    parts.push(spectrumBar(leftX, y, barW, r.a, aColor));
-    parts.push(spectrumBar(rightX, y, barW, r.b, bColor));
-    parts.push(`<text x="${cx}" y="${y + 11}" text-anchor="middle" font-family="Inter" font-weight="400" font-size="22" fill="#e2e8f0">${escapeXml(truncate(r.topic, 34))}</text>`);
+    parts.push(`<text x="${margin}" y="${y}" font-family="Inter" font-weight="700" font-size="26" fill="${leanColor(r.a)}">${escapeXml(r.a != null ? fmtScoreLR(r.a) : '—')}</text>
+      <text x="${cx}" y="${y}" text-anchor="middle" font-family="Inter" font-weight="400" font-size="24" fill="#e2e8f0">${escapeXml(truncate(r.topic, 30))}</text>
+      <text x="${CARD_SIZE - margin}" y="${y}" text-anchor="end" font-family="Inter" font-weight="700" font-size="26" fill="${leanColor(r.b)}">${escapeXml(r.b != null ? fmtScoreLR(r.b) : '—')}</text>`);
     y += step;
   }
   return parts.join('\n');
@@ -688,6 +672,7 @@ function wrapLines(text: string, maxChars: number, maxLines: number): string[] {
   }
   if (lines.length < maxLines && cur) lines.push(cur);
   if (lines.length === maxLines) {
+    // If words remain unconsumed, mark the last line as truncated.
     const consumed = lines.join(' ').split(' ').length;
     if (consumed < words.length) lines[maxLines - 1] = lines[maxLines - 1].replace(/[\s,;:.!?-]+$/, '') + '…';
   }
@@ -697,7 +682,7 @@ function wrapLines(text: string, maxChars: number, maxLines: number): string[] {
 function buildRaceComparisonSvg(f: RaceCardFacts, analysis: string | null): string {
   const cx = CARD_SIZE / 2;
   const margin = 64;
-  const colGap = 40;
+  const colGap = 44;
   const colW = (CARD_SIZE - margin * 2 - colGap) / 2;
   const leftX = margin;
   const rightX = margin + colW + colGap;
@@ -712,18 +697,13 @@ function buildRaceComparisonSvg(f: RaceCardFacts, analysis: string | null): stri
     .map((ln, i) => `<text x="${cx}" y="${244 + i * 26}" text-anchor="middle" font-family="Inter" font-weight="400" font-size="20" fill="#9fb0c8">${escapeXml(ln)}</text>`)
     .join('\n');
 
-  const sectionTop = Y.bottom + 40;
+  const gridTop = Y.bottom + 30;
 
   return `<svg width="${CARD_SIZE}" height="${CARD_SIZE}" viewBox="0 0 ${CARD_SIZE} ${CARD_SIZE}" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#0b1220" />
       <stop offset="1" stop-color="#111d3a" />
-    </linearGradient>
-    <linearGradient id="spectrum" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#3b82f6" />
-      <stop offset="0.5" stop-color="#64748b" />
-      <stop offset="1" stop-color="#ef4444" />
     </linearGradient>
   </defs>
 
@@ -739,11 +719,11 @@ function buildRaceComparisonSvg(f: RaceCardFacts, analysis: string | null): stri
   ${raceColumn(a, leftX, colW, Y)}
   ${raceColumn(b, rightX, colW, Y)}
 
-  <line x1="${cx}" y1="${Y.name - 16}" x2="${cx}" y2="${Y.bottom - 8}" stroke="#1f2a44" stroke-width="3" />
-  <circle cx="${cx}" cy="${Y.party - 8}" r="28" fill="#0f1a30" stroke="#1f2a44" stroke-width="3" />
-  <text x="${cx}" y="${Y.party}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="22" fill="#fbbf24">VS</text>
+  <line x1="${cx}" y1="${Y.name - 18}" x2="${cx}" y2="${Y.bottom - 6}" stroke="#1f2a44" stroke-width="3" />
+  <circle cx="${cx}" cy="${Y.overall - 6}" r="30" fill="#0f1a30" stroke="#1f2a44" stroke-width="3" />
+  <text x="${cx}" y="${Y.overall + 3}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="24" fill="#fbbf24">VS</text>
 
-  ${raceSpectrumSection(f, sectionTop, margin)}
+  ${racePositionsGrid(f, gridTop, margin)}
 
   <text x="${cx}" y="1052" text-anchor="middle" font-family="Inter" font-weight="400" font-size="22" fill="#64748b">polipulseapp.com — Follow the money</text>
 </svg>`;
