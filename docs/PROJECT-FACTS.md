@@ -35,6 +35,38 @@
   When unset, the SessionStart readiness probe reports DB work is **blocked**. Full setup:
   `docs/dev-migration-resync.md`.
 
+## Backend & hosting decision (2026-06-09)
+
+**Decision:** Stay on Supabase as-is. No migration. (Full rationale also in `CLAUDE.md`.)
+
+**Why this is the right call *now*:** The genuinely heavy work — the FEC bulk load (25–40M rows)
+— already runs as a **local script** (`scripts/fec-etl/run.sh`), which is correct: no timeout.
+The *incremental* syncs (FEC donors, Congress votes, AI candidate-answer enrichment) run as
+edge functions tuned right up against the per-call time limit, surviving via time-budget +
+resume cursors + (for AI enrichment) HTTP self-chaining. It works today, and workload is
+"mixed / scale uncertain," so re-architecting now would cost more than it's worth.
+
+**The reversibility rule (don't break it):** all new data/external access goes through **one
+layer in our own code** — never new scattered direct-from-frontend DB calls. This is what keeps
+the backend swappable later. Adopt going forward; not a mandate to refactor existing code.
+
+**The "move it off Supabase" signal — revisit deliberately when ANY of these is true:**
+- a sync can't finish within its time budget even *with* resume logic;
+- AI enrichment (`get-candidate-answers`) backlogs / stalls repeatedly;
+- you need fresher-than-~15-min data;
+- edge-function timeouts start showing up in logs.
+Then move **the offending job only** (not everything) to a real background worker — Supabase
+Queues/`pgmq`, a small always-on host (Railway/Render/Fly), or a scheduled GitHub Action.
+Record any such move with a dated note here + a HANDOFF entry.
+
+**Fragile spots to watch** (from the Phase B audit): `get-candidate-answers` (self-chaining AI),
+`fetch-fec-donors` / `drain-fec-finance` (FEC pagination at the timeout ceiling),
+`sync-legislator-votes` (Congress.gov pagination). Big CSV imports
+(`import-fec-receipts-csv`) are fine for now but risky above ~50k rows.
+
+**Current Supabase limits & pricing:** **TODO** — fold in verified current numbers (edge-function
+wall-clock ceiling, plan pricing) from the pending research pass.
+
 ## Hard guardrails — NEVER get these wrong
 
 1. **Never auto-apply migrations.** Use `scripts/apply-missing-migrations.sh`, which is
