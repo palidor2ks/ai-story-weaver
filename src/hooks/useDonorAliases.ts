@@ -326,27 +326,28 @@ export const useDeleteDonorAlias = () => {
           .eq('name', m.donor_name)
           .eq('type', m.donor_type as 'Individual' | 'PAC' | 'Organization' | 'Unknown');
       }
-
-      // Refresh the donor consolidated MV so the public Donors list immediately
-      // stops showing the merged row for the deleted alias.
-      const { error: mvErr } = await supabase.rpc('refresh_donor_consolidated_mv');
-      if (mvErr) console.warn('[delete-alias] mv refresh failed:', mvErr.message);
     },
     onSuccess: () => {
       invalidateDonorCaches(queryClient);
-      toast.success('Alias deleted — Donors list refreshed');
+      // Refresh the donor consolidated MV in the background so the deleted alias's
+      // merged row drops off the public Donors list shortly (never block the admin).
+      triggerDonorMvRefresh(queryClient);
+      toast.success('Alias deleted — Donors list will refresh shortly');
     },
     onError: (error: Error) => toast.error(`Failed to delete alias: ${error.message}`),
   });
 };
 
-// Single coalesced MV refresh shared across attach/detach/delete flows.
-const refreshDonorMv = async (queryClient: ReturnType<typeof useQueryClient>) => {
-  try {
-    await supabase.rpc('refresh_donor_consolidated_mv');
-  } catch (e) {
-    console.warn('[donor-mv] refresh failed:', (e as Error)?.message);
-  }
+// Fire-and-forget background refresh shared across attach/detach/delete flows.
+//
+// The donor consolidated MV rebuild takes 1-5 minutes; doing it inline used to blow
+// past the 8s API timeout and hammer the DB. Instead we trigger the `refresh-donor-mv`
+// edge function, which returns immediately and runs the (stampede-guarded) refresh in
+// the background. We never await it, so admin actions stay snappy.
+const triggerDonorMvRefresh = (queryClient: ReturnType<typeof useQueryClient>) => {
+  void supabase.functions.invoke('refresh-donor-mv').then(({ error }) => {
+    if (error) console.warn('[donor-mv] background refresh trigger failed:', error.message);
+  });
   queryClient.invalidateQueries({ queryKey: ['donors-paginated'] });
   queryClient.invalidateQueries({ queryKey: ['donors-consolidated'] });
 };
@@ -374,10 +375,8 @@ export const useAttachDonors = () => {
     },
     onSuccess: (data) => {
       invalidateDonorCaches(queryClient);
-      const toastId = toast.loading(`Attached ${data.attached_count} donor(s) — refreshing list…`);
-      refreshDonorMv(queryClient).finally(() => {
-        toast.success(`Attached ${data.attached_count} donor(s) — Donors list refreshed`, { id: toastId });
-      });
+      triggerDonorMvRefresh(queryClient);
+      toast.success(`Attached ${data.attached_count} donor(s) — Donors list will refresh shortly`);
     },
     onError: (error: Error) => toast.error(`Failed to attach: ${error.message}`),
   });
@@ -396,10 +395,8 @@ export const useDetachDonors = () => {
     },
     onSuccess: (data) => {
       invalidateDonorCaches(queryClient);
-      const toastId = toast.loading(`Detached ${data.detached_count} donor(s) — refreshing list…`);
-      refreshDonorMv(queryClient).finally(() => {
-        toast.success(`Detached ${data.detached_count} donor(s) — Donors list refreshed`, { id: toastId });
-      });
+      triggerDonorMvRefresh(queryClient);
+      toast.success(`Detached ${data.detached_count} donor(s) — Donors list will refresh shortly`);
     },
     onError: (error: Error) => toast.error(`Failed to detach: ${error.message}`),
   });
