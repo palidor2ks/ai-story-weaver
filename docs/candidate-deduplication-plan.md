@@ -162,3 +162,20 @@ order by n desc;
   double-count, no loss.
 - Remaining: 41 `proposed` pairs awaiting review/approval (27 Signal A are high-confidence;
   14 Signal B need per-pair verification before approving).
+
+## Status (2026-06-10, final) — ALL 42 MERGES EXECUTED on Dev
+
+- **27 Signal A** batch-merged after all dry-runs showed `overlap = 0` (biggest: C001129 ← S6GA00390,
+  29,999 contributions; H001095 ← S6TX00511, 7,690).
+- **14 Signal B** merged after per-pair verification: every pair was an exact normalized-name +
+  state + party match in the House↔Senate (or ward-label) pattern — incl. Allred TX (10,200
+  contributions on the old House id), Crockett TX, Letlow LA, Hern OK, Peltola AK, and the 4 NJ
+  `ai_pair` ward duplicates. No user profile claims were dropped anywhere.
+- **Post-merge integrity sweep: clean.** 0 dup candidate rows, 0 orphaned
+  contributions/donors/answers, 0 name+state duplicate clusters remain, all 4 tamper triggers
+  re-enabled. `candidates` now has 2,386 rows.
+- **Still open:** the 2 Type E cross-state clusters (C00934869 MO/TX, C00896787 FL/GA) stay
+  quarantined pending manual FEC verification. Cosmetic: a few `ai_pair` survivors kept the
+  generic "Ward Council Member" label while the merged dup had the more specific "Ward N" label.
+- All 42 merges are audited in `candidate_merge_map` (status `merged`, full per-table reports in
+  the `report` jsonb).

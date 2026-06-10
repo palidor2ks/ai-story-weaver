@@ -61,13 +61,15 @@ moves 6,357 contributions + 2,051 donors, fec_transaction_overlap=0, conflicts r
 canonical-wins. The execute path has NOT run anywhere yet.
 
 **Next**
-~~Apply to Dev + Moulton pilot~~ **DONE (same session, user-approved):** migration applied to
-Pulse Dev, 42 proposals seeded, Moulton pilot merged and verified end-to-end (one profile, both
-FEC ids aliased, 7,708 contributions + 3,147 donors on M001196, finance grand_total unchanged at
-$4,542,839, orphan person gone, all 4 tamper triggers re-enabled). NEW next: review the 41
-remaining `proposed` rows in `candidate_merge_map` — the 27 Signal A (shared-committee) pairs
-are high-confidence and can be batch-approved; the 14 Signal B (name+state) pairs need per-pair
-verification. Then `run_approved_candidate_merges(p_dry_run := false)`.
+~~Apply to Dev + pilot + all merges~~ **DONE (same session, user-approved): all 42 duplicate
+pairs merged on Pulse Dev.** Migration applied; Moulton pilot verified end-to-end; 27 Signal A
+batch-merged (all dry-runs overlap=0); 14 Signal B merged after per-pair verification (exact
+name+state+party, House↔Senate / ward pattern — Allred, Crockett, Letlow, Hern, Peltola, 4 NJ
+ai_pairs, etc.). Post-merge sweep clean: 0 dup rows, 0 orphans, 0 name+state clusters left, 4/4
+tamper triggers re-enabled, full audit in candidate_merge_map. NEW next: spot-check a few merged
+profiles in the running app (search "seth", "allred", "crockett" — each should show ONE card with
+finance intact), then tackle the 2 quarantined Type E clusters (C00934869 MO/TX, C00896787 FL/GA)
+with a manual fec.gov check.
 
 **Deferred**
 §5.2–5.4 of the plan (office-agnostic resolve_person, alias backfill, standing duplicate-audit
