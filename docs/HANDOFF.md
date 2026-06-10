@@ -62,6 +62,14 @@ flagged (execute revoked from public/anon/authenticated); 110 PRE-EXISTING defin
 findings remain (older functions — separate cleanup candidate). check:accuracy exits 2
 cleanly without DB URL. NOT verified: dashboard tiles rendered in a browser (needs admin
 login); edge-fn redeploy (happens on merge, not from this sandbox).
+**Preview-branch postscript:** the PR's Supabase preview (schema from migration FILES only)
+failed the original seed call — `last_sync_completed_at does not exist` (SQLSTATE 42703) —
+i.e. prod carries columns no committed migration creates: drift, measured. Fixed by guarding
+the seed + cron.schedule in exception blocks (f403a5eb) and close/reopening the PR; the NEW
+preview branch then applied all migrations ✅. The orphaned first preview project died with
+"Resource has been removed" and left a stale red Supabase-Preview check on the PR — cleared
+by the next commit's fresh check suite. Lesson recorded: migrations here must tolerate
+file-vs-prod schema drift until the ROADMAP #2 resync lands.
 
 **Next**
 Decide the bills-sync revival (DATA-ACCURACY §Bills recipe: shared-secret + pg_net cron —
