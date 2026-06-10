@@ -27,6 +27,55 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-10 (accuracy scoreboard) — claude/laughing-dirac-x72d3g (priority #1 made checkable)
+
+**What happened & why**
+Maintainer asked: which data categories does priority #1 cover, are goals stated per category,
+how does preflight review them, where do we stand, and can status keep updating while away —
+then pointed at the Coverage & Finance dashboard as the tool to build on. Investigation found
+the dashboard's `admin_stats_cache` rows were only recomputed on manual click (votes stale
+since **2026-01-19** — the edge fn depends on a `vote_action_counts` MATERIALIZED VIEW that
+doesn't exist in prod, failing silently; FEC/answers ~13 days), the **nightly bill sync has
+been dead since 2026-01-13** (admin-JWT-only function, nothing can cron it), and "82% sourced"
+on the dashboard means source *descriptions* — only **5.9%** of answers have a source URL.
+Shipped: (1) migration `20260610170000` — all stat computation moved into ONE SQL function
+`refresh_admin_stats_cache()` (no MV dependency; covers votes/answers/FEC + NEW bills,
+state-finance, finance-recon, identity keys), **pg_cron every 15 min** + seed on apply;
+(2) `refresh-admin-stats` edge fn now just auth-gates and delegates to the RPC (one set of
+definitions for cron + dashboard buttons); (3) new `DataAccuracyScoreboard` dashboard section
+(bills/state/recon/identity tiles) + hook types + staleTime fix (was Infinity);
+(4) `bun run check:accuracy` + preflight skill wiring (with Supabase-MCP fallback when no
+SUPABASE_DB_URL); (5) `docs/DATA-ACCURACY.md` — per-category goal/definition/standing/
+threshold; ROADMAP #1 gains the missing **answers** category + changelog.
+
+**State** (verified)
+Lint 0 errors / 12 tests / tsc clean / vite build clean. **Migration APPLIED to prod
+2026-06-10 16:56 UTC** (deliberate apply after review: the migration-safety-reviewer
+subagent died on a session limit, so the review was done inline + a full transactional
+dry-run that EXECUTED the function against prod schema and rolled back — it caught that
+candidate_votes labels are 'sponsor'/'cosponsor', not 'sponsored'/'cosponsored', meaning
+the old dashboard's legislative-actions count was zero even before it went stale; fixed to
+accept both). Verified post-apply: cron job active (*/15), all 7 cache keys seeded 16:56,
+spot-checks correct (legislativeActions 822,899; bills staleDays 148 → red as designed;
+recon 776 errors; sourcedWithUrl 22,535). Security advisors: refresh_admin_stats_cache NOT
+flagged (execute revoked from public/anon/authenticated); 110 PRE-EXISTING definer-function
+findings remain (older functions — separate cleanup candidate). check:accuracy exits 2
+cleanly without DB URL. NOT verified: dashboard tiles rendered in a browser (needs admin
+login); edge-fn redeploy (happens on merge, not from this sandbox).
+
+**Next**
+Decide the bills-sync revival (DATA-ACCURACY §Bills recipe: shared-secret + pg_net cron —
+guardrail #2 wants your eyes) — until then check:accuracy stays red on bills, correctly.
+
+**Deferred**
+Answers URL-sourcing goal/target % (proposed in DATA-ACCURACY §Answers — confirm); state
+finance portal-total reconciliation (mirror FEC recon); spot-verification sampling for votes
+(data-accuracy-verifier, 10/chamber); party_platforms 0-rows decision; vote_action_counts MV
+drift (function no longer needs it — decide drop vs recreate); (carried) bun.lockb cleanup +
+items in entries below.
+
+---
+
 ## 2026-06-10 (follow-up) — claude/laughing-dirac-x72d3g (CI lockfile-registry guard)
 
 **What happened & why**
