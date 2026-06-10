@@ -7,6 +7,7 @@
 // hallucinated), then the Lovable AI gateway writes punchy, number-driven copy
 // from them. A deterministic template covers the no-AI path.
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import type { NewsHook } from './news-research.ts';
 
 // max = hard character budget; long = give the fuller "deep analysis" treatment.
 export const PLATFORM_LIMITS: Record<string, { max: number; long: boolean }> = {
@@ -190,28 +191,40 @@ function electionTimingDirective(cycle: string | null, todayIso: string | null |
   return `TIMING (today is ${stamp}): The ${year} election cycle (${dateStr}) is over. Use PAST tense (e.g. "in the ${year} cycle, raised...") and do not imply any active or upcoming race.`;
 }
 
-function buildPrompt(platform: string, block: string, hint: string | null, timing: string | null, handle: string | null, long: boolean, max: number): string {
+function buildPrompt(platform: string, block: string, hint: string | null, timing: string | null, handle: string | null, long: boolean, max: number, news: NewsHook | null = null): string {
   const handleRule = handle
     ? `\n- The "Name to use" above IS the rep's X handle (@${handle}) — refer to them by that handle in place of a real name, and never write their actual personal name. Do NOT put @${handle} as the very first character of the post (so X does not treat it as a reply).`
     : '';
+  // Real, sourced recent news is the most attention-grabbing angle when present; it
+  // becomes the hook and the money figure drops to supporting context.
+  const newsBlock = news
+    ? `\nIN THE NEWS (real, recently reported by ${news.source} — treat as a verified, attributed fact):\n${news.hook}\n`
+    : '';
   const focusRule = long
-    ? `Give the fuller breakdown: money raised + donors, the standout donor, the funding mix, and the for-vs-against outside spending with the biggest PACs.`
-    : `Be SELECTIVE — this is a short post. Include only THREE things: (1) the lead figure, (2) the SINGLE most striking secondary fact — pick ONE of: a lopsided for-vs-against fight, a notable funding angle (e.g. "42% PAC-funded" or small-dollar/grassroots), or the standout top donor${handle ? ', and (3) the @-mention' : ''}. Leave every other fact OUT — a tight post beats a crammed one, and it must never get cut off.`;
+    ? `Give the fuller breakdown: money raised + donors, the standout donor, the funding mix, and the for-vs-against outside spending with the biggest PACs.${news ? ` Frame it all UNDER the news hook above.` : ''}`
+    : news
+      ? `Be SELECTIVE — this is a short post. Lead with the news hook, then add the SINGLE most striking money fact (the lead figure or a notable funding angle) as supporting context${handle ? ', plus the @-mention' : ''}. Leave every other fact OUT — a tight post beats a crammed one, and it must never get cut off.`
+      : `Be SELECTIVE — this is a short post. Include only THREE things: (1) the lead figure, (2) the SINGLE most striking secondary fact — pick ONE of: a lopsided for-vs-against fight, a notable funding angle (e.g. "42% PAC-funded" or small-dollar/grassroots), or the standout top donor${handle ? ', and (3) the @-mention' : ''}. Leave every other fact OUT — a tight post beats a crammed one, and it must never get cut off.`;
   const lengthRule = long
     ? `Length: 3–5 short sentences, under ${max} characters.`
     : `Length: ONE or TWO tight sentences. Stay comfortably under ${max} characters — aim for about ${Math.round(max * 0.85)} and leave room; do NOT run to the limit.`;
-  const leadRule = hint
-    ? `OPEN with this exact figure — it is the single biggest number and MUST be your hook, right at the front: ${hint}.`
-    : `LEAD with the single most eye-popping dollar figure and make it the hook.`;
-  return `You are a sharp political-media editor writing a punchy, headline-worthy ${platform.toUpperCase()} post about a U.S. politician's campaign money, built for media consumption and engagement.
+  const leadRule = news
+    ? `OPEN with the news hook above and attribute it to ${news.source} (e.g. "Per ${news.source}, …" or "${news.source} reports …") — it is your headline. Then bring in the money below as supporting context.`
+    : hint
+      ? `OPEN with this exact figure — it is the single biggest number and MUST be your hook, right at the front: ${hint}.`
+      : `LEAD with the single most eye-popping dollar figure and make it the hook.`;
+  const newsRule = news
+    ? `\n- The IN THE NEWS item is real reporting by ${news.source}, not your own claim: state it EXACTLY as factually as written, attributed to ${news.source}. NEVER sharpen it into an accusation, add a detail, or imply guilt beyond what is reported.`
+    : '';
+  return `You are a sharp political-media editor writing a punchy, headline-worthy ${platform.toUpperCase()} post about a U.S. politician, built for media consumption and engagement.
 
 Use ONLY the verified facts below. Never invent, alter, or re-round any number; never add a fact that isn't listed. You MAY tidy an ALL-CAPS committee name to Title Case.
 
 VERIFIED FACTS:
 ${block}
-${timing ? `\n${timing}\n` : ''}
+${newsBlock}${timing ? `\n${timing}\n` : ''}
 Write the post:
-- ${leadRule}
+- ${leadRule}${newsRule}
 - ${focusRule}
 - Match the tense and framing to the TIMING note above — an upcoming election must NOT be described in the past tense, and a finished one must not be written as if it's still ahead.
 - Refer to them using the "Leaning & party" line EXACTLY as given. When it's only a party ("Democrat"/"Republican"), use just that — NEVER prepend "Left", "Right", "Progressive", "Conservative" or any direction yourself. Only a middle-of-the-road rep carries a "Center-Left", "Centrist", or "Center-Right" qualifier (e.g. "Center-Right Republican"). Say "re-election" only if the facts mark them as the incumbent; otherwise call it their campaign or bid.${handleRule}
@@ -318,6 +331,7 @@ export async function composeFinanceCaption(
   candidateId: string,
   platform: string,
   meta: CandidateMeta,
+  news: NewsHook | null = null,
 ): Promise<{ caption: string; source: string } | null> {
   const cfg = PLATFORM_LIMITS[platform] ?? PLATFORM_LIMITS.x;
   const { data: factsRaw } = await admin.rpc('get_candidate_caption_facts', { _candidate_id: candidateId });
@@ -332,8 +346,8 @@ export async function composeFinanceCaption(
   const hint = headlineHint(facts);
   const timing = electionTimingDirective(facts.cycle, facts.today);
 
-  const ai = await aiCaption(aiKey, buildPrompt(platform, block, hint, timing, handle, cfg.long, cfg.max), cfg.max);
-  if (ai) return { caption: ensureHandle(ai, handle, cfg.max), source: 'finance_ai' };
+  const ai = await aiCaption(aiKey, buildPrompt(platform, block, hint, timing, handle, cfg.long, cfg.max, news), cfg.max);
+  if (ai) return { caption: ensureHandle(ai, handle, cfg.max), source: news ? 'finance_news_ai' : 'finance_ai' };
   return { caption: ensureHandle(templateCaption(displayName, meta.party, ideology, meta.state, facts, cfg.max), handle, cfg.max), source: 'finance_template' };
 }
 
@@ -353,10 +367,14 @@ function buildAnalysisPrompt(
   platform: string, displayName: string, partyLine: string,
   record: string | null, funding: string | null, character: string | null,
   timing: string | null, handle: string | null, mode: 'both' | 'funding' | 'record', max: number,
+  news: NewsHook | null = null,
 ): string {
   const long = PLATFORM_LIMITS[platform]?.long ?? false;
   const handleRule = handle
     ? `\n- Refer to them as @${handle} in place of a real name; never write their actual personal name, and do NOT start the post with @${handle} (so X does not treat it as a reply).`
+    : '';
+  const newsRule = news
+    ? `\n- IN THE NEWS (real, recently reported by ${news.source} — treat as a verified, attributed fact): ${news.hook}. OPEN with this as your hook and attribute it to ${news.source} (e.g. "Per ${news.source}, …"); it is the most attention-grabbing angle. State it EXACTLY as written — never sharpen it into an accusation, add a detail, or imply guilt beyond what is reported.`
     : '';
   const focus = mode === 'both'
     ? `Cover BOTH angles: (1) who they are — their record, positions, and what they're known for; and (2) their campaign money and what it says about WHO funds them.`
@@ -378,7 +396,7 @@ Subject: ${displayName} — ${partyLine}.
 ${focus}${recordRule}${fundingRule}
 ${timing ? `\n${timing}\n` : ''}
 Write the post:
-- Match the tense and framing to the TIMING note above (if given) — an upcoming election must NOT be written in the past tense.${handleRule}
+- Match the tense and framing to the TIMING note above (if given) — an upcoming election must NOT be written in the past tense.${newsRule}${handleRule}
 - Intense, headline-worthy, media-ready. Exactly ONE tasteful emoji.
 - ${lengthRule}
 - Plain text ONLY — no markdown, no asterisks, no underscores, no bullet points, no hashtags. Do NOT include a URL (a link is appended automatically). No quotes, no preamble.`;
@@ -395,13 +413,16 @@ export async function composeAnalysisCaption(
   platform: string,
   meta: CandidateMeta,
   recordSummary: string | null | undefined,
+  news: NewsHook | null = null,
 ): Promise<{ caption: string; source: string } | null> {
   const cfg = PLATFORM_LIMITS[platform] ?? PLATFORM_LIMITS.x;
   const { data: factsRaw } = await admin.rpc('get_candidate_caption_facts', { _candidate_id: candidateId });
   const facts = (factsRaw ?? null) as Facts | null;
   const hasFin = hasFinance(facts);
   const record = (recordSummary ?? '').replace(/\s+/g, ' ').trim() || null;
-  if (!record && !hasFin) return null;
+  // A real, sourced news hook is enough to carry a post on its own, even with no
+  // record summary or finance data — that's exactly when it's most useful.
+  if (!record && !hasFin && !news) return null;
 
   // Short posts feature one angle (randomized when both exist); long posts include both.
   let mode: 'both' | 'funding' | 'record';
@@ -418,20 +439,23 @@ export async function composeAnalysisCaption(
   const timing = facts ? electionTimingDirective(facts.cycle, facts.today) : null;
   const recordForPrompt = record ? summarizeForSocial(record, 500) : null;
 
-  const prompt = buildAnalysisPrompt(platform, displayName, partyLine, recordForPrompt, funding, character, timing, handle, mode, cfg.max);
+  const prompt = buildAnalysisPrompt(platform, displayName, partyLine, recordForPrompt, funding, character, timing, handle, mode, cfg.max, news);
   const ai = await aiCaption(aiKey, prompt, cfg.max);
-  if (ai) return { caption: ensureHandle(ai, handle, cfg.max), source: `analysis_${mode}_ai` };
+  if (ai) return { caption: ensureHandle(ai, handle, cfg.max), source: `analysis_${mode}${news ? '_news' : ''}_ai` };
 
-  // Deterministic fallback when the model is unavailable.
-  let base: string;
+  // Deterministic fallback when the model is unavailable. A news hook (when present)
+  // leads, attributed to its source; the record/funding angle follows if we have it.
+  const newsClause = news ? `Per ${news.source}, ${displayName} ${news.hook}.` : '';
+  let body: string;
   if (mode === 'funding') {
-    base = templateCaption(displayName, meta.party, ideology, meta.state, facts as Facts, cfg.max);
+    body = templateCaption(displayName, meta.party, ideology, meta.state, facts as Facts, cfg.max);
   } else if (mode === 'record') {
-    base = record as string;
+    body = record ?? '';
   } else {
     const fundClause = character ? ` ${displayName} is ${character}.` : (funding ? ` ${displayName}: ${funding}.` : '');
-    base = `${record}${fundClause}`.trim();
+    body = `${record}${fundClause}`.trim();
   }
-  return { caption: ensureHandle(summarizeForSocial(base, cfg.max), handle, cfg.max), source: `analysis_${mode}_template` };
+  const base = [newsClause, body].filter(Boolean).join(' ').trim() || `${displayName} on PoliPulse.`;
+  return { caption: ensureHandle(summarizeForSocial(base, cfg.max), handle, cfg.max), source: `analysis_${mode}${news ? '_news' : ''}_template` };
 }
 

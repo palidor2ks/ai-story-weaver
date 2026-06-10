@@ -15,6 +15,7 @@ import {
 import { composeDonorEntityCaption } from '../_shared/donor-card.ts';
 import { composeCommitteeSpenderCaption } from '../_shared/committee-card.ts';
 import { composeRaceComparisonCaption } from '../_shared/race-card.ts';
+import { researchControversy } from '../_shared/news-research.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -25,6 +26,7 @@ const supaUrl = Deno.env.get('SUPABASE_URL')!;
 const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
 const aiKey = Deno.env.get('LOVABLE_API_KEY');
+const youKey = Deno.env.get('YOU_API_KEY');
 
 const BodySchema = z.object({
   post_id: z.string().uuid(),
@@ -127,18 +129,31 @@ Deno.serve(async (req) => {
     };
 
     if (meta && post.subject_id) {
+      // Research a real, recently-reported, ATTRIBUTED news hook to give the caption an
+      // attention-grabbing angle (grounded in live web research with citations; null
+      // when there's no key, nothing notable, or on error — captions then fall back to
+      // the verified-finance/record copy). Cached per-candidate for a day in news-research.
+      const news = await researchControversy({
+        candidateId: post.subject_id,
+        name: meta.name,
+        office: meta.office,
+        state: meta.state,
+        youKey,
+        aiKey,
+      });
+
       // Type-specific composer first; each returns null when its data is missing.
       if (post.subject_type === 'ai_analysis') {
-        const analysis = await composeAnalysisCaption(admin, aiKey, post.subject_id, platform, meta, await readRecord());
+        const analysis = await composeAnalysisCaption(admin, aiKey, post.subject_id, platform, meta, await readRecord(), news);
         if (analysis) return await save(analysis.caption, analysis.source);
       }
 
       // Shared money-driven fallback for rep_profile (and any other candidate-anchored
       // type) when its specific data is absent — every candidate-anchored post still
       // gets a verified-finance caption, then a record-blended one, before the static line.
-      const headline = await composeFinanceCaption(admin, aiKey, post.subject_id, platform, meta);
+      const headline = await composeFinanceCaption(admin, aiKey, post.subject_id, platform, meta, news);
       if (headline) return await save(headline.caption, headline.source);
-      const analysis = await composeAnalysisCaption(admin, aiKey, post.subject_id, platform, meta, await readRecord());
+      const analysis = await composeAnalysisCaption(admin, aiKey, post.subject_id, platform, meta, await readRecord(), news);
       if (analysis) return await save(analysis.caption, analysis.source);
     }
 
