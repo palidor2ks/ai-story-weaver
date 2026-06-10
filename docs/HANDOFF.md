@@ -27,6 +27,60 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-10 — claude/sweet-dijkstra-o2yhdz
+
+**What happened & why**
+Ran the Roadmap-#1 data-accuracy gate for independent expenditures: the FEC
+`schedule_e/by_candidate` cross-check, cycle 2024 president — Harris `P00009423`, Biden
+`P80000722` (+ Trump `P80001571` for context) — against our `independent_expenditures` data.
+The container egress allowlist blocks `api.open.fec.gov` (curl AND WebFetch get 403), so FEC
+was queried from inside the project DB via `extensions.http_get()` (pgsql-http) using
+`DEMO_KEY` — read-only, and the real `FEC_API_KEY` never entered logged SQL. Findings:
+
+- **Provenance of the quoted "stored totals" confirmed**: Harris `$1,210,981,595` / Biden
+  `$49,500,220` are exactly `candidate_independent_expenditure_totals.total_amount` — i.e.
+  **support + oppose combined**, NOT "pro-" money. Harris's figure also contains a **$1.4M
+  cycle-2026 leak** (20 rows; the view has no cycle filter). Biden's matches to the cent.
+- **FEC ground truth** (cycle 2024, `election_full=false`; granular `by_candidate` summed
+  across all 9 pages agrees with `totals/by_candidate` to the cent): Harris **S $524,478,745
+  / O $560,397,619**; Biden **S $223,274,562 / O $61,665,322**; Trump S $237,601,838 /
+  O $156,916,229. (The `totals/by_candidate` endpoint silently ignores its `office` param —
+  filter by candidate_id, never office.)
+- So **"pro-Harris $1B+" is FALSE on FEC's books** — pro-Harris support is $524.5M; only
+  S+O combined crosses $1B ($1.085B FEC vs our $1.211B). Pro-Harris exceeds pro-Biden
+  **2.3× as-filed**, not the ~88× our stored S-split (706.8M vs 8.1M) implies.
+- **Stored Harris support runs ~$152M HOT** vs FEC ($676.2M Harris-coded-as-filed in our
+  table vs FEC's deduped $524.5M) — amendment/notice double-counting suspected; an exact
+  (committee, date, amount, S/O) duplicate scan explains only $13.3M of it.
+- **Stored Biden support runs ~$185M COLD**: FEC carries $223.3M of Biden-coded support;
+  we hold only ~$38.6M of Biden-S-coded line items (and `ie_target_overrides` legitimately
+  reattributes $30.5M of that to Harris — those moves are almost entirely post-2024-07-21
+  and name-matched "Kamala", so the override design is sound; the gap is coverage).
+
+**State** (verified)
+Every number above re-derived live this session: DB side via Supabase MCP `execute_sql`
+(exclusion-aware, matching `ie_reconcile_local` semantics); FEC side via in-DB `http_get`
+(all HTTP 200; two independent FEC endpoints cross-agree exactly). NOT verified: the pre- vs
+post-dropout composition of FEC's $223.3M Biden-S — DEMO_KEY hit its 40-req/hr limit on that
+last query. No code or config changed; this docs entry is the session's only diff.
+
+**Next**
+Re-run the deferred decomposition once the DEMO_KEY hour resets (or from an env whose
+allowlist permits `api.open.fec.gov` with the real key): flat `schedule_e` endpoint,
+`candidate_id=P80000722&support_oppose_indicator=S&two_year_transaction_period=2024&
+data_type=processed&most_recent=true&sort=-expenditure_amount` — if the big items are
+pre-dropout they're genuine pro-Biden we're missing (coverage fix); if post-dropout they're
+mis-coded pro-Harris (override fix). That decides which side to repair.
+
+**Deferred**
+Amendment-chain dedup for the ~$140M unexplained Harris-S overage (needs image_number /
+amendment-family matching, not exact-tuple matching). Add a cycle filter (or per-cycle
+grouping) to `candidate_independent_expenditure_totals` to stop cross-cycle leaks. Audit any
+UI surface that labels `total_amount` as "pro-X" — it's support+oppose. Landscape sweep for
+the remaining 2024 presidential candidates.
+
+---
+
 ## 2026-06-10 — claude/database-migration-railway-3r08O
 
 **What happened & why**
