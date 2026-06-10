@@ -27,6 +27,44 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-10 (bills catch-up COMPLETE; green light for enrichment) — claude/laughing-dirac-x72d3g
+
+**What happened & why**
+Closing the bills arc, fully automated end-to-end: congress 119 walk completed 19:33 UTC
+(16,598/16,598), the hardened chain opened 118 hands-free, 118 completed 20:51 UTC
+(19,315/19,315 — bigger than estimated), and both temporary crons
+(`bills-catchup-119`/`-118`) were unscheduled per the documented cleanup. **bills table:
+31,321 → 65,836 rows.** PR #349 merged after four Codex review rounds (all addressed; final
+invariant: "a filtered completion is not a completion" on both jobs' guards + in-cron
+self-resets). Throttling by the shared CONGRESS_GOV_API_KEY (429s) occurred and self-healed
+exactly as designed.
+
+**State** (verified)
+Both `bill_ingestion_status` rows `complete` with cursor == total_available; 0 catch-up cron
+jobs remain; nightly-bill-sync cron (03:10 UTC) is the only bills scheduler left. Corpus
+counts: 119 → 20,469 rows, 118 → 25,420 rows — MORE than the API walks because of
+pre-existing rows from older paths. NEW HYGIENE FINDING (deferred, inert): junk rows predate
+today — 718 `bill_type='PROC'`, rows whose bill_type contains a full TITLE string (old
+import parsing bug), possible congress mislabels. Enrichment joins via candidate_votes
+canonical ids (verified 0 orphans), so this doesn't block. NOT verified: scoreboard bills
+tile green (needs tonight's 03:10 UTC nightly completion).
+
+**Next**
+**GREEN LIGHT — start the answers enrichment push, part 1 (vote-derived citations):** for
+answers backed by member votes/sponsorships, generate Congress.gov source URLs mechanically
+from candidate_votes ↔ bills (now a complete 118+119 corpus); measure sourcedWithUrl before
+vs after against the 35%/75%/100% bands (DATA-ACCURACY §Answers). Then the bills
+follow-through: fetch-bill-sponsors backfill + member-sync re-run (should shrink the 262
+incomplete members).
+
+**Deferred**
+Bills-table hygiene audit (PROC/title-as-type junk, congress label check); the
+`excludeIntroduced` admin-path footgun (root cause of all four Codex findings);
+fetch-all-bills req.clone() error-path bug; amendments ingestion (6,045 in 119); (carried)
+items below.
+
+---
+
 ## 2026-06-10 (bills revival + answers goal) — claude/laughing-dirac-x72d3g
 
 **What happened & why**
