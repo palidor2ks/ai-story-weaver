@@ -48,6 +48,7 @@ const StatCardRender = lazy(() => import("./pages/StatCardRender"));
 const SocialPosts = lazy(() => import("./pages/admin/SocialPosts"));
 const Onboarding = lazy(() => import("./pages/Onboarding").then((m) => ({ default: m.Onboarding })));
 const PoliticalCompassTest = lazy(() => import("./pages/PoliticalCompassTest"));
+const PoliticalIdeologyTestsComparison = lazy(() => import("./pages/PoliticalIdeologyTestsComparison"));
 
 // Root route: route users based on auth + onboarding status
 const RootRedirect = () => {
