@@ -21,11 +21,16 @@ features ride on top of it.
 ## Priorities (ranked)
 
 ### 1. 🟡 Data accuracy — FEC/finance + voting records & bills  ⟵ top priority & the ship gate
-The blocker and the definition of done both land here.
+The blocker and the definition of done both land here. Per-category goals, definitions,
+thresholds, and current standing: **`docs/DATA-ACCURACY.md`** (checked every preflight via
+`bun run check:accuracy`; surfaced on the Coverage & Finance dashboard).
 - Verify FEC donor/committee/candidate data is correct, not just loaded. Watch for ID
   mismapping (`docs/ie-target-reattribution.md`).
 - Voting records & bills: confirm they reflect reality before surfacing them in the UI.
 - State campaign-finance ingestion correctness (`docs/state-campaign-finance.md`).
+- **Candidate answers/positions** (added 2026-06-10): the alignment quiz's own input —
+  VISION's riskiest assumption includes positions, so "sourced with a URL, not just a
+  description" is tracked as its own category (`docs/DATA-ACCURACY.md` §Answers).
 - **Done =** the data on a given profile/page is confirmed accurate against source.
 
 ### 2. 🟡 Migration / DB stability
@@ -83,3 +88,11 @@ X/TikTok posting, Remotion social cards, AI-generated analysis. Deferred until t
   sitemap generator no longer ships degraded output on fetch errors. Plan + operator playbook:
   `docs/candidate-deduplication-plan.md`. #1 stays 🟡 (voting records & bills, state finance
   still unverified).
+- **2026-06-10 (accuracy scoreboard)** — Priority #1 made *checkable*: per-category goals +
+  thresholds written down (`docs/DATA-ACCURACY.md`), **candidate answers/positions added as a
+  #1 category** (it was in VISION but missing here), stats computation moved into one SQL
+  function refreshed by cron every 15 min (dashboard tiles had been stale since 2026-01-19 /
+  May 28–29), dashboard gained a Data Accuracy Scoreboard (bills/state finance/recon/identity),
+  and preflight gained `check:accuracy`. Found in the process: the **nightly bill sync has
+  been dead since 2026-01-13** (no scheduler can call it — needs the shared-secret pattern;
+  recipe in DATA-ACCURACY §Bills, awaiting review per guardrail #2).

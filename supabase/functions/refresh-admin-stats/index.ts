@@ -5,7 +5,20 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-type StatKey = "voting_records_stats" | "candidate_answer_stats" | "fec_stats" | "all";
+// All stat computation lives in the refresh_admin_stats_cache() SQL function
+// (supabase/migrations/20260610170000_admin_stats_auto_refresh.sql) so the dashboard's
+// manual refresh, the 15-minute pg_cron job, and the preflight data-accuracy check share
+// one set of definitions. This function is just the admin-authenticated trigger.
+
+type StatKey =
+  | "voting_records_stats"
+  | "candidate_answer_stats"
+  | "fec_stats"
+  | "bills_stats"
+  | "state_finance_stats"
+  | "finance_recon_stats"
+  | "identity_stats"
+  | "all";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -39,231 +52,16 @@ Deno.serve(async (req) => {
     const { statKey } = await req.json() as { statKey: StatKey };
     console.log(`[refresh-admin-stats] Refreshing: ${statKey}`);
 
-    const results: Record<string, unknown> = {};
+    const { data: results, error: rpcError } = await supabase.rpc("refresh_admin_stats_cache", {
+      p_keys: statKey === "all" ? null : [statKey],
+    });
 
-    if (statKey === "voting_records_stats" || statKey === "all") {
-      console.log("[refresh-admin-stats] Fetching voting records stats...");
-      
-      // Use materialized view for instant counts (no timeout issues)
-      console.log("[refresh-admin-stats] Fetching from vote_action_counts materialized view...");
-      const rpcStart = Date.now();
-      let { data: actionCounts, error: viewError } = await supabase
-        .from("vote_action_counts")
-        .select("action_type, count");
-      
-      if (viewError) {
-        console.error("[refresh-admin-stats] Materialized view error:", viewError);
-      }
-      
-      // If view is empty or stale, refresh it and retry
-      if (!actionCounts || actionCounts.length === 0) {
-        console.log("[refresh-admin-stats] View empty, refreshing materialized view...");
-        const { error: refreshError } = await supabase.rpc("refresh_vote_action_counts");
-        if (refreshError) {
-          console.error("[refresh-admin-stats] Refresh error:", refreshError);
-        } else {
-          // Retry after refresh
-          const { data: retryData } = await supabase
-            .from("vote_action_counts")
-            .select("action_type, count");
-          actionCounts = retryData;
-        }
-      }
-      
-      console.log(`[refresh-admin-stats] Got ${actionCounts?.length || 0} action types in ${Date.now() - rpcStart}ms`);
-      console.log("[refresh-admin-stats] Action counts:", JSON.stringify(actionCounts));
-
-      // Parse action counts (normalize to lowercase for resilient matching)
-      const countMap: Record<string, number> = {};
-      actionCounts?.forEach((r: { action_type: string; count: number }) => {
-        const key = String(r.action_type || "").toLowerCase().trim();
-        countMap[key] = Number(r.count || 0);
+    if (rpcError) {
+      console.error("[refresh-admin-stats] RPC error:", rpcError);
+      return new Response(JSON.stringify({ error: rpcError.message }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
-      console.log("[refresh-admin-stats] Normalized count map:", JSON.stringify(countMap));
-
-      const sponsored = countMap["sponsored"] || 0;
-      const cosponsored = countMap["cosponsored"] || 0;
-      const floorVoteCount = countMap["floor_vote"] || 0;
-      
-      const legislativeActions = sponsored + cosponsored;
-      const floorVotes = floorVoteCount;
-      const totalRecords = legislativeActions + floorVotes;
-
-      console.log(`[refresh-admin-stats] Parsed counts: sponsored=${sponsored}, cosponsored=${cosponsored}, floor=${floorVotes}`);
-      console.log(`[refresh-admin-stats] Totals: legislative=${legislativeActions}, floor=${floorVotes}, total=${totalRecords}`);
-
-      // Get member counts from vote_sync_status (fast, small table)
-      console.log("[refresh-admin-stats] Fetching vote_sync_status for member counts...");
-      const syncStart = Date.now();
-      const { data: syncStatus, error: syncError } = await supabase
-        .from("vote_sync_status")
-        .select("candidate_id, persisted_count, persisted_floor_votes");
-      
-      if (syncError) {
-        console.error("[refresh-admin-stats] vote_sync_status error:", syncError);
-      }
-      console.log(`[refresh-admin-stats] vote_sync_status fetched ${syncStatus?.length || 0} rows in ${Date.now() - syncStart}ms`);
-
-      // Count members with data
-      let membersSynced = 0;
-      let membersWithFloorVotes = 0;
-      syncStatus?.forEach(s => {
-        const persisted = s.persisted_count || 0;
-        const floor = s.persisted_floor_votes || 0;
-        if (persisted > 0 || floor > 0) membersSynced++;
-        if (floor > 0) membersWithFloorVotes++;
-      });
-
-      console.log(`[refresh-admin-stats] Members synced: ${membersSynced}, with floor votes: ${membersWithFloorVotes}`);
-
-      // Get total federal candidates for coverage - using limit(1) instead of head:true
-      const { count: totalFederalCandidates } = await supabase
-        .from("candidates")
-        .select("id", { count: "exact" })
-        .or("office.ilike.%Senator%,office.ilike.%Representative%")
-        .limit(1);
-
-      const coveragePercentage = totalFederalCandidates 
-        ? Math.round((membersSynced / totalFederalCandidates) * 100)
-        : 0;
-
-      const votingStats = {
-        legislativeActions,
-        floorVotes,
-        totalRecords,
-        membersSynced,
-        membersWithFloorVotes,
-        coveragePercentage,
-      };
-
-      console.log("[refresh-admin-stats] Final voting stats:", JSON.stringify(votingStats));
-
-      const { error: upsertError } = await supabase
-        .from("admin_stats_cache")
-        .upsert({
-          stat_key: "voting_records_stats",
-          stat_value: votingStats,
-          updated_at: new Date().toISOString(),
-        });
-
-      if (upsertError) {
-        console.error("[refresh-admin-stats] Upsert error:", upsertError);
-      }
-
-      results.voting_records_stats = votingStats;
-    }
-
-    if (statKey === "candidate_answer_stats" || statKey === "all") {
-      console.log("[refresh-admin-stats] Fetching candidate answer stats...");
-
-      const [questionsRes, candidatesRes, coverageRes] = await Promise.all([
-        supabase.from("questions").select("*", { count: "exact", head: true }),
-        supabase.from("candidates").select("*", { count: "exact", head: true }),
-        supabase.from("candidate_answer_coverage_stats").select("*"),
-      ]);
-
-      const totalQuestions = questionsRes.count || 0;
-      const totalCandidates = candidatesRes.count || 0;
-      const coverageData = coverageRes.data || [];
-
-      // Calculate stats
-      let noAnswers = 0;
-      let lowCoverage = 0;
-      let fullCoverage = 0;
-      let totalAnswers = 0;
-      let totalSourced = 0;
-
-      coverageData.forEach((c) => {
-        const answerCount = c.answer_count || 0;
-        const sourcedCount = c.sourced_count || 0;
-        const answerPct = totalQuestions > 0 ? (answerCount / totalQuestions) * 100 : 0;
-        
-        totalAnswers += answerCount;
-        totalSourced += sourcedCount;
-        
-        if (answerCount === 0) noAnswers++;
-        else if (answerPct < 30) lowCoverage++;
-        else if (answerPct >= 80) fullCoverage++;
-      });
-
-      // Candidates without any answers in the coverage view
-      const candidatesWithAnswers = coverageData.length;
-      noAnswers = Math.max(0, totalCandidates - candidatesWithAnswers) + noAnswers;
-
-      const answerStats = {
-        totalCandidates,
-        totalQuestions,
-        noAnswers,
-        lowCoverage,
-        fullCoverage,
-        totalAnswers,
-        totalSourced,
-      };
-
-      console.log("[refresh-admin-stats] Answer stats:", answerStats);
-
-      await supabase.from("admin_stats_cache").upsert({
-        stat_key: "candidate_answer_stats",
-        stat_value: answerStats,
-        updated_at: new Date().toISOString(),
-      });
-
-      results.candidate_answer_stats = answerStats;
-    }
-
-    if (statKey === "fec_stats" || statKey === "all") {
-      console.log("[refresh-admin-stats] Fetching FEC stats...");
-
-      // Get candidates with FEC IDs
-      const { data: candidatesWithFec } = await supabase
-        .from("candidates")
-        .select("id, fec_candidate_id, last_donor_sync");
-
-      const withFecId = candidatesWithFec?.filter(c => c.fec_candidate_id).length || 0;
-      const neverSynced = candidatesWithFec?.filter(c => c.fec_candidate_id && !c.last_donor_sync).length || 0;
-      
-      // Check committee sync status
-      const { data: committees } = await supabase
-        .from("candidate_committees")
-        .select("candidate_id, last_sync_completed_at, has_more");
-
-      const committeesByCandidate = new Map<string, { synced: boolean; complete: boolean }>();
-      committees?.forEach(c => {
-        const existing = committeesByCandidate.get(c.candidate_id || "");
-        if (!existing) {
-          committeesByCandidate.set(c.candidate_id || "", {
-            synced: !!c.last_sync_completed_at,
-            complete: c.last_sync_completed_at && !c.has_more,
-          });
-        } else {
-          existing.synced = existing.synced || !!c.last_sync_completed_at;
-          existing.complete = existing.complete && (!c.has_more);
-        }
-      });
-
-      let partialSync = 0;
-      let complete = 0;
-      committeesByCandidate.forEach(v => {
-        if (v.complete) complete++;
-        else if (v.synced) partialSync++;
-      });
-
-      const fecStats = {
-        withFecId,
-        neverSynced,
-        partialSync,
-        complete,
-      };
-
-      console.log("[refresh-admin-stats] FEC stats:", fecStats);
-
-      await supabase.from("admin_stats_cache").upsert({
-        stat_key: "fec_stats",
-        stat_value: fecStats,
-        updated_at: new Date().toISOString(),
-      });
-
-      results.fec_stats = fecStats;
     }
 
     return new Response(JSON.stringify({ success: true, results }), {

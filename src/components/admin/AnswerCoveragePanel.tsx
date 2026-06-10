@@ -62,6 +62,7 @@ import { ProcessingStatusIndicator } from "@/components/admin/ProcessingStatusIn
 import { StatTile } from "@/components/admin/StatTile";
 import { FinanceCycleSummary } from "@/components/admin/FinanceCycleSummary";
 import { CronHealthPanel } from "@/components/admin/CronHealthPanel";
+import { DataAccuracyScoreboard } from "@/components/admin/DataAccuracyScoreboard";
 import { ScoreTextInline } from "@/components/ScoreText";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -1308,6 +1309,9 @@ export function AnswerCoveragePanel() {
 
         {/* Pipeline & Cron health — attempts, failures, and per-rep drill-down */}
         <CronHealthPanel />
+
+        {/* Data Accuracy Scoreboard — bills, state finance, reconciliation, identity */}
+        <DataAccuracyScoreboard />
         {/* Voting Records Stats */}
         <div className="space-y-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
