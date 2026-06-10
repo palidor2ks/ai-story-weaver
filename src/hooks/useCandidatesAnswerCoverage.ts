@@ -219,6 +219,34 @@ function useQuestionCounts() {
   });
 }
 
+// PostgREST `.in()` filters put every id into the query string; past a few
+// hundred ids the URL blows the gateway limit and the request FAILS. These
+// supporting queries are non-fatal by design, so when FEC discovery grew the
+// directory from ~600 to ~2,400 candidates, every row silently rendered
+// 0 answers / "No Data" / "—" while the data sat intact in the DB. Same root
+// cause as the older `CHUNK = 100` fix further down — applied here to every
+// id-filtered supporting query. Chunks run in parallel; chunk failures are
+// logged loudly instead of swallowed.
+const IN_CHUNK = 200;
+async function chunkedIn<Row>(
+  label: string,
+  ids: string[],
+  build: (chunk: string[]) => PromiseLike<{ data: Row[] | null; error: { message: string } | null }>,
+): Promise<Row[]> {
+  const chunks: string[][] = [];
+  for (let i = 0; i < ids.length; i += IN_CHUNK) chunks.push(ids.slice(i, i + IN_CHUNK));
+  const settled = await Promise.all(chunks.map(c => build(c)));
+  const rows: Row[] = [];
+  settled.forEach((res, i) => {
+    if (res.error) {
+      console.error(`[coverage] ${label} chunk ${i + 1}/${chunks.length} failed: ${res.error.message}`);
+    } else if (res.data) {
+      rows.push(...res.data);
+    }
+  });
+  return rows;
+}
+
 export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { enabled?: boolean; limit?: number; financeCycle?: string; refetchInterval?: number | false }) {
   const limit = options?.limit;
   const financeCycle = options?.financeCycle ?? '2026';
@@ -264,63 +292,64 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
 
       const FINANCE_CYCLE = financeCycle;
 
-      // Run ALL supporting queries in parallel for maximum performance
+      // Run ALL supporting queries in parallel for maximum performance.
+      // Each one is id-chunked (see chunkedIn) — a single .in() with the full
+      // candidate list exceeds URL limits and used to fail silently.
       const [
-        answerCoverageResult,
-        votingCoverageResult,
-        donorCountsResult,
-        reconciliationResult,
-        partialSyncResult,
-        voteSyncResult,
-        allCyclesResult
+        answerCoverageData,
+        votingCoverageData,
+        donorCountsData,
+        reconciliationData,
+        partialSyncData,
+        voteSyncData,
+        allCyclesData,
       ] = await Promise.all([
         // Answer counts - filter by candidate IDs
-        supabase
-          .from('candidate_answer_coverage_stats')
-          .select('candidate_id, answer_count, sourced_count')
-          .in('candidate_id', candidateIds),
+        chunkedIn('candidate_answer_coverage_stats', candidateIds, chunk =>
+          supabase
+            .from('candidate_answer_coverage_stats')
+            .select('candidate_id, answer_count, sourced_count')
+            .in('candidate_id', chunk)),
         // Vote counts - filter by candidate IDs
-        supabase
-          .from('candidate_voting_coverage')
-          .select('candidate_id, total_votes_stored, legislative_actions_count, floor_votes_count')
-          .in('candidate_id', candidateIds),
+        chunkedIn('candidate_voting_coverage', candidateIds, chunk =>
+          supabase
+            .from('candidate_voting_coverage')
+            .select('candidate_id, total_votes_stored, legislative_actions_count, floor_votes_count')
+            .in('candidate_id', chunk)),
         // Donor counts - filter by candidate IDs
-        supabase
-          .from('candidate_donor_counts')
-          .select('candidate_id, donor_count')
-          .in('candidate_id', candidateIds),
+        chunkedIn('candidate_donor_counts', candidateIds, chunk =>
+          supabase
+            .from('candidate_donor_counts')
+            .select('candidate_id, donor_count')
+            .in('candidate_id', chunk)),
         // Finance reconciliation - filter by candidate IDs
-        supabase
-          .from('finance_reconciliation')
-          .select('*')
-          .eq('cycle', FINANCE_CYCLE)
-          .in('candidate_id', candidateIds),
+        chunkedIn('finance_reconciliation', candidateIds, chunk =>
+          supabase
+            .from('finance_reconciliation')
+            .select('*')
+            .eq('cycle', FINANCE_CYCLE)
+            .in('candidate_id', chunk)),
         // Committee sync status - filter by candidate IDs
-        supabase
-          .from('candidate_committees')
-          .select('candidate_id, has_more, last_sync_date, last_sync_completed_at, last_cycle, designation')
-          .in('candidate_id', candidateIds),
+        chunkedIn('candidate_committees', candidateIds, chunk =>
+          supabase
+            .from('candidate_committees')
+            .select('candidate_id, has_more, last_sync_date, last_sync_completed_at, last_cycle, designation')
+            .in('candidate_id', chunk)),
         // Vote sync status - filter by candidate IDs
-        supabase
-          .from('vote_sync_status')
-          .select('candidate_id, expected_total, persisted_count, expected_floor_votes, persisted_floor_votes, last_sync_completed_at, sync_error, floor_vote_sync_error')
-          .in('candidate_id', candidateIds),
+        chunkedIn('vote_sync_status', candidateIds, chunk =>
+          supabase
+            .from('vote_sync_status')
+            .select('candidate_id, expected_total, persisted_count, expected_floor_votes, persisted_floor_votes, last_sync_completed_at, sync_error, floor_vote_sync_error')
+            .in('candidate_id', chunk)),
         // All cycles that have reconciliation data (lightweight — drives the
         // cross-cycle hint so a candidate's data isn't "invisible" when the
         // selected cycle has no row but another cycle does).
-        supabase
-          .from('finance_reconciliation')
-          .select('candidate_id, cycle')
-          .in('candidate_id', candidateIds),
+        chunkedIn('finance_reconciliation (all cycles)', candidateIds, chunk =>
+          supabase
+            .from('finance_reconciliation')
+            .select('candidate_id, cycle')
+            .in('candidate_id', chunk)),
       ]);
-
-      // Extract data from results (errors are non-fatal for supporting data)
-      const answerCoverageData = answerCoverageResult.data;
-      const votingCoverageData = votingCoverageResult.data;
-      const donorCountsData = donorCountsResult.data;
-      const reconciliationData = reconciliationResult.data;
-      const partialSyncData = partialSyncResult.data;
-      const voteSyncData = voteSyncResult.data;
 
       // Build lookup maps for answer counts
       const answerCountMap: Record<string, number> = {};
@@ -396,7 +425,7 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
       // Map candidate_id -> every cycle that has a reconciliation row (any cycle).
       // Used to surface a hint when the selected cycle has no data but another does.
       const cyclesByCandidate: Record<string, string[]> = {};
-      (allCyclesResult.data || []).forEach(row => {
+      (allCyclesData || []).forEach(row => {
         if (!row.candidate_id) return;
         const cy = String(row.cycle);
         if (!cyclesByCandidate[row.candidate_id]) cyclesByCandidate[row.candidate_id] = [];
@@ -655,12 +684,13 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
           const federalIds = new Set(results.map(r => r.id));
           const newCivicIds = civicOfficials.filter(co => !federalIds.has(co.candidate_id)).map(co => co.candidate_id);
 
-          // Fetch answer counts for civic officials
+          // Fetch answer counts for civic officials (id-chunked — see chunkedIn)
           if (newCivicIds.length > 0) {
-            const { data: civicAnswerData } = await supabase
-              .from('candidate_answer_coverage_stats')
-              .select('candidate_id, answer_count, sourced_count')
-              .in('candidate_id', newCivicIds);
+            const civicAnswerData = await chunkedIn('candidate_answer_coverage_stats (civic)', newCivicIds, chunk =>
+              supabase
+                .from('candidate_answer_coverage_stats')
+                .select('candidate_id, answer_count, sourced_count')
+                .in('candidate_id', chunk));
 
             const civicAnswerMap: Record<string, { count: number; sourced: number }> = {};
             (civicAnswerData || []).forEach(row => {
@@ -722,23 +752,25 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
           const staticAnswerMap: Record<string, { count: number; sourced: number }> = {};
           const staticOverrideMap: Record<string, { overall_score: number | null; coverage_tier: string | null; confidence: string | null }> = {};
           if (newIds.length > 0) {
-            const [staticAnswerRes, staticOverrideRes] = await Promise.all([
-              supabase
-                .from('candidate_answer_coverage_stats')
-                .select('candidate_id, answer_count, sourced_count')
-                .in('candidate_id', newIds),
-              supabase
-                .from('candidate_overrides')
-                .select('candidate_id, overall_score, coverage_tier, confidence')
-                .in('candidate_id', newIds),
+            const [staticAnswerData, staticOverrideData] = await Promise.all([
+              chunkedIn('candidate_answer_coverage_stats (static)', newIds, chunk =>
+                supabase
+                  .from('candidate_answer_coverage_stats')
+                  .select('candidate_id, answer_count, sourced_count')
+                  .in('candidate_id', chunk)),
+              chunkedIn('candidate_overrides (static)', newIds, chunk =>
+                supabase
+                  .from('candidate_overrides')
+                  .select('candidate_id, overall_score, coverage_tier, confidence')
+                  .in('candidate_id', chunk)),
             ]);
-            (staticAnswerRes.data || []).forEach(row => {
+            (staticAnswerData || []).forEach(row => {
               staticAnswerMap[row.candidate_id] = {
                 count: Number(row.answer_count) || 0,
                 sourced: Number(row.sourced_count) || 0,
               };
             });
-            (staticOverrideRes.data || []).forEach(row => {
+            (staticOverrideData || []).forEach(row => {
               staticOverrideMap[row.candidate_id] = {
                 overall_score: row.overall_score,
                 coverage_tier: row.coverage_tier,
