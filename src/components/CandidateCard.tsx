@@ -37,9 +37,9 @@ export const CandidateCard = ({
 
   const getPartyColor = (party: string) => {
     switch (party) {
-      case 'Democrat': return 'text-blue-600';
-      case 'Republican': return 'text-red-600';
-      case 'Independent': return 'text-purple-600';
+      case 'Democrat': return 'text-blue-700';
+      case 'Republican': return 'text-red-700';
+      case 'Independent': return 'text-purple-700';
       default: return 'text-muted-foreground';
     }
   };
