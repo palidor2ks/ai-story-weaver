@@ -51,9 +51,18 @@ last_sync_completed_at` moved and bills_checked/new_bills_added > 0 (one run cap
 bills / ~150s, so the 5-month gap likely needs a few more kicks with stepped fromDateTime).
 
 **Next**
-Check request 17968's outcome (`bill_sync_status` + `net._http_response`); if it progressed,
-fire stepped catch-up kicks (Feb/Mar/Apr/May fromDateTime) until bills staleDays goes green,
-then watch the 03:10 UTC cron run on its own tonight.
+Watch `bill_ingestion_status` (congress 119) until `status='complete'` (~1h from 18:17 UTC at
+~250 bills/min), then as cleanup `select cron.unschedule('bills-catchup-119')` and confirm the
+scoreboard's bills tile goes green after the next 03:10 UTC nightly run.
+
+**Catch-up upgrade (same session, after the kicks asymptoted):** manual re-kicks of
+nightly-bill-sync converge too slowly (run 1: +1,191 new bills; run 2: +387 — it restarts at
+offset 0 and sleeps 50ms/bill, so a 5-month window can't fit one wall clock). Switched to
+`fetch-all-bills`, which processes ONE page per call and persists a resume cursor
+(`bill_ingestion_status.last_offset`): gave it the same x-sync-secret path (deployed v336)
+and scheduled a **TEMPORARY self-quiescing every-minute cron** `bills-catchup-119`
+(migration `20260610181500`, applied) that walks all of congress 119 (~250 bills/min,
+upserts refresh stale actions too) and becomes a no-op SELECT once status='complete'.
 
 **Deferred**
 Answers enrichment plan to actually climb 6% → 35% → 75% (pipeline points at

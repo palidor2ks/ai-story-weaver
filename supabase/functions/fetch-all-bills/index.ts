@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-sync-secret',
 };
 
 const CONGRESS_API_KEY = Deno.env.get('CONGRESS_GOV_API_KEY');
@@ -182,6 +182,17 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Lock-down with two paths (same pattern as nightly-bill-sync / state finance):
+  // the catch-up cron sends a Vault-validated shared secret (x-sync-secret →
+  // check_bill_sync_secret); humans keep the original admin-JWT path.
+  const providedSecret = req.headers.get('x-sync-secret') || '';
+  let cronAuthorized = false;
+  if (providedSecret) {
+    const secretClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const { data: secretOk } = await secretClient.rpc('check_bill_sync_secret', { p_token: providedSecret });
+    cronAuthorized = !!secretOk;
+  }
+  if (!cronAuthorized) {
     // Admin auth check
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
@@ -199,6 +210,7 @@ serve(async (req) => {
     if (!roleData) {
       return new Response(JSON.stringify({ error: 'Forbidden: admin role required' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
+  }
 
 
   try {
