@@ -59,3 +59,18 @@ jobs:
         run: bun install --frozen-lockfile
       - name: Type-check (app sources)
         run: bunx tsc --noEmit -p tsconfig.app.json
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    # Unit tests via `bun test` (see src/**/*.test.ts). Currently small but real;
+    # this is the harness new tests hang off of. Part of the /preflight gate.
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Test
+        run: bun run test
