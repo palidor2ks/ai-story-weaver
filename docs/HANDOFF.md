@@ -27,6 +27,49 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-10 — claude/laughing-dirac-x72d3g (preflight run; lockfile mirror-pin fix)
+
+**What happened & why**
+Session started as a plain `/preflight` run and found the gate itself couldn't start: fresh
+`bun install` failed with HTTP 403 on 29 packages. Root cause wasn't this sandbox's egress
+wall — `bun.lock` had tarball URLs for exactly those 29 packages (html-to-image,
+react-helmet-async, rollup-plugin-visualizer + 26 transitive deps, the ones added via the
+Lovable sandbox) pinned to Lovable's private npm mirror
+(`europe-west1/west4-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache`), unreachable from
+anywhere that can't see that mirror. CI only stays green because GitHub runners can reach it.
+`package-lock.json` was also missing the same 29 packages, so `npm ci` failed *everywhere*
+(EUSAGE out-of-sync). Fixed both: bun.lock entries restored to default-registry form (`""` —
+same versions, same sha512 hashes, so bun verifies identical artifacts from
+registry.npmjs.org), package-lock.json re-synced via `npm install --package-lock-only` (only
+additions + stale dev-flag recomputation; zero version changes). Preflight itself: lint/tests
+pass; build/check:data failed only on this sandbox's real egress wall (Supabase + FEC 403,
+npmjs reachable — allowlist, not sources); sitemap correctly preserved; check:dupes skipped
+(no `SUPABASE_DB_URL`).
+
+**State** (verified)
+On a wiped node_modules: `bun install --frozen-lockfile` exits 0 with no mirror access
+(416 packages), `npm ci --dry-run` passes, lint 0 errors (154 warnings), 12/12 unit tests,
+`bunx vite build` clean. bun.lock diff is exactly 29 URL-field changes; zero pkg.dev refs
+remain. NOT verified: CI's own run on this branch (PR open, draft); `bun.lockb` (binary,
+ignored by modern bun when bun.lock exists) still contains mirror URLs — left alone
+deliberately to keep the diff reviewable.
+
+**Next**
+Check CI on the lockfile PR; if green, mark ready for review and merge — that closes the
+"fresh clone can't install outside Lovable" trap.
+
+**Deferred**
+`bun.lockb` still mirror-pinned (only matters for bun <1.2; consider deleting it as a
+follow-up if the Lovable bot doesn't need it). Watch whether the next Lovable-bot commit
+re-pins bun.lock URLs to the mirror — if so, this needs an upstream fix or a CI guard
+(e.g. fail on `pkg.dev` in bun.lock). (carried) run check:data/check:dupes from a
+network/DB-enabled env; plan §5.2–5.4; UI disambiguation of active race vs incumbency on
+merged profiles; FEC coverage_end_date confirmation for C00547240; $490M memo_x attribution
+on C00547240; FEC allowlist + by_candidate query for the FF×ticket split; $14.44B whole-cycle
+reconciliation; 2024 presidential sweep; cycle-2026 leak caveat.
+
+---
+
 ## 2026-06-10 (close-out) — claude/pre-flight-if8apr (de-dup arc complete; PR #342 MERGED)
 
 **What happened & why**
