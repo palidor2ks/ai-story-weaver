@@ -85,6 +85,7 @@ Deno.serve(async (req) => {
         is_incumbent: fc.incumbent_challenge === 'I',
         image_url: null,
         fec_candidate_id: fc.candidate_id,
+        principal_committee_id: fc.principal_committees?.[0]?.committee_id ?? null,
         source: 'fec-targeted',
         source_ref: Array.isArray(fc.election_years) && fc.election_years.length
           ? String(Math.max(...fc.election_years)) : null,

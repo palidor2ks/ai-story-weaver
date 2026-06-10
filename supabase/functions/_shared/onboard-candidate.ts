@@ -26,6 +26,14 @@ export interface CandidateInput {
   is_incumbent: boolean;
   image_url?: string | null;
   fec_candidate_id?: string | null;
+  /**
+   * FEC principal committee id for this candidacy. FEC assigns one principal
+   * committee per person across offices, so it is the strongest cross-office
+   * identity signal — used to collapse a House incumbent's new Senate candidacy
+   * onto the existing person instead of minting a duplicate. See
+   * docs/candidate-deduplication-plan.md.
+   */
+  principal_committee_id?: string | null;
   source: string;
   source_ref?: string | null;
   status?: string;
@@ -212,6 +220,27 @@ export async function resolveAndUpsertCandidate(
   }
 
   let resolvedPersonId: string | null = null;
+
+  // 0) Strongest signal — shared principal committee. FEC assigns one principal
+  // committee per person across offices, so if this committee is already linked to
+  // an existing candidate, the discovered candidacy is the SAME person changing
+  // office (e.g. a U.S. House incumbent filing for U.S. Senate). Collapse onto that
+  // candidate. Unlike step 3 below, this is office-agnostic, which is exactly the
+  // case the office-scoped fallback misses. See docs/candidate-deduplication-plan.md.
+  if (c.principal_committee_id) {
+    const { data: byCommittee } = await supabase
+      .from('candidate_committees')
+      .select('candidate_id')
+      .eq('fec_committee_id', c.principal_committee_id)
+      .eq('active', true)
+      .order('candidate_id', { ascending: true })
+      .limit(1);
+    const committeeOwner = byCommittee?.[0]?.candidate_id;
+    if (committeeOwner && committeeOwner !== c.id) {
+      console.log(`[onboard] collapsing ${c.id} onto ${committeeOwner} via shared committee ${c.principal_committee_id}`);
+      c.id = committeeOwner;
+    }
+  }
 
   // 1) Try collapsing by FEC candidate id.
   const looksLikeFecId = /^[HSP]\d[A-Z]{2}\d+$/.test(c.id);

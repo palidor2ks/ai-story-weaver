@@ -164,6 +164,7 @@ async function runSweep(supabase: any, maxPages: number): Promise<void> {
             is_incumbent: fc.incumbent_challenge === 'I',
             image_url: null,
             fec_candidate_id: fc.candidate_id,
+            principal_committee_id: fc.principal_committees?.[0]?.committee_id ?? null,
             source: SOURCE,
             source_ref: cycle,
           };
