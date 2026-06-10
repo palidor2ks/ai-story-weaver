@@ -103,3 +103,15 @@ links their spending. Then add an IE backfill migration guarded by
 Insert a row into `ie_target_overrides` (admin-only via RLS) and add a small
 migration that seeds it and runs the standard idempotent backfill block. Keep
 `match_name_pattern` paired with a specific FEC id per the safety rule above.
+
+## Known divergence vs FEC-as-filed (expected — do not "fix")
+
+*(2026-06-10)* Because of these corrections, our per-candidate totals will NOT
+match FEC's `schedule_e/by_candidate` aggregation for the 2024 Biden→Harris
+ticket — and that's correct behavior. FEC's *processed* layer keeps roughly
+$185M of FF PAC's (`C00669259`) post-dropout pro-Harris spending coded to
+Biden's `P80000722`, while the F24 notices (our source data) code it to Harris;
+at ticket level (Harris+Biden combined) the books reconcile to ~96%. Full
+verification trail: `docs/HANDOFF.md`, both 2026-06-10 entries. If FEC support
+numbers ever look wildly off for one ticket candidate, check the other ticket ID
+before suspecting our data.

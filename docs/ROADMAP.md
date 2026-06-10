@@ -70,3 +70,8 @@ X/TikTok posting, Remotion social cards, AI-generated analysis. Deferred until t
 - **2026-06-09** — added status markers; added Code health & cleanup section (Phase C triage);
   parked Social/AI content for v1 (per VISION); recorded `.env` safe fix as done; aligned north
   star with `docs/VISION.md` (core job = alignment matching, riskiest bet = data accuracy).
+- **2026-06-10** — Priority #1 progress: the **2024 presidential independent-expenditure slice
+  is verified against FEC** — sound at ticket level (~96% support / ~88% oppose; residual =
+  small-item long tail), with the FF PAC ticket-ID attribution split documented as an
+  intentional divergence (`docs/ie-target-reattribution.md`, `docs/HANDOFF.md` 2026-06-10).
+  #1 stays 🟡: donors/committees, voting records & bills, and state finance still unverified.
