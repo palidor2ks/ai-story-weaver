@@ -7,9 +7,11 @@
 -- (committee-based resolution in _shared/onboard-candidate.ts); this migration provides the
 -- CLEANUP tool for the duplicates that already exist.
 --
--- What applying this migration does: creates one empty table and three functions. It moves
--- NO data by itself. Merges happen only when an operator (service role) later:
---   1. inserts reviewed (canonical_id, dup_id) pairs into candidate_merge_map,
+-- What applying this migration does: creates one empty table and two functions, and drops the
+-- superseded one-off _merge_candidate(). It moves NO data by itself. Merges happen only when
+-- an operator (service role) later:
+--   1. inserts reviewed (canonical_id, dup_id) pairs into candidate_merge_map
+--      (scripts/candidate-merge-proposals.sql),
 --   2. inspects merge_candidate(canonical, dup) dry-run reports (p_dry_run defaults to TRUE),
 --   3. flips rows to status='approved' and runs run_approved_candidate_merges(p_dry_run := false).
 --
@@ -20,12 +22,33 @@
 --   • Plain child tables: blind re-point candidate_id (contributions is protected against
 --     double-ingest by its own UNIQUE (identity_hash, cycle); we additionally refuse to merge
 --     when the same fec_transaction_id exists under both ids, unless p_force).
+--   • The anti-tampering triggers on candidate_answers / candidate_overrides are disabled for
+--     the duration of the merge and re-enabled before commit. They (a) raise on candidate_id
+--     changes when the session has no service-role/admin JWT (psql, dashboard SQL editor), and
+--     (b) one of them silently CANCELS deletes (BEFORE DELETE returning NEW = NULL), which
+--     would commit a half-merge. Precedent: 20260510223130 disabled them around the previous
+--     one-off merge. They are matched by name pattern (not a hardcoded list) because the list
+--     has already drifted once — a fourth tamper trigger exists that the original three-name
+--     list misses.
+--   • Belt-and-braces: before deleting the dup candidates row, the function asserts that NO
+--     child table still holds rows with candidate_id = dup. Any silent skip — present or
+--     future trigger, new table, anything — aborts the whole transaction instead of
+--     committing a half-merge.
 --   • The dup's FEC candidate id(s) are preserved as candidate_fec_ids aliases on the
 --     canonical, so both the House and Senate FEC ids resolve to one person forever.
 --   • person_id is unified: references to the dup's person are re-pointed and the orphaned
 --     persons row is removed.
---   • Display carry-over: the canonical adopts the dup's image_url only if it has none.
+--   • Display carry-over: the canonical adopts the dup's image_url only if it has none
+--     (COALESCE — never overwrites an existing photo; see the self-hosted-image guardrail).
+--   • candidate_merge_map rows that chain through the dup (canonical_id = dup) are re-pointed
+--     to the survivor, the reverse pair is removed, and other pending proposals for the same
+--     dup are marked rejected/superseded — so batches can't hit FK violations or "dup not
+--     found" surprises.
 --   • The dup's candidates row is deleted last.
+--
+-- Operator note: run with a session-level statement_timeout sized for the largest pair
+-- (SET statement_timeout = '600s'). A SET on the function itself would NOT apply to the
+-- already-running top-level statement, so none is declared here.
 
 -- ---------------------------------------------------------------------------
 -- 1) Review worklist / audit log. RLS enabled with NO policies: clients (anon/auth) get
@@ -49,8 +72,8 @@ CREATE TABLE IF NOT EXISTS public.candidate_merge_map (
 ALTER TABLE public.candidate_merge_map ENABLE ROW LEVEL SECURITY;
 
 -- ---------------------------------------------------------------------------
--- 2) The merge function. SECURITY DEFINER + pinned search_path, service-role-only by
---    EXECUTE grant (revoked from anon/authenticated below).
+-- 2) The merge function. SECURITY DEFINER (owner can ALTER TABLE … DISABLE TRIGGER and
+--    bypass RLS) + pinned search_path; EXECUTE revoked from clients below.
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.merge_candidate(
   p_canonical_id text,
@@ -61,8 +84,7 @@ CREATE OR REPLACE FUNCTION public.merge_candidate(
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path TO 'public'
-SET statement_timeout TO '300000'
+SET search_path TO 'public', 'pg_temp'
 AS $function$
 DECLARE
   v_canonical public.candidates%ROWTYPE;
@@ -75,6 +97,8 @@ DECLARE
   v_overlap   bigint;
   v_match     text;
   v_tbl       text;
+  v_trg       record;
+  v_disabled  text[] := '{}';
   r           record;
   -- Conflict-keyed tables: unique key columns besides candidate_id. '{}' means the unique
   -- key is candidate_id alone (at most one row per candidate; canonical's wins).
@@ -152,8 +176,24 @@ BEGIN
     v_tables := v_tables || jsonb_build_object(v_tbl, jsonb_build_object('move', v_count));
   END LOOP;
 
-  SELECT count(*) INTO v_count FROM public.profile_claims WHERE candidate_id = p_dup_id;
-  v_tables := v_tables || jsonb_build_object('profile_claims', jsonb_build_object('move', v_count));
+  -- profile_claims: same move/drop split the execute path applies, so a reviewer sees in the
+  -- dry-run when a user's claim would be dropped in favor of the canonical's.
+  SELECT count(*) FILTER (WHERE NOT EXISTS (SELECT 1 FROM public.profile_claims x
+                                            WHERE x.candidate_id = p_canonical_id AND x.user_id = t.user_id)
+                            AND NOT (t.status IN ('pending', 'approved') AND EXISTS (
+                                  SELECT 1 FROM public.profile_claims x
+                                  WHERE x.candidate_id = p_canonical_id
+                                    AND x.status IN ('pending', 'approved')))),
+         count(*) FILTER (WHERE EXISTS (SELECT 1 FROM public.profile_claims x
+                                        WHERE x.candidate_id = p_canonical_id AND x.user_id = t.user_id)
+                            OR (t.status IN ('pending', 'approved') AND EXISTS (
+                                  SELECT 1 FROM public.profile_claims x
+                                  WHERE x.candidate_id = p_canonical_id
+                                    AND x.status IN ('pending', 'approved'))))
+  INTO v_movable, v_conflicts
+  FROM public.profile_claims t WHERE t.candidate_id = p_dup_id;
+  v_tables := v_tables || jsonb_build_object('profile_claims',
+    jsonb_build_object('move', v_movable, 'conflict_drop', v_conflicts));
 
   v_report := jsonb_build_object(
     'canonical_id', p_canonical_id,
@@ -168,6 +208,25 @@ BEGIN
   END IF;
 
   -- ----- execute (single transaction; any error rolls back everything) -------------------
+
+  -- Disable the anti-tampering triggers for the merge. Matched by pattern, not a hardcoded
+  -- list (the known set already grew from 3 to 4); the no-leftover assertion below catches
+  -- anything a present or future trigger silently skips. The disable is transactional —
+  -- a failed merge rolls it back along with everything else.
+  FOR v_trg IN
+    SELECT c.relname AS tbl, t.tgname
+    FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public'
+      AND c.relname IN ('candidate_answers', 'candidate_overrides')
+      AND NOT t.tgisinternal
+      AND t.tgname ~ 'tampering|sensitive_override'
+      AND t.tgenabled <> 'D'
+  LOOP
+    EXECUTE format('ALTER TABLE public.%I DISABLE TRIGGER %I', v_trg.tbl, v_trg.tgname);
+    v_disabled := v_disabled || format('%s.%s', v_trg.tbl, v_trg.tgname);
+  END LOOP;
+
   FOR r IN SELECT key AS tbl, value AS keys FROM jsonb_each(c_keyed) LOOP
     SELECT CASE WHEN jsonb_array_length(r.keys) = 0 THEN 'true'
            ELSE (SELECT string_agg(format('x.%I = t.%I', k, k), ' AND ')
@@ -236,7 +295,49 @@ BEGIN
     END IF;
   END IF;
 
+  -- Re-enable exactly the triggers we disabled.
+  FOREACH v_match IN ARRAY v_disabled LOOP
+    EXECUTE format('ALTER TABLE public.%I ENABLE TRIGGER %I',
+      split_part(v_match, '.', 1), split_part(v_match, '.', 2));
+  END LOOP;
+
+  -- All-or-nothing assertion: nothing may still reference the dup. Catches any silently
+  -- skipped update/delete (e.g. a future BEFORE trigger returning NULL/NEW) before we
+  -- delete the dup row and commit a half-merge.
+  FOR v_tbl IN
+    SELECT key FROM jsonb_each(c_keyed)
+    UNION ALL SELECT unnest(c_plain)
+    UNION ALL SELECT 'profile_claims'
+  LOOP
+    EXECUTE format('SELECT count(*) FROM public.%I WHERE candidate_id = $1', v_tbl)
+    INTO v_count USING p_dup_id;
+    IF v_count > 0 THEN
+      RAISE EXCEPTION
+        'merge_candidate: % rows in % still reference dup % after merge — aborting (silent skip?)',
+        v_count, v_tbl, p_dup_id;
+    END IF;
+  END LOOP;
+
+  -- candidate_merge_map bookkeeping so chained/duplicate proposals can't break later:
+  --  • the reverse pair (dup→canonical) is now meaningless — remove it;
+  --  • rows where the dup was someone else's canonical re-point to the survivor (unless
+  --    that pair already exists — then they're redundant and removed);
+  --  • other pending proposals naming this dup are superseded by this merge.
+  DELETE FROM public.candidate_merge_map
+  WHERE canonical_id = p_dup_id AND dup_id = p_canonical_id;
+  UPDATE public.candidate_merge_map m SET canonical_id = p_canonical_id
+  WHERE m.canonical_id = p_dup_id
+    AND NOT EXISTS (SELECT 1 FROM public.candidate_merge_map x
+                    WHERE x.canonical_id = p_canonical_id AND x.dup_id = m.dup_id);
+  DELETE FROM public.candidate_merge_map WHERE canonical_id = p_dup_id;
+  UPDATE public.candidate_merge_map SET status = 'rejected',
+    notes = coalesce(notes || ' | ', '') || format('superseded: %s merged into %s', p_dup_id, p_canonical_id)
+  WHERE dup_id = p_dup_id AND canonical_id <> p_canonical_id
+    AND status IN ('proposed', 'approved');
+
   DELETE FROM public.candidates WHERE id = p_dup_id;
+
+  v_report := v_report || jsonb_build_object('disabled_triggers', to_jsonb(v_disabled));
 
   INSERT INTO public.candidate_merge_map (canonical_id, dup_id, merge_type, status, report, merged_at)
   VALUES (p_canonical_id, p_dup_id, 'manual', 'merged', v_report, now())
@@ -248,16 +349,15 @@ END;
 $function$;
 
 -- ---------------------------------------------------------------------------
--- 3) Batch runner over reviewed+approved map rows. Dry-run by default; each merge is its
---    own subtransaction-free call, so one failing pair aborts the whole batch (deliberate:
+-- 3) Batch runner over reviewed+approved map rows. Dry-run by default. All pairs run in the
+--    caller's single transaction, so one failing pair aborts the whole batch (deliberate:
 --    investigate, fix, re-run — no partially-merged worklists).
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.run_approved_candidate_merges(p_dry_run boolean DEFAULT true)
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path TO 'public'
-SET statement_timeout TO '600000'
+SET search_path TO 'public', 'pg_temp'
 AS $function$
 DECLARE
   v_out jsonb := '[]'::jsonb;
@@ -267,15 +367,29 @@ BEGIN
     SELECT canonical_id, dup_id FROM public.candidate_merge_map
     WHERE status = 'approved' ORDER BY created_at
   LOOP
-    v_out := v_out || jsonb_build_array(
-      public.merge_candidate(r.canonical_id, r.dup_id, p_dry_run));
+    -- A pair superseded/re-pointed by an earlier merge in this same batch may no longer be
+    -- approved — re-check so we never act on stale worklist state.
+    IF EXISTS (SELECT 1 FROM public.candidate_merge_map
+               WHERE canonical_id = r.canonical_id AND dup_id = r.dup_id
+                 AND status = 'approved') THEN
+      v_out := v_out || jsonb_build_array(
+        public.merge_candidate(r.canonical_id, r.dup_id, p_dry_run));
+    END IF;
   END LOOP;
   RETURN v_out;
 END;
 $function$;
 
 -- Service-role only: these move user-visible data and must never be callable from clients.
+-- NOTE: Supabase default privileges re-grant EXECUTE on every CREATE OR REPLACE — any future
+-- redefinition of these functions must repeat these REVOKEs.
 REVOKE EXECUTE ON FUNCTION public.merge_candidate(text, text, boolean, boolean)
   FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public.run_approved_candidate_merges(boolean)
   FROM PUBLIC, anon, authenticated;
+
+-- The one-off _merge_candidate(p_loser, p_winner) from 20260510223010 is superseded by
+-- merge_candidate() above (different semantics: no dry-run, no audit trail, hardcoded child
+-- list that predates several tables). Drop it so two merge tools can't diverge. No app code
+-- references it (checked: only migrations + generated types).
+DROP FUNCTION IF EXISTS public._merge_candidate(text, text);

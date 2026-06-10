@@ -134,3 +134,16 @@ order by n desc;
 
 > Nothing here is applied yet. Next concrete step: review this plan, then implement §5 prevention
 > behind the existing onboarding front door before any merge migration.
+
+## Status (2026-06-10)
+
+- §5.1 prevention **landed** (committee-based resolution in `_shared/onboard-candidate.ts` +
+  unit tests; PR #342).
+- §4 merge tooling **drafted, not applied**: `supabase/migrations/20260610130000_candidate_merge_function.sql`
+  (+ `scripts/candidate-merge-proposals.sql`). Reviewed by migration-safety-reviewer; initial
+  NO-GO findings (anti-tampering triggers breaking/half-merging, merge-map FK chains) are fixed —
+  the function now disables/re-enables the tamper triggers transactionally and asserts zero
+  leftover dup references before deleting the dup row. Function body validated against live Dev
+  data via a session-temporary copy; Moulton dry-run: 6,357 contributions + 2,051 donors move,
+  `fec_transaction_overlap = 0`.
+- §5.2–5.4 (office-agnostic `resolve_person`, alias backfill, standing duplicate audit) still open.

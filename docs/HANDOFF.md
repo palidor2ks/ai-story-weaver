@@ -27,6 +27,55 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-10 (later) — claude/pre-flight-if8apr (candidate de-dup: plan, prevention, merge draft)
+
+**What happened & why**
+The "two Seth Moulton profiles" report turned out systemic: **~35 duplicate-person clusters**
+(same human as multiple candidates rows), root-caused to the onboarding dedup funnel being
+office-scoped — `officeClass` must match, so a House incumbent filing for Senate (Moulton
+M001196 vs S6MA00296) never collapses, and `resolve_person` mints a fresh person_id per office.
+Verified: ALL 31 shared-active-committee clusters have mismatched person_ids. FEC's own signal
+(one principal committee per person across offices — confirmed on fec.gov for Moulton: H4MA06090
+and S6MA00296 both list C00547240 "Seth for Massachusetts") was being ignored. Decision with
+palidor2ks: merge duplicates into one profile per person. Work shipped on PR #342:
+(1) `docs/candidate-deduplication-plan.md` — detection/merge/prevention plan;
+(2) prevention — committee-based, office-agnostic resolution step in
+`_shared/onboard-candidate.ts`, `principal_committee_id` threaded from both FEC callers, 3 unit
+tests, test gate broadened to `supabase/functions/_shared`;
+(3) cleanup draft — `supabase/migrations/20260610130000_candidate_merge_function.sql`:
+`candidate_merge_map` (RLS, service-role only) + `merge_candidate(canonical, dup, dry_run:=true)`
++ `run_approved_candidate_merges()`, plus `scripts/candidate-merge-proposals.sql` (seeds
+proposals; never proposes cross-state Type E pairs). migration-safety-reviewer's NO-GO findings
+were fixed: anti-tampering triggers (4, not the precedent's 3 — one silently cancels DELETEs and
+would half-merge) are now pattern-disabled/re-enabled inside the transaction, a zero-leftover
+assertion guards the dup delete, merge-map FK chains are re-pointed/superseded, profile_claims
+dry-run counts split move/drop, stale `_merge_candidate` dropped.
+
+**State** (verified)
+Tests 11/11 pass, lint 0 errors; build still blocked locally (registry 403) — CI green on PR
+#342 for earlier commits, latest push pending. Migration NOT applied anywhere (guardrail #1) —
+it's pure DDL even when applied; merges only happen via the deliberate
+proposals→dry-run→approve→execute workflow. Function body syntax+dry-run validated against live
+Dev (Pulse Dev `ornnzinjrcyigazecctf`) via a session-temporary pg_temp copy: Moulton dry-run
+moves 6,357 contributions + 2,051 donors, fec_transaction_overlap=0, conflicts resolve
+canonical-wins. The execute path has NOT run anywhere yet.
+
+**Next**
+Apply the migration to Dev deliberately, run `scripts/candidate-merge-proposals.sql`, review the
+seeded map + per-pair dry-runs, then execute the Moulton pilot
+(`merge_candidate('M001196','S6MA00296', p_dry_run := false)`) and verify the profile, finance,
+and votes look right before approving the rest.
+
+**Deferred**
+§5.2–5.4 of the plan (office-agnostic resolve_person, alias backfill, standing duplicate-audit
+job); Type E cross-state clusters need manual FEC verification; UI disambiguation of active race
+vs incumbency on merged profiles ("Rep MA-06 · running for Senate 2026"); (carried) FEC
+coverage_end_date confirmation for C00547240; $490M memo_x attribution on C00547240; FEC
+allowlist + by_candidate query for the FF×ticket split; $14.44B whole-cycle reconciliation; 2024
+presidential sweep; cycle-2026 leak caveat.
+
+---
+
 ## 2026-06-10 — claude/pre-flight-if8apr (verify #340 on live data)
 
 **What happened & why**
