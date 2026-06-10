@@ -27,6 +27,41 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-10 — claude/session-continuity-setup-3sNGk
+
+**What happened & why**
+Hardened the repo on top of the continuity baton so any contributor can work safely and fast.
+Added `docs/VISION.md` (core job = alignment matching; riskiest bet = data accuracy); recorded
+the **backend decision** (stay on Supabase, "one front door" for data) in `PROJECT-FACTS.md`;
+upgraded `ROADMAP.md` with status markers, a "don't silently rewrite" change rule, a Phase-C
+code-health triage, and parked social/video for v1. Fixed an `.env` footgun (now gitignored;
+added `.env.example`; only public `VITE_*` values were ever tracked — no secret exposed).
+Installed **CodeGraph** (local symbol index, gitignored). Stood up the first **safety net**:
+a `bun test` harness + real unit tests for `src/lib/electionUtils.ts` (the name/office/district
+normalization candidate-matching depends on) + a Test job in CI. Expanded `CLAUDE.md` into a
+working rulebook (reuse-first, one front door, Zod, secrets-in-env, security baseline). Added a
+**review council** (`.claude/agents/`: data-accuracy, migration-safety, frontend, security) and
+two **skills** (`/preflight`, `/wrap-up`).
+
+**State** (verified)
+`bun test src` → 8/8 pass. CodeGraph index healthy (494 files). `.claude/settings.json` still
+valid JSON with both original SessionStart hooks intact (not modified). Agent + skill files have
+valid frontmatter. NOT verified locally: full `bun run lint` / `bun run build` — they need
+`bun install`, which isn't available in this container, so **CI on the PR is the authority** for
+lint/build. Commits show as "Unverified" on GitHub because the env's SSH signing key is an empty
+0-byte file (committer email is correct; nothing fixable here).
+
+**Next**
+Open the draft PR and let CI run lint + build + test; confirm it's green. Then return to Roadmap
+priority #1 — verifying FEC/finance data accuracy (hand a sample to the `data-accuracy-verifier`).
+
+**Deferred**
+Break down oversized files (`AnswerCoveragePanel.tsx` ~3.3k, `CandidateProfile.tsx` ~1.5k).
+Record the production/deployment URL in `PROJECT-FACTS.md` (still a TODO). Grow test coverage
+beyond the first pure-helper module.
+
+---
+
 ## 2026-06-08 — claude/session-continuity-setup-3sNGk
 
 **What happened & why**
