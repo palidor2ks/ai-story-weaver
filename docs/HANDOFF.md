@@ -27,6 +27,37 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-10 (close-out) — claude/fix-reconciliation-field-drift (#340)
+
+**What happened & why**
+Fixed a silent field-name drift in `nightly-finance-reconciliation`. `get_contribution_totals`
+had been corrected to exclude memo_code='X' conduit pass-through and to rename its output
+columns, but the reconciliation function still read the OLD names (itemized_total,
+transfers_total, loans_total, passthrough_total, gross_individual_total). Those resolved to
+`undefined → 0`, producing inflated/garbage finance_reconciliation rows — e.g. S6MA00296 showed
+$162M local_itemized vs ~$4.25M at FEC (the corrected RPC returns grand_total ~$4.54M). Remapped
+to the real columns (individual_gross, grand_total, transfer_total, loan_total,
+pass_through_excluded) so local_itemized is clean Line 11A+11B+11C net of conduit double-count,
+and added a comment block pinning the field contract so it can't drift silently again.
+Admin-reconciliation only — candidate profiles show FEC-sourced totals, not these local figures.
+Also closed redundant PRs #336 and #338 (superseded by #340).
+
+**State** (verified)
+Merged to main via #340 (CI green); working tree clean, branch == merged main. The garbage rows
+are explained at the source-of-data level; I did NOT re-run the reconciliation job, so the
+existing finance_reconciliation rows are still stale until refreshed.
+
+**Next**
+Re-run `nightly-finance-reconciliation` for a conduit-heavy candidate (S6MA00296, cycle 2026) and
+confirm local_itemized now matches FEC (delta → ~0), proving the fix end-to-end on live data.
+
+**Deferred**
+(carried) FEC allowlist + by_candidate query to stamp the ~$315M/~$185M FF×ticket split CONFIRMED;
+whole-cycle all-races $14.44B-vs-FEC reconciliation; 2024 presidential landscape sweep; cycle-2026
+leak caveat on per-cycle figures from the all-cycle view.
+
+---
+
 ## 2026-06-10 (close-out) — claude/sweet-dijkstra-o2yhdz
 
 **What happened & why**
