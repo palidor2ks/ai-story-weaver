@@ -27,7 +27,7 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
-## 2026-06-10 (close-out) — claude/pre-flight-if8apr (preflight data-health + PR #342 ready)
+## 2026-06-10 (close-out) — claude/pre-flight-if8apr (de-dup arc complete; PR #342 MERGED)
 
 **What happened & why**
 Continuation of the de-dup session below, closing the loop on "how do we know about data
@@ -47,15 +47,15 @@ ready for review** with a body covering the full arc (prevention, merge tooling,
 merges, preflight checks).
 
 **State** (verified)
-PR #342 ready, ALL checks green (lint/typecheck/test/build/GitGuardian). 12/12 unit tests.
-check:data + strict sitemap verified in this sandbox (everything 403s here → itemized + egress
-hint + sitemap untouched). Dev DB clean: 0 duplicate clusters either signal. NOT verified:
-check:data/check:dupes against a network/DB-enabled environment (CI doesn't run them; they're
-local/Dev gates).
+**PR #342 MERGED to main** (all checks green: lint/typecheck/test/build/GitGuardian); branch ==
+merged main. 12/12 unit tests. check:data + strict sitemap verified in this sandbox (everything
+403s here → itemized + egress hint + sitemap untouched). Dev DB clean: 0 duplicate clusters on
+either signal; all 44 merges audited in candidate_merge_map. NOT verified: check:data/check:dupes
+against a network/DB-enabled environment (CI doesn't run them; they're local/Dev gates).
 
 **Next**
-Review + merge PR #342, then run `bun run check:data` and `bun run check:dupes` once from a
-network-enabled env (or with SUPABASE_DB_URL set) to see the all-green path for real.
+Run `bun run check:data` and `bun run check:dupes` once from a network-enabled env (or with
+SUPABASE_DB_URL set) to see the all-green path for real.
 
 **Deferred**
 (carried) plan §5.2–5.4 (office-agnostic resolve_person, alias backfill, standing

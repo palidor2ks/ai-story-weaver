@@ -75,3 +75,11 @@ X/TikTok posting, Remotion social cards, AI-generated analysis. Deferred until t
   small-item long tail), with the FF PAC ticket-ID attribution split documented as an
   intentional divergence (`docs/ie-target-reattribution.md`, `docs/HANDOFF.md` 2026-06-10).
   #1 stays 🟡: donors/committees, voting records & bills, and state finance still unverified.
+- **2026-06-10 (later)** — Priority #1 progress (PR #342, merged): **duplicate candidate
+  profiles eliminated** — ~35 same-person clusters (e.g. Seth Moulton as both House and Senate
+  rows) merged into one profile per person (44 audited merges on Dev), with onboarding-side
+  prevention (committee-based resolution + a Type E cross-state review queue) so they can't
+  silently regrow. Preflight gained data-health gates (`check:data`, `check:dupes`) and the
+  sitemap generator no longer ships degraded output on fetch errors. Plan + operator playbook:
+  `docs/candidate-deduplication-plan.md`. #1 stays 🟡 (voting records & bills, state finance
+  still unverified).
