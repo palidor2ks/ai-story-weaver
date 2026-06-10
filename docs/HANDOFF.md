@@ -51,9 +51,18 @@ last_sync_completed_at` moved and bills_checked/new_bills_added > 0 (one run cap
 bills / ~150s, so the 5-month gap likely needs a few more kicks with stepped fromDateTime).
 
 **Next**
-Watch `bill_ingestion_status` (congress 119) until `status='complete'` (~1h from 18:17 UTC at
-~250 bills/min), then as cleanup `select cron.unschedule('bills-catchup-119')` and confirm the
-scoreboard's bills tile goes green after the next 03:10 UTC nightly run.
+Watch `bill_ingestion_status` until BOTH 119 and 118 read `status='complete'` (118 chains
+automatically after 119 — migration `20260610190000`, applied), then cleanup:
+`select cron.unschedule('bills-catchup-119'); select cron.unschedule('bills-catchup-118');`
+and confirm the scoreboard's bills tile goes green after the next 03:10 UTC nightly run.
+NOTE: the walk is throttled by the shared CONGRESS_GOV_API_KEY hourly quota (Congress.gov
+429s observed 18:1x — sync-legislator-votes et al. share the key). Self-healing by design:
+failed pages don't advance the cursor and the minute-cron retries, so it resumes each time
+the hourly window resets — expect a few hours, not one. Cosmetic bug for later:
+fetch-all-bills' catch block calls req.clone() after the body was consumed, so it can't
+write status='failed' (row stays 'in_progress' during throttling); retries don't depend on
+it. Also confirmed vs Congress.gov UI: "Legislation 22,643" = 16,598 bills (our walk) +
+6,045 amendments (separate endpoint, not ingested — future option for sponsor signal).
 
 **Catch-up upgrade (same session, after the kicks asymptoted):** manual re-kicks of
 nightly-bill-sync converge too slowly (run 1: +1,191 new bills; run 2: +387 — it restarts at
