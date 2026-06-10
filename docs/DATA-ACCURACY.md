@@ -58,10 +58,11 @@
   requires an admin user JWT, so no pg_cron entry can call it as-is.
 - **Threshold:** staleDays > **7** FAILS (currently failing, deliberately — it stays red
   until the sync is revived).
-- **Fix recipe (needs maintainer review — guardrail #2):** give `nightly-bill-sync` the same
-  vault shared-secret path the state-finance functions use (`check_<st>_sync_secret` pattern
-  in `docs/state-campaign-finance.md`), then schedule it nightly via the `pg_net` cron
-  pattern in `20260604020000_drain_fec_finance_cron.sql`.
+- **Fix (maintainer approved 2026-06-10):** `nightly-bill-sync` now accepts the vault
+  shared-secret path (`check_bill_sync_secret`, migration `20260610180000`) and runs
+  nightly at 03:10 UTC via pg_net; the secret value lives only in Vault
+  (`bill_sync_secret`). A manual catch-up run covering the 2026-01-13 → now gap was kicked
+  at revival time.
 
 ### 4. State campaign finance (NJ / FL / NY) — `state_finance_stats`
 - **Goal:** each ingested state's contributions keep flowing (per-state drains stay
@@ -82,8 +83,10 @@
 - **Standing (2026-06-10):** 382,845 answers across 1,969 candidates ·
   ~82% description-sourced · **only ~5.9% (22,487) URL-sourced** · 0 rows use the
   `has_discrepancy` flag (the discrepancy machinery exists but nothing populates it).
-- **Threshold:** informational until the maintainer confirms the URL-sourcing goal + target;
-  then set a floor and ratchet.
+- **Goal (set by maintainer 2026-06-10):** URL-sourced answers — **target 100%**,
+  **≥75% = success**, **<35% = poor/failing**. `check:accuracy` FAILS below 35%, warns
+  below 75%. We are at ~5.9%, so this category is RED on purpose until the enrichment
+  pipeline closes the gap — same "stays red until fixed" stance as Bills.
 
 ### 6. Candidate identity — `identity_stats` + `check:dupes`
 - **Goal:** one profile per person; merges audited.

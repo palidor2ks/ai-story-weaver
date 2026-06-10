@@ -27,6 +27,49 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-10 (bills revival + answers goal) — claude/laughing-dirac-x72d3g
+
+**What happened & why**
+Maintainer approved roadmap item #1 from the "what's next" list (bills-sync revival — this IS
+the guardrail #2 review) and set the answers URL-sourcing bands: **target 100%, ≥75% =
+success, <35% = poor/failing**. Shipped: (1) `nightly-bill-sync` gains the Vault
+shared-secret path (`x-sync-secret` header → `check_bill_sync_secret` RPC, copied from the
+NJ pattern; admin-JWT path unchanged) — it had been dead since 2026-01-13 because only the
+admin path existed; (2) migration `20260610180000` (RPC + nightly 03:10 UTC pg_net cron,
+drift-guarded like 20260610170000) **applied to prod**; secret value created out-of-band in
+Vault (`bill_sync_secret`), no literals in repo; (3) function **deployed to prod (v336)** via
+MCP; (4) **catch-up run kicked** with fromDateTime=2026-01-13 (net.http_post request 17968)
+to start closing the 148-day gap; (5) answers bands encoded in docs/DATA-ACCURACY.md,
+check:accuracy (FAILS <35% — we're at ~6%, so answers is now deliberately RED like bills
+was), and a new scoreboard tile (red/amber/green at 35/75).
+
+**State** (verified)
+Migration applied + cron `nightly-bill-sync` scheduled; vault secret present; function v336
+ACTIVE; tsc clean / lint 0 errors / 12 tests / build clean; check-data-accuracy.sh syntax OK.
+PENDING at write time: catch-up request 17968's result — verify `bill_sync_status.
+last_sync_completed_at` moved and bills_checked/new_bills_added > 0 (one run caps at 10k
+bills / ~150s, so the 5-month gap likely needs a few more kicks with stepped fromDateTime).
+
+**Next**
+Watch `bill_ingestion_status` (congress 119) until `status='complete'` (~1h from 18:17 UTC at
+~250 bills/min), then as cleanup `select cron.unschedule('bills-catchup-119')` and confirm the
+scoreboard's bills tile goes green after the next 03:10 UTC nightly run.
+
+**Catch-up upgrade (same session, after the kicks asymptoted):** manual re-kicks of
+nightly-bill-sync converge too slowly (run 1: +1,191 new bills; run 2: +387 — it restarts at
+offset 0 and sleeps 50ms/bill, so a 5-month window can't fit one wall clock). Switched to
+`fetch-all-bills`, which processes ONE page per call and persists a resume cursor
+(`bill_ingestion_status.last_offset`): gave it the same x-sync-secret path (deployed v336)
+and scheduled a **TEMPORARY self-quiescing every-minute cron** `bills-catchup-119`
+(migration `20260610181500`, applied) that walks all of congress 119 (~250 bills/min,
+upserts refresh stale actions too) and becomes a no-op SELECT once status='complete'.
+
+**Deferred**
+Answers enrichment plan to actually climb 6% → 35% → 75% (pipeline points at
+get-candidate-answers / drain-research-queue — needs its own session); (carried) items below.
+
+---
+
 ## 2026-06-10 (coverage-table zeros) — claude/laughing-dirac-x72d3g (URL-limit chunking fix)
 
 **What happened & why**
