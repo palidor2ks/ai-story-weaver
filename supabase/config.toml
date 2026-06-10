@@ -227,5 +227,7 @@ project_id = "ornnzinjrcyigazecctf"
     verify_jwt = false
   [functions.upload-share-card]
     verify_jwt = false
+  [functions.refresh-donor-mv]
+    verify_jwt = true
   [functions.x-fetch-user-tweets]
     verify_jwt = false
