@@ -200,18 +200,29 @@ serve(async (req) => {
         }
 
         const totals = categoryTotals?.[0] || categoryTotals || {};
+        // Field names below MUST match get_contribution_totals' actual output columns:
+        // individual_total, individual_gross, organization_total, pac_total, party_total,
+        // transfer_total, loan_total, offset_total, other_receipts_total, earmarked_total,
+        // memo_x_total, conduit_excluded, pass_through_excluded, other_total, grand_total.
+        // (The RPC was corrected to exclude memo_code='X' conduit pass-through from its
+        // contribution sums; reading the old names silently yielded 0 and produced the
+        // stale, inflated finance_reconciliation rows. See HANDOFF 2026-06-10.)
         const localIndividualItemized = Number(totals.individual_total) || 0;  // Net (excludes memo_code='X')
-        const localGrossIndividual = Number(totals.gross_individual_total) || 0;  // Gross (includes memo_code='X' for FEC comparison)
-        const memoXAmount = localGrossIndividual - localIndividualItemized;  // Amount in memo_code='X' entries
+        const localGrossIndividual = Number(totals.individual_gross) || 0;  // Gross (includes memo_code='X' for FEC comparison)
+        const memoXAmount = localGrossIndividual - localIndividualItemized;  // Amount in memo_code='X' individual entries
         const localPacContributions = Number(totals.pac_total) || 0;
         const localPartyContributions = Number(totals.party_total) || 0;
-        const localItemized = Number(totals.itemized_total) || 0;
-        const localTransfers = Number(totals.transfers_total) || 0;
+        // local "itemized" = Line 11A (individual + organization) + 11B (party) + 11C (pac),
+        // net of memo_code='X' conduit pass-through — the RPC exposes this as grand_total, so
+        // earmarked/conduit dollars are not double-counted into total receipts.
+        const localItemized = Number(totals.grand_total) || 0;
+        const localTransfers = Number(totals.transfer_total) || 0;
         const localEarmarked = Number(totals.earmarked_total) || 0;
-        const passThroughTotal = Number(totals.passthrough_total) || 0;
+        const passThroughTotal = Number(totals.pass_through_excluded) || 0;
         const localOther = Number(totals.other_total) || 0;
-        const localLoans = Number(totals.loans_total) || 0;
+        const localLoans = Number(totals.loan_total) || 0;
         const localOrganization = Number(totals.organization_total) || 0;
+        // get_contribution_totals exposes no contribution-count column; log-only, kept at 0.
         const contributionCount = Number(totals.contribution_count) || 0;
 
         // local_itemized now excludes transfers (Line 12), loans (Line 13A), and other receipts (Line 15)
