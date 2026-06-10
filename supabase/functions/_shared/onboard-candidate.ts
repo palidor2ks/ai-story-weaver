@@ -227,6 +227,12 @@ export async function resolveAndUpsertCandidate(
   // office (e.g. a U.S. House incumbent filing for U.S. Senate). Collapse onto that
   // candidate. Unlike step 3 below, this is office-agnostic, which is exactly the
   // case the office-scoped fallback misses. See docs/candidate-deduplication-plan.md.
+  //
+  // Type E guard: when the committee's owner is in a DIFFERENT state, the situation is
+  // ambiguous — a clerical filing error (Raven Harrison's GA-23), a genuine multi-state
+  // candidate (Gordon Heslop, MO + TX), or two different people with a mis-linked
+  // committee. Those need a human call, so we do NOT collapse; we queue a 'proposed' row
+  // in candidate_merge_map for the review→dry-run→approve→merge workflow instead.
   if (c.principal_committee_id) {
     const { data: byCommittee } = await supabase
       .from('candidate_committees')
@@ -237,8 +243,32 @@ export async function resolveAndUpsertCandidate(
       .limit(1);
     const committeeOwner = byCommittee?.[0]?.candidate_id;
     if (committeeOwner && committeeOwner !== c.id) {
-      console.log(`[onboard] collapsing ${c.id} onto ${committeeOwner} via shared committee ${c.principal_committee_id}`);
-      c.id = committeeOwner;
+      const { data: ownerRow } = await supabase
+        .from('candidates')
+        .select('state')
+        .eq('id', committeeOwner)
+        .maybeSingle();
+      const ownerState = String(ownerRow?.state ?? '').toUpperCase();
+      const newState = String(c.state ?? '').toUpperCase();
+      const statesComparable = ownerState && newState && ownerState !== 'US' && newState !== 'US';
+      if (!statesComparable || ownerState === newState) {
+        console.log(`[onboard] collapsing ${c.id} onto ${committeeOwner} via shared committee ${c.principal_committee_id}`);
+        c.id = committeeOwner;
+      } else {
+        console.warn(
+          `[onboard] type E: ${c.id} (${newState}) shares committee ${c.principal_committee_id} with ` +
+          `${committeeOwner} (${ownerState}) — queued for review, NOT auto-collapsed`,
+        );
+        const { error: flagErr } = await supabase.from('candidate_merge_map').upsert({
+          canonical_id: committeeOwner,
+          dup_id: c.id,
+          merge_type: 'manual',
+          status: 'proposed',
+          notes: `type E (auto-flagged at onboarding): shared committee ${c.principal_committee_id}, ` +
+            `cross-state ${ownerState} vs ${newState} — verify same person before approving`,
+        }, { onConflict: 'canonical_id,dup_id', ignoreDuplicates: true });
+        if (flagErr) console.warn('[onboard] type E flag upsert failed:', flagErr.message);
+      }
     }
   }
 

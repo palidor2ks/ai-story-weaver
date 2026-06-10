@@ -192,3 +192,30 @@ order by n desc;
 - Cosmetic ward labels fixed: the 4 NJ `ai_pair` survivors now show their specific
   "Ward N Council Member" office, backfilled from `election_candidates`.
 - **Shared-committee duplicate clusters remaining: 0. Name+state duplicate clusters: 0.**
+
+## Future Type E handling (policy, implemented 2026-06-10)
+
+A "Type E" is a shared principal committee across **different states** — inherently ambiguous:
+the 2026-06-10 batch contained one clerical error (Harrison: bogus GA-23 → scrub + merge into FL)
+and one genuine multi-state candidate (Heslop: real MO + TX runs → merge, keep both races). Only
+a human can tell these apart, so the rule is **auto-collapse only when unambiguous; queue the
+rest**:
+
+1. **Onboarding guard** (`_shared/onboard-candidate.ts` step 0): a discovered candidacy sharing
+   a committee with an existing candidate auto-collapses only when the **states match** (or one
+   side is national/blank). Cross-state → the candidacy is onboarded as its own row AND a
+   `status='proposed'` review row is auto-written to `candidate_merge_map` (notes mark it
+   "type E (auto-flagged at onboarding)"). Unit-tested both ways.
+2. **Review queue = `candidate_merge_map`.** Flagged rows wait for a human verdict; nothing
+   merges without `status='approved'`.
+3. **Operator playbook per flagged pair** (what we did for Harrison/Heslop):
+   - Check fec.gov for the committee and both candidate ids.
+   - **Same person, one filing bogus** (clerical) → approve the merge with the REAL state's row
+     as canonical, then delete the phantom `election_candidates` membership.
+   - **Same person, both candidacies real** (multi-state) → approve the merge; both races and
+     FEC ids survive on the one profile automatically.
+   - **Two different people** → set `status='rejected'` and fix the bad
+     `candidate_committees` link instead (detach the committee from the wrong candidate).
+4. **Safety net (still deferred, §5.4):** a standing duplicate-audit job re-running the
+   detection signals on a schedule, catching dupes that arrive via paths that bypass the
+   onboarding funnel (e.g. direct imports).
