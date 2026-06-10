@@ -96,3 +96,9 @@ X/TikTok posting, Remotion social cards, AI-generated analysis. Deferred until t
   and preflight gained `check:accuracy`. Found in the process: the **nightly bill sync has
   been dead since 2026-01-13** (no scheduler can call it — needs the shared-secret pattern;
   recipe in DATA-ACCURACY §Bills, awaiting review per guardrail #2).
+- **2026-06-10 (bills revival + answers goal)** — Maintainer approved the bills-sync revival
+  (guardrail #2 review done): `nightly-bill-sync` gained the Vault shared-secret path and a
+  nightly 03:10 UTC cron (migration `20260610180000`), with a manual catch-up run covering
+  the 5-month gap. Maintainer also set the **answers URL-sourcing goal: target 100%,
+  ≥75% = success, <35% = poor** — encoded in `check:accuracy` (fails <35%; we're at ~6%, so
+  answers joins bills as a deliberately-red category until the enrichment pipeline closes it).

@@ -1,8 +1,9 @@
 import { formatDistanceToNow } from "date-fns";
-import { AlertTriangle, CheckCircle2, Clock, FileText, Landmark, RefreshCw, Scale, Users } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock, FileText, Landmark, Link2, RefreshCw, Scale, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   useBillsStatsCache,
+  useCandidateAnswerStatsCache,
   useStateFinanceStatsCache,
   useFinanceReconStatsCache,
   useIdentityStatsCache,
@@ -56,12 +57,23 @@ export function DataAccuracyScoreboard() {
   const states = useStateFinanceStatsCache();
   const recon = useFinanceReconStatsCache();
   const identity = useIdentityStatsCache();
+  const answers = useCandidateAnswerStatsCache();
   const refresh = useRefreshAdminStats();
 
   const billsData = bills.data?.data;
   const statesData = states.data?.data;
   const reconData = recon.data?.data;
   const identityData = identity.data?.data;
+  const answersData = answers.data?.data;
+
+  // URL-sourcing bands set by the maintainer 2026-06-10:
+  // target 100%, >=75% success (green), <35% poor (red), between = amber.
+  const urlSourcedPct =
+    answersData && answersData.totalAnswers > 0
+      ? Math.round(((answersData.sourcedWithUrl ?? 0) / answersData.totalAnswers) * 100)
+      : null;
+  const answersTone =
+    urlSourcedPct === null ? "muted" : urlSourcedPct < 35 ? "red" : urlSourcedPct < 75 ? "amber" : "green";
 
   const billsTone = billsData
     ? billsData.staleDays < 0 || billsData.staleDays > 7
@@ -153,6 +165,17 @@ export function DataAccuracyScoreboard() {
           detail={
             identityData
               ? `${identityData.auditedMerges} audited merges · dupes gated by check:dupes`
+              : "loading…"
+          }
+        />
+        <Tile
+          tone={answersTone}
+          icon={Link2}
+          label="Answers URL-sourced"
+          value={urlSourcedPct !== null ? `${urlSourcedPct}%` : "—"}
+          detail={
+            answersData
+              ? `${(answersData.sourcedWithUrl ?? 0).toLocaleString()} of ${answersData.totalAnswers.toLocaleString()} · target 100% · success ≥75% · poor <35%`
               : "loading…"
           }
         />

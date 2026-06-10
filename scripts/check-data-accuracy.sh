@@ -68,10 +68,18 @@ else
   ok "state-finance: NJ/FL/NY syncing clean (0 errors this week)"
 fi
 
-# --- 5. Candidate answers (informational until the sourcing goal is set: report both
-#        definitions — description-sourced vs URL-sourced) ---
+# --- 5. Candidate answers: URL-sourcing bands set by maintainer 2026-06-10 —
+#        target 100%, >=75% success, <35% poor (FAIL). Both definitions reported. ---
 read -r ATOT ASRC AURL <<<"$(q "select coalesce(stat_value->>'totalAnswers','0'), coalesce(stat_value->>'totalSourced','0'), coalesce(stat_value->>'sourcedWithUrl','0') from admin_stats_cache where stat_key='candidate_answer_stats'" | tr '|' ' ')"
-note "answers: $ATOT total — $ASRC with source description, $AURL with source URL (goal: docs/DATA-ACCURACY.md §Answers)"
+APCT=0
+[ "${ATOT:-0}" -gt 0 ] && APCT=$(( ${AURL:-0} * 100 / ATOT ))
+if [ "$APCT" -lt 35 ]; then
+  err "answers: only ${APCT}% of $ATOT answers are URL-sourced ($AURL) — below the 35% floor (target 100%, success 75%); $ASRC have descriptions only"
+elif [ "$APCT" -lt 75 ]; then
+  note "answers: ${APCT}% URL-sourced ($AURL of $ATOT) — above the 35% floor, below the 75% success bar"
+else
+  ok "answers: ${APCT}% URL-sourced ($AURL of $ATOT) — success bar (75%) met; target 100%"
+fi
 
 if [ "$ERRORS" -eq 0 ]; then
   echo "[data-accuracy] all categories within thresholds"
