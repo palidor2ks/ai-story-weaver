@@ -27,6 +27,45 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-10 (close-out) — claude/pre-flight-if8apr (preflight data-health + PR #342 ready)
+
+**What happened & why**
+Continuation of the de-dup session below, closing the loop on "how do we know about data
+problems before they bite": (1) **preflight now reports data errors itemized** — new
+`bun run check:dupes` (duplicate-candidate clusters; only UNTRIAGED ones fail; skips cleanly
+without `SUPABASE_DB_URL`) and `bun run check:data` (probes Supabase REST / direct DB / FEC API,
+itemizes per-source HTTP codes, and distinguishes an env-egress 403 wall from a real data
+error); `/preflight` skill reworked into a prioritized Fix-first report (build > tests > data
+errors > untriaged dupes > lint). (2) **generate-sitemap.ts no longer ships degraded sitemaps**:
+on any fetch failure it itemizes errors, keeps the last-good `public/sitemap.xml`, exits 1
+(prebuild strict, predev tolerant) — previously a 403 day silently wrote a sitemap missing
+~28.6k URLs. (3) **GitGuardian remediation**: the anon-key literal I'd added to
+check-data-health.sh was flagged; key is public-by-design so nothing rotated, but the script now
+derives it (env → .env → generate-sitemap.ts) and the branch history was rewritten
+(--force-with-lease) so no commit carries the literal — GitGuardian green. (4) **PR #342 marked
+ready for review** with a body covering the full arc (prevention, merge tooling, 44 executed
+merges, preflight checks).
+
+**State** (verified)
+PR #342 ready, ALL checks green (lint/typecheck/test/build/GitGuardian). 12/12 unit tests.
+check:data + strict sitemap verified in this sandbox (everything 403s here → itemized + egress
+hint + sitemap untouched). Dev DB clean: 0 duplicate clusters either signal. NOT verified:
+check:data/check:dupes against a network/DB-enabled environment (CI doesn't run them; they're
+local/Dev gates).
+
+**Next**
+Review + merge PR #342, then run `bun run check:data` and `bun run check:dupes` once from a
+network-enabled env (or with SUPABASE_DB_URL set) to see the all-green path for real.
+
+**Deferred**
+(carried) plan §5.2–5.4 (office-agnostic resolve_person, alias backfill, standing
+duplicate-audit job); UI disambiguation of active race vs incumbency on merged profiles; FEC
+coverage_end_date confirmation for C00547240; $490M memo_x attribution on C00547240; FEC
+allowlist + by_candidate query for the FF×ticket split; $14.44B whole-cycle reconciliation; 2024
+presidential sweep; cycle-2026 leak caveat.
+
+---
+
 ## 2026-06-10 (later) — claude/pre-flight-if8apr (candidate de-dup: plan, prevention, merge draft)
 
 **What happened & why**
