@@ -180,6 +180,7 @@ const AppRoutes = () => (
       <Route path="/admin/tiktok-connect" element={<RouteGuard requireAuth requireOnboarding><TikTokConnect /></RouteGuard>} />
       <Route path="/admin/tiktok-connect/callback" element={<RouteGuard requireAuth requireOnboarding><TikTokConnectCallback /></RouteGuard>} />
       <Route path="/politician" element={<RouteGuard requireAuth requireOnboarding><PoliticianDashboard /></RouteGuard>} />
+      <Route path="/blog/political-ideology-tests-comparison" element={<RouteGuard requireAuth={false} requireOnboarding={false}><PoliticalIdeologyTestsComparison /></RouteGuard>} />
       <Route path="/blog" element={<RouteGuard requireAuth={false} requireOnboarding={false}><Blog /></RouteGuard>} />
       <Route path="/jobs" element={<RouteGuard requireAuth={false} requireOnboarding={false}><Jobs /></RouteGuard>} />
       <Route path="*" element={<NotFound />} />
