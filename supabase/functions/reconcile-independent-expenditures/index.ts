@@ -14,6 +14,9 @@
 //
 // Same dual auth as import-independent-expenditures (admin JWT or x-sync-secret).
 // Body params: { cycle?: string = "2024", max_pages?: number = 200 }
+//   - committee_ids?: string[]  -> spot-check mode: per-committee FEC IE total + coverage date
+//   - candidate_ids?: string[]  -> spot-check mode: per-candidate FEC Schedule E support/oppose
+// (spot-check modes return early; with neither, runs the full cycle reconciliation.)
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -136,6 +139,49 @@ serve(async (req) => {
         await new Promise((r) => setTimeout(r, 150));
       }
       return new Response(JSON.stringify({ cycle, committees }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Candidate spot-check mode: given FEC candidate_ids, return each candidate's
+    // cycle Schedule E support/oppose totals straight from FEC's by_candidate
+    // aggregation. Lets us confirm IE reattribution against FEC's *raw* coding —
+    // e.g. Biden's reused id P80000722 still carries the post-withdrawal Harris
+    // spend on FEC's side, so FEC(P00009423)/FEC(P80000722) should match our
+    // pre-correction figures and their gap is exactly what ie_target_overrides moves.
+    const candidateIds = Array.isArray(body.candidate_ids) ? (body.candidate_ids as unknown[]).map(String) : [];
+    if (candidateIds.length > 0) {
+      const candidates: Array<Record<string, unknown>> = [];
+      for (const cid of candidateIds) {
+        let support = 0, oppose = 0, lineItems = 0, page = 1, pages = 1;
+        for (; page <= maxPages; page++) {
+          const j = await fecGet("/schedules/schedule_e/by_candidate/", {
+            api_key: fecApiKey,
+            candidate_id: cid,
+            cycle,
+            election_full: "false",
+            per_page: "100",
+            page: String(page),
+          });
+          pages = Number(j?.pagination?.pages ?? 1);
+          for (const r of (j?.results ?? [])) {
+            const amt = Number(r?.total ?? 0);
+            lineItems += Number(r?.count ?? 0);
+            if (r?.support_oppose_indicator === "S") support += amt;
+            else if (r?.support_oppose_indicator === "O") oppose += amt;
+          }
+          if (page >= pages) break;
+          await new Promise((r) => setTimeout(r, 150));
+        }
+        candidates.push({
+          candidate_id: cid,
+          fec_support_amount: support,
+          fec_oppose_amount: oppose,
+          fec_total_amount: support + oppose,
+          fec_line_items: lineItems,
+        });
+      }
+      return new Response(JSON.stringify({ cycle, candidates }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
