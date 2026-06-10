@@ -48,6 +48,7 @@ const StatCardRender = lazy(() => import("./pages/StatCardRender"));
 const SocialPosts = lazy(() => import("./pages/admin/SocialPosts"));
 const Onboarding = lazy(() => import("./pages/Onboarding").then((m) => ({ default: m.Onboarding })));
 const PoliticalCompassTest = lazy(() => import("./pages/PoliticalCompassTest"));
+const PoliticalIdeologyTestsComparison = lazy(() => import("./pages/PoliticalIdeologyTestsComparison"));
 
 // Root route: route users based on auth + onboarding status
 const RootRedirect = () => {
@@ -179,6 +180,7 @@ const AppRoutes = () => (
       <Route path="/admin/tiktok-connect" element={<RouteGuard requireAuth requireOnboarding><TikTokConnect /></RouteGuard>} />
       <Route path="/admin/tiktok-connect/callback" element={<RouteGuard requireAuth requireOnboarding><TikTokConnectCallback /></RouteGuard>} />
       <Route path="/politician" element={<RouteGuard requireAuth requireOnboarding><PoliticianDashboard /></RouteGuard>} />
+      <Route path="/blog/political-ideology-tests-comparison" element={<RouteGuard requireAuth={false} requireOnboarding={false}><PoliticalIdeologyTestsComparison /></RouteGuard>} />
       <Route path="/blog" element={<RouteGuard requireAuth={false} requireOnboarding={false}><Blog /></RouteGuard>} />
       <Route path="/jobs" element={<RouteGuard requireAuth={false} requireOnboarding={false}><Jobs /></RouteGuard>} />
       <Route path="*" element={<NotFound />} />
