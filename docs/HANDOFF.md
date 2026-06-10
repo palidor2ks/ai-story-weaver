@@ -81,6 +81,50 @@ the remaining 2024 presidential candidates.
 
 ---
 
+## 2026-06-10 — claude/database-migration-railway-3r08O
+
+**What happened & why**
+User asked to migrate the database to Railway (keeping Supabase for auth) to fix query/API
+timeouts. Instead of committing to that multi-week rebuild, we diagnosed the live DB first
+(performance advisor + pg_stat_statements + role timeouts + table sizes) and found the timeouts
+had specific in-place fixes that Railway would NOT solve. Root cause #1: the donor-alias admin
+flows (`useDonorAliases.ts`) called `refresh_donor_consolidated_mv()` synchronously from the
+browser — a 1–5 min rebuild over contributions (11.6M rows) / donors (2.45M) — so every
+attach/detach/delete blew past the 8s API statement timeout and saturated the DB, cascading into
+timeouts elsewhere. Fixed in three phases: (A) added a transaction-level advisory-lock stampede
+guard to `refresh_donor_consolidated_mv()`, a new admin-only edge function `refresh-donor-mv`
+that runs the refresh in the background (EdgeRuntime.waitUntil), and changed the hook to trigger
+it fire-and-forget; (B) added the 18 missing FK indexes (advisor lint 0001); (C) wrapped
+`auth.*()` in `(select …)` on the large hot tables (initplan, lint 0003). Discovered Phases C/D
+were ALREADY written but never applied (`20260602190001` 163-policy initplan fix,
+`20260602190000` duplicate-index drop) — the DB is behind on migrations per
+`docs/dev-migration-resync.md`. Also fixed a pre-existing red "Supabase Preview" check (a June 7
+migration enabled RLS on `claude_migration_log`, which only the deploy script creates, so it
+failed on fresh preview DBs).
+
+**State** (verified)
+All fixes APPLIED to prod (`ornnzinjrcyigazecctf`) via Supabase MCP and verified live:
+remaining_unindexed_fks=0, both duplicate indexes gone, large-table policies wrapped
+(truly_unwrapped=0), stampede guard present, edge function `refresh-donor-mv` ACTIVE
+(verify_jwt=true). Each migration was dry-run in BEGIN…ROLLBACK before applying. PR #332 MERGED
+to main; CI green (Build/Typecheck/Lint/GitGuardian + Supabase Preview all ✅). NOT verified:
+local `bun run build` (sandbox can't fetch all devDeps — CI is the authority); the donor-alias
+admin UX (no manual click-through done — recommend a smoke test).
+
+**Next**
+Catch up the migration backlog on the DB so the remaining committed-but-unapplied perf migration
+`20260602190001` (initplan fix for ~150 tiny tables) lands — run
+`scripts/apply-missing-migrations.sh` (needs `SUPABASE_DB_URL`; see `docs/dev-migration-resync.md`).
+
+**Deferred**
+- `multiple_permissive_policies` consolidation (666 findings) — changes policy structure; risky
+  without tests. Left as follow-up.
+- Dropping "unused" indexes / global `statement_timeout` tuning — risky to guess; documented only.
+- Railway DB migration — parked as a documented fallback in `/root/.claude/plans/`; revisit only
+  if the app genuinely outgrows Supabase AFTER the above fixes.
+
+---
+
 ## 2026-06-10 — claude/session-continuity-setup-3sNGk
 
 **What happened & why**
