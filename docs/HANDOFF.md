@@ -66,10 +66,15 @@ pairs merged on Pulse Dev.** Migration applied; Moulton pilot verified end-to-en
 batch-merged (all dry-runs overlap=0); 14 Signal B merged after per-pair verification (exact
 name+state+party, House↔Senate / ward pattern — Allred, Crockett, Letlow, Hern, Peltola, 4 NJ
 ai_pairs, etc.). Post-merge sweep clean: 0 dup rows, 0 orphans, 0 name+state clusters left, 4/4
-tamper triggers re-enabled, full audit in candidate_merge_map. NEW next: spot-check a few merged
-profiles in the running app (search "seth", "allred", "crockett" — each should show ONE card with
-finance intact), then tackle the 2 quarantined Type E clusters (C00934869 MO/TX, C00896787 FL/GA)
-with a manual fec.gov check.
+tamper triggers re-enabled, full audit in candidate_merge_map. Type E then resolved with
+palidor2ks's domain knowledge (44 merges total): Raven Harrison's GA-23 was a clerical error
+(merged into FL-25, phantom GA race membership deleted); Gordon Heslop legally ran in both MO and
+TX (merged into MO-08, TX preserved as alias + race). Ward-label cosmetics backfilled from
+election_candidates. **ZERO duplicate clusters remain** (shared-committee and name+state both 0).
+Moulton spot-checked in the app by palidor2ks — one card, works. NEW next: land the deferred
+prevention follow-ups (plan §5.2–5.4 — office-agnostic resolve_person, alias backfill, standing
+duplicate-audit job) so new ingests can't regrow duplicates beyond what the committee-based
+onboarding fix already catches.
 
 **Deferred**
 §5.2–5.4 of the plan (office-agnostic resolve_person, alias backfill, standing duplicate-audit

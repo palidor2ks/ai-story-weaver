@@ -179,3 +179,16 @@ order by n desc;
   generic "Ward Council Member" label while the merged dup had the more specific "Ward N" label.
 - All 42 merges are audited in `candidate_merge_map` (status `merged`, full per-table reports in
   the `report` jsonb).
+
+## Status (2026-06-10, close) — Type E resolved, ZERO duplicate clusters remain
+
+- **Type E resolved with palidor2ks's domain knowledge (44 merges total):**
+  - **Raven Harrison** — the GA-23 filing is a **clerical error** (GA has no district 23); she is
+    FL. Merged H6GA23012 → H6FL23139 (350 contributions moved, GA id aliased), and the phantom
+    GA-23 race membership was deleted from `election_candidates`. Profile: U.S. House FL-25.
+  - **Gordon Heslop** — **legally ran in both MO and TX**; same person, two real candidacies.
+    Merged H6TX32241 → H6MO08217 (canonical = MO via the committee rollup association); the TX
+    candidacy is preserved as a FEC-id alias and race membership.
+- Cosmetic ward labels fixed: the 4 NJ `ai_pair` survivors now show their specific
+  "Ward N Council Member" office, backfilled from `election_candidates`.
+- **Shared-committee duplicate clusters remaining: 0. Name+state duplicate clusters: 0.**
