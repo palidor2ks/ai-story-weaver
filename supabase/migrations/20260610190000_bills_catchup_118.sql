@@ -32,6 +32,16 @@ update public.bill_ingestion_status
 do $$ begin perform cron.unschedule('bills-catchup-118'); exception when others then null; end $$;
 do $$ begin
   perform cron.schedule('bills-catchup-118', '* * * * *', $cron$
+    -- Self-correct EVERY run, not just at migration time (Codex round 3): an
+    -- admin can still click the dashboard's filtered ingest (excludeIntroduced)
+    -- while this chain is waiting, re-poisoning the cursor. Statements run
+    -- sequentially in one session, so the post below sees the reset values.
+    update public.bill_ingestion_status
+       set status = 'in_progress', last_offset = 0,
+           total_fetched = 0, total_inserted = 0, total_filtered = 0,
+           completed_at = null, updated_at = now()
+     where congress = 118
+       and coalesce(total_filtered, 0) > 0;
     select net.http_post(
       url := 'https://ornnzinjrcyigazecctf.supabase.co/functions/v1/fetch-all-bills',
       headers := jsonb_build_object(
