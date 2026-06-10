@@ -12,20 +12,21 @@
 --   select cron.unschedule('bills-catchup-119');
 --   select cron.unschedule('bills-catchup-118');
 
--- Guard against a FILTERED prior completion (Codex review, PR #349): the admin
--- UI calls fetch-all-bills with excludeIntroduced=true, which walks every bill
--- (advancing last_offset to the end and marking status='complete') while
--- inserting only the non-introduced subset — exactly the ~7.2k-of-~16k state
--- this migration repairs. Such rows are identifiable by total_filtered > 0;
--- reset them so the chain guard below doesn't quiesce on a filtered corpus.
--- (No-op on prod today: bill_ingestion_status had no 118 row when this shipped.
--- A genuinely full walk has total_filtered = 0 and is left alone.)
+-- Guard against any FILTERED prior walk (Codex review, PR #349, both rounds):
+-- the admin UI calls fetch-all-bills with excludeIntroduced=true, which walks
+-- the cursor while inserting only the non-introduced subset — exactly the
+-- ~7.2k-of-~16k state this migration repairs. That filtered state can be left
+-- either 'complete' (guard would quiesce on it) or 'in_progress' mid-walk
+-- (cron would RESUME from the filtered prefix's offset, permanently skipping
+-- its introduced-only bills). Both are identifiable by total_filtered > 0 —
+-- rewind them to offset 0 regardless of status. A genuinely full walk has
+-- total_filtered = 0 and is left alone; re-walking is idempotent (upserts).
+-- (No-op on prod today: bill_ingestion_status had no 118 row when this shipped.)
 update public.bill_ingestion_status
    set status = 'in_progress', last_offset = 0,
        total_fetched = 0, total_inserted = 0, total_filtered = 0,
        completed_at = null, updated_at = now()
  where congress = 118
-   and status = 'complete'
    and coalesce(total_filtered, 0) > 0;
 
 do $$ begin perform cron.unschedule('bills-catchup-118'); exception when others then null; end $$;
