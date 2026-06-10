@@ -27,6 +27,56 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-10 (answers enrichment part 1 SHIPPED: vote-derived citations) — claude/kind-hamilton-f1qdl0
+
+**What happened & why**
+Executed the green-lit enrichment push part 1. Key discoveries that shaped it: (1) the old
+`populate-candidate-answers` keyword map is dead — its question ids (`econ1`…) don't exist in
+today's questions table AND its direction comment contradicts the axis convention
+(`answer_value` is left/right per `src/lib/scoring.ts`, NOT agreement — Cruz +10 / Sanders
+−10 are correct); (2) `get-candidate-answers` never reads `candidate_votes` — its
+"voting_record" label is regex-classified AI prose, and 40.5k of the 81k URL-less
+vote-labeled answers belong to candidates with NO vote data (mislabeled, unreachable).
+Built a two-tier mechanical pipeline (`scripts/answers-enrichment/`): tier 1 resolves bills
+already NAMED in each answer's own description against the member's confirmed actions;
+tier 2 uses a NEW hand-authored axis-coded keyword map (110 questions, 276 rules) joined
+through sponsor/cosponsor actions with a sign-consistency guard. Staged → sample-verified →
+fixed three real defects the samples caught (39% of member↔bill pairs fail congress/date
+consistency = the bills id-collision/mislabel issue, now guarded; CRA-disapproval titles
+matching keywords with inverted intent; junk "On Agreeing…" display names) → applied.
+
+**State** (verified)
+**3,309 answers enriched** (tier1 523, tier2 2,786; ~450 members, sign-guard + congress
+guard on every citation): `sourcedWithUrl` **22,670 (5.67%) → 25,997 (6.47%)**, measured
+live and pushed via `refresh_admin_stats_cache` (dashboard shows it). All `_enrich_*`
+scratch tables dropped. Verify probes: 0 collisions, 0 malformed URLs; 35 random staged
+citations eyeballed (incl. cross-party correctness: Murkowski's −5 abortion answer cites
+her actual WHPA sponsorship; Strong's +10 union answer cites Right-to-Work). Lint 0 errors,
+12/12 tests, Vite compile clean. NOT verified: live HTTP resolution of generated URLs
+(sandbox egress blocks congress.gov — spot-check ~5 URLs from a networked env; pattern is
+Congress.gov's canonical form).
+
+**Next**
+**Part 1b decision:** the remaining gap to 35% can't come from vote citations alone
+(eligible pool is exhausted at ~27k even perfect). Pick: (a) extend the keyword map +
+floor-vote evidence with roll-call context, (b) start citing campaign_website/statement
+answers via the research pipeline, or (c) FIRST fix the two data-integrity findings below —
+recommended, they poison everything downstream.
+
+**Deferred**
+**NEW + URGENT-ish: `candidate_votes.bill_id` ↔ `bills` integrity** — 39% of member↔bill
+pairs (420,879 of 1,073,842) have action dates impossible for the bill's labeled congress
+(id collisions like unprefixed `HRES.760` + congress mislabels). This corrupts any feature
+joining votes→bills metadata (vote displays, stats), not just citations. Quantified in
+`scripts/answers-enrichment/README.md`. **NEW: 40.5k answers labeled `voting_record` for
+candidates with zero vote data** — relabel to `inferred` in a hygiene pass (they also still
+say "no record found" in their descriptions). (Carried) bills-table hygiene audit
+(PROC/title-as-type junk); `excludeIntroduced` footgun; fetch-all-bills req.clone() bug;
+amendments ingestion; bills follow-through (fetch-bill-sponsors backfill + member-sync
+re-run); scoreboard bills tile flips green after tonight's 03:10 UTC nightly.
+
+---
+
 ## 2026-06-10 (bills catch-up COMPLETE; green light for enrichment) — claude/laughing-dirac-x72d3g
 
 **What happened & why**
