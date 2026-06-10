@@ -242,10 +242,23 @@ revoke all on function public.refresh_admin_stats_cache(text[]) from public, ano
 grant execute on function public.refresh_admin_stats_cache(text[]) to service_role;
 
 -- Refresh every 15 minutes — the ingestion drains run every 3–10 minutes, so this keeps
--- the dashboard within one cycle of "after each update of data". Idempotent reschedule.
+-- the dashboard within one cycle of "after each update of data". Idempotent reschedule,
+-- and guarded so environments without pg_cron (some previews/local) still migrate.
 do $$ begin perform cron.unschedule('refresh-admin-stats-cache'); exception when others then null; end $$;
-select cron.schedule('refresh-admin-stats-cache', '*/15 * * * *',
-                     'select public.refresh_admin_stats_cache()');
+do $$ begin
+  perform cron.schedule('refresh-admin-stats-cache', '*/15 * * * *',
+                        'select public.refresh_admin_stats_cache()');
+exception when others then
+  raise notice 'refresh-admin-stats-cache cron not scheduled on this environment: %', sqlerrm;
+end $$;
 
--- Seed immediately so the dashboard is truthful the moment this lands.
-select public.refresh_admin_stats_cache();
+-- Seed immediately so the dashboard is truthful the moment this lands. Guarded: preview
+-- branches and Dev are built from migration files only, and prod carries drifted columns
+-- the files never created (e.g. last_sync_completed_at — the known Dev-vs-main drift,
+-- ROADMAP #2). A failed stats seed must not sink an entire branch deploy; the cron will
+-- retry every 15 minutes wherever the schema actually supports it.
+do $$ begin
+  perform public.refresh_admin_stats_cache();
+exception when others then
+  raise notice 'admin stats seed skipped (schema drift on this environment): %', sqlerrm;
+end $$;
