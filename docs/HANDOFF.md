@@ -27,6 +27,39 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-10 (coverage-table zeros) — claude/laughing-dirac-x72d3g (URL-limit chunking fix)
+
+**What happened & why**
+Maintainer asked why the Coverage & Finance per-rep table shows 0/251 answers, "$ No Data",
+and "—" for FEC/Local/Delta when the data exists (it does: spot-checked Aaron Bean B001314 —
+251/251 answers, 1,491 donor rows, recon rows for 2024+2026, 2 committees). Root cause:
+`useCandidatesAnswerCoverage` fans out 7 supporting queries with `.in('candidate_id', <ALL
+ids>)`; PostgREST puts every id in the query string, and once FEC discovery grew the
+directory ~600 → ~2,384 candidates the URLs blew the gateway limit and the requests failed —
+"non-fatally", so every row rendered zeros while the DB was fine. The file already contained
+the same fix locally (`CHUNK = 100` "avoid URL length limits") for ONE query; the other ten
+call sites were unchunked. Fix: shared `chunkedIn()` helper (200 ids/request, parallel
+chunks, chunk failures console.error'd loudly instead of swallowed) applied to all 11 sites
+(main block, civic, static).
+
+**State** (verified)
+tsc clean, lint 0 errors, 12/12 tests, vite build clean. NOT verified: the table rendered in
+a browser (needs admin login) — but the failure mechanism and the data's existence were both
+confirmed against prod, and the math (2,384 ids × ~11 chars ≫ 8–16KB URL caps vs 200 × ~11 ≈
+2.2KB) is unambiguous.
+
+**Next**
+Open the Coverage & Finance dashboard after merge and confirm Aaron Bean's row shows 251/251
+answers + FEC/Local/Delta populated for cycle 2026 (and 2024 via the cross-cycle hint).
+
+**Deferred**
+Same unbounded-`.in()` pattern exists in CivicOfficialsPanel, ComparePanel,
+useIndependentExpenditures, useCandidateScoreMap, usePersonalizedScoreMap — most use small
+lists today; audit them before the directory grows again (or hoist chunkedIn into a shared
+lib). (carried) bills-sync revival decision; answers URL-sourcing target; items below.
+
+---
+
 ## 2026-06-10 (accuracy scoreboard) — claude/laughing-dirac-x72d3g (priority #1 made checkable)
 
 **What happened & why**
