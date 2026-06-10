@@ -12,6 +12,22 @@
 --   select cron.unschedule('bills-catchup-119');
 --   select cron.unschedule('bills-catchup-118');
 
+-- Guard against a FILTERED prior completion (Codex review, PR #349): the admin
+-- UI calls fetch-all-bills with excludeIntroduced=true, which walks every bill
+-- (advancing last_offset to the end and marking status='complete') while
+-- inserting only the non-introduced subset — exactly the ~7.2k-of-~16k state
+-- this migration repairs. Such rows are identifiable by total_filtered > 0;
+-- reset them so the chain guard below doesn't quiesce on a filtered corpus.
+-- (No-op on prod today: bill_ingestion_status had no 118 row when this shipped.
+-- A genuinely full walk has total_filtered = 0 and is left alone.)
+update public.bill_ingestion_status
+   set status = 'in_progress', last_offset = 0,
+       total_fetched = 0, total_inserted = 0, total_filtered = 0,
+       completed_at = null, updated_at = now()
+ where congress = 118
+   and status = 'complete'
+   and coalesce(total_filtered, 0) > 0;
+
 do $$ begin perform cron.unschedule('bills-catchup-118'); exception when others then null; end $$;
 do $$ begin
   perform cron.schedule('bills-catchup-118', '* * * * *', $cron$
