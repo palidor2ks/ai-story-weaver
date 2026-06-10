@@ -27,6 +27,53 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-10 — claude/pre-flight-if8apr (verify #340 on live data)
+
+**What happened & why**
+Closed the loop on #340's "Next": prove the reconciliation field-drift fix end-to-end on live
+data for the conduit-heavy candidate S6MA00296 (Seth Moulton, committee C00547240, cycle 2026).
+Data lives in the **Pulse Dev** Supabase project (`ornnzinjrcyigazecctf`), not PulseApp/PulseApp_FEC.
+Findings: (1) the deployed `nightly-finance-reconciliation` (v556) is byte-for-byte the #340 repo
+code — it reads `grand_total`/`individual_total`, and `get_contribution_totals` correctly excludes
+`memo_code='X'`. (2) The job **was already re-run today** (finance_reconciliation rows fresh,
+checked_at ~10:15–10:21); `local_itemized` is now **$4,542,839** (= RPC `grand_total`), NOT the old
+$162M garbage. So the field-drift fix is proven at the data layer. (3) BUT the reconciliation does
+**NOT** hit delta→0 as the prior handoff hoped — Moulton shows **delta_pct +22.35%, status=error**,
+driven by individual itemized: local $4.30M vs FEC $3.50M (+$810K, +23%).
+(4) Root-caused the residual: a monthly breakdown shows local individual-itemized spans
+2025-01…2026-03; cumulative-through-Dec-2025 = $3.33M and through-Jan-2026 = $3.60M. FEC's
+individual_itemized ($3.50M) lands exactly between those, implying **FEC's latest totals cover
+~year-end 2025** while local includes Q1-2026 (~$975K). Truncated to year-end 2025, local ($3.33M)
+is within ~-5% of FEC ($3.50M). So the +22% is **overwhelmingly a coverage/timing mismatch on an
+active cycle**, NOT a field regression and NOT an obvious earmark double-count. Implication: the
+reconciliation's `status=error` is likely a **false positive for in-cycle candidates** — it compares
+full current local data against FEC's last-filed (lagging) totals.
+
+**State** (verified)
+Verified via Supabase MCP against Pulse Dev: deployed fn == repo code; RPC returns grand_total
+$4,542,839; stored row delta +22.35% (error); local monthly cumulatives as above. NOT verified:
+FEC's actual `coverage_end_date` for C00547240 — the FEC API is **blocked (403) from this sandbox's
+outbound network** (same policy that 403'd npm + the sitemap fetch). The edge function reached FEC
+fine at run time, so the stored FEC figures are real; I just couldn't re-pull coverage metadata to
+turn the year-end-2025 inference into a confirmed fact. Side note (harmless but a data-quality red
+flag): `memo_x_total` for this single committee = **$490M** (correctly excluded, but suspicious
+conduit attribution worth a later look). No code/migration changed; only this HANDOFF entry.
+
+**Next**
+Fetch FEC committee totals for **C00547240 cycle 2026** and read `coverage_end_date` (needs an
+outbound FEC call — do it from an environment that can reach api.open.fec.gov, or via the edge
+function logs). If coverage ends ~2025-12-31, the +22% is confirmed benign coverage-lag and the fix
+is fully proven; the real follow-on is to make `nightly-finance-reconciliation` truncate local data
+to FEC's coverage window before comparing, so active-cycle candidates stop flagging false `error`.
+
+**Deferred**
+(carried) FEC allowlist + by_candidate query to stamp the ~$315M/~$185M FF×ticket split CONFIRMED;
+whole-cycle all-races $14.44B-vs-FEC reconciliation; 2024 presidential landscape sweep; cycle-2026
+leak caveat on per-cycle figures from the all-cycle view. NEW: investigate the $490M memo_x
+attribution on C00547240; consider coverage-window truncation in the reconciliation fn (above).
+
+---
+
 ## 2026-06-10 (close-out) — claude/fix-reconciliation-field-drift (#340)
 
 **What happened & why**
