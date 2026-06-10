@@ -1,7 +1,14 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
-export type StatKey = "voting_records_stats" | "candidate_answer_stats" | "fec_stats";
+export type StatKey =
+  | "voting_records_stats"
+  | "candidate_answer_stats"
+  | "fec_stats"
+  | "bills_stats"
+  | "state_finance_stats"
+  | "finance_recon_stats"
+  | "identity_stats";
 
 export interface VotingRecordsStats {
   legislativeActions: number;
@@ -11,6 +18,11 @@ export interface VotingRecordsStats {
   coveragePercentage: number;
   // Extended stats for compatibility
   membersWithFloorVotes?: number;
+  // Truth fields added by refresh_admin_stats_cache (migration 20260610170000)
+  syncErrors?: number;
+  floorSyncErrors?: number;
+  incompleteMembers?: number;
+  latestSync?: string | null;
 }
 
 export interface CandidateAnswerStats {
@@ -21,6 +33,9 @@ export interface CandidateAnswerStats {
   fullCoverage: number;
   totalAnswers: number;
   totalSourced: number;
+  // Stricter signal: answers carrying an actual source URL (not just a description)
+  sourcedWithUrl?: number;
+  latestUpdate?: string | null;
 }
 
 export interface FecStats {
@@ -28,6 +43,41 @@ export interface FecStats {
   neverSynced: number;
   partialSync: number;
   complete: number;
+}
+
+export interface BillsStats {
+  totalBills: number;
+  totalSponsors: number;
+  lastNightlySync: string | null;
+  staleDays: number;
+  lastError: string | null;
+}
+
+export interface StateFinanceEntry {
+  contributions: number;
+  lastRun: string | null;
+  errors7d: number;
+}
+
+export interface StateFinanceStats {
+  nj: StateFinanceEntry;
+  fl: StateFinanceEntry;
+  ny: StateFinanceEntry;
+}
+
+export interface FinanceReconStats {
+  ok: number;
+  warning: number;
+  partial: number;
+  error: number;
+  latestCheck: string | null;
+  errorGapUsd: number;
+}
+
+export interface IdentityStats {
+  candidates: number;
+  persons: number;
+  auditedMerges: number;
 }
 
 interface CacheRow {
@@ -56,8 +106,10 @@ export function useAdminStatsCache<T>(statKey: StatKey) {
         updatedAt: data.updated_at,
       };
     },
-    staleTime: Infinity, // Never refetch automatically
-    gcTime: Infinity, // Keep in cache forever
+    // The cache rows are now recomputed server-side every 15 minutes (pg_cron →
+    // refresh_admin_stats_cache), so re-read them instead of pinning forever.
+    staleTime: 5 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
   });
 }
 
@@ -101,4 +153,20 @@ export function useCandidateAnswerStatsCache() {
 
 export function useFecStatsCache() {
   return useAdminStatsCache<FecStats>("fec_stats");
+}
+
+export function useBillsStatsCache() {
+  return useAdminStatsCache<BillsStats>("bills_stats");
+}
+
+export function useStateFinanceStatsCache() {
+  return useAdminStatsCache<StateFinanceStats>("state_finance_stats");
+}
+
+export function useFinanceReconStatsCache() {
+  return useAdminStatsCache<FinanceReconStats>("finance_recon_stats");
+}
+
+export function useIdentityStatsCache() {
+  return useAdminStatsCache<IdentityStats>("identity_stats");
 }

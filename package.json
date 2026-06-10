@@ -13,6 +13,7 @@
     "test": "bun test src supabase/functions/_shared",
     "check:dupes": "bash scripts/check-duplicate-candidates.sh",
     "check:data": "bash scripts/check-data-health.sh",
+    "check:accuracy": "bash scripts/check-data-accuracy.sh",
     "preview": "vite preview",
     "analyze": "ANALYZE=true vite build"
   },
