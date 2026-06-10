@@ -66,6 +66,10 @@ X/TikTok posting, Remotion social cards, AI-generated analysis. Deferred until t
   *(parked 2026-06-09)*
 
 ## Changelog
+- **2026-06-10** — priority #1 progress: IE target reattribution (Biden→Harris `P80000722`
+  id-reuse) **verified internally exact** vs `docs/ie-target-reattribution.md` (Harris $1.21B /
+  Biden $49.5M, safety + non-destructive checks pass). External FEC cross-check still open —
+  blocked by the env network allowlist (`api.open.fec.gov` 403). Stays 🟡 until confirmed vs FEC.
 - **2026-06-08** — created with the four ranked priorities + blockers.
 - **2026-06-09** — added status markers; added Code health & cleanup section (Phase C triage);
   parked Social/AI content for v1 (per VISION); recorded `.env` safe fix as done; aligned north

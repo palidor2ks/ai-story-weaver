@@ -27,6 +27,44 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-10 — data-accuracy: IE reattribution verified (claude/data-accuracy-ie-verification)
+
+**What happened & why**
+First real use of the `data-accuracy-verifier` council agent on Roadmap priority #1. Verified the
+independent-expenditure (IE) target reattribution — the Biden→Harris FEC id-reuse landmine
+(`P80000722`) documented in `docs/ie-target-reattribution.md` — against the **live DB**. The job
+was to confirm the data is correct against source, not merely present.
+
+**State** (verified)
+Internal verification is **complete and exact** (via the app's
+`candidate_independent_expenditure_totals` view + `ie_target_overrides`, project
+`ornnzinjrcyigazecctf`):
+- All 7 override rows present and safe — every `match_name_pattern` is paired with a specific
+  `match_target_fec_candidate_id`, so no loose regex can grab the wrong person.
+- Harris (`P00009423`) 2024 IE = **$1,210,981,595** (8,843 IEs); Biden (`P80000722`) =
+  **$49,500,220** (980) — exact match to the doc.
+- Safety holds: $0 Biden-named filings under Harris, $0 Harris-named under Biden.
+- Non-destructive: 2,284 corrected rows still carry the original `P80000722` in `raw_payload`.
+**NOT verified:** the external FEC absolute-truth cross-check. Blocked by this environment's
+**network policy** — `api.open.fec.gov` returns `HTTP 403 "Host not in allowlist"` even with
+`FEC_API_KEY` set. So this is "our correction logic is provably applied and internally
+consistent," not yet "confirmed against FEC's own published figures."
+
+**Next**
+Close the external leg from a context that can reach FEC (the Supabase edge functions already
+call openFEC nightly). Confirm FEC's **raw** Schedule-E `by_candidate` for 2024/president matches
+our **pre-correction** figures (~$928M Harris `P00009423` / ~$332M Biden `P80000722`); the ~$283M
+delta is exactly what the overrides reattribute.
+
+**Deferred**
+Enable in-session FEC checks by adding `api.open.fec.gov` to the environment network allowlist
+(if the policy mode allows) OR a small read-only edge function returning `schedule_e/by_candidate`.
+Then move to the next data-accuracy domain (contributions vs FEC via `finance_reconciliation`, or
+voting records in `candidate_votes`). Also still open from before: oversized-file breakup,
+production-URL TODO in `PROJECT-FACTS.md`, broader test coverage.
+
+---
+
 ## 2026-06-10 — claude/session-continuity-setup-3sNGk
 
 **What happened & why**
