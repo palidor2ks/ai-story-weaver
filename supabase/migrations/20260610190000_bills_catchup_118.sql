@@ -58,8 +58,10 @@ do $$ begin
       timeout_milliseconds := 120000
     )
     where exists (
+      -- Filtered completions are NOT completions (Codex round 4): only chain
+      -- once 119 finished an UNFILTERED walk.
       select 1 from public.bill_ingestion_status
-      where congress = 119 and status = 'complete'
+      where congress = 119 and status = 'complete' and coalesce(total_filtered, 0) = 0
     )
     and not exists (
       select 1 from public.bill_ingestion_status
@@ -68,4 +70,41 @@ do $$ begin
   $cron$);
 exception when others then
   raise notice 'bills-catchup-118 cron not scheduled on this environment: %', sqlerrm;
+end $$;
+
+-- Harden the 119 job the same way (it shipped in 20260610181500 with a bare
+-- status='complete' quiesce guard): a filtered admin walk of 119 marking
+-- 'complete' would otherwise stop the unfiltered catch-up early AND open the
+-- 118 chain. Reschedule it with the same self-reset + the same rule.
+do $$ begin perform cron.unschedule('bills-catchup-119'); exception when others then null; end $$;
+do $$ begin
+  perform cron.schedule('bills-catchup-119', '* * * * *', $cron$
+    update public.bill_ingestion_status
+       set status = 'in_progress', last_offset = 0,
+           total_fetched = 0, total_inserted = 0, total_filtered = 0,
+           completed_at = null, updated_at = now()
+     where congress = 119
+       and coalesce(total_filtered, 0) > 0;
+    select net.http_post(
+      url := 'https://ornnzinjrcyigazecctf.supabase.co/functions/v1/fetch-all-bills',
+      headers := jsonb_build_object(
+        'Content-Type', 'application/json',
+        'Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'nj_elec_cron_anon_key'),
+        'apikey', (select decrypted_secret from vault.decrypted_secrets where name = 'nj_elec_cron_anon_key'),
+        'x-sync-secret', (select decrypted_secret from vault.decrypted_secrets where name = 'bill_sync_secret')
+      ),
+      body := jsonb_build_object(
+        'congress', 119,
+        'offset', coalesce((select last_offset from public.bill_ingestion_status where congress = 119), 0),
+        'limit', 250
+      ),
+      timeout_milliseconds := 120000
+    )
+    where not exists (
+      select 1 from public.bill_ingestion_status
+      where congress = 119 and status = 'complete'
+    );
+  $cron$);
+exception when others then
+  raise notice 'bills-catchup-119 cron not (re)scheduled on this environment: %', sqlerrm;
 end $$;
