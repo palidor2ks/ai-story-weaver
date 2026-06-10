@@ -27,6 +27,32 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-10 (follow-up) — claude/laughing-dirac-x72d3g (CI lockfile-registry guard)
+
+**What happened & why**
+PR #344 (entry below) merged with all checks green, closing the "fresh clone can't install
+outside Lovable" trap. This follow-up adds the regression guard deferred there: a new
+`lockfile-guard` job in `.github/workflows/ci.yml` that fails if `npm.pkg.dev` appears in
+`bun.lock` or `package-lock.json` — i.e. if the Lovable bot (or anyone) re-pins tarball URLs
+to the private mirror. Checkout + grep only (no bun setup/install), so it's the fastest job
+in the matrix; failure prints the offending line and a `::error` annotation pointing at
+PR #344 for the fix recipe. `bun.lockb` is deliberately excluded (legacy binary lockfile,
+ignored by bun >= 1.2 while bun.lock exists, still carries old mirror URLs).
+
+**State** (verified)
+YAML parses (js-yaml). Guard logic tested locally both ways: current lockfiles pass (exit 0);
+a synthetic mirror line fails (exit 1, line number + annotation). Unit tests still 12/12.
+NOT verified: the job's first real run on GitHub Actions (PR open as draft).
+
+**Next**
+Check the lockfile-guard job ran (and passed) on this PR's CI; if green, merge.
+
+**Deferred**
+(carried from below) bun.lockb still mirror-pinned; check:data/check:dupes from a
+network/DB-enabled env; plus the long-standing FEC/dedup items in the entry below.
+
+---
+
 ## 2026-06-10 — claude/laughing-dirac-x72d3g (preflight run; lockfile mirror-pin fix)
 
 **What happened & why**
