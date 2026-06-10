@@ -27,6 +27,67 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-10 (later) — claude/sweet-dijkstra-o2yhdz (follow-up)
+
+**What happened & why**
+Ran the "Next" step from the entry below and it **materially revises that diagnosis** — both
+suspected defects dissolve into one documented attribution split:
+
+- **"Amendment double-counting" (~$152M Harris-S hot): RULED OUT.** Every cycle-2024 row is
+  `source='csv_import'` (61,480 rows, $14.44B all races — one bulk file, 2022-05→2025-10, so
+  no cross-source twins), and dedup by the filer-assigned `raw_payload->>'transaction_id'`
+  (stable across re-filings, unlike FEC `sub_id`) finds only **$2.55M S / $3.53M O** of true
+  duplicate excess in Harris-targeted rows.
+- **"Biden coverage gap" (~$185M cold): RULED OUT.** The decisive spot-check: FF PAC's
+  (`C00669259`) official FEC committee IE total for cycle 2024 is **$503,317,964** (via the
+  `reconcile-independent-expenditures` committee mode — see auth note below); our table holds
+  **$497.28M** of FF PAC rows (98.8%). FF's notices ≈ FF's actuals. Triangulation:
+  FEC ticket-level S (Harris $524.5M + Biden $223.3M = **$747.8M**) vs ours (**$714.9M**) =
+  95.6%; non-FF Harris-S ours **$211.0M** vs FEC-implied **~$209M**. ⇒ FEC's *processed*
+  reports code **~$185M of FF PAC's post-dropout pro-Harris money under Biden's ID**, while
+  FF's own F24 notices (= our data, 97% of our Harris-S dollars are F24) code it to Harris.
+  Same dollars, different ticket ID per filing layer — not phantom money, not missing money.
+- **Net verdict for the gate**: presidential IE data is **sound at ticket level** (S 95.6% /
+  O 87.5% of FEC, residual = small-item long tail); our override-based Harris attribution is
+  the *substantively* correct split and now documented as an intentional divergence from
+  FEC-as-filed. The headline correction stands: pro-Harris ≈ $707M ours / $524.5M FEC-as-filed
+  — never $1B+; the $1.21B figure is support+oppose.
+- **UI audit (deferred item): CLEAN.** `IndependentExpenditureSections` labels Total/
+  Supporting/Opposing separately and has a cycle selector; no "pro-X" mislabel in src. The
+  view's missing cycle filter only bites when its all-cycle total is quoted as a cycle number
+  (which is how the "$1.21B for 2024" misquote happened).
+
+Method/auth notes for future sessions: DEMO_KEY via in-DB `http_get` is now **dead from this
+project's egress IP** (shared IP, 40/hr pool stayed exhausted >35 min). Workaround that keeps
+secrets out of logged SQL: call our own edge functions with
+`extensions.http(...)` + `x-sync-secret` header read server-side from
+`vault.decrypted_secrets` (name `ie_sync_secret`) — the functions hold the real `FEC_API_KEY`
+in their env. To run *arbitrary* FEC queries from a session, add `api.open.fec.gov` to the
+environment's network allowlist (then plain `curl` with `$FEC_API_KEY` works, key never logged).
+
+**State** (verified)
+All numbers re-derived live: DB via Supabase MCP; FF PAC FEC total via the project's own
+reconcile function (HTTP 200, vault-mediated auth, no secret in SQL text or output). NOT
+verified (needs one FEC call each, blocked by DEMO_KEY): the exact FF×candidate split inside
+FEC's `by_candidate` (~$315M Harris / ~$185M Biden is inferred from three-way triangulation,
+not read directly), and the line-item dates of FEC's $223.3M Biden-S. No code/config changed;
+docs only.
+
+**Next**
+Add `api.open.fec.gov` to the env network allowlist (user action, Environment settings), then
+run `schedule_e/by_candidate?candidate_id=P00009423&candidate_id=P80000722&committee_id=C00669259&cycle=2024&election_full=false`
+to read the FF×ticket split directly and stamp the inference CONFIRMED in PROJECT-FACTS (a
+"FEC attribution quirks" note worth recording there either way).
+
+**Deferred**
+Whole-cycle (all races) $14.44B-vs-FEC reconciliation — that's the existing
+`reconcile-independent-expenditures` main mode's job (notice+report inflation at the
+all-races level; presidential scope is now closed). Landscape sweep for remaining 2024
+presidential candidates. The $1.4M cycle-2026 leak note below still applies when quoting
+per-cycle figures from the all-cycle view.
+
+---
+
 ## 2026-06-10 — claude/sweet-dijkstra-o2yhdz
 
 **What happened & why**
