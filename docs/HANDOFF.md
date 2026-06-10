@@ -27,6 +27,49 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-10 (votes↔bills integrity FIXED at the source + repaired) — claude/kind-hamilton-f1qdl0 (2nd arc)
+
+**What happened & why**
+Took the recommended next step from the entry below: fixed integrity finding #1 instead of
+piling more features on corrupt joins. Root cause found in `fetch-member-votes`: it built
+`bill_id` as `TYPE.NUMBER` with NO congress (the API supplies it), so every congress's
+HR 1234 collapsed onto one bills row, the bills upsert smeared whichever congress synced
+last over that row's metadata, and cross-congress repeat actions were silently deduped
+away by the unique constraint. Three-part fix: (1) writer now emits canonical
+`{congress}-{TYPE}.{NUMBER}` ids (+ the invalid-id guard now runs BEFORE the bills upsert);
+(2) one-time repair (`scripts/data-repair/2026-06-10-candidate-votes-bill-ids.sql`)
+repointed existing rows to the congress implied by action_date — **371,917 rows repointed,
+0 collisions, 0 date-inconsistent after**; (3) re-ran the (idempotent) enrichment on the
++142,889 newly consistent pairs (+297 answers), and the sample gate caught one more poison
+class — commemorative/sense-of resolutions matching keywords incidentally (a hostage-release
+resolution cited for legal aid) — now excluded in the generator, with 205 round-1
+commemorative-only rows reset to the pool.
+
+**State** (verified)
+candidate_votes sponsorship rows: 371,917 canonical (0 date-inconsistent) + 492,558 legacy
+(296,282 inconsistent) awaiting canonical bills rows for older congresses; table-wide
+inconsistency 28.2% → 19.1%. Scoreboard: **sourcedWithUrl 26,123 (6.44% of 405,498)**, cache
+refreshed. All scratch tables dropped. Writer fix is code-only in this branch — **deploys on
+merge** (sandbox can't deploy edge functions); until merge+deploy, member syncs still write
+legacy ids (repair script is re-runnable + convergent, so that's safe). NOT verified: a
+post-deploy member re-sync run (should create canonical bills rows for older congresses →
+re-run repair steps 1-5 to repoint the 492k remainder and delete stranded dupes).
+
+**Next**
+After this merges + edge functions deploy: trigger a member re-sync batch
+(`fetch-member-votes`), then RE-RUN the repair script (steps 1→5 — step 4's stranded-dupe
+delete matters this time), then re-run the enrichment once more; expect the legacy-id pool
+to shrink toward 0 and `voting_records_stats` legislativeActions to become trustworthy.
+
+**Deferred**
+Integrity finding #2 (40.5k answers labeled `voting_record` for candidates with zero vote
+data — relabel to inferred, but check state-legislator answers citing STATE votes before
+blanket relabel); floor-vote ids (`H R 8038` style, 1,060 inconsistent — same class, tiny);
+(carried) bills-table hygiene (PROC junk, orphaned unprefixed bills rows after repoints);
+the rest carried from below.
+
+---
+
 ## 2026-06-10 (answers enrichment part 1 SHIPPED: vote-derived citations) — claude/kind-hamilton-f1qdl0
 
 **What happened & why**

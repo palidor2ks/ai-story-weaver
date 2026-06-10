@@ -21,6 +21,11 @@ Accuracy guards (each one earned by a failed sample during the 2026-06-10 run):
   the first quantification of the deferred bills-hygiene issue.)
 - **CRA disapprovals excluded from keyword matching** — "…Repeal of the Affordable
   Clean Energy Rule" contains 'clean energy' with inverted intent.
+- **Commemorative / sense-of resolutions excluded from keyword matching** — their
+  titles carry incidental keyword text (a Venezuela hostage-release resolution
+  matched 'public defender' for a legal-aid question) and are weak policy evidence
+  even when topical. Added in round 2; round-1 rows citing ONLY such resolutions
+  (205) were reset to the enrichable pool.
 - **Junk names excluded** ("On Agreeing to the Amendment"), and tier-2 titles come
   from the keyword-matched row, not whichever duplicate bills row `min()` picked.
 - **Floor votes are NOT tier-2 evidence** — `candidate_votes` can't distinguish a
@@ -61,9 +66,14 @@ the answer's direction, and that the `collisions` and `bad_urls` probes return 0
 
 ## Part-1 run record (2026-06-10)
 
-- Applied: tier 1 = **523** answers (819 citations), tier 2 = **2,786** answers
+- Round 1: tier 1 = **523** answers (819 citations), tier 2 = **2,786** answers
   (after 189 overlap), total **3,309** answers across ~450 members.
-- `sourcedWithUrl`: 22,670 (5.67%) → **25,997 (6.47%)**; cache refreshed.
+  `sourcedWithUrl`: 22,670 (5.67%) → 25,997 (6.47%).
+- Round 2 (after the `candidate_votes.bill_id` repair in `scripts/data-repair/`
+  unlocked +142,889 congress-consistent pairs): +48 tier-1, +249 tier-2; then
+  **−205** round-1 rows reset by the new commemorative-resolution standard.
+  Net standing: **26,123 URL-sourced (6.44% of 405,498 — the answers total keeps
+  growing from the regular pipeline)**; cache refreshed both times.
 - Not verified from the sandbox (egress-blocked): live HTTP resolution of the
   generated URLs — spot-check a handful from a networked env. The URL pattern is
   Congress.gov's canonical one.
