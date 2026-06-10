@@ -83,6 +83,12 @@
 - **Standing (2026-06-10):** 382,845 answers across 1,969 candidates ·
   ~82% description-sourced · **only ~5.9% (22,487) URL-sourced** · 0 rows use the
   `has_discrepancy` flag (the discrepancy machinery exists but nothing populates it).
+- **Standing (2026-06-10, post enrichment part 1):** 401,683 answers ·
+  **25,997 (6.47%) URL-sourced** after the vote-derived citation pipeline
+  (`scripts/answers-enrichment/`) attached 3,309 mechanically verified citations
+  (member sponsor/cosponsor actions, sign- and congress-consistency guarded).
+  The vote-citation route's remaining ceiling is ~27k eligible answers; crossing
+  35% needs the other source types (see part-1b options in HANDOFF).
 - **Goal (set by maintainer 2026-06-10):** URL-sourced answers — **target 100%**,
   **≥75% = success**, **<35% = poor/failing**. `check:accuracy` FAILS below 35%, warns
   below 75%. We are at ~5.9%, so this category is RED on purpose until the enrichment
