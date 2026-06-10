@@ -27,6 +27,34 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-10 (close-out) — claude/sweet-dijkstra-o2yhdz
+
+**What happened & why**
+Session wrap-up after PRs #334 and #337 merged (the 2024 presidential IE accuracy gate — full
+story in the two entries below). This final commit just finishes the ritual the work earned:
+a dated **ROADMAP changelog line** marking priority-#1 progress (presidential IE slice
+verified, sound at ticket level; #1 stays 🟡 — donors/committees, votes/bills, state finance
+still open), and a **"Known divergence vs FEC-as-filed" section in
+`docs/ie-target-reattribution.md`** so nobody "fixes" the intentional FF PAC ticket-ID
+divergence back into existence the next time our totals are compared to FEC's `by_candidate`.
+
+**State** (verified)
+Working tree was clean before these three doc edits; branch content == merged main. Docs-only
+session throughout — no code/config touched, so lint/build/test not run locally (CI on the PR
+is the authority, and both prior PRs went green).
+
+**Next**
+(unchanged) Add `api.open.fec.gov` to the env network allowlist, then run the by_candidate
+query recorded in the follow-up entry below to read the FF×ticket split directly and stamp
+the ~$315M/~$185M inference CONFIRMED.
+
+**Deferred**
+(carried) Whole-cycle all-races $14.44B-vs-FEC reconciliation via the reconcile function's
+main mode; landscape sweep of remaining 2024 presidential candidates; the cycle-2026 leak
+caveat when quoting per-cycle figures from the all-cycle view.
+
+---
+
 ## 2026-06-10 (later) — claude/sweet-dijkstra-o2yhdz (follow-up)
 
 **What happened & why**
