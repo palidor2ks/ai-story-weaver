@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-sync-secret',
 };
 
 const CONGRESS_API_KEY = Deno.env.get('CONGRESS_GOV_API_KEY');
@@ -71,6 +71,19 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Lock-down with two paths (same pattern as the state-finance functions):
+  // cron jobs send a Vault-validated shared secret (x-sync-secret, checked via
+  // the service-role-only RPC check_bill_sync_secret); humans use the original
+  // admin-JWT path. The sync was dead 2026-01-13 → 2026-06-10 precisely because
+  // only the admin path existed and nothing could schedule it.
+  const providedSecret = req.headers.get('x-sync-secret') || '';
+  let cronAuthorized = false;
+  if (providedSecret) {
+    const secretClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const { data: secretOk } = await secretClient.rpc('check_bill_sync_secret', { p_token: providedSecret });
+    cronAuthorized = !!secretOk;
+  }
+  if (!cronAuthorized) {
     // Admin auth check
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
@@ -88,6 +101,7 @@ serve(async (req) => {
     if (!roleData) {
       return new Response(JSON.stringify({ error: 'Forbidden: admin role required' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
+  }
 
 
   try {
