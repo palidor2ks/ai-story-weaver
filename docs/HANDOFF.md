@@ -61,10 +61,13 @@ moves 6,357 contributions + 2,051 donors, fec_transaction_overlap=0, conflicts r
 canonical-wins. The execute path has NOT run anywhere yet.
 
 **Next**
-Apply the migration to Dev deliberately, run `scripts/candidate-merge-proposals.sql`, review the
-seeded map + per-pair dry-runs, then execute the Moulton pilot
-(`merge_candidate('M001196','S6MA00296', p_dry_run := false)`) and verify the profile, finance,
-and votes look right before approving the rest.
+~~Apply to Dev + Moulton pilot~~ **DONE (same session, user-approved):** migration applied to
+Pulse Dev, 42 proposals seeded, Moulton pilot merged and verified end-to-end (one profile, both
+FEC ids aliased, 7,708 contributions + 3,147 donors on M001196, finance grand_total unchanged at
+$4,542,839, orphan person gone, all 4 tamper triggers re-enabled). NEW next: review the 41
+remaining `proposed` rows in `candidate_merge_map` — the 27 Signal A (shared-committee) pairs
+are high-confidence and can be batch-approved; the 14 Signal B (name+state) pairs need per-pair
+verification. Then `run_approved_candidate_merges(p_dry_run := false)`.
 
 **Deferred**
 §5.2–5.4 of the plan (office-agnostic resolve_person, alias backfill, standing duplicate-audit

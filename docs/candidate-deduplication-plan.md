@@ -147,3 +147,18 @@ order by n desc;
   data via a session-temporary copy; Moulton dry-run: 6,357 contributions + 2,051 donors move,
   `fec_transaction_overlap = 0`.
 - §5.2–5.4 (office-agnostic `resolve_person`, alias backfill, standing duplicate audit) still open.
+
+## Status (2026-06-10, later) — applied to Dev + Moulton pilot MERGED
+
+- Migration **applied to Pulse Dev** (deliberate, user-approved). Proposals seeded:
+  **42 pairs** (28 Signal A shared-committee, 14 Signal B name+state incl. 4 `ai_pair`);
+  the 2 cross-state Type E clusters (C00934869 MO/TX, C00896787 FL/GA) were NOT proposed.
+- **Pilot executed:** `merge_candidate('M001196','S6MA00296', p_dry_run := false)` — verified:
+  one Moulton row; both FEC ids aliased to M001196 (House/crosswalk + Senate/merge); 7,708
+  cycle-2026 contributions (1,351 + 6,357) and 3,147 donors on the survivor, 0 on the dup;
+  orphan person removed; map row `merged`; all 4 tamper triggers re-enabled (the function
+  auto-disabled 4 — the precedent's 3-name list would have missed one);
+  `get_contribution_totals('M001196','2026')` returns the same grand_total $4,542,839 — no
+  double-count, no loss.
+- Remaining: 41 `proposed` pairs awaiting review/approval (27 Signal A are high-confidence;
+  14 Signal B need per-pair verification before approving).
