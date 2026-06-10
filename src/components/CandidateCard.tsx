@@ -149,9 +149,9 @@ export const CandidateCard = ({
                   className={cn(
                     "h-5 px-2 py-0 text-[10px] font-semibold",
                     isFormer
-                      ? "border-amber-500/40 bg-amber-500/10 text-amber-600"
+                      ? "border-amber-500/40 bg-amber-500/10 text-amber-700"
                       : isIncumbent
-                        ? "border-green-500/40 bg-green-500/10 text-green-600"
+                        ? "border-green-500/40 bg-green-500/10 text-green-700"
                         : "border-border bg-muted text-muted-foreground"
                   )}
                 >

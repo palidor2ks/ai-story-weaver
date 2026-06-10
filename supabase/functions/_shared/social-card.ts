@@ -646,7 +646,13 @@ function racePositionsGrid(f: RaceCardFacts, top: number, margin: number): strin
   const parts: string[] = [];
   parts.push(`<text x="${cx}" y="${top}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="22" fill="#94a3b8" letter-spacing="3">PRIMARY POSITIONS — L MORE LEFT · R MORE RIGHT</text>`);
   let y = top + 46;
-  const step = 38;
+  // Fit the rows above the footer: when the money block pushed `top` low (funding +
+  // outside money + cause chip all present), shrink the row step — down to 30 — so the
+  // last position row never collides with the footer line.
+  const FOOTER_TOP = 1014;
+  const step = rows.length > 1
+    ? Math.max(30, Math.min(38, Math.floor((FOOTER_TOP - y) / (rows.length - 1))))
+    : 38;
   for (const r of rows) {
     parts.push(`<text x="${margin}" y="${y}" font-family="Inter" font-weight="700" font-size="26" fill="${leanColor(r.a)}">${escapeXml(r.a != null ? fmtScoreLR(r.a) : '—')}</text>
       <text x="${cx}" y="${y}" text-anchor="middle" font-family="Inter" font-weight="400" font-size="24" fill="#e2e8f0">${escapeXml(truncate(r.topic, 30))}</text>
@@ -697,7 +703,7 @@ function buildRaceComparisonSvg(f: RaceCardFacts, analysis: string | null): stri
     .map((ln, i) => `<text x="${cx}" y="${244 + i * 26}" text-anchor="middle" font-family="Inter" font-weight="400" font-size="20" fill="#9fb0c8">${escapeXml(ln)}</text>`)
     .join('\n');
 
-  const gridTop = Y.bottom + 30;
+  const gridTop = Y.bottom + 24;
 
   return `<svg width="${CARD_SIZE}" height="${CARD_SIZE}" viewBox="0 0 ${CARD_SIZE} ${CARD_SIZE}" xmlns="http://www.w3.org/2000/svg">
   <defs>

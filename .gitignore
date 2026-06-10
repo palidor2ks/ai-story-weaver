@@ -12,8 +12,15 @@ dist
 dist-ssr
 *.local
 
+# Local environment file. Only PUBLIC client values (VITE_*) ever belong in a
+# committed file (see .env.example). Real secrets live in the platform env, never here.
+.env
+
 # Working dir for CSVs pulled from Drive before import (scripts/import-drive-csv.mjs)
 tmp/
+
+# CodeGraph local index — rebuilt per machine, never committed
+.codegraph/
 
 # Editor directories and files
 .vscode/*

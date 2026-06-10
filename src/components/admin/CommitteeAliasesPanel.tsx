@@ -66,6 +66,7 @@ interface RawCommitteeSearchResult {
   name: string | null;
   fec_committee_id: string;
   treasurer_name: string | null;
+  source: 'outside_spender' | 'pac_registry' | 'candidate_committee' | 'recipient';
 }
 
 interface CommitteeAliasInput {
@@ -73,6 +74,22 @@ interface CommitteeAliasInput {
   fec_committee_ids: string[];
   notes: string;
   is_active: boolean;
+}
+
+
+function formatCommitteeSource(source: RawCommitteeSearchResult['source'], treasurerName: string | null) {
+  switch (source) {
+    case 'outside_spender':
+      return treasurerName ? `Outside spender · ${treasurerName}` : 'Outside spender';
+    case 'pac_registry':
+      return treasurerName ? `PAC registry · ${treasurerName}` : 'PAC registry';
+    case 'candidate_committee':
+      return 'Candidate committee';
+    case 'recipient':
+      return 'Donor recipient';
+    default:
+      return '—';
+  }
 }
 
 export function CommitteeAliasesPanel() {
@@ -122,12 +139,9 @@ export function CommitteeAliasesPanel() {
       if (!safe) return [];
       const like = `%${safe}%`;
 
-      // Primary source: the committees that actually appear as outside spenders
-      // on the Top Spenders page (independent-expenditure filers). external_pacs
-      // is only the FEC registration catalog — it is frequently empty/partial and
-      // stores full registered names, so searching it alone returns nothing for
-      // filer abbreviations like "HMP" (registered as "HOUSE MAJORITY PAC").
-      const [ieRes, pacNameRes] = await Promise.all([
+      // Search every committee source the alias can affect: outside spenders,
+      // PAC registrations, candidate committees, and donor-profile recipients.
+      const [ieRes, pacNameRes, candidateCommitteeRes, recipientCommitteeRes] = await Promise.all([
         (supabase as any)
           .from('committee_independent_expenditure_totals')
           .select('spending_committee_fec_id, spending_committee_name, total_amount')
@@ -140,9 +154,24 @@ export function CommitteeAliasesPanel() {
           .or(`name.ilike.${like},fec_committee_id.ilike.${like}`)
           .order('name', { ascending: true })
           .limit(30),
+        (supabase as any)
+          .from('candidate_committees')
+          .select('fec_committee_id, name')
+          .or(`name.ilike.${like},fec_committee_id.ilike.${like}`)
+          .order('name', { ascending: true })
+          .limit(30),
+        (supabase as any)
+          .from('donors')
+          .select('recipient_committee_id, recipient_committee_name, amount')
+          .not('recipient_committee_id', 'is', null)
+          .or(`recipient_committee_name.ilike.${like},recipient_committee_id.ilike.${like}`)
+          .order('amount', { ascending: false })
+          .limit(100),
       ]);
       if (ieRes.error) throw ieRes.error;
       if (pacNameRes.error) throw pacNameRes.error;
+      if (candidateCommitteeRes.error) throw candidateCommitteeRes.error;
+      if (recipientCommitteeRes.error) throw recipientCommitteeRes.error;
 
       const ieRows = (ieRes.data ?? []) as Array<{
         spending_committee_fec_id: string;
@@ -152,6 +181,14 @@ export function CommitteeAliasesPanel() {
         fec_committee_id: string;
         name: string | null;
         treasurer_name: string | null;
+      }>;
+      const candidateRows = (candidateCommitteeRes.data ?? []) as Array<{
+        fec_committee_id: string;
+        name: string | null;
+      }>;
+      const recipientRows = (recipientCommitteeRes.data ?? []) as Array<{
+        recipient_committee_id: string | null;
+        recipient_committee_name: string | null;
       }>;
 
       // Enrich the IE spenders with their registered FEC name + treasurer when we
@@ -179,6 +216,7 @@ export function CommitteeAliasesPanel() {
           name: pac?.name || r.spending_committee_name,
           fec_committee_id: r.spending_committee_fec_id,
           treasurer_name: pac?.treasurer_name ?? null,
+          source: 'outside_spender',
         });
       });
       pacRows.forEach((p) => {
@@ -187,6 +225,25 @@ export function CommitteeAliasesPanel() {
           name: p.name,
           fec_committee_id: p.fec_committee_id,
           treasurer_name: p.treasurer_name,
+          source: 'pac_registry',
+        });
+      });
+      candidateRows.forEach((c) => {
+        if (!c.fec_committee_id || merged.has(c.fec_committee_id)) return;
+        merged.set(c.fec_committee_id, {
+          name: c.name,
+          fec_committee_id: c.fec_committee_id,
+          treasurer_name: null,
+          source: 'candidate_committee',
+        });
+      });
+      recipientRows.forEach((r) => {
+        if (!r.recipient_committee_id || merged.has(r.recipient_committee_id)) return;
+        merged.set(r.recipient_committee_id, {
+          name: r.recipient_committee_name,
+          fec_committee_id: r.recipient_committee_id,
+          treasurer_name: null,
+          source: 'recipient',
         });
       });
 
@@ -207,8 +264,9 @@ export function CommitteeAliasesPanel() {
       if (error) throw error;
     },
     onSuccess: async () => {
-      toast.success('Spender alias created');
+      toast.success('Committee alias created');
       await qc.invalidateQueries({ queryKey: ['committee-aliases'] });
+      await qc.invalidateQueries({ queryKey: ['active-committee-aliases'] });
       await qc.invalidateQueries({ queryKey: ['top-spenders'] });
     },
     onError: (e: Error) => toast.error(e.message),
@@ -228,8 +286,9 @@ export function CommitteeAliasesPanel() {
       if (error) throw error;
     },
     onSuccess: async () => {
-      toast.success('Spender alias updated');
+      toast.success('Committee alias updated');
       await qc.invalidateQueries({ queryKey: ['committee-aliases'] });
+      await qc.invalidateQueries({ queryKey: ['active-committee-aliases'] });
       await qc.invalidateQueries({ queryKey: ['top-spenders'] });
     },
     onError: (e: Error) => toast.error(e.message),
@@ -244,8 +303,9 @@ export function CommitteeAliasesPanel() {
       if (error) throw error;
     },
     onSuccess: async () => {
-      toast.success('Spender alias removed');
+      toast.success('Committee alias removed');
       await qc.invalidateQueries({ queryKey: ['committee-aliases'] });
+      await qc.invalidateQueries({ queryKey: ['active-committee-aliases'] });
       await qc.invalidateQueries({ queryKey: ['top-spenders'] });
     },
     onError: (e: Error) => toast.error(e.message),
@@ -433,7 +493,7 @@ export function CommitteeAliasesPanel() {
       <Tabs defaultValue="aliases" className="w-full">
         <TabsList>
           <TabsTrigger value="aliases">Manage Aliases</TabsTrigger>
-          <TabsTrigger value="attach">Attach Spenders</TabsTrigger>
+          <TabsTrigger value="attach">Attach Committees</TabsTrigger>
         </TabsList>
 
         <TabsContent value="aliases" className="space-y-4">
@@ -512,14 +572,14 @@ export function CommitteeAliasesPanel() {
 
         <TabsContent value="attach" className="space-y-4">
           <div className="grid gap-3 md:grid-cols-2">
-            <div className="space-y-2"><Label>Alias to update</Label><Select value={selectedAttachAliasId} onValueChange={setSelectedAttachAliasId}><SelectTrigger><SelectValue placeholder="Select an active spender alias" /></SelectTrigger><SelectContent>{activeAliases.map((alias) => <SelectItem key={alias.id} value={alias.id}>{alias.canonical_name}</SelectItem>)}</SelectContent></Select></div>
-            <div className="space-y-2"><Label>Search committees</Label><div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input placeholder="Search spenders by name, abbreviation (e.g. HMP) or FEC ID..." value={committeeSearch} onChange={(e) => setCommitteeSearch(e.target.value)} className="pl-9" /></div></div>
+            <div className="space-y-2"><Label>Alias to update</Label><Select value={selectedAttachAliasId} onValueChange={setSelectedAttachAliasId}><SelectTrigger><SelectValue placeholder="Select an active committee alias" /></SelectTrigger><SelectContent>{activeAliases.map((alias) => <SelectItem key={alias.id} value={alias.id}>{alias.canonical_name}</SelectItem>)}</SelectContent></Select></div>
+            <div className="space-y-2"><Label>Search committees</Label><div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input placeholder="Search recipients/spenders by name, abbreviation (e.g. SLF), or FEC ID..." value={committeeSearch} onChange={(e) => setCommitteeSearch(e.target.value)} className="pl-9" /></div></div>
           </div>
           <Card><CardContent className="p-0"><Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Committee</TableHead>
-                <TableHead>Treasurer</TableHead>
+                <TableHead>Source</TableHead>
                 <TableHead>FEC Committee ID</TableHead>
                 <TableHead>Current alias</TableHead>
                 <TableHead className="w-44">Action</TableHead>
@@ -531,14 +591,14 @@ export function CommitteeAliasesPanel() {
               ) : committeeSearchLoading ? (
                 <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">Searching committees...</TableCell></TableRow>
               ) : committeeSearchResults.length === 0 ? (
-                <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">No spenders match “{committeeSearch.trim()}”. Searches outside spenders (independent-expenditure filers) by name, abbreviation, or FEC ID.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">No committees match “{committeeSearch.trim()}”. Searches donor recipients, candidate committees, outside spenders, PACs, and FEC IDs.</TableCell></TableRow>
               ) : committeeSearchResults.map((row) => {
                 const currentAlias = aliases.find((a) => a.fec_committee_ids.includes(row.fec_committee_id));
                 const attachedToSelected = !!currentAlias && currentAlias.id === selectedAttachAliasId;
                 return (
                   <TableRow key={row.fec_committee_id}>
                     <TableCell className="font-medium">{row.name || 'Unknown committee'}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{row.treasurer_name || '—'}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{formatCommitteeSource(row.source, row.treasurer_name)}</TableCell>
                     <TableCell className="font-mono">{row.fec_committee_id}</TableCell>
                     <TableCell>{currentAlias ? <Badge variant="secondary">{currentAlias.canonical_name}</Badge> : <span className="text-muted-foreground text-sm">—</span>}</TableCell>
                     <TableCell>
@@ -567,8 +627,8 @@ export function CommitteeAliasesPanel() {
           <DialogHeader>
             <DialogTitle>{selectedAlias ? 'Edit Alias' : 'New Alias'}</DialogTitle>
             <DialogDescription>
-              Aliases override the displayed name on the Top Spenders page for any of the listed FEC
-              committee IDs.
+              Aliases merge matching recipient cards on donor profiles and override displayed committee names
+              anywhere those FEC committee IDs are grouped.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
@@ -638,8 +698,8 @@ export function CommitteeAliasesPanel() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete alias?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will remove the alias "{selectedAlias?.canonical_name}". The underlying spender
-              names on the Top Spenders page will revert to their FEC defaults.
+              This will remove the alias "{selectedAlias?.canonical_name}". The underlying recipient and spender
+              names will revert to their FEC defaults.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

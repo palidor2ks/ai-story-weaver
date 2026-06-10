@@ -18,15 +18,17 @@ CREATE POLICY ny_contributions_admin_read ON public.ny_contributions
   USING (public.has_role(auth.uid(), 'admin'));
 
 -- claude_migration_log: enable RLS and admin-only read.
--- The table is normally created out-of-band by scripts/apply-prod-migrations.sh, so a
--- database built purely from migration files (e.g. a Supabase preview branch) doesn't
--- have it yet -- create it here with the same definition so this migration is
--- self-sufficient instead of failing on fresh databases.
-CREATE TABLE IF NOT EXISTS public.claude_migration_log(
-  filename text primary key,
-  applied_at timestamptz not null default now());
-ALTER TABLE public.claude_migration_log ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS claude_migration_log_admin_read ON public.claude_migration_log;
-CREATE POLICY claude_migration_log_admin_read ON public.claude_migration_log
-  FOR SELECT TO authenticated
-  USING (public.has_role(auth.uid(), 'admin'));
+-- This table is provisioned out-of-band (by the migration tooling) and is NOT
+-- created by any migration, so it is absent on fresh/preview databases. Guard
+-- the RLS + policy so the migration is a no-op where the table doesn't exist
+-- and still locks it down where it does (prod). DROP first keeps it idempotent.
+DO $$
+BEGIN
+  IF to_regclass('public.claude_migration_log') IS NOT NULL THEN
+    ALTER TABLE public.claude_migration_log ENABLE ROW LEVEL SECURITY;
+    DROP POLICY IF EXISTS claude_migration_log_admin_read ON public.claude_migration_log;
+    CREATE POLICY claude_migration_log_admin_read ON public.claude_migration_log
+      FOR SELECT TO authenticated
+      USING (public.has_role(auth.uid(), 'admin'));
+  END IF;
+END $$;
