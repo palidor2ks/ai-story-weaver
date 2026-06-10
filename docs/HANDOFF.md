@@ -27,6 +27,151 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-10 (close-out) — claude/pre-flight-if8apr (preflight data-health + PR #342 ready)
+
+**What happened & why**
+Continuation of the de-dup session below, closing the loop on "how do we know about data
+problems before they bite": (1) **preflight now reports data errors itemized** — new
+`bun run check:dupes` (duplicate-candidate clusters; only UNTRIAGED ones fail; skips cleanly
+without `SUPABASE_DB_URL`) and `bun run check:data` (probes Supabase REST / direct DB / FEC API,
+itemizes per-source HTTP codes, and distinguishes an env-egress 403 wall from a real data
+error); `/preflight` skill reworked into a prioritized Fix-first report (build > tests > data
+errors > untriaged dupes > lint). (2) **generate-sitemap.ts no longer ships degraded sitemaps**:
+on any fetch failure it itemizes errors, keeps the last-good `public/sitemap.xml`, exits 1
+(prebuild strict, predev tolerant) — previously a 403 day silently wrote a sitemap missing
+~28.6k URLs. (3) **GitGuardian remediation**: the anon-key literal I'd added to
+check-data-health.sh was flagged; key is public-by-design so nothing rotated, but the script now
+derives it (env → .env → generate-sitemap.ts) and the branch history was rewritten
+(--force-with-lease) so no commit carries the literal — GitGuardian green. (4) **PR #342 marked
+ready for review** with a body covering the full arc (prevention, merge tooling, 44 executed
+merges, preflight checks).
+
+**State** (verified)
+PR #342 ready, ALL checks green (lint/typecheck/test/build/GitGuardian). 12/12 unit tests.
+check:data + strict sitemap verified in this sandbox (everything 403s here → itemized + egress
+hint + sitemap untouched). Dev DB clean: 0 duplicate clusters either signal. NOT verified:
+check:data/check:dupes against a network/DB-enabled environment (CI doesn't run them; they're
+local/Dev gates).
+
+**Next**
+Review + merge PR #342, then run `bun run check:data` and `bun run check:dupes` once from a
+network-enabled env (or with SUPABASE_DB_URL set) to see the all-green path for real.
+
+**Deferred**
+(carried) plan §5.2–5.4 (office-agnostic resolve_person, alias backfill, standing
+duplicate-audit job); UI disambiguation of active race vs incumbency on merged profiles; FEC
+coverage_end_date confirmation for C00547240; $490M memo_x attribution on C00547240; FEC
+allowlist + by_candidate query for the FF×ticket split; $14.44B whole-cycle reconciliation; 2024
+presidential sweep; cycle-2026 leak caveat.
+
+---
+
+## 2026-06-10 (later) — claude/pre-flight-if8apr (candidate de-dup: plan, prevention, merge draft)
+
+**What happened & why**
+The "two Seth Moulton profiles" report turned out systemic: **~35 duplicate-person clusters**
+(same human as multiple candidates rows), root-caused to the onboarding dedup funnel being
+office-scoped — `officeClass` must match, so a House incumbent filing for Senate (Moulton
+M001196 vs S6MA00296) never collapses, and `resolve_person` mints a fresh person_id per office.
+Verified: ALL 31 shared-active-committee clusters have mismatched person_ids. FEC's own signal
+(one principal committee per person across offices — confirmed on fec.gov for Moulton: H4MA06090
+and S6MA00296 both list C00547240 "Seth for Massachusetts") was being ignored. Decision with
+palidor2ks: merge duplicates into one profile per person. Work shipped on PR #342:
+(1) `docs/candidate-deduplication-plan.md` — detection/merge/prevention plan;
+(2) prevention — committee-based, office-agnostic resolution step in
+`_shared/onboard-candidate.ts`, `principal_committee_id` threaded from both FEC callers, 3 unit
+tests, test gate broadened to `supabase/functions/_shared`;
+(3) cleanup draft — `supabase/migrations/20260610130000_candidate_merge_function.sql`:
+`candidate_merge_map` (RLS, service-role only) + `merge_candidate(canonical, dup, dry_run:=true)`
++ `run_approved_candidate_merges()`, plus `scripts/candidate-merge-proposals.sql` (seeds
+proposals; never proposes cross-state Type E pairs). migration-safety-reviewer's NO-GO findings
+were fixed: anti-tampering triggers (4, not the precedent's 3 — one silently cancels DELETEs and
+would half-merge) are now pattern-disabled/re-enabled inside the transaction, a zero-leftover
+assertion guards the dup delete, merge-map FK chains are re-pointed/superseded, profile_claims
+dry-run counts split move/drop, stale `_merge_candidate` dropped.
+
+**State** (verified)
+Tests 11/11 pass, lint 0 errors; build still blocked locally (registry 403) — CI green on PR
+#342 for earlier commits, latest push pending. Migration NOT applied anywhere (guardrail #1) —
+it's pure DDL even when applied; merges only happen via the deliberate
+proposals→dry-run→approve→execute workflow. Function body syntax+dry-run validated against live
+Dev (Pulse Dev `ornnzinjrcyigazecctf`) via a session-temporary pg_temp copy: Moulton dry-run
+moves 6,357 contributions + 2,051 donors, fec_transaction_overlap=0, conflicts resolve
+canonical-wins. The execute path has NOT run anywhere yet.
+
+**Next**
+~~Apply to Dev + pilot + all merges~~ **DONE (same session, user-approved): all 42 duplicate
+pairs merged on Pulse Dev.** Migration applied; Moulton pilot verified end-to-end; 27 Signal A
+batch-merged (all dry-runs overlap=0); 14 Signal B merged after per-pair verification (exact
+name+state+party, House↔Senate / ward pattern — Allred, Crockett, Letlow, Hern, Peltola, 4 NJ
+ai_pairs, etc.). Post-merge sweep clean: 0 dup rows, 0 orphans, 0 name+state clusters left, 4/4
+tamper triggers re-enabled, full audit in candidate_merge_map. Type E then resolved with
+palidor2ks's domain knowledge (44 merges total): Raven Harrison's GA-23 was a clerical error
+(merged into FL-25, phantom GA race membership deleted); Gordon Heslop legally ran in both MO and
+TX (merged into MO-08, TX preserved as alias + race). Ward-label cosmetics backfilled from
+election_candidates. **ZERO duplicate clusters remain** (shared-committee and name+state both 0).
+Moulton spot-checked in the app by palidor2ks — one card, works. NEW next: land the deferred
+prevention follow-ups (plan §5.2–5.4 — office-agnostic resolve_person, alias backfill, standing
+duplicate-audit job) so new ingests can't regrow duplicates beyond what the committee-based
+onboarding fix already catches.
+
+**Deferred**
+§5.2–5.4 of the plan (office-agnostic resolve_person, alias backfill, standing duplicate-audit
+job); Type E cross-state clusters need manual FEC verification; UI disambiguation of active race
+vs incumbency on merged profiles ("Rep MA-06 · running for Senate 2026"); (carried) FEC
+coverage_end_date confirmation for C00547240; $490M memo_x attribution on C00547240; FEC
+allowlist + by_candidate query for the FF×ticket split; $14.44B whole-cycle reconciliation; 2024
+presidential sweep; cycle-2026 leak caveat.
+
+---
+
+## 2026-06-10 — claude/pre-flight-if8apr (verify #340 on live data)
+
+**What happened & why**
+Closed the loop on #340's "Next": prove the reconciliation field-drift fix end-to-end on live
+data for the conduit-heavy candidate S6MA00296 (Seth Moulton, committee C00547240, cycle 2026).
+Data lives in the **Pulse Dev** Supabase project (`ornnzinjrcyigazecctf`), not PulseApp/PulseApp_FEC.
+Findings: (1) the deployed `nightly-finance-reconciliation` (v556) is byte-for-byte the #340 repo
+code — it reads `grand_total`/`individual_total`, and `get_contribution_totals` correctly excludes
+`memo_code='X'`. (2) The job **was already re-run today** (finance_reconciliation rows fresh,
+checked_at ~10:15–10:21); `local_itemized` is now **$4,542,839** (= RPC `grand_total`), NOT the old
+$162M garbage. So the field-drift fix is proven at the data layer. (3) BUT the reconciliation does
+**NOT** hit delta→0 as the prior handoff hoped — Moulton shows **delta_pct +22.35%, status=error**,
+driven by individual itemized: local $4.30M vs FEC $3.50M (+$810K, +23%).
+(4) Root-caused the residual: a monthly breakdown shows local individual-itemized spans
+2025-01…2026-03; cumulative-through-Dec-2025 = $3.33M and through-Jan-2026 = $3.60M. FEC's
+individual_itemized ($3.50M) lands exactly between those, implying **FEC's latest totals cover
+~year-end 2025** while local includes Q1-2026 (~$975K). Truncated to year-end 2025, local ($3.33M)
+is within ~-5% of FEC ($3.50M). So the +22% is **overwhelmingly a coverage/timing mismatch on an
+active cycle**, NOT a field regression and NOT an obvious earmark double-count. Implication: the
+reconciliation's `status=error` is likely a **false positive for in-cycle candidates** — it compares
+full current local data against FEC's last-filed (lagging) totals.
+
+**State** (verified)
+Verified via Supabase MCP against Pulse Dev: deployed fn == repo code; RPC returns grand_total
+$4,542,839; stored row delta +22.35% (error); local monthly cumulatives as above. NOT verified:
+FEC's actual `coverage_end_date` for C00547240 — the FEC API is **blocked (403) from this sandbox's
+outbound network** (same policy that 403'd npm + the sitemap fetch). The edge function reached FEC
+fine at run time, so the stored FEC figures are real; I just couldn't re-pull coverage metadata to
+turn the year-end-2025 inference into a confirmed fact. Side note (harmless but a data-quality red
+flag): `memo_x_total` for this single committee = **$490M** (correctly excluded, but suspicious
+conduit attribution worth a later look). No code/migration changed; only this HANDOFF entry.
+
+**Next**
+Fetch FEC committee totals for **C00547240 cycle 2026** and read `coverage_end_date` (needs an
+outbound FEC call — do it from an environment that can reach api.open.fec.gov, or via the edge
+function logs). If coverage ends ~2025-12-31, the +22% is confirmed benign coverage-lag and the fix
+is fully proven; the real follow-on is to make `nightly-finance-reconciliation` truncate local data
+to FEC's coverage window before comparing, so active-cycle candidates stop flagging false `error`.
+
+**Deferred**
+(carried) FEC allowlist + by_candidate query to stamp the ~$315M/~$185M FF×ticket split CONFIRMED;
+whole-cycle all-races $14.44B-vs-FEC reconciliation; 2024 presidential landscape sweep; cycle-2026
+leak caveat on per-cycle figures from the all-cycle view. NEW: investigate the $490M memo_x
+attribution on C00547240; consider coverage-window truncation in the reconciliation fn (above).
+
+---
+
 ## 2026-06-10 (close-out) — claude/fix-reconciliation-field-drift (#340)
 
 **What happened & why**
