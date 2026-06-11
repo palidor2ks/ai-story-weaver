@@ -29,9 +29,13 @@ const DEFAULT_BATCH = 8;
 const PER_CALL_DELAY_MS = 250; // gentle spacing between members to avoid rate limits
 
 // Federal legislators are stored in `candidates` with a Bioguide-pattern id
-// ([A-Z][0-9]{6}), matched here with a text-range filter (same as the admin UI).
+// ([A-Z][0-9]{6}). A bare text range is NOT enough: FEC-style ids like
+// "H0TX24209" sort inside A000000..Z999999 too, and 1,813 of them were
+// permanently wasting ~75% of every sync tick on guaranteed Congress-API
+// misses (recorded as "OK" zero-syncs). Range + 7-char LIKE pins the shape.
 const BIOGUIDE_LO = 'A000000';
 const BIOGUIDE_HI = 'Z999999';
+const BIOGUIDE_SHAPE = '_______'; // exactly 7 chars; FEC ids have 9
 
 function chamberFromOffice(office: string | null): 'house' | 'senate' {
   return (office || '').toLowerCase().includes('senat') ? 'senate' : 'house';
@@ -81,7 +85,8 @@ serve(async (req) => {
       .from('candidates')
       .select('id, name, office')
       .gte('id', BIOGUIDE_LO)
-      .lte('id', BIOGUIDE_HI);
+      .lte('id', BIOGUIDE_HI)
+      .like('id', BIOGUIDE_SHAPE);
     if (legErr) throw legErr;
     if (!legislators || legislators.length === 0) {
       return new Response(JSON.stringify({ status: 'idle', message: 'no federal legislators found' }), {
