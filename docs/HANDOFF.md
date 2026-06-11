@@ -27,6 +27,50 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-11 (5th arc: evidence-index slice 1 — reviewed schema + production drain) — claude/cool-mendel-q22rt6
+
+**What happened & why**
+Owner: "ready" → built the production slice the 4th arc queued. (1) **Migration
+`20260611180000_member_statements_evidence_index.sql`** (NOT applied — lands when the owner
+merges, per guardrail #1): `member_statements` corpus table (unique (candidate_id,url),
+content_hash, body_source, published_at + raw audit string), `member_statement_sync` state
+table, RLS on both (public-read policy on statements — public artifacts; policy-less lockdown
+on sync), and an atomic `claim_statement_sync_members()` (FOR UPDATE SKIP LOCKED, 1h stuck-claim
+expiry, seeds sitting members from candidate_votes). Replay-safe throughout (the preview-flake
+lesson). (2) **`fetch-member-statements` drain**: RSS-payload bodies FIRST (content:encoded/
+description — sidesteps the house.gov bot-wall), page-fetch fallback capped at 10/member,
+Lee-pattern query-string item URLs handled (helper + test), sha256 content hashes, capped
+self-chaining (service-role bearer, the cron-auth escape hatch; MAX_CHAIN 150) so a coverage
+run needs one kick. NO cron registered (guardrail #2 — proposal goes to owner). (3) **Review
+council ran before the PR**: migration-safety GO with one required fix (seed INSERT now has
+ON CONFLICT DO NOTHING — concurrent seeders raced to 23505; + pg_temp search-path nit);
+security found no exposure/escalation paths and confirmed the self-chain can't leak the key,
+with one MEDIUM applied — the drain's fetcher now enforces an https + .gov-host allowlist with
+post-redirect re-check (fetched bodies are world-readable, so SSRF read-back was the
+aggravator) — plus explicit service_role EXECUTE grant and config.toml verify_jwt=false
+entries for both statement functions.
+
+**State** (verified)
+Lint 0 errors, **51/51** tests (10 evidence-index helper tests incl. payload-body, Lee-pattern,
+date normalization). Migration reviewed (GO) but NOT applied anywhere; drain NOT deployed (CI
+deploys it on merge; it 503s harmlessly until the migration exists). Schema↔consumer alignment
+checked column-by-column by the reviewer. NOT verified: live behavior end-to-end — first
+post-merge action is a small kick (limit 4, no chain) to prove RSS-payload bodies arrive, then
+the full coverage run.
+
+**Next**
+After merge: kick the drain once via pg_net (limit 4, max_chain 0), verify member_statements
+rows have body_source='rss_payload' with real text, then launch the coverage run
+(max_chain ~140) and measure: members with a working feed, statements ingested, body-source
+mix. Then propose the cron (guardrail #2) + the statement↔topic indexing step.
+
+**Deferred**
+Cron proposal for the drain; coverage-run measurement; seed-INSERT cost footnote (gate behind
+existence check if claim latency ever matters); spike fn + scratch tables cleanup once the
+production path is proven; (carried) everything in the 4th-arc list.
+
+---
+
 ## 2026-06-11 (4th arc: evidence-index DECIDED + 5-member spike VALIDATED) — claude/cool-mendel-q22rt6
 
 **What happened & why**
