@@ -477,6 +477,9 @@ function SettingsTab() {
 function PostCard({ post, platforms, onChanged }: { post: SocialPost; platforms: PlatformRow[]; onChanged: () => void }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [localPlatforms, setLocalPlatforms] = useState(platforms);
+  // AI-caption angle, applied to every platform's "AI caption" regenerate. Defaults to
+  // finance; only meaningful for candidate-anchored posts (ignored server-side otherwise).
+  const [captionStyle, setCaptionStyle] = useState<'finance' | 'news' | 'analysis'>('finance');
   useEffect(() => setLocalPlatforms(platforms), [platforms]);
   const canRenderProfileCard =
     post.subject_type === 'candidate' ||
@@ -504,7 +507,7 @@ function PostCard({ post, platforms, onChanged }: { post: SocialPost; platforms:
     setBusy(`gen-${platform}`);
     try {
       const { data, error } = await supabase.functions.invoke('generate-social-caption', {
-        body: { post_id: post.id, platform },
+        body: { post_id: post.id, platform, style: captionStyle },
       });
       if (error) throw error;
       const row = localPlatforms.find((p) => p.platform === platform);
@@ -627,6 +630,26 @@ function PostCard({ post, platforms, onChanged }: { post: SocialPost; platforms:
             {post.share_url ? 'Re-render' : 'Render image'}
           </Button>
         </div>
+
+        {canRenderProfileCard && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-xs text-muted-foreground mr-0.5 inline-flex items-center gap-1">
+              <Sparkles className="h-3 w-3 text-primary" /> Caption style:
+            </span>
+            {([['finance', 'Finance'], ['news', 'In the news'], ['analysis', 'Analysis']] as const).map(([id, label]) => (
+              <Button
+                key={id}
+                size="sm"
+                variant={captionStyle === id ? 'default' : 'outline'}
+                className="h-7 text-xs"
+                onClick={() => setCaptionStyle(id)}
+                disabled={!!busy}
+              >
+                {label}
+              </Button>
+            ))}
+          </div>
+        )}
 
         <div className="space-y-3">
           {localPlatforms.map((p) => (

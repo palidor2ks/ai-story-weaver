@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Check, Copy, Download, Eye, Facebook, Linkedin, Loader2, RotateCcw, Share2, Twitter } from 'lucide-react';
+import { Check, Copy, Download, Eye, Facebook, Linkedin, Loader2, RotateCcw, Share2, Sparkles, Twitter } from 'lucide-react';
 import { toast } from 'sonner';
 import { BaseballCard } from './templates/BaseballCard';
 import { CandidateStatCard } from './templates/CandidateStatCard';
@@ -73,6 +73,14 @@ interface ShareCardModalProps {
    * only seeds the editor while the user hasn't typed their own text.
    */
   captionBodyOverride?: string;
+  /**
+   * Optional AI-caption style picker. When provided, the caption editor shows a
+   * chip row; selecting a style calls `onSelectCaptionStyle` and replaces the body
+   * with the returned text. The first option's seed is expected to match
+   * `captionBodyOverride`, so the default selection is already populated.
+   */
+  captionStyleOptions?: { id: string; label: string }[];
+  onSelectCaptionStyle?: (styleId: string) => Promise<string | null>;
   triggerLabel?: string;
 }
 
@@ -122,6 +130,8 @@ export const ShareCardModal = ({
   data,
   caption,
   captionBodyOverride,
+  captionStyleOptions,
+  onSelectCaptionStyle,
 }: ShareCardModalProps) => {
   const templates = TEMPLATES_BY_KIND[data.kind];
   const defaultTemplate =
@@ -144,6 +154,10 @@ export const ShareCardModal = ({
 
   const [body, setBody] = useState(defaultBody);
   const [includeHashtags, setIncludeHashtags] = useState(true);
+  // AI-caption style picker (optional). Defaults to the first option, whose seed is
+  // expected to match captionBodyOverride, so the default selection is already populated.
+  const [captionStyle, setCaptionStyle] = useState<string | null>(captionStyleOptions?.[0]?.id ?? null);
+  const [styleBusy, setStyleBusy] = useState<string | null>(null);
   const editedFiredRef = useRef(false);
   // Flips true once the user types in the caption box, so an override that
   // arrives asynchronously (or any later default change) won't clobber their edit.
@@ -157,6 +171,7 @@ export const ShareCardModal = ({
     setIncludeHashtags(true);
     editedFiredRef.current = false;
     setSelected(defaultTemplate);
+    setCaptionStyle(captionStyleOptions?.[0]?.id ?? null);
     trackEvent('share_modal_opened', {
       surface,
       kind: caption.kind,
@@ -203,6 +218,30 @@ export const ShareCardModal = ({
     bodyTouchedRef.current = false;
     setBody(defaultBody);
     setIncludeHashtags(true);
+    setCaptionStyle(captionStyleOptions?.[0]?.id ?? null);
+  };
+
+  // Pick an AI-caption style: fetch the styled caption and replace the body with it.
+  // Marked as a deliberate edit so a late-arriving default seed won't clobber the choice.
+  const handleSelectStyle = async (styleId: string) => {
+    if (!onSelectCaptionStyle || styleBusy) return;
+    setCaptionStyle(styleId);
+    setStyleBusy(styleId);
+    trackEvent('share_caption_style_selected', { surface, kind: caption.kind, style: styleId });
+    try {
+      const next = await onSelectCaptionStyle(styleId);
+      if (next && next.trim()) {
+        bodyTouchedRef.current = true;
+        setBody(next.trim());
+      } else {
+        toast.message('No caption available for that style — keeping the current one.');
+      }
+    } catch (e) {
+      toast.error('Could not generate that caption style.');
+      console.error(e);
+    } finally {
+      setStyleBusy(null);
+    }
   };
 
   const filename = useMemo(() => {
@@ -550,6 +589,27 @@ export const ShareCardModal = ({
               </Button>
             )}
           </div>
+          {captionStyleOptions && captionStyleOptions.length > 0 && onSelectCaptionStyle && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-xs text-muted-foreground mr-0.5 inline-flex items-center gap-1">
+                <Sparkles className="w-3 h-3 text-primary" /> AI caption:
+              </span>
+              {captionStyleOptions.map((opt) => (
+                <Button
+                  key={opt.id}
+                  type="button"
+                  size="sm"
+                  variant={captionStyle === opt.id ? 'default' : 'outline'}
+                  disabled={!!styleBusy}
+                  onClick={() => handleSelectStyle(opt.id)}
+                  className="h-7 gap-1 text-xs"
+                >
+                  {styleBusy === opt.id && <Loader2 className="w-3 h-3 animate-spin" />}
+                  {opt.label}
+                </Button>
+              ))}
+            </div>
+          )}
           <Textarea
             id="share-caption"
             value={body}

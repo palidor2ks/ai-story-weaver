@@ -31,6 +31,9 @@ const youKey = Deno.env.get('YOU_API_KEY');
 const BodySchema = z.object({
   post_id: z.string().uuid(),
   platform: z.enum(['x', 'facebook', 'instagram', 'tiktok']),
+  // Optional caption angle from the admin UI: finance | news | analysis. When omitted
+  // (the auto-poster), behavior is unchanged — research news and auto-pick the angle.
+  style: z.enum(['finance', 'news', 'analysis']).optional(),
 });
 
 Deno.serve(async (req) => {
@@ -54,7 +57,7 @@ Deno.serve(async (req) => {
 
     const parsed = BodySchema.safeParse(await req.json());
     if (!parsed.success) return new Response(JSON.stringify({ error: parsed.error.flatten().fieldErrors }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-    const { post_id, platform } = parsed.data;
+    const { post_id, platform, style } = parsed.data;
 
     const { data: post } = await admin.from('social_posts').select('*').eq('id', post_id).maybeSingle();
     if (!post) return new Response(JSON.stringify({ error: 'post_not_found' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
@@ -119,28 +122,38 @@ Deno.serve(async (req) => {
       };
     }
 
-    // The candidate's cached, web-grounded record summary (used by ai_analysis and as the
-    // no-finance fallback). Read lazily so we only hit the cache when a branch needs it.
+    // The candidate's cached, web-grounded record summary (used by ai_analysis, the
+    // "analysis" style, and as the no-finance fallback). Read lazily + memoized so we
+    // hit the cache at most once even when several branches ask for it.
+    let recordMemo: string | null | undefined;
     const readRecord = async (): Promise<string | null> => {
+      if (recordMemo !== undefined) return recordMemo;
       const cached = await readCache<{ summary?: string; insufficient_information?: boolean }>({
         kind: 'recipient', subject_id: `v2:candidate:${post.subject_id}`, cycle: null,
       });
-      return cached?.payload && !cached.payload.insufficient_information ? cached.payload.summary ?? null : null;
+      recordMemo = cached?.payload && !cached.payload.insufficient_information ? cached.payload.summary ?? null : null;
+      return recordMemo;
     };
 
     if (meta && post.subject_id) {
-      // Research a real, recently-reported, ATTRIBUTED news hook to give the caption an
-      // attention-grabbing angle (grounded in live web research with citations; null
-      // when there's no key, nothing notable, or on error — captions then fall back to
-      // the verified-finance/record copy). Cached per-candidate for a day in news-research.
-      const news = await researchControversy({
-        candidateId: post.subject_id,
-        name: meta.name,
-        office: meta.office,
-        state: meta.state,
-        youKey,
-        aiKey,
-      });
+      // The admin UI lets the user pin a caption angle; the auto-poster (no style) keeps
+      // the original behavior: research news and auto-pick. Skip news research entirely
+      // for the finance/analysis styles — they don't use it.
+      const wantNews = style === 'news' || style === undefined;
+      const news = wantNews
+        ? await researchControversy({
+            candidateId: post.subject_id, name: meta.name, office: meta.office, state: meta.state, youKey, aiKey,
+          })
+        : null;
+
+      // Pinned styles try their dedicated composer first, then fall through to the chain.
+      if (style === 'finance') {
+        const headline = await composeFinanceCaption(admin, aiKey, post.subject_id, platform, meta, null);
+        if (headline) return await save(headline.caption, headline.source);
+      } else if (style === 'analysis') {
+        const analysis = await composeAnalysisCaption(admin, aiKey, post.subject_id, platform, meta, await readRecord(), null, 'record');
+        if (analysis) return await save(analysis.caption, analysis.source);
+      }
 
       // Type-specific composer first; each returns null when its data is missing.
       if (post.subject_type === 'ai_analysis') {
