@@ -47,7 +47,26 @@ const MAX_CHAIN = 150;          // hard ceiling on self-chaining depth
 const MAX_ITEMS_PER_MEMBER = 40;
 const PAGE_FETCH_CAP = 10;      // page-fetch fallbacks per member when the feed has no body
 
-async function get(url: string): Promise<{ status: number; text: string } | null> {
+// SSRF allowlist (security review 2026-06-11): fetched bodies are published into the
+// world-readable member_statements table, so every crawl target must be a public
+// congressional host — https, no IP literals/localhost, hostname ending in .gov.
+// (The pinned legislators dataset on github.io is fetched separately, outside this gate.)
+function isAllowedCrawlUrl(raw: string): boolean {
+  let u: URL;
+  try {
+    u = new URL(raw);
+  } catch {
+    return false;
+  }
+  if (u.protocol !== 'https:') return false;
+  const host = u.hostname.toLowerCase();
+  if (/^[0-9.]+$/.test(host) || host.includes(':')) return false; // IPv4/IPv6 literals
+  if (host === 'localhost' || host.endsWith('.local') || host.endsWith('.internal')) return false;
+  return host.endsWith('.gov');
+}
+
+async function get(url: string, opts?: { unrestricted?: boolean }): Promise<{ status: number; text: string } | null> {
+  if (!opts?.unrestricted && !isAllowedCrawlUrl(url)) return null;
   try {
     const ctl = new AbortController();
     const t = setTimeout(() => ctl.abort(), FETCH_TIMEOUT_MS);
@@ -57,6 +76,11 @@ async function get(url: string): Promise<{ status: number; text: string } | null
       headers: { 'User-Agent': 'PoliPulse statements drain (public newsroom indexing)' },
     });
     clearTimeout(t);
+    // a redirect may have moved us off the allowlist — re-check before reading the body
+    if (!opts?.unrestricted && resp.url && !isAllowedCrawlUrl(resp.url)) {
+      await resp.body?.cancel();
+      return { status: resp.status, text: '' };
+    }
     return { status: resp.status, text: resp.ok ? await resp.text() : '' };
   } catch {
     return null;
@@ -74,7 +98,7 @@ interface Legislator {
 }
 
 async function loadOfficialSites(): Promise<Map<string, string> | null> {
-  const resp = await get(LEGISLATORS_URL);
+  const resp = await get(LEGISLATORS_URL, { unrestricted: true }); // pinned https origin
   if (!resp || resp.status !== 200) return null;
   const map = new Map<string, string>();
   for (const l of JSON.parse(resp.text) as Legislator[]) {

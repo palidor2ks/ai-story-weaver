@@ -68,14 +68,15 @@ create or replace function public.claim_statement_sync_members(p_limit int defau
 returns setof text
 language plpgsql
 security definer
-set search_path to 'public'
+set search_path to 'public', 'pg_temp'
 as $$
 begin
   insert into member_statement_sync (candidate_id)
   select distinct cv.candidate_id
   from candidate_votes cv
   where not exists (select 1 from member_statement_sync s where s.candidate_id = cv.candidate_id)
-    and exists (select 1 from candidates c where c.id = cv.candidate_id);
+    and exists (select 1 from candidates c where c.id = cv.candidate_id)
+  on conflict (candidate_id) do nothing;  -- concurrent seeders must not 23505 each other
 
   return query
   with claimed as (
@@ -96,3 +97,4 @@ end;
 $$;
 
 revoke all on function public.claim_statement_sync_members(int) from public, anon, authenticated;
+grant execute on function public.claim_statement_sync_members(int) to service_role;

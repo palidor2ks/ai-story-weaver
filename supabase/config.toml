@@ -61,6 +61,10 @@ project_id = "ornnzinjrcyigazecctf"
     verify_jwt = false
   [functions.fetch-member-votes]
     verify_jwt = false
+  [functions.fetch-member-statements]
+    verify_jwt = false
+  [functions.spike-ingest-member-statements]
+    verify_jwt = false
   [functions.sync-legislator-votes]
     verify_jwt = false
   [functions.fetch-representatives]
