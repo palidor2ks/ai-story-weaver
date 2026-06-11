@@ -6,7 +6,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { z } from 'npm:zod@3.23.8';
 import { isCronAuthorized } from '../_shared/cron-auth.ts';
 import { composeFinanceCaption, composeNewsCaption, composeRecordCaption } from '../_shared/finance-caption.ts';
-import { researchControversy } from '../_shared/news-research.ts';
+import { researchTopNews } from '../_shared/news-research.ts';
 import { getCandidateRecord } from '../_shared/candidate-record.ts';
 
 const corsHeaders = {
@@ -82,7 +82,7 @@ Deno.serve(async (req) => {
       result = await composeRecordCaption(aiKey, meta, platform, record);
     } else if (style === 'news') {
       // ONLY the top recent, cited news about the rep — no finance.
-      const news = await researchControversy({
+      const news = await researchTopNews({
         candidateId: candidate_id, name: meta.name, office: meta.office, state: meta.state, youKey, aiKey,
       });
       result = await composeNewsCaption(aiKey, meta, platform, news);

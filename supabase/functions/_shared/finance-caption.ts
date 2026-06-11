@@ -486,76 +486,87 @@ function subjectPartyLine(meta: CandidateMeta): string {
 
 // "In the news" caption — built from ONLY a real, attributed news hook. Deliberately
 // excludes finance/positions so it reads as today's news about the rep, not a money or
-// record post. Returns null when there's no news hook (caller decides what to do).
+// record post. ALWAYS returns a caption (an honest "no recent news" line when there's no
+// hook) so the picker never silently leaves a different style's text in place.
 export async function composeNewsCaption(
   aiKey: string | undefined,
   meta: CandidateMeta,
   platform: string,
   news: NewsHook | null,
-): Promise<{ caption: string; source: string } | null> {
-  if (!news) return null;
+): Promise<{ caption: string; source: string }> {
   const cfg = PLATFORM_LIMITS[platform] ?? PLATFORM_LIMITS.x;
   const handle = normalizeHandle(meta.handle);
   const displayName = handle ? `@${handle}` : (meta.name || 'This politician');
+  if (!news) {
+    // No recent coverage — say so plainly (clearly NOT the finance/positions caption).
+    const base = `📰 No major recent news on ${displayName} in the headlines right now.`;
+    return { caption: ensureHandle(summarizeForSocial(base, cfg.max), handle, cfg.max), source: 'news_none' };
+  }
   const handleRule = handle
     ? `\n- Refer to them as @${handle}; never write their real personal name, and do NOT start the post with @${handle} (so X does not treat it as a reply).`
     : '';
   const lengthRule = cfg.long
     ? `Length: 2–4 short sentences, under ${cfg.max} characters.`
     : `Length: ONE or TWO tight sentences, comfortably under ${cfg.max} characters — leave room.`;
-  const prompt = `You are a sharp political-news editor writing a punchy, timely ${platform.toUpperCase()} post about the LATEST NEWS involving a U.S. politician.
+  const prompt = `You are a sharp political-news editor writing a punchy, timely ${platform.toUpperCase()} post about the LATEST NEWS involving a U.S. politician. This is a NEWS post — what they're in the headlines for right now.
 
 Subject: ${displayName} — ${subjectPartyLine(meta)}.
 
 THE NEWS (real, reported by ${news.source} — treat as a verified, attributed fact; this is your ONLY material): ${news.hook}
 
 Write the post:
-- Lead with this news and attribute it to ${news.source} (e.g. "Per ${news.source}, …" or "${news.source}: …"). Make it feel current and breaking.
-- Use ONLY the news above. Do NOT mention campaign finance, fundraising, donors, PACs, outside spending, or any dollar figure, and do NOT bring in their policy positions or goals. Add no fact, allegation, or detail not in the news line; never sharpen it into an accusation or imply guilt beyond what is reported.${handleRule}
-- Intense, headline-worthy, media-ready. Exactly ONE tasteful emoji.
+- OPEN with the news itself, attributed to ${news.source} (e.g. "Per ${news.source}, …" or "${news.source}: …"). It must read like a news headline, not a profile blurb. Make it feel current.
+- Use ONLY the news above. Do NOT mention campaign finance, fundraising, donors, PACs, outside spending, or any dollar figure, and do NOT bring in their general policy positions or goals. Add no fact, allegation, or detail not in the news line; never sharpen it into an accusation or imply guilt beyond what is reported.${handleRule}
+- Intense, headline-worthy, media-ready. Exactly ONE tasteful emoji (prefer 📰 or 🗞️).
 - ${lengthRule}
 - Plain text ONLY — no markdown, no hashtags, no URLs. No quotes, no preamble.`;
   const ai = await aiCaption(aiKey, prompt, cfg.max);
   if (ai) return { caption: ensureHandle(ai, handle, cfg.max), source: 'news_ai' };
-  const base = `Per ${news.source}, ${displayName} ${news.hook}. 📰`;
+  const base = `📰 Per ${news.source}, ${displayName} ${news.hook}.`;
   return { caption: ensureHandle(summarizeForSocial(base, cfg.max), handle, cfg.max), source: 'news_template' };
 }
 
 // "Analysis" caption — built from ONLY the candidate's positions & goals (the same
 // record the AI-analysis dialog shows). Deliberately excludes money and news headlines.
-// `record` is a positions/goals text block; returns null when there's none.
+// `record` is a positions/goals text block. ALWAYS returns a caption (an honest "not
+// available yet" line when there's no record) so the picker never silently leaves a
+// different style's text in place.
 export async function composeRecordCaption(
   aiKey: string | undefined,
   meta: CandidateMeta,
   platform: string,
   record: string | null,
-): Promise<{ caption: string; source: string } | null> {
-  const clean = (record ?? '').replace(/\s+/g, ' ').trim();
-  if (!clean) return null;
+): Promise<{ caption: string; source: string }> {
   const cfg = PLATFORM_LIMITS[platform] ?? PLATFORM_LIMITS.x;
   const handle = normalizeHandle(meta.handle);
   const displayName = handle ? `@${handle}` : (meta.name || 'This politician');
+  const clean = (record ?? '').replace(/\s+/g, ' ').trim();
+  if (!clean) {
+    // No positions/goals on file yet — say so plainly (clearly NOT the finance/news caption).
+    const base = `🗳️ A detailed breakdown of ${displayName}'s positions and goals isn't available yet.`;
+    return { caption: ensureHandle(summarizeForSocial(base, cfg.max), handle, cfg.max), source: 'record_none' };
+  }
   const handleRule = handle
     ? `\n- Refer to them as @${handle}; never write their real personal name, and do NOT start the post with @${handle} (so X does not treat it as a reply).`
     : '';
   const lengthRule = cfg.long
     ? `Length: 2–4 short sentences, under ${cfg.max} characters.`
     : `Length: ONE or TWO tight sentences, comfortably under ${cfg.max} characters — leave room.`;
-  const prompt = `You are a sharp political editor writing a punchy ${platform.toUpperCase()} post summarizing WHO a U.S. politician is — their positions and goals.
+  const prompt = `You are a sharp political editor writing a punchy ${platform.toUpperCase()} post summarizing WHO a U.S. politician is — what they stand for, their positions and goals. This is a PROFILE of their platform, NOT news and NOT campaign money.
 
 Subject: ${displayName} — ${subjectPartyLine(meta)}.
 
 THEIR POSITIONS & GOALS (summarize faithfully; never invent or embellish): ${summarizeForSocial(clean, 700)}
 
 Write the post:
-- Capture the ONE or TWO most defining positions/goals — what they actually stand for.
-- Do NOT mention campaign finance, fundraising, donors, PACs, outside spending, or any dollar figure, and do NOT reference recent news headlines.${handleRule}
+- Frame it as where they stand / what they're fighting for (e.g. "Where ${displayName} stands:" or "${displayName}'s platform:"). Capture the ONE or TWO most defining positions or goals.
+- Do NOT mention campaign finance, fundraising, donors, PACs, outside spending, or any dollar figure, and do NOT reference recent news headlines or current events. This is about their enduring positions, not a money story or a news story.${handleRule}
 - Neutral and factual — describe their stance, don't cheerlead or attack.
-- Headline-worthy and readable. Exactly ONE tasteful emoji.
+- Headline-worthy and readable. Exactly ONE tasteful emoji (prefer 🗳️ or 📋).
 - ${lengthRule}
 - Plain text ONLY — no markdown, no hashtags, no URLs. No quotes, no preamble.`;
   const ai = await aiCaption(aiKey, prompt, cfg.max);
   if (ai) return { caption: ensureHandle(ai, handle, cfg.max), source: 'record_ai' };
-  return { caption: ensureHandle(summarizeForSocial(`${displayName}: ${clean}`, cfg.max), handle, cfg.max), source: 'record_template' };
+  return { caption: ensureHandle(summarizeForSocial(`Where ${displayName} stands: ${clean}`, cfg.max), handle, cfg.max), source: 'record_template' };
 }
 

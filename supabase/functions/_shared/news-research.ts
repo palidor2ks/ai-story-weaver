@@ -28,14 +28,15 @@ const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 // error (the caller then falls back to the verified-finance caption).
 async function distill(aiKey: string, content: string, citations: YouCitation[], name: string): Promise<NewsHook | null> {
   const sourceList = citations.slice(0, 10).map((c, i) => `[${i}] ${c.title} — ${c.url}`).join('\n');
-  const systemPrompt = `You distill web-research notes into ONE short, factual, attributed news hook about a U.S. politician for a social-media caption.
+  const systemPrompt = `You distill web-research notes into ONE short, factual, attributed news hook about a U.S. politician for a social-media caption — the TOP recent news about them.
 
 RULES:
 - Use ONLY claims explicitly supported by the research notes below. NEVER add an allegation, detail, number, or characterization that isn't stated. No speculation, no guesses.
-- Pick the SINGLE most newsworthy / controversial / attention-grabbing item from roughly the last few months — weigh recency and stakes (scandals, investigations, ethics issues, notable votes/statements, high-profile fights).
-- The hook is a short clause that completes the sentence "<NAME> ___" (e.g. "is under a House ethics investigation over undisclosed stock trades"). 10–22 words. Neutral, factual wording — report it, do NOT editorialize, sharpen it into an accusation, or imply guilt beyond what's reported.
+- Pick the SINGLE most significant recent news item — whatever they are most in the news for lately. This is "top news of the day", NOT only scandals: a bill they introduced or voted on, an election/primary result, a notable public statement or interview, an endorsement, a town hall, a legal/ethics matter, a high-profile fight — any of these count. Prefer the most recent + highest-profile.
+- Do NOT pick a campaign-finance/fundraising-totals item if any other real news exists — money is covered by a separate caption style.
+- The hook is a short clause that completes the sentence "<NAME> ___" (e.g. "introduced a bill to expand rural broadband" or "won the Republican primary for Ohio's 9th district"). 10–22 words. Neutral, factual wording — report it, do NOT editorialize, sharpen it into an accusation, or imply guilt beyond what's reported.
 - source_index: the index of the citation that best supports the hook (must be one of the listed indices).
-- If there is NO genuinely newsworthy or controversial recent item, set newsworthy=false and leave the other fields empty.
+- Set newsworthy=false ONLY if the notes contain no real recent news about this person at all.
 
 Return strict JSON via the distill_hook tool.`;
   const userPrompt = `POLITICIAN: ${name}\n\nSOURCES:\n${sourceList}\n\nRESEARCH NOTES:\n${content.slice(0, 8000)}`;
@@ -95,10 +96,10 @@ Return strict JSON via the distill_hook tool.`;
   }
 }
 
-// Look up the candidate's single most attention-grabbing recent news item, grounded in
-// live web research with real citations. Cached per-candidate for a day (hook OR a
-// "no news" verdict). Returns null when there's nothing notable, no key, or on error.
-export async function researchControversy(opts: {
+// Look up the candidate's TOP recent news item (broad — not only controversy), grounded
+// in live web research with real citations. Cached per-candidate for a day (hook OR a
+// "no news" verdict). Returns null when there's no recent coverage, no key, or on error.
+export async function researchTopNews(opts: {
   candidateId: string;
   name: string;
   office?: string | null;
@@ -122,7 +123,7 @@ export async function researchControversy(opts: {
   try {
     const who = [cleanName, opts.office, opts.state ? `of ${opts.state}` : '']
       .map((p) => (p ?? '').trim()).filter(Boolean).join(', ');
-    const query = `What is the single most newsworthy, controversial, or attention-grabbing thing about ${who} in the news recently (roughly the last few months, as of ${opts.todayIso ?? 'today'})? Focus on scandals, controversies, investigations, ethics issues, notable votes or statements, or high-profile fights they are involved in. Give the specific factual claim and which news outlet reported it. If there is nothing genuinely notable, answer exactly: NONE.`;
+    const query = `What is the TOP recent news about ${who}? In other words, what are they most in the news for lately (roughly the last 1–2 months, as of ${opts.todayIso ?? 'today'})? Include any significant coverage — a bill or vote, a primary/election result, a notable public statement or interview, an endorsement, a town hall, a dispute, or a legal/ethics matter. Give the single biggest recent development as a specific factual claim and name the news outlet that reported it. If there is genuinely no recent news coverage about this person at all, answer exactly: NONE.`;
     const research = await callYouSmart({ query, apiKey: opts.youKey, researchEffort: 'lite' });
     const trimmed = (research.content ?? '').trim();
     if (trimmed && !/^none\b/i.test(trimmed) && research.citations.length > 0) {

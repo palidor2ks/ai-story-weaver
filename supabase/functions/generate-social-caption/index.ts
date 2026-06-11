@@ -17,7 +17,7 @@ import {
 import { composeDonorEntityCaption } from '../_shared/donor-card.ts';
 import { composeCommitteeSpenderCaption } from '../_shared/committee-card.ts';
 import { composeRaceComparisonCaption } from '../_shared/race-card.ts';
-import { researchControversy } from '../_shared/news-research.ts';
+import { researchTopNews } from '../_shared/news-research.ts';
 import { getCandidateRecord } from '../_shared/candidate-record.ts';
 
 const corsHeaders = {
@@ -150,7 +150,7 @@ Deno.serve(async (req) => {
         r = await composeFinanceCaption(admin, aiKey, post.subject_id, platform, meta, null);
       } else if (style === 'news') {
         // ONLY the top recent, cited news about the rep — no finance.
-        const news = await researchControversy({
+        const news = await researchTopNews({
           candidateId: post.subject_id, name: meta.name, office: meta.office, state: meta.state, youKey, aiKey,
         });
         r = await composeNewsCaption(aiKey, meta, platform, news);
@@ -169,7 +169,7 @@ Deno.serve(async (req) => {
     if (meta && post.subject_id) {
       // Auto-poster (no pinned style): research a news hook and auto-pick the angle —
       // unchanged from before the style picker existed.
-      const news = await researchControversy({
+      const news = await researchTopNews({
         candidateId: post.subject_id, name: meta.name, office: meta.office, state: meta.state, youKey, aiKey,
       });
 
