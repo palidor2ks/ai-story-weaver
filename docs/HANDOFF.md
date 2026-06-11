@@ -67,6 +67,11 @@ on a NON-scandal rep (e.g. a quiet backbencher) and confirm all three now change
 rare now (broad news + analysis generate-on-cold), but a future pass could auto-fall to a 2nd-choice
 angle WITH a clear style label instead. On-demand analysis generation still adds up to ~45s on a cold
 cache. Aliased candidates still read `v2:candidate:<id>`. `callYouSmart` still has no request timeout.
+**NEW — preview-branch migration idempotency:** `20260107015931_…` does a bare `CREATE TABLE
+public.admin_stats_cache` (no `IF NOT EXISTS`) → `relation already exists (42P07)` on a full
+migration replay (hit on PR #357's Supabase preview deploy; self-resolved on retry). Unrelated to
+captions, but a one-line `CREATE TABLE IF NOT EXISTS` (its own reviewed migration) would stop
+preview deploys flaking.
 
 ## 2026-06-11 (caption styles made DISTINCT: dedicated composers) — claude/caption-styles-distinct
 
