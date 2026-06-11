@@ -27,6 +27,53 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-11 (caption styles made DISTINCT: dedicated composers) — claude/caption-styles-distinct
+
+**What happened & why**
+Owner reported the three caption styles "seem like the same thing." Root cause: they all
+funneled through finance-centric composers — "In the news" used `composeFinanceCaption(meta,
+news)` (news-led but finance-laden), and "Analysis" used `composeAnalysisCaption(forceMode:
+'record')` which **silently fell back to the funding angle whenever the record cache was cold**
+(`pickAnalysisMode` → `hasFin ? 'funding'`). So every style leaned on money. Rebuilt each style
+as a dedicated, single-source composer that EXCLUDES the others:
+- **Finance** → `composeFinanceCaption` (unchanged): donors + outside spending, where money comes from.
+- **In the news** → NEW `composeNewsCaption(aiKey, meta, platform, news)`: ONLY the cited news hook;
+  prompt explicitly forbids finance/positions. Null when no news.
+- **Analysis** → NEW `composeRecordCaption(aiKey, meta, platform, record)` fed by NEW
+  `getCandidateRecord` (`_shared/candidate-record.ts`), which reads the cached
+  `ai-recipient-analysis` payload and builds a **structured positions + goals** block
+  (`recordBlockFromAnalysis`, pure + tested in `candidate-record-utils.ts`); on a COLD cache it
+  generates the analysis on demand via a service-role call to `ai-recipient-analysis` (bounded by
+  a 45s AbortController). Prompt forbids money/news. So "Analysis" is now genuinely positions/goals,
+  like the rep-profile AI-analysis dialog, and never collapses to finance.
+A pinned style now returns its angle or a clean static — it NEVER silently emits a different angle
+(both `compose-candidate-caption` and `generate-social-caption`). The auto-poster (no `style`) path
+is byte-for-byte unchanged (still `composeAnalysisCaption`/`composeFinanceCaption` + news auto-pick).
+No frontend change — the existing chip picker already sends the right style ids. Fixed a real bug
+found en route: candidates' FEC column is `fec_candidate_id`, not `fec_id`.
+
+**State** (verified)
+Typecheck (tsconfig.app.json) clean, lint **0 errors** (154 pre-existing warnings, unchanged),
+**28/28** unit tests (5 new in `candidate-record.test.ts` for the positions/goals block + null
+guards), `bunx vite build` clean. Grepped both edge functions for stale refs — clean. NOT verified
+(sandbox egress blocked): live round-trips — that the three styles now read visibly different, that
+on-demand analysis generation works + stays under the time budget, and that `fec_candidate_id`
+resolves finance for the generated analysis. The cross-function service-role call to
+`ai-recipient-analysis` is new and unexercised here.
+
+**Next**
+Smoke-test from a networked env: open a rep profile → Share, click Finance / In the news / Analysis
+and confirm each reads as a DIFFERENT angle (money vs. today's news vs. positions/goals). Test a
+candidate with a cold analysis cache (Analysis should generate then show positions/goals, not
+finance; watch latency). Then repeat in admin SocialPosts.
+
+**Deferred**
+On-demand analysis generation adds latency (web search, up to ~45s) on a cold cache for the
+Analysis style — acceptable with the spinner, but worth a UX note / pre-warm. If generation fails,
+Analysis returns null (rep profile keeps current caption) or a static (admin) — never finance.
+Aliased candidates still read `v2:candidate:<id>` (miss `v2:alias:*`). `callYouSmart` still has no
+request timeout (carried). Picking the already-selected default chip re-invokes the function.
+
 ## 2026-06-11 (AI caption STYLE PICKER: finance / news / analysis) — claude/caption-style-picker
 
 **What happened & why**
