@@ -96,6 +96,14 @@ X/TikTok posting, Remotion social cards, AI-generated analysis. Deferred until t
   and preflight gained `check:accuracy`. Found in the process: the **nightly bill sync has
   been dead since 2026-01-13** (no scheduler can call it — needs the shared-secret pattern;
   recipe in DATA-ACCURACY §Bills, awaiting review per guardrail #2).
+- **2026-06-11 (answers: dilution accepted + part-1b direction)** — Maintainer decisions:
+  (1) **accept** the URL-% dilution from `batch-populate-answers-job` (~30k description-sourced
+  answers/day) rather than throttle it — coverage work has a natural end (666 low-coverage
+  candidates) and the % is honest; (2) **part 1b = research-pipeline citations** (option b),
+  plan in `docs/answers-enrichment-part1b-plan.md` — the 35% floor needs ~155k URL-sourced and
+  only the statement/website pools are big enough. Hygiene shipped same day: 47,066 answers
+  mislabeled `voting_record` for vote-less candidates relabeled to inferred (integrity finding
+  #2 closed), with a write-time guard in `get-candidate-answers` so the pool can't regrow.
 - **2026-06-10 (bills revival + answers goal)** — Maintainer approved the bills-sync revival
   (guardrail #2 review done): `nightly-bill-sync` gained the Vault shared-secret path and a
   nightly 03:10 UTC cron (migration `20260610180000`), with a manual catch-up run covering

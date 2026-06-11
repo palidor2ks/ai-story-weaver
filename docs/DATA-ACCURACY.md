@@ -102,7 +102,16 @@
   on Vaccinations", "National Park*inson's*") — now excluded in the generator.
   **27,578 (6.26%) of 440,326 URL-sourced.** Mind the **dilution dynamic**: the regular
   pipeline adds ~30k description-sourced answers/day, so the % can drop between enrichment
-  rounds even as the URL-sourced count grows.
+  rounds even as the URL-sourced count grows. *(Maintainer 2026-06-11: dilution accepted —
+  no throttle; see ROADMAP changelog.)*
+- **Standing (2026-06-11, hygiene — integrity finding #2 closed):** **47,066** answers
+  labeled `voting_record` for candidates with **zero** `candidate_votes` rows (sampling:
+  party-affiliation inferences, incl. wrong-person research) relabeled to
+  `evidence_type='inferred'` / `source_type='other'`. `voting_record` without URL is now
+  **36,282, all with real vote data** (the honest vote-citation pool). Regrowth stopped at
+  write time by `_shared/answer-label-guard.ts` in `get-candidate-answers`. ~5.2k relabeled
+  rows belong to 161 **orphaned candidate_ids** (no candidates row) — separate repoint task.
+  **Next route: part 1b** (research-pipeline citations) — `docs/answers-enrichment-part1b-plan.md`.
 - **Goal (set by maintainer 2026-06-10):** URL-sourced answers — **target 100%**,
   **≥75% = success**, **<35% = poor/failing**. `check:accuracy` FAILS below 35%, warns
   below 75%. We are at ~5.9%, so this category is RED on purpose until the enrichment

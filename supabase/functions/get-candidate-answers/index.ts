@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { demoteUnverifiableVoteClaims } from "../_shared/answer-label-guard.ts";
 
 // Declare EdgeRuntime for Supabase Edge Functions background processing
 declare const EdgeRuntime: {
@@ -1023,10 +1024,18 @@ async function saveAnswersBatch(
   questions: Question[]
 ): Promise<void> {
   const questionMap = new Map(questions.map(q => [q.id, q]));
-  
+
   const validSourceTypes = ['voting_record', 'public_statement', 'campaign_website', 'interview', 'legislation', 'web_research', 'other'];
 
-  const answersToInsert = answers.map(answer => ({
+  // Uncited "voting_record" labels are only honest if we actually hold votes for this
+  // candidate — otherwise demote to inferred (see _shared/answer-label-guard.ts).
+  const { count: voteRowCount } = await supabase
+    .from('candidate_votes')
+    .select('id', { count: 'exact', head: true })
+    .eq('candidate_id', candidateId);
+  const guardedAnswers = demoteUnverifiableVoteClaims(answers, (voteRowCount ?? 0) > 0);
+
+  const answersToInsert = guardedAnswers.map(answer => ({
     candidate_id: candidateId,
     question_id: answer.question_id,
     answer_value: answer.answer_value,

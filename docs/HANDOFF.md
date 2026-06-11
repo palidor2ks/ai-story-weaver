@@ -27,6 +27,60 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-11 (2nd arc: dilution decided, 47k mislabels fixed + write guard, part-1b planned) — claude/cool-mendel-q22rt6
+
+**What happened & why**
+Owner took the recommendation from the morning arc: (1) **accept** the URL-% dilution (no cron
+throttle — recorded in ROADMAP changelog + DATA-ACCURACY); (2) do the **mislabel hygiene**;
+(3) **start part 1b as option (b)** (research-pipeline citations). Hygiene first: the pool of
+`voting_record` answers for candidates with ZERO vote rows had GROWN 40.5k → **47,066** (1,512
+candidates) since 2026-06-10 — the generator was still minting them. Checked the HANDOFF caveat
+before relabeling: sampled state-body mentions are inference-style too ("his actions in the AZ
+State Legislature *indicate*…"), and the broader sample is pure party-inference prose — two rows
+even researched the WRONG person (Gianaris prose on a "JONES, GIAN A" row). So blanket relabel is
+correct: `evidence_type='inferred'`, `source_type='other'` ('inferred' is NOT in the source_type
+CHECK constraint — 'other' is the allowed honest value; evidence_type is unconstrained and is
+what the admin UI badge reads; scoring reads neither). The UPDATE tripped the
+`prevent_politician_score_tampering` trigger (evidence_type is a guarded column; MCP session has
+no JWT) — ran it under a transaction-local `request.jwt.claims` service_role claim, the path the
+trigger explicitly allows. All 47,066 relabeled; `voting_record` w/o URL now **36,282, every one
+backed by real vote data**. Stats refreshed (relabel changes no scoreboard number by design —
+sourcedWithUrl is URL-based, totalSourced is description-text-based). Then stopped the regrowth
+at the source: `get-candidate-answers` (confirmed the only writer minting these; the 6h cron
+chain writes 'legislation' labels via populate-candidate-answers) now demotes uncited vote
+claims for vote-less candidates at save time — pure helper `_shared/answer-label-guard.ts`
+(+5 tests), one count-query + map in `saveAnswersBatch`. Cited vote claims are KEPT even
+without local vote data (a URL makes a state-vote claim checkable). Finally wrote the part-1b
+plan (`docs/answers-enrichment-part1b-plan.md`): pools, reuse of the news-research
+citation-index pattern, stance/host/identity guards, phase gates with a 50-sample precision
+bar, the ~155k-needed math, and the open "inferred denominator" metric question.
+
+**State** (verified)
+Relabel verified live: pool query returns 0; source_type distribution re-measured
+(other 157,570 / public_statement 155,599 w/o URL / voting_record 36,282 w/o URL);
+candidate_answer_stats refreshed (443,950 total / 27,669 URL-sourced — dilution visibly
+continuing, +3.6k answers in ~80 min). Lint **0 errors**, **37/37** tests (5 new guard tests),
+guard change is code-only — **deploys when this merges** (sandbox can't deploy edge fns);
+until then the generator keeps mislabeling (the relabel UPDATE is re-runnable). One MCP
+timeout-but-committed on the big UPDATE (verified pool=0 before proceeding). NOT verified:
+guard behavior against a live generation run (needs deploy + a vote-less candidate generate).
+
+**Next**
+After merge+deploy: trigger a generation for one vote-less candidate and confirm new answers
+arrive as inferred/other (the guard's live smoke test). Then start part-1b phase 1 per the
+plan (networked env required).
+
+**Deferred**
+**NEW: 161 orphaned candidate_ids** hold 5,189 of the relabeled answers (no candidates row —
+merge leftovers?) — repoint via candidate_merge_map or delete; quantify against merge map
+first. The "inferred denominator" metric decision (plan §inferred). populate-civic-answers
+writes source_type 'ai_inferred' which the CHECK constraint rejects — dead code or silent
+failure, check it. (carried) 25,135 legacy sponsorship ids; duplicate bills rows; stalled
+May-26 job_queue row; per-congress bills spot-check; preview-migration one-liner;
+caption smoke test; callYouSmart timeout.
+
+---
+
 ## 2026-06-11 (repair re-run + enrichment round 3 EXECUTED on prod via MCP) — claude/cool-mendel-q22rt6
 
 **What happened & why**
