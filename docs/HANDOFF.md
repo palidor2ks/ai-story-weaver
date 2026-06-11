@@ -27,6 +27,47 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-11 (convergence VALIDATED end-to-end + orchestrator queue fix) — claude/kind-hamilton-f1qdl0 (3rd arc)
+
+**What happened & why**
+PR #352 merged → fixed `fetch-member-votes` deployed (verified: live source v637 has canonical
+ids). Proved the whole convergence loop on one member (Doggett, D000399): manual re-sync via
+pg_net (attempt 1 died on a transient "error reading a body from connection" — `.json()` isn't
+inside the retry wrapper, noted below; attempt 2 clean) → **+3,020 canonical vote rows, +2,966
+canonical bills rows for older congresses** → those shared bills unlocked **60,358 legacy rows
+across the whole roster** for repointing (steps 1-3 re-run) → step-4 delete removed Doggett's
+2,314 stranded duplicates. Each member re-sync compounds repairs for everyone else.
+ALSO found+fixed why the sync queue crawls: the orchestrator's `A000000..Z999999` text range
+admits 9-char FEC ids (`H0TX24209`), so **1,813 phantom entries (75% of vote_sync_status, all
+expected_total=0) were eating ~75% of every 15-min tick** on guaranteed Congress-API 404s
+recorded as "OK" zero-syncs. Added a 7-char LIKE shape filter (bioguide ids are exactly 7).
+
+**State** (verified)
+Sponsorship rows: **435,295 canonical (0 date-inconsistent) / 429,886 legacy** (was 864k legacy
+yesterday); Doggett 100% canonical. Orchestrator fix is code-only — **deploys when this
+branch's PR merges**; until then ticks still cycle FEC ids. Repair script unchanged & still
+re-runnable. Floor-vote inconsistency quantified: 1,060 rows across just 4 collided ids
+(`ADJOURN`, `H CON RES 40`, `H J RES 88`, `QUORUM`). NOT verified: bills scoreboard tile
+(03:10 UTC nightly hadn't run yet); also noticed unexplained intermittent 401s in edge logs
+(fetch-fec-*, fetch-*-finance, fetch-all-bills) interleaved with 200s — state-finance stats
+show 0 errors, so likely retry noise, but worth a look.
+
+**Next**
+After the orchestrator PR merges + deploys: the queue re-walks all 542 real members in
+~3.4h/cycle (was ~15h). Let it run ~a day, then re-run the repair script (steps 1→5) once
+more and check `legacy_rows` ≈ 0; then re-run the enrichment (idempotent) and re-measure
+sourcedWithUrl — the newly canonical older-congress corpus should lift tier-2 matches.
+
+**Deferred**
+`fetch-member-votes` robustness: response-body reads (`.json()`) aren't covered by
+fetchWithRetry — one flaky stream kills a whole member walk (Doggett attempt 1).
+vote_sync_status hygiene: 1,813 phantom FEC-id rows to purge once the queue fix lands (plus
+expected_* zero-stomps they left). Integrity finding #2 (40.5k mislabeled voting_record
+answers — sample for state-vote claims first); floor-vote id collisions (4 ids, 1,060 rows);
+(carried) bills hygiene; the rest below.
+
+---
+
 ## 2026-06-10 (AI captions: grounded controversy/news hook) — claude/ai-caption-controversy-research-fknev1
 
 **What happened & why**
