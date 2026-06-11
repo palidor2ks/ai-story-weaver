@@ -6,6 +6,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { z } from 'npm:zod@3.23.8';
 import { isCronAuthorized } from '../_shared/cron-auth.ts';
 import { composeFinanceCaption } from '../_shared/finance-caption.ts';
+import { researchControversy } from '../_shared/news-research.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -16,6 +17,7 @@ const supaUrl = Deno.env.get('SUPABASE_URL')!;
 const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
 const aiKey = Deno.env.get('LOVABLE_API_KEY');
+const youKey = Deno.env.get('YOU_API_KEY');
 
 const BodySchema = z.object({
   candidate_id: z.string().min(1),
@@ -61,7 +63,19 @@ Deno.serve(async (req) => {
       handle: (cand.x_handle as string | null) ?? null,
     };
 
-    const headline = await composeFinanceCaption(admin, aiKey, candidate_id, platform, meta);
+    // Research a real, recently-reported, attributed news hook for an attention-grabbing
+    // angle (grounded + cited; null when no key / nothing notable / error — then the
+    // verified-finance caption stands on its own). Cached per-candidate for a day.
+    const news = await researchControversy({
+      candidateId: candidate_id,
+      name: meta.name,
+      office: meta.office,
+      state: meta.state,
+      youKey,
+      aiKey,
+    });
+
+    const headline = await composeFinanceCaption(admin, aiKey, candidate_id, platform, meta, news);
     return json({ caption: headline?.caption ?? null, source: headline?.source ?? null });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'unknown';

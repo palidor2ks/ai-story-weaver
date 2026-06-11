@@ -27,6 +27,53 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-10 (AI captions: grounded controversy/news hook) — claude/ai-caption-controversy-research-fknev1
+
+**What happened & why**
+Owner asked the "AI caption" button (and the auto-poster) to research the candidate and
+surface a controversy so posts grab attention. The caption pipeline is deliberately
+verified-facts-only (guardrail #1), so the risk was hallucinated/defamatory claims about
+real, named politicians on a public feed. Confirmed approach with the owner: **real cited
+news only**, **factual & attributed**, **both manual + auto-poster**. Built a grounded
+research hop that reuses existing primitives rather than the model's memory: `callYouSmart`
+(You.com Research API, `YOU_API_KEY`) pulls live web research WITH citations, then a Lovable
+gateway tool-call distills it into ONE short, neutral, attributed hook — and the cited URL is
+always picked from the returned citation list (model returns a `source_index`, never a URL),
+so it can't invent a source. New `_shared/news-research.ts` (`researchControversy`) +
+pure-helper `_shared/news-research-utils.ts` (tested). Wired an optional `news` arg through
+`finance-caption.ts` (`composeFinanceCaption` + `composeAnalysisCaption` / both prompt
+builders): when present it becomes the lead/hook attributed to the source ("Per Politico, …"),
+money drops to supporting context, and the prompt forbids sharpening it beyond what's reported.
+Fetched once per candidate in `generate-social-caption` (auto-poster routes through it) and
+`compose-candidate-caption` (rep-profile share button). Cached per-candidate for 24h via the
+existing ai-cache (`kind=candidate`, `subject_id=caption-news:v1:<id>`); transient API errors
+are NOT cached. Graceful null (today's verified-finance caption) when no `YOU_API_KEY`, nothing
+notable, or any error.
+
+**State** (verified)
+Lint **0 errors** (154 pre-existing warnings, none in new files). `bunx vite build` clean
+(the `bun run build` prebuild sitemap step 403s on sandbox egress — env limitation, unrelated;
+all edits are Deno edge code outside the Vite graph). Tests **18/18** (`bun test src
+supabase/functions/_shared`), incl. 7 new for the pure helpers (citation-index guard, hook
+cleaning, host label). NOT verified: live `YOU_API_KEY`/Lovable tool-call round-trip and the
+distiller's real-world output quality (sandbox egress blocks both) — needs a smoke test from a
+networked env: hit `generate-social-caption` for a candidate in the news and eyeball the hook +
+attribution. `YOU_API_KEY` must be set in the edge env (already used by ai-recipient-analysis).
+
+**Next**
+Smoke-test from a networked env: deploy `generate-social-caption` + `compose-candidate-caption`
+(and `_shared`), generate a caption for a currently-in-the-news rep, confirm the hook is real,
+attributed, and matches the cited source; then spot-check a low-news candidate falls back cleanly.
+
+**Deferred**
+`callYouSmart` has no request timeout — a hang would stall the nightly auto-poster batch
+(matches existing repo usage; worth an AbortController later). Rep-profile share button
+(`compose-candidate-caption`) still returns null when a candidate has no finance data even if a
+news hook exists (only the auto-poster's analysis path uses news-only). Donor/committee/race
+card captions intentionally left unresearched (entity-anchored, not candidate-anchored).
+
+---
+
 ## 2026-06-10 (votes↔bills integrity FIXED at the source + repaired) — claude/kind-hamilton-f1qdl0 (2nd arc)
 
 **What happened & why**
