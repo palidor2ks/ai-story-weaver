@@ -27,6 +27,48 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-11 (AI caption STYLE PICKER: finance / news / analysis) — claude/caption-style-picker
+
+**What happened & why**
+Follow-up to the grounded-news caption work: the owner wanted the rep-profile Share button
+(and the admin SocialPosts "AI caption" button) to let you CHOOSE the caption angle instead
+of always getting one. Three styles, **Finance default**: (1) **Finance** — money tied to the
+stat card (no news research); (2) **In the news** — the real-cited-news, factual+attributed
+hook shipped last session; (3) **Analysis** — positions/goals/political activity (same web-
+grounded `ai-recipient-analysis` summary the AI-analysis dialog shows), condensed to each
+platform's char limit. Backend was mostly already there: added a `forceMode` param to
+`composeAnalysisCaption` (extracted the angle picker into a pure, tested `pickAnalysisMode`)
+so "Analysis" pins the record angle and never drifts to funding; added a `style` enum to
+`compose-candidate-caption` (rep profile) and an optional `style` to `generate-social-caption`
+(admin). The auto-poster calls `generate-social-caption` with NO style, so its behavior is
+byte-for-byte unchanged (research news + auto-pick). Frontend: a small chip row in the
+ShareCardModal caption editor (new optional `captionStyleOptions` + `onSelectCaptionStyle`
+props — generic modal stays clean for other surfaces) wired from `ShareProfileButton`, and a
+"Caption style" chip row on each candidate-anchored admin PostCard that feeds `regenerate`.
+
+**State** (verified)
+Typecheck (tsconfig.app.json, same as CI) clean, lint **0 errors** (154 pre-existing warnings,
+unchanged count — none added), **23/23** unit tests (5 new in `finance-caption.test.ts` for
+`pickAnalysisMode` incl. the forceMode pin + injectable-rand for the random branch), `bunx vite
+build` clean. NOT verified (sandbox egress blocked): the live edge round-trips — picking "In the
+news"/"Analysis" in the real UI and confirming the caption swaps, and that the "Analysis" style
+reads a warm `v2:candidate:<id>` record-summary cache (the Share modal pre-warms it by invoking
+`ai-recipient-analysis` on open; admin posts rely on it having been generated already).
+
+**Next**
+Smoke-test from a networked env: open a rep profile → Share, click each of Finance / In the
+news / Analysis, confirm the caption box swaps and stays within the limit; then in admin
+SocialPosts pick a style and hit "AI caption" per platform. Watch for a candidate whose
+analysis cache is cold (Analysis should fall back to finance, not error).
+
+**Deferred**
+"Analysis" style depends on the `ai-recipient-analysis` summary being cached for the candidate;
+when cold it falls back to finance (acceptable, but a future tweak could trigger a generate).
+Picking the already-selected default chip re-invokes the function (one redundant call). Aliased
+candidates: the record-summary read uses `v2:candidate:<id>` and misses the `v2:alias:*` key
+(mirrors the existing auto-poster limitation). `callYouSmart` still has no request timeout
+(carried from last session).
+
 ## 2026-06-10 (AI captions: grounded controversy/news hook) — claude/ai-caption-controversy-research-fknev1
 
 **What happened & why**

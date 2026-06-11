@@ -402,6 +402,24 @@ Write the post:
 - Plain text ONLY — no markdown, no asterisks, no underscores, no bullet points, no hashtags. Do NOT include a URL (a link is appended automatically). No quotes, no preamble.`;
 }
 
+// Decide which angle an analysis caption leads with. A caller-pinned `forceMode` wins
+// when the available data backs it (a news hook alone can carry the 'record' angle);
+// otherwise long posts cover both when possible, and short posts feature ONE angle —
+// randomized (via `rand`) only when both a record summary and finance data exist.
+export function pickAnalysisMode(opts: {
+  long: boolean; hasRecord: boolean; hasFin: boolean; hasNews: boolean;
+  forceMode?: 'record' | 'funding' | 'both'; rand?: number;
+}): 'both' | 'funding' | 'record' {
+  const { long, hasRecord, hasFin, hasNews, forceMode, rand = Math.random() } = opts;
+  const canRecord = hasRecord || hasNews;
+  if (forceMode === 'record' && canRecord) return 'record';
+  if (forceMode === 'funding' && hasFin) return 'funding';
+  if (forceMode === 'both' && (hasRecord || hasFin)) return hasRecord && hasFin ? 'both' : (hasFin ? 'funding' : 'record');
+  if (long) return hasRecord && hasFin ? 'both' : (hasFin ? 'funding' : 'record');
+  if (hasRecord && hasFin) return rand < 0.5 ? 'funding' : 'record';
+  return hasFin ? 'funding' : 'record';
+}
+
 // Caption for an "AI analysis" rotation post about a candidate. Blends two ingredients —
 // their cached record summary and their verified finance facts — per the user's rule:
 // short posts (X/TikTok) feature ONE angle, randomized; long posts (FB/IG) cover BOTH.
@@ -414,6 +432,9 @@ export async function composeAnalysisCaption(
   meta: CandidateMeta,
   recordSummary: string | null | undefined,
   news: NewsHook | null = null,
+  // Pin the angle instead of the default randomized pick — used by the "Analysis"
+  // caption style to force the record (positions/goals/activity) angle, never funding.
+  forceMode?: 'record' | 'funding' | 'both',
 ): Promise<{ caption: string; source: string } | null> {
   const cfg = PLATFORM_LIMITS[platform] ?? PLATFORM_LIMITS.x;
   const { data: factsRaw } = await admin.rpc('get_candidate_caption_facts', { _candidate_id: candidateId });
@@ -424,11 +445,9 @@ export async function composeAnalysisCaption(
   // record summary or finance data — that's exactly when it's most useful.
   if (!record && !hasFin && !news) return null;
 
-  // Short posts feature one angle (randomized when both exist); long posts include both.
-  let mode: 'both' | 'funding' | 'record';
-  if (cfg.long) mode = record && hasFin ? 'both' : (hasFin ? 'funding' : 'record');
-  else if (record && hasFin) mode = Math.random() < 0.5 ? 'funding' : 'record';
-  else mode = hasFin ? 'funding' : 'record';
+  const mode = pickAnalysisMode({
+    long: cfg.long, hasRecord: !!record, hasFin, hasNews: !!news, forceMode,
+  });
 
   const handle = normalizeHandle(meta.handle);
   const displayName = handle ? `@${handle}` : (meta.name || 'This candidate');

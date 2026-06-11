@@ -310,6 +310,25 @@ export const ShareProfileButton = ({
   });
   const aiCaptionOverride = headlineCaption?.trim() ? headlineCaption.trim() : undefined;
 
+  // Let the user pick the AI-caption angle. The default ('finance', first) matches the
+  // seed fetched above, so the chip is already populated when the modal opens.
+  const captionStyleOptions = candidateId
+    ? [
+        { id: 'finance', label: 'Finance' },
+        { id: 'news', label: 'In the news' },
+        { id: 'analysis', label: 'Analysis' },
+      ]
+    : undefined;
+
+  const handleSelectCaptionStyle = async (styleId: string): Promise<string | null> => {
+    if (!candidateId) return null;
+    const { data, error } = await supabase.functions.invoke('compose-candidate-caption', {
+      body: { candidate_id: candidateId, platform: 'x', style: styleId },
+    });
+    if (error) return null;
+    return (data as { caption?: string | null } | null)?.caption ?? null;
+  };
+
   return (
     <>
       <IconActionButton
@@ -366,6 +385,8 @@ export const ShareProfileButton = ({
           url: profileUrl,
         }}
         captionBodyOverride={aiCaptionOverride}
+        captionStyleOptions={captionStyleOptions}
+        onSelectCaptionStyle={candidateId ? handleSelectCaptionStyle : undefined}
       />
     </>
   );
