@@ -198,6 +198,13 @@ expected_* zero-stomps they left). Integrity finding #2 (40.5k mislabeled voting
 answers — sample for state-vote claims first); floor-vote id collisions (4 ids, 1,060 rows);
 (carried) bills hygiene; the rest below.
 
+**Close-out postscript (00:35 UTC):** PR #354 merged and orchestrator **v7 verified live**
+(00:28 UTC, shape filter present) — the "deploys when this branch's PR merges" caveat above is
+resolved; ticks now draw from the 542 real members only. The "Next" above is unblocked and
+purely time-gated. Branch note: this entry originally conflicted with the captions session's
+(#353) HANDOFF entry — resolved by rebasing and stacking both; CI's PR-trigger stall on this
+branch also cleared after that rebase (full suite green on the merged head).
+
 ---
 
 ## 2026-06-10 (AI captions: grounded controversy/news hook) — claude/ai-caption-controversy-research-fknev1
