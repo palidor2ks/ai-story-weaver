@@ -165,12 +165,20 @@ async function processBatch(batchId: string): Promise<void> {
         description: row.description,
         artifactHint: detectArtifactHint(row.description),
       });
-      const research = await callYouSmart({ query, apiKey: YOU_API_KEY!, researchEffort: 'lite' });
+      // 'standard' (not 'lite'): finding one SPECIFIC artifact is a needle query — the
+      // 50/50-NONE first gate run showed lite's single pass just takes the NONE escape.
+      const research = await callYouSmart({ query, apiKey: YOU_API_KEY!, researchEffort: 'standard' });
       const notes = (research.content ?? '').trim();
 
       if (!notes || /^none\b/i.test(notes) || research.citations.length === 0) {
         patch.verdict = 'none';
-        patch.reason = 'research returned no matching source';
+        // record WHICH branch + a notes excerpt — the gate needs to distinguish "the
+        // artifact genuinely isn't findable" from a systematic research/query problem
+        patch.reason = !notes
+          ? 'research: empty content'
+          : /^none\b/i.test(notes)
+            ? `research said NONE: ${notes.slice(0, 200)}`
+            : `research had 0 citations; notes: ${notes.slice(0, 200)}`;
       } else {
         const verdict = await verifyCitation(row, notes, research.citations);
         if (!verdict) {

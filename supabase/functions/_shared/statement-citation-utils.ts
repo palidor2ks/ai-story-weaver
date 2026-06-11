@@ -42,11 +42,11 @@ export function buildFindSourceQuery(opts: {
   const who = [opts.name, opts.office, opts.state ? `of ${opts.state}` : '']
     .map((p) => (p ?? '').trim()).filter(Boolean).join(', ');
   const artifact = opts.artifactHint ? `a specific ${opts.artifactHint}` : 'a specific public statement';
-  return `Find the EXACT original source for this claim about ${who}: ` +
+  return `Find the original source for this claim about ${who}: ` +
     `"${opts.description.slice(0, 600)}". ` +
-    `The claim references ${artifact}. Locate that actual artifact — the original press release ` +
-    `(campaign site or congressional .gov newsroom), the interview or its transcript, the op-ed, ` +
-    `or a news article that directly reports it — and make sure it is about THIS person, not ` +
-    `someone with a similar name. If you cannot find a source that clearly matches BOTH this ` +
-    `person AND this specific claim, answer exactly: NONE.`;
+    `The claim references ${artifact}. Search thoroughly — their congressional .gov newsroom or ` +
+    `campaign site, the named outlet, transcripts, and news coverage — for the artifact itself ` +
+    `OR an article that directly reports that specific statement. It must be about THIS person, ` +
+    `not someone with a similar name. Do NOT give up after one search; only if a thorough search ` +
+    `finds no source matching BOTH this person AND this specific claim, answer exactly: NONE.`;
 }
