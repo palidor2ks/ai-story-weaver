@@ -27,6 +27,65 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-11 (repair re-run + enrichment round 3 EXECUTED on prod via MCP) — claude/cool-mendel-q22rt6
+
+**What happened & why**
+Owner asked "do the crons need speed work, and what's next on the roadmap?" Verified cron health
+three layers deep — 22 jobs / 0 failed runs in 3d; pg_net responses 550×200 + 37×202 with ~10
+self-healing 5s-timeout ticks and one isolated 401; `job_queue` empty except ONE stalled May-26
+`rep_answers_generate` row; no dead letters — so no speed work needed (orchestrator v7 was the
+speed-up, and canonical sponsorship rows had already doubled overnight, 435k→829k). Instead, with
+the owner's explicit go-ahead, EXECUTED the time-gated follow-through from 2026-06-10 entirely via
+Supabase MCP (no `SUPABASE_DB_URL` here): (1) **repair re-run** (steps 1→5): 152,976 legacy rows
+repointed (8 sample mappings eyeballed first — pure id canonicalizations + cross-congress
+corrections with exact introduced-date hits), post-check 0 date-inconsistent, and step 4's
+stranded-dupe delete did its first real work — **251,775 legacy duplicates removed**. Legacy
+sponsorship ids 429,886 → **25,135**; `legislativeActions` deflated 1.26M → 1.02M (was
+duplicate-inflated). (2) **enrichment round 3**: repaired corpus nearly doubled consistent
+member↔bill pairs (653k → 1,213,567 / 541 members). Staged 151 tier-1 + 818 tier-2; probes 0
+collisions / 0 bad URLs — but the tier-2 sample eyeball caught a NEW poison class: keyword puns /
+cross-word matches ("Head Start on Vaccinations Act" cited for early-childhood ed; 'national park'
+matching "National Parkinson's Disease Week"). A subagent then audited ALL 803 staged
+keyword↔title pairings: 10 flagged (44 citations, 2.5%). Cut 8 title classes (puns, proclamation
+weeks — the commemorative regex was missing the verb 'proclaiming' — commemorative coin,
+Medicaid-clawback domain error, seniors right-to-work); KEPT the two substantive
+"supporting <policy>" clean-car resolutions (the filter deliberately allows those) and the
+mislabeled-but-correct Glass-Steagall cite (artifact of duplicate bills rows — see Deferred).
+Extended the generator filter (proclaiming + explicit pun excludes), purged the staged table to
+match, rebuilt tier 2 (811/1,523), re-verified 0 flagged remaining, THEN applied: **+934 answers
+URL-sourced** (151 + 783; tier-1-wins-overlap exact). `sourcedWithUrl` 26,540 (6.08%) → **27,578
+(6.26% of 440,326)**; pushed `candidate_answer_stats` + `voting_records_stats` to the dashboard.
+
+**State** (verified)
+All numbers above re-measured live AFTER apply, not estimated. Scoreboard: cache fresh; recon 765
+≤ 900; voting 257 errors ≤ 350 / 188 incomplete; bills 0d stale; state finance 0 errors; answers
+still red by design (6.26% < 35%). 0 leftover `_repair_*`/`_enrich_*` tables. Lint **0 errors**
+(154 pre-existing warnings), **32/32** tests, generator change is code-only. Two MCP calls timed
+out client-side but COMMITTED server-side (kw CTAS + tier-2 rebuild) — verified via ACL + counts
+before proceeding, per the README's pg_stat_activity ritual. NOT verified: live HTTP resolution of
+new congress.gov URLs (sandbox egress; spot-check ~5 from a networked env). Morning /preflight:
+all ❌ were sandbox-egress 403s or the known answers gap; bills corpus is now 154,930 across
+congresses 108–119 — plausible per-congress spread, NOT yet spot-checked vs Congress.gov.
+
+**Next**
+Decide the **dilution question**: batch-populate adds ~30k description-sourced answers/day (666
+low-coverage candidates), so URL% falls between enrichment rounds (6.47 → 6.08 overnight) — either
+accept until part-1b lands or throttle `batch-populate-answers-job`. Then part-1b proper:
+(a) keyword-map + roll-call-context floor votes, or (b) research-pipeline citations for
+campaign_website/statement answers.
+
+**Deferred**
+25,135 legacy sponsorship ids still await canonical bills rows (repair stays re-runnable; cheap to
+re-run after more member re-syncs). Duplicate bills rows sharing (congress,type,number) — caused
+the Glass-Steagall keyword mislabel; fold into the bills-hygiene audit. Stalled May-26
+`rep_answers_generate` job_queue row (delete or requeue). Per-congress bills spot-check vs
+Congress.gov. pg_net 5s timeout drops ~10 cron ticks/day (self-healing; bump
+`timeout_milliseconds` only if it ever matters). (carried) integrity finding #2 (40.5k mislabeled
+voting_record answers); preview-branch migration idempotency one-liner; caption-styles smoke test;
+`callYouSmart` timeout.
+
+---
+
 ## 2026-06-11 (caption styles STILL bleeding → broaden news + never-null composers) — claude/caption-styles-distinct-v2
 
 **What happened & why**

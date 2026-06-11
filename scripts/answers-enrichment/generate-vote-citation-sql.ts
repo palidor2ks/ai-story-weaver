@@ -176,7 +176,11 @@ where upper(b.bill_type) in (${CANONICAL_TYPES})
   and b.name !~* '^on (agreeing|motion|passage)'       -- vote-action junk masquerading as a name
   -- commemorative / sense-of resolutions carry incidental keyword text (a hostage-release
   -- resolution matched 'public defender'); they are weak-to-misleading as policy evidence
-  and b.name !~* '^(a (joint |concurrent )?resolution )?(expressing|recognizing|designating|calling|condemning|honoring|celebrating|congratulating|commemorating|supporting the (designation|goals)|reaffirming)'
+  and b.name !~* '^(a (joint |concurrent )?resolution )?(expressing|recognizing|designating|proclaiming|calling|condemning|honoring|celebrating|congratulating|commemorating|supporting the (designation|goals)|reaffirming)'
+  -- title-substring false positives caught by the 2026-06-11 full-staging audit: puns and
+  -- cross-word matches ('national park' inside "National Parkinson's"), plus commemorative
+  -- coins — each cites the wrong topic for its keyword's question
+  and b.name !~* '(head start on vaccinations|parkinson|commemorative coin|visual pollution|medicaid clawback|senior citizens. right to work)'
 group by k.question_id, k.axis, b.congress, upper(b.bill_type), b.bill_number;
 revoke all on _enrich_bill_kw from anon, authenticated;
 analyze _enrich_bill_kw;

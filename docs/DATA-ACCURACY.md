@@ -44,6 +44,9 @@
   (persisted < expected). Sync itself is automated (`sync-legislator-votes` cron, 15 min).
 - **Standing (2026-06-10):** 2,419 members tracked · 36 sync errors · 233 floor-vote errors ·
   270 members with incomplete bill-vote sets. 1.51M vote rows.
+- **Standing (2026-06-11, post repair re-run):** legacy sponsorship bill-ids 429,886 → 25,135
+  (94% cleared) and **251,775 stranded legacy duplicates deleted**, so `legislativeActions`
+  (1.02M, previously an inflated 1.26M) is now trustworthy. 24+233 sync errors · 188 incomplete.
 - **Threshold:** syncErrors + floorSyncErrors must not exceed **350**.
 - **Spot-verification** (counts ≠ correctness): use the `data-accuracy-verifier` agent to
   diff sample members against Congress.gov — not yet done systematically. TODO: pick 10
@@ -56,6 +59,9 @@
 - **Standing (2026-06-10):** 31,321 bills / 86,292 sponsor links — but the nightly sync
   **last completed 2026-01-13 (≈5 months dead)**. Nothing schedules it: `nightly-bill-sync`
   requires an admin user JWT, so no pg_cron entry can call it as-is.
+- **Standing (2026-06-11):** revival + catch-up grew the corpus to **154,930 bills across
+  congresses 108–119** (canonical `{congress}-TYPE.NUMBER` ids); nightly sync alive (0d stale).
+  Per-congress totals look plausible but are **not yet verified against Congress.gov** — TODO.
 - **Threshold:** staleDays > **7** FAILS (currently failing, deliberately — it stays red
   until the sync is revived).
 - **Fix (maintainer approved 2026-06-10):** `nightly-bill-sync` now accepts the vault
@@ -89,6 +95,14 @@
   (member sponsor/cosponsor actions, sign- and congress-consistency guarded).
   The vote-citation route's remaining ceiling is ~27k eligible answers; crossing
   35% needs the other source types (see part-1b options in HANDOFF).
+- **Standing (2026-06-11, post repair re-run + round 3):** the `candidate_votes` repair re-run
+  lifted congress-consistent evidence to 1,213,567 pairs / 541 members; round 3 enriched
+  **+934 answers** (151 tier-1 / 783 tier-2). A full-staging audit of all 803 keyword↔bill
+  titles caught a new poison class — proclamation/awareness weeks and title puns ("Head Start
+  on Vaccinations", "National Park*inson's*") — now excluded in the generator.
+  **27,578 (6.26%) of 440,326 URL-sourced.** Mind the **dilution dynamic**: the regular
+  pipeline adds ~30k description-sourced answers/day, so the % can drop between enrichment
+  rounds even as the URL-sourced count grows.
 - **Goal (set by maintainer 2026-06-10):** URL-sourced answers — **target 100%**,
   **≥75% = success**, **<35% = poor/failing**. `check:accuracy` FAILS below 35%, warns
   below 75%. We are at ~5.9%, so this category is RED on purpose until the enrichment
