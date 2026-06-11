@@ -630,6 +630,57 @@ export type Database = {
         }
         Relationships: []
       }
+      candidate_merge_map: {
+        Row: {
+          canonical_id: string
+          created_at: string
+          dup_id: string
+          id: string
+          merge_type: string
+          merged_at: string | null
+          notes: string | null
+          report: Json | null
+          status: string
+        }
+        Insert: {
+          canonical_id: string
+          created_at?: string
+          dup_id: string
+          id?: string
+          merge_type: string
+          merged_at?: string | null
+          notes?: string | null
+          report?: Json | null
+          status?: string
+        }
+        Update: {
+          canonical_id?: string
+          created_at?: string
+          dup_id?: string
+          id?: string
+          merge_type?: string
+          merged_at?: string | null
+          notes?: string | null
+          report?: Json | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "candidate_merge_map_canonical_id_fkey"
+            columns: ["canonical_id"]
+            isOneToOne: false
+            referencedRelation: "candidate_voting_coverage"
+            referencedColumns: ["candidate_id"]
+          },
+          {
+            foreignKeyName: "candidate_merge_map_canonical_id_fkey"
+            columns: ["canonical_id"]
+            isOneToOne: false
+            referencedRelation: "candidates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       candidate_overrides: {
         Row: {
           candidate_id: string
@@ -5470,10 +5521,6 @@ export type Database = {
         }
         Returns: undefined
       }
-      _merge_candidate: {
-        Args: { p_loser: string; p_winner: string }
-        Returns: undefined
-      }
       _user_question_scope: { Args: { p_user_id: string }; Returns: string }
       admin_delete_roster_row: {
         Args: { _id: string; _source: string }
@@ -5495,6 +5542,7 @@ export type Database = {
         }[]
       }
       cancel_job: { Args: { p_id: string }; Returns: undefined }
+      check_bill_sync_secret: { Args: { p_token: string }; Returns: boolean }
       check_fl_sync_secret: { Args: { p_token: string }; Returns: boolean }
       check_ie_sync_secret: { Args: { p_token: string }; Returns: boolean }
       check_import_sync_secret: { Args: { p_token: string }; Returns: boolean }
@@ -5860,6 +5908,15 @@ export type Database = {
         Args: { p_event_type: string; p_payload?: Json }
         Returns: string
       }
+      merge_candidate: {
+        Args: {
+          p_canonical_id: string
+          p_dry_run?: boolean
+          p_dup_id: string
+          p_force?: boolean
+        }
+        Returns: Json
+      }
       merge_persons: {
         Args: { from_id: string; into_id: string }
         Returns: undefined
@@ -5897,6 +5954,7 @@ export type Database = {
           updated: boolean
         }[]
       }
+      refresh_admin_stats_cache: { Args: { p_keys?: string[] }; Returns: Json }
       refresh_bill_summary_stats: { Args: never; Returns: undefined }
       refresh_committee_pool: { Args: never; Returns: undefined }
       refresh_donor_consolidated_mv: { Args: never; Returns: undefined }
@@ -5922,6 +5980,10 @@ export type Database = {
       }
       retag_vendor_refunds: { Args: never; Returns: number }
       retry_job: { Args: { p_id: string }; Returns: undefined }
+      run_approved_candidate_merges: {
+        Args: { p_dry_run?: boolean }
+        Returns: Json
+      }
       save_quiz_results: {
         Args: {
           p_answers: Json
