@@ -174,6 +174,9 @@ where upper(b.bill_type) in (${CANONICAL_TYPES})
   and b.congress between 93 and 130
   and b.name not ilike '%congressional disapproval%'   -- CRA disapprovals invert keyword intent
   and b.name !~* '^on (agreeing|motion|passage)'       -- vote-action junk masquerading as a name
+  -- commemorative / sense-of resolutions carry incidental keyword text (a hostage-release
+  -- resolution matched 'public defender'); they are weak-to-misleading as policy evidence
+  and b.name !~* '^(a (joint |concurrent )?resolution )?(expressing|recognizing|designating|calling|condemning|honoring|celebrating|congratulating|commemorating|supporting the (designation|goals)|reaffirming)'
 group by k.question_id, k.axis, b.congress, upper(b.bill_type), b.bill_number;
 revoke all on _enrich_bill_kw from anon, authenticated;
 analyze _enrich_bill_kw;

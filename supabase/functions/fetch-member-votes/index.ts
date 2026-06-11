@@ -230,7 +230,9 @@ async function processVoteSync(bioguideId: string, persistVotes: boolean, syncSt
           
           votes.push({
             id: `${bioguideId}-${bill.congress || 0}-sponsored-${bill.type}${bill.number}`,
-            bill_id: `${bill.type}.${bill.number}`,
+            // Canonical congress-qualified id (e.g. "118-HR.1234"): TYPE.NUMBER alone is
+            // ambiguous across congresses and used to smear unrelated bills onto one row.
+            bill_id: `${bill.congress}-${bill.type}.${bill.number}`,
             bill_name: bill.title || `${bill.type} ${bill.number}`,
             candidate_id: bioguideId,
             position: 'Sponsored',
@@ -282,7 +284,8 @@ async function processVoteSync(bioguideId: string, persistVotes: boolean, syncSt
           
           votes.push({
             id: `${bioguideId}-${bill.congress || 0}-cosponsored-${bill.type}${bill.number}`,
-            bill_id: `${bill.type}.${bill.number}`,
+            // Canonical congress-qualified id — see sponsored-legislation note above.
+            bill_id: `${bill.congress}-${bill.type}.${bill.number}`,
             bill_name: bill.title || `${bill.type} ${bill.number}`,
             candidate_id: bioguideId,
             position: 'Cosponsored',
@@ -349,6 +352,13 @@ async function processVoteSync(bioguideId: string, persistVotes: boolean, syncSt
       const candidateVotes: any[] = [];
       
       for (const v of votes) {
+        // Skip invalid bill_ids BEFORE the bills upsert too — an id missing its
+        // congress ("undefined-HR.1") must never create or overwrite a bills row.
+        if (!v.bill_id || v.bill_id.includes('null') || v.bill_id.includes('undefined')) {
+          console.warn(`[BG] Skipping invalid bill_id: ${v.bill_id}`);
+          continue;
+        }
+
         // Upsert bill data (deduplicated by bill_id)
         if (!billsMap.has(v.bill_id)) {
           billsMap.set(v.bill_id, {
@@ -366,13 +376,7 @@ async function processVoteSync(bioguideId: string, persistVotes: boolean, syncSt
             latest_action_date: v.date,
           });
         }
-        
-        // Skip invalid bill_ids to prevent data corruption
-        if (!v.bill_id || v.bill_id.includes('null') || v.bill_id.includes('undefined')) {
-          console.warn(`[BG] Skipping invalid bill_id: ${v.bill_id}`);
-          continue;
-        }
-        
+
         // Create candidate_vote record with vote_number = 0 for sponsor/cosponsor
         candidateVotes.push({
           bill_id: v.bill_id,
