@@ -5,9 +5,9 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { z } from 'npm:zod@3.23.8';
 import { isCronAuthorized } from '../_shared/cron-auth.ts';
-import { composeAnalysisCaption, composeFinanceCaption } from '../_shared/finance-caption.ts';
+import { composeFinanceCaption, composeNewsCaption, composeRecordCaption } from '../_shared/finance-caption.ts';
 import { researchControversy } from '../_shared/news-research.ts';
-import { readCache } from '../_shared/ai-cache.ts';
+import { getCandidateRecord } from '../_shared/candidate-record.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -23,10 +23,11 @@ const youKey = Deno.env.get('YOU_API_KEY');
 const BodySchema = z.object({
   candidate_id: z.string().min(1),
   platform: z.enum(['x', 'facebook', 'instagram', 'tiktok']).default('x'),
-  // Caption angle the share UI lets the user pick between:
-  //   finance  — money tied to the stat card (default; no news research)
-  //   news     — lead with a real, cited, recent-news hook (falls back to finance)
-  //   analysis — positions/goals/political activity, condensed to the platform limit
+  // Caption angle the share UI lets the user pick between — each is a DISTINCT angle,
+  // and a pinned style never silently produces a different one:
+  //   finance  — money: donors + outside spending, where it comes from (default)
+  //   news     — ONLY the top recent, cited news about the rep (no finance)
+  //   analysis — ONLY their positions & goals, like the AI-analysis dialog (no money)
   style: z.enum(['finance', 'news', 'analysis']).default('finance'),
 });
 
@@ -54,7 +55,7 @@ Deno.serve(async (req) => {
 
     const { data: cand } = await admin
       .from('candidates')
-      .select('name, party, office, state, overall_score, is_incumbent, x_handle')
+      .select('name, party, office, state, overall_score, is_incumbent, x_handle, fec_candidate_id')
       .eq('id', candidate_id)
       .maybeSingle();
     if (!cand) return json({ caption: null, source: null, error: 'candidate_not_found' });
@@ -69,30 +70,24 @@ Deno.serve(async (req) => {
       handle: (cand.x_handle as string | null) ?? null,
     };
 
-    // The candidate's cached, web-grounded record summary (the same one the AI-analysis
-    // dialog shows) — the ingredient for the "analysis" style. Read lazily.
-    const readRecord = async (): Promise<string | null> => {
-      const cached = await readCache<{ summary?: string; insufficient_information?: boolean }>({
-        kind: 'recipient', subject_id: `v2:candidate:${candidate_id}`, cycle: null,
-      });
-      return cached?.payload && !cached.payload.insufficient_information ? cached.payload.summary ?? null : null;
-    };
-
+    // Each style is a DISTINCT angle; a pinned style returns its angle or null (the UI
+    // keeps the current caption) — it never silently produces a different angle.
     let result: { caption: string; source: string } | null = null;
     if (style === 'analysis') {
-      // Positions/goals/activity, condensed to the platform limit; fall back to finance.
-      result = await composeAnalysisCaption(admin, aiKey, candidate_id, platform, meta, await readRecord(), null, 'record')
-        ?? await composeFinanceCaption(admin, aiKey, candidate_id, platform, meta, null);
+      // ONLY positions & goals (the AI-analysis record), generated on a cold cache.
+      const record = await getCandidateRecord({
+        candidateId: candidate_id, generate: true,
+        meta: { name: meta.name, party: meta.party, office: meta.office, state: meta.state, fecId: (cand.fec_candidate_id as string | null) ?? null },
+      });
+      result = await composeRecordCaption(aiKey, meta, platform, record);
     } else if (style === 'news') {
-      // Lead with a real, recently-reported, attributed news hook (grounded + cited; null
-      // when no key / nothing notable / error). Finance carries it; record is the no-finance fallback.
+      // ONLY the top recent, cited news about the rep — no finance.
       const news = await researchControversy({
         candidateId: candidate_id, name: meta.name, office: meta.office, state: meta.state, youKey, aiKey,
       });
-      result = await composeFinanceCaption(admin, aiKey, candidate_id, platform, meta, news)
-        ?? await composeAnalysisCaption(admin, aiKey, candidate_id, platform, meta, await readRecord(), news, 'record');
+      result = await composeNewsCaption(aiKey, meta, platform, news);
     } else {
-      // finance (default): money tied to the stat card, no news research.
+      // finance (default): money — donors + outside spending, no news research.
       result = await composeFinanceCaption(admin, aiKey, candidate_id, platform, meta, null);
     }
 

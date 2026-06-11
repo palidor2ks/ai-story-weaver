@@ -10,12 +10,15 @@ import { readCache } from '../_shared/ai-cache.ts';
 import {
   composeFinanceCaption,
   composeAnalysisCaption,
+  composeNewsCaption,
+  composeRecordCaption,
   type CandidateMeta,
 } from '../_shared/finance-caption.ts';
 import { composeDonorEntityCaption } from '../_shared/donor-card.ts';
 import { composeCommitteeSpenderCaption } from '../_shared/committee-card.ts';
 import { composeRaceComparisonCaption } from '../_shared/race-card.ts';
 import { researchControversy } from '../_shared/news-research.ts';
+import { getCandidateRecord } from '../_shared/candidate-record.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -105,10 +108,11 @@ Deno.serve(async (req) => {
 
     // The remaining rotation types are candidate-anchored, so build the shared meta once.
     let meta: CandidateMeta | null = null;
+    let fecId: string | null = null;
     if (post.subject_id) {
       const { data: cand } = await admin
         .from('candidates')
-        .select('name, party, office, state, overall_score, is_incumbent, x_handle')
+        .select('name, party, office, state, overall_score, is_incumbent, x_handle, fec_candidate_id')
         .eq('id', post.subject_id)
         .maybeSingle();
       meta = {
@@ -120,6 +124,7 @@ Deno.serve(async (req) => {
         incumbent: (cand?.is_incumbent as boolean | null) ?? null,
         handle: (cand?.x_handle as string | null) ?? null,
       };
+      fecId = (cand?.fec_candidate_id as string | null) ?? null;
     }
 
     // The candidate's cached, web-grounded record summary (used by ai_analysis, the
@@ -135,25 +140,38 @@ Deno.serve(async (req) => {
       return recordMemo;
     };
 
-    if (meta && post.subject_id) {
-      // The admin UI lets the user pin a caption angle; the auto-poster (no style) keeps
-      // the original behavior: research news and auto-pick. Skip news research entirely
-      // for the finance/analysis styles — they don't use it.
-      const wantNews = style === 'news' || style === undefined;
-      const news = wantNews
-        ? await researchControversy({
-            candidateId: post.subject_id, name: meta.name, office: meta.office, state: meta.state, youKey, aiKey,
-          })
-        : null;
-
-      // Pinned styles try their dedicated composer first, then fall through to the chain.
+    // A pinned style from the admin UI produces EXACTLY that angle (each is distinct), or
+    // a clean static — it never silently produces a different angle. The auto-poster (no
+    // style) keeps the original behavior below.
+    if (style && meta && post.subject_id) {
+      let r: { caption: string; source: string } | null = null;
       if (style === 'finance') {
-        const headline = await composeFinanceCaption(admin, aiKey, post.subject_id, platform, meta, null);
-        if (headline) return await save(headline.caption, headline.source);
-      } else if (style === 'analysis') {
-        const analysis = await composeAnalysisCaption(admin, aiKey, post.subject_id, platform, meta, await readRecord(), null, 'record');
-        if (analysis) return await save(analysis.caption, analysis.source);
+        // Money: donors + outside spending. No news research.
+        r = await composeFinanceCaption(admin, aiKey, post.subject_id, platform, meta, null);
+      } else if (style === 'news') {
+        // ONLY the top recent, cited news about the rep — no finance.
+        const news = await researchControversy({
+          candidateId: post.subject_id, name: meta.name, office: meta.office, state: meta.state, youKey, aiKey,
+        });
+        r = await composeNewsCaption(aiKey, meta, platform, news);
+      } else {
+        // analysis: ONLY positions & goals (the AI-analysis record), generated on a cold cache.
+        const record = await getCandidateRecord({
+          candidateId: post.subject_id, generate: true,
+          meta: { name: meta.name, party: meta.party, office: meta.office, state: meta.state, fecId },
+        });
+        r = await composeRecordCaption(aiKey, meta, platform, record);
       }
+      if (r) return await save(r.caption, r.source);
+      return await save(`${post.subject_label ?? 'This rep'} on PoliPulse. See where they stand.`, `${style}_unavailable`);
+    }
+
+    if (meta && post.subject_id) {
+      // Auto-poster (no pinned style): research a news hook and auto-pick the angle —
+      // unchanged from before the style picker existed.
+      const news = await researchControversy({
+        candidateId: post.subject_id, name: meta.name, office: meta.office, state: meta.state, youKey, aiKey,
+      });
 
       // Type-specific composer first; each returns null when its data is missing.
       if (post.subject_type === 'ai_analysis') {
