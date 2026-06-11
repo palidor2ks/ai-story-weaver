@@ -16591,17 +16591,17 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00900449</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00911024</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00544684</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/committee/C00900449</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -17326,22 +17326,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/P000608</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/candidate/G000602</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/H2MT02084</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/candidate/K000401</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -17387,6 +17377,11 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/H6NY01209</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/candidate/K000401</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -17452,6 +17447,11 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/F000463</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/candidate/P000608</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -17602,6 +17602,11 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/G000591</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/candidate/H6LA05309</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -17861,11 +17866,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/B001313</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/candidate/H6TN06247</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -17882,6 +17882,11 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/C001133</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/candidate/B001313</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -17946,6 +17951,11 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/candidate/H6CA34286</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/candidate/H6MA06145</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -17961,22 +17971,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/C001127</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/candidate/H6CA48336</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/H6FL07165</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/candidate/G000594</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -17991,17 +17991,42 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/H0VA05160</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/candidate/F000472</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/candidate/G000594</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/candidate/H6CT02188</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/candidate/C001127</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/candidate/H8ME02185</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/candidate/H6TN03228</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/candidate/C001117</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/candidate/H0VA05160</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -18096,6 +18121,11 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/candidate/H6GA09284</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/candidate/N000189</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -18132,6 +18162,11 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/H6NJ12284</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/candidate/H6TN06213</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -18601,6 +18636,11 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/candidate/C001053</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/candidate/G000604</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -18656,11 +18696,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/C001053</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/candidate/H6MT01145</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -18702,6 +18737,11 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/H6FL06332</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/candidate/R000603</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -18766,11 +18806,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/R000603</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/candidate/P000614</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -18826,17 +18861,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/M000871</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/candidate/H6CA14130</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/candidate/M001223</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -18851,7 +18876,17 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/candidate/M000871</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/candidate/H4PA13298</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/candidate/M001223</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -19106,11 +19141,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/K000402</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/candidate/P00009423</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -19131,17 +19161,22 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/candidate/K000402</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/candidate/S6KY00369</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/G000606</loc>
+    <loc>https://www.polipulseapp.com/candidate/U000040</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/U000040</loc>
+    <loc>https://www.polipulseapp.com/candidate/G000606</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -19416,11 +19451,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/H4IN03182</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/candidate/ai_f93b7e9b81c5becb28506e349d53ce4286f52e7a</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -19432,6 +19462,11 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/D000626</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/candidate/H4IN03182</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -19611,6 +19646,11 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/candidate/M001241</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/candidate/H6KY04155</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -19691,11 +19731,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/M001241</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/candidate/W000790</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -19742,6 +19777,11 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/C001098</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/candidate/J000295</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -19802,11 +19842,6 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/H6NY11273</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/candidate/J000295</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -20236,6 +20271,11 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/candidate/C001047</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/candidate/B001303</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -20277,11 +20317,6 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/B001319</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/candidate/C001047</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -20866,11 +20901,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/T000278</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/candidate/H6TX13159</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -20892,6 +20922,11 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/S001184</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/candidate/T000278</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -21116,6 +21151,11 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/candidate/S001203</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/candidate/H6NY01159</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -21132,11 +21172,6 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/H6MD06279</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/candidate/S001203</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -21546,11 +21581,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/H6CA26241</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/candidate/H4PA12068</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -21612,6 +21642,11 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/H6PA10182</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/candidate/H6CA26241</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -22066,11 +22101,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/H6WA01212</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/candidate/H6SC02159</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -22082,6 +22112,11 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/H6MD05347</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/candidate/H6WA01212</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -22556,6 +22591,11 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/candidate/S001193</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/candidate/S001231</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -22602,11 +22642,6 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/B001309</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/candidate/S001193</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -22866,11 +22901,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/H6IL02322</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/candidate/H6GA13120</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -22887,6 +22917,11 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/H6WA03275</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/candidate/H6IL02322</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -23726,6 +23761,11 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/candidate/H2TX34113</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/candidate/K000394</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -23736,22 +23776,17 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/candidate/H6TX10221</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/candidate/L000571</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/H6GA14268</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/candidate/H2TX34113</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/candidate/H6TX10221</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -23946,6 +23981,11 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/candidate/H6UT02457</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/candidate/H6MI08296</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -23982,16 +24022,6 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/H6IL16090</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/candidate/H6UT02457</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/candidate/H6IL04153</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -24046,6 +24076,11 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/candidate/H6GA01083</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/candidate/H6GA14193</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -24091,7 +24126,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/H6GA01083</loc>
+    <loc>https://www.polipulseapp.com/candidate/H6IL04153</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -24206,16 +24241,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/H6LA05309</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/candidate/H6GA09284</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/candidate/H6TX32159</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -24237,11 +24262,6 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/S6SD01133</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/candidate/H6TN03228</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -24586,6 +24606,11 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/candidate/H4TX28129</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/candidate/H6MI10268</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -24602,11 +24627,6 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/H0MN05251</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/candidate/H4TX28129</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -24651,17 +24671,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/H6TX02251</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/candidate/S6LA00698</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/candidate/H8ME02185</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -24756,11 +24766,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/H6CA40325</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/candidate/S001215</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -24771,12 +24776,17 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/candidate/H6TX02251</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/candidate/S001216</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/H6CA34286</loc>
+    <loc>https://www.polipulseapp.com/candidate/H6CA40325</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -24816,11 +24826,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/H6WY00217</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/candidate/T000467</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -24837,11 +24842,6 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/H6TX30245</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/candidate/H6IN05307</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -24886,6 +24886,11 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/candidate/H6IN05307</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/candidate/T000476</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -24926,12 +24931,17 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/H2IL08146</loc>
+    <loc>https://www.polipulseapp.com/candidate/H6VA07189</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/H6VA07189</loc>
+    <loc>https://www.polipulseapp.com/candidate/H6WY00217</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/candidate/H2IL08146</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -25091,6 +25101,16 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/candidate/H6MO05247</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/candidate/H6SC02142</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/candidate/H6WV02184</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -25107,11 +25127,6 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/H6IN06263</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/candidate/H6MO05247</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -25167,11 +25182,6 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/H6MI02208</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/candidate/H6SC02142</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -25241,17 +25251,17 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/candidate/H6GA14235</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/candidate/H2MI13311</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/H6MO02350</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/candidate/H4TX22197</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -25301,6 +25311,11 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/candidate/H4TX22197</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/candidate/H6MI13296</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -25317,11 +25332,6 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/H4TX31081</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/candidate/H6GA14235</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -25686,11 +25696,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/H6CT02188</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/candidate/H6UT01236</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -25746,11 +25751,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/H6VA08294</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/candidate/S000250</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -25767,6 +25767,11 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/H0TX14184</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/candidate/H6VA08294</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -26521,12 +26526,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/H6SC05210</loc>
+    <loc>https://www.polipulseapp.com/candidate/H6IN09226</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/H6IN09226</loc>
+    <loc>https://www.polipulseapp.com/candidate/H6SC05210</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -27341,11 +27346,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/H6IL09327</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/candidate/H6TN06270</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -27446,7 +27446,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/H6AZ05190</loc>
+    <loc>https://www.polipulseapp.com/candidate/H6IL09327</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -27472,6 +27472,11 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/H6OK01201</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/candidate/H6AZ05190</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -27836,11 +27841,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/H6TN06213</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/candidate/H6CA32173</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -28061,11 +28061,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/H0TX31030</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/candidate/H6WV01137</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -28117,6 +28112,11 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/H6ID02274</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/candidate/H0TX31030</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -28341,17 +28341,17 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/H6WV01160</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/candidate/H6NH01388</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/H6WA08159</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/candidate/H6WV01160</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -28486,11 +28486,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/candidate/H6WI01267</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/candidate/H6CA40382</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -28507,6 +28502,11 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/H6VA05191</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/candidate/H6WI01267</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
