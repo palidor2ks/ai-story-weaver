@@ -42,11 +42,15 @@ export function buildFindSourceQuery(opts: {
   const who = [opts.name, opts.office, opts.state ? `of ${opts.state}` : '']
     .map((p) => (p ?? '').trim()).filter(Boolean).join(', ');
   const artifact = opts.artifactHint ? `a specific ${opts.artifactHint}` : 'a specific public statement';
-  return `Find the original source for this claim about ${who}: ` +
-    `"${opts.description.slice(0, 600)}". ` +
-    `The claim references ${artifact}. Search thoroughly — their congressional .gov newsroom or ` +
-    `campaign site, the named outlet, transcripts, and news coverage — for the artifact itself ` +
-    `OR an article that directly reports that specific statement. It must be about THIS person, ` +
-    `not someone with a similar name. Do NOT give up after one search; only if a thorough search ` +
-    `finds no source matching BOTH this person AND this specific claim, answer exactly: NONE.`;
+  // Phrased as a research QUESTION, not a retrieval command, and with NO bail-out token:
+  // the gate runs showed the You.com research model answers a "find the exact source, else
+  // say NONE" command with an instant "NONE." for every row (while the caption pipeline's
+  // question-shaped query works in prod). The strict accept/reject decision lives in the
+  // verify_citation distiller, which can only pick from the citations research returns.
+  return `What has ${who} publicly said on this, and where was it originally published? ` +
+    `The recorded claim is: "${opts.description.slice(0, 600)}". ` +
+    `This references ${artifact} — research that statement and list the sources where it ` +
+    `appears: the original press release (congressional .gov newsroom or campaign site), the ` +
+    `interview or transcript, the op-ed, or news coverage directly quoting it. Make sure the ` +
+    `sources are about THIS person, not someone with a similar name.`;
 }

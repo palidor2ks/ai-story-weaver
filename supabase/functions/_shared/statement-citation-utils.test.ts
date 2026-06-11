@@ -17,7 +17,7 @@ test('stanceLine spells out the left/right axis convention from src/lib/scoring.
   expect(stanceLine('Should X happen?', 7)).toContain('value 7');
 });
 
-test('buildFindSourceQuery names the person, the claim, and the NONE escape', () => {
+test('buildFindSourceQuery is question-shaped and names the person and claim', () => {
   const q = buildFindSourceQuery({
     name: 'Jane Doe',
     office: 'U.S. House NH-01',
@@ -28,7 +28,10 @@ test('buildFindSourceQuery names the person, the claim, and the NONE escape', ()
   expect(q).toContain('Jane Doe, U.S. House NH-01, of NH');
   expect(q).toContain('a specific press release');
   expect(q).toContain('rural broadband');
-  expect(q).toContain('answer exactly: NONE');
+  // The research query must NOT offer a bail-out token — the 2026-06-11 gate runs showed
+  // the research model answers an "else say NONE" command with an instant NONE for every
+  // row. Rejection is the verify_citation distiller's job.
+  expect(q).not.toContain('NONE');
   expect(q).toContain('not someone with a similar name'); // identity guard present
 });
 
