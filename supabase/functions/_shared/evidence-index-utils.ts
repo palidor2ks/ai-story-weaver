@@ -5,7 +5,10 @@
 export interface FeedItem {
   title: string;
   url: string;
-  publishedAt: string | null; // raw pubDate text; parsing/normalizing is the caller's job
+  publishedAt: string | null; // raw pubDate text; normalizeFeedDate() for ISO
+  bodyHtml?: string | null;   // RSS content:encoded/description payload — preferred body
+                              // source: many member feeds carry the full release, which
+                              // sidesteps the house.gov bot-wall the spike hit on page fetches
 }
 
 const ENTITIES: Record<string, string> = {
@@ -35,7 +38,8 @@ export function parseFeedItems(xml: string): FeedItem[] {
     const url = tagText(b, 'link') ?? tagText(b, 'guid');
     const title = tagText(b, 'title');
     if (!url || !/^https?:\/\//i.test(url)) continue;
-    items.push({ title: title ?? url, url, publishedAt: tagText(b, 'pubDate') });
+    const bodyHtml = tagText(b, 'content:encoded') ?? tagText(b, 'description');
+    items.push({ title: title ?? url, url, publishedAt: tagText(b, 'pubDate'), bodyHtml });
   }
   if (items.length > 0) return items;
 
@@ -66,6 +70,13 @@ export function stripHtmlToText(html: string): string {
     .replace(/[ \t]+/g, ' ')
     .replace(/\s*\n\s*/g, '\n')
     .trim();
+}
+
+// Raw feed dates ("Tue, 09 Jul 2024 12:00:00 GMT", ISO, etc.) → ISO timestamp or null.
+export function normalizeFeedDate(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const t = Date.parse(raw.trim());
+  return Number.isFinite(t) ? new Date(t).toISOString() : null;
 }
 
 export function absolutizeUrl(base: string, href: string): string | null {
@@ -126,8 +137,10 @@ export function extractPressLinks(html: string, baseUrl: string, cap = 20): Feed
     }
     if (u.hostname !== host) continue;
     if (!/(press|news|release|statement|media)/i.test(u.pathname)) continue;
-    // listing/landing pages, not individual items
-    if (/\/(press(-releases?)?|news|media|newsroom|statements?)\/?$/i.test(u.pathname)) continue;
+    // listing/landing pages, not individual items — EXCEPT query-string item URLs:
+    // several Senate CMSes serve releases as /news/press-releases?ID=… (the Lee pattern
+    // the 2026-06-11 spike missed), where the pathname alone looks like a listing
+    if (/\/(press(-releases?)?|news|media|newsroom|statements?)\/?$/i.test(u.pathname) && !u.search) continue;
     const text = stripHtmlToText(m[2]);
     if (text.length < 15) continue; // nav crumbs / "Read more"
     if (seen.has(abs)) continue;

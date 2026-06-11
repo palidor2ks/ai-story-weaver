@@ -5,9 +5,43 @@ import {
   candidateFeedPaths,
   extractPressLinks,
   extractRssLinks,
+  normalizeFeedDate,
   parseFeedItems,
   stripHtmlToText,
 } from './evidence-index-utils.ts';
+
+test('parseFeedItems extracts the body payload (content:encoded over description)', () => {
+  const xml = `<rss><channel><item>
+    <title>Release</title><link>https://a.house.gov/news/1</link>
+    <description><![CDATA[<p>Short teaser</p>]]></description>
+    <content:encoded><![CDATA[<p>Full release body with the actual quote.</p>]]></content:encoded>
+  </item></channel></rss>`;
+  const [item] = parseFeedItems(xml);
+  expect(item.bodyHtml).toContain('Full release body');
+
+  const xmlDescOnly = `<rss><channel><item>
+    <title>R2</title><link>https://a.house.gov/news/2</link>
+    <description><![CDATA[<p>Body via description.</p>]]></description>
+  </item></channel></rss>`;
+  expect(parseFeedItems(xmlDescOnly)[0].bodyHtml).toContain('Body via description');
+});
+
+test('extractPressLinks keeps query-string item URLs on listing-looking paths (Lee pattern)', () => {
+  const base = 'https://www.lee.senate.gov/news/press-releases';
+  const html = `
+    <a href="/news/press-releases?ID=ABC-123">Lee Introduces Regulatory Relief Bill</a>
+    <a href="/news/press-releases">All Press Releases</a>`;
+  const items = extractPressLinks(html, base);
+  expect(items).toHaveLength(1);
+  expect(items[0].url).toContain('?ID=ABC-123');
+});
+
+test('normalizeFeedDate parses RFC822 and ISO, rejects junk', () => {
+  expect(normalizeFeedDate('Tue, 09 Jul 2024 12:00:00 GMT')).toBe('2024-07-09T12:00:00.000Z');
+  expect(normalizeFeedDate('2026-01-02T03:04:05Z')).toBe('2026-01-02T03:04:05.000Z');
+  expect(normalizeFeedDate('yesterday-ish')).toBeNull();
+  expect(normalizeFeedDate(null)).toBeNull();
+});
 
 test('parseFeedItems reads RSS 2.0 items incl. CDATA titles', () => {
   const xml = `<rss><channel>
