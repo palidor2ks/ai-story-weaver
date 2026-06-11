@@ -125,7 +125,7 @@ export default function PoliticalIdeologyTestsComparison() {
   return (
     <div className="min-h-screen bg-background">
       <Seo
-        title="Political Ideology Tests Compared: Accuracy, Bias & Candidate Match | Pulse"
+        title="Political Ideology Tests Compared | Pulse"
         description="Compare the top political compass tests and political spectrum quizzes — Pew, iSideWith, The Political Compass, 8values — on accuracy, bias, and candidate matching."
         path="/blog/political-ideology-tests-comparison"
         type="article"
