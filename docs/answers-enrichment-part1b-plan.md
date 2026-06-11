@@ -17,6 +17,23 @@
 
 ## Where this goes next (owner decision)
 
+> **DECIDED (owner, 2026-06-11): option 2 — the evidence index.** Spike ran same day
+> (5 sitting members, `spike-ingest-member-statements` + `_evidence_spike_*` scratch
+> tables): **mapping 5/5** (sitting members' candidate_ids ARE bioguide ids; official
+> sites from the canonical congress-legislators dataset), **discovery 4/5** (all three
+> House sites via RSS — two probed `/rss.xml`, one advertised; Booker via HTML-listing
+> fallback; Mike Lee's Senate CMS uses query-string item URLs `?ID=…` that the path-based
+> filter misreads — fix identified), **extraction clean where pages fetch** (Titus 8/8,
+> Booker 6/6, multi-KB bodies) but **house.gov item pages intermittently refuse fetches**
+> (Hinson 3/8, Roy 2/8 — bot protection). Production design notes from the spike:
+> (1) read release bodies from the RSS `<description>`/`content:encoded` payload first and
+> only fall back to page fetches — sidesteps the bot-wall for RSS members; (2) handle
+> query-string Senate CMS item URLs; (3) dedupe on (candidate, url) + content hash
+> (duplicate feed items observed); (4) per-member walker as a queue drain, mirroring the
+> FEC/state-finance pattern (new cron = guardrail #2 review). Next build step: production
+> schema (reviewed migration) + the drain, then statement↔topic indexing, then the
+> say-vs-do discrepancy layer against the verified votes corpus.
+
 The machinery built for phase 1 (research → strict identity/claim/stance verifier →
 staging) is sound — the gate caught everything before a single URL landed. Three pivots:
 

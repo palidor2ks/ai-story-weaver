@@ -71,6 +71,13 @@ X/TikTok posting, Remotion social cards, AI-generated analysis. Deferred until t
   *(parked 2026-06-09)*
 
 ## Changelog
+- **2026-06-11 (latest — pivot decided: statement EVIDENCE INDEX)** — owner picked option 2:
+  build a primary-source corpus of members' official statements (the statements-equivalent of
+  the bills corpus) instead of verifying AI prose. Same-day 5-member spike validated the
+  architecture (bioguide→site mapping exact, House RSS works, two hardening items found);
+  results + production design notes in `docs/answers-enrichment-part1b-plan.md` §DECIDED.
+  Long-term this enables say-vs-do analysis (statements × verified votes) — the real use for
+  `has_discrepancy`.
 - **2026-06-11 (later — part-1b phase-1 gate FAILED, finding: fabricated provenance)** — the
   50-sample precision gate on artifact-naming `public_statement` answers yielded 2/44 citable:
   the AI answer generator fabricated concrete-looking provenance (dated press releases, named

@@ -27,6 +27,53 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-11 (4th arc: evidence-index DECIDED + 5-member spike VALIDATED) — claude/cool-mendel-q22rt6
+
+**What happened & why**
+After the gate verdict, owner asked which pivot is "most accurate and best for long-term deep
+analysis" → recommended and owner approved **option 2: the statement evidence index** — the
+statements-equivalent of the bills corpus; accurate by construction (a member's .gov newsroom
+solves identity structurally; held text can't rot or be fabricated), and it unlocks say-vs-do
+analysis against the verified votes corpus (the real job for `has_discrepancy`). Ran the
+proposed validation spike same-session: `spike-ingest-member-statements` (spike-only edge fn,
+deployed via MCP; writes only `_evidence_spike_log` / `_evidence_spike_statements`) +
+`_shared/evidence-index-utils.ts` pure helpers (+7 tests) — feed parsing (RSS2+Atom), homepage
+RSS discovery, common-path probes, HTML-listing fallback, crude text extraction. Cohort: Lee,
+Booker, Hinson, Titus, Roy. **Key discovery before any code ran:** sitting members'
+candidate_ids ARE bioguide ids → the legislators-current mapping is an exact join, no fuzzy
+name matching. **Spike results:** mapping 5/5; discovery 4/5 (House 3/3 via RSS — Hinson+Roy
+probed /rss.xml, Titus advertised news/rss.aspx; Booker via HTML-listing on /news, 6 items;
+Lee 0 items — his Senate CMS serves items as /news/press-releases?ID=… and the path-based
+listing filter eats them); extraction clean where pages fetch (Titus 8/8 + Booker 6/6,
+multi-KB real bodies eyeballed) but **house.gov item pages intermittently refuse fetches**
+(Hinson 3/8, Roy 2/8 ok — bot protection; bodies recorded honestly as 0-char). Production
+design notes recorded in the plan doc §DECIDED: read bodies from RSS description/
+content:encoded first (sidesteps the bot-wall), handle query-string Senate item URLs, dedupe
+on (candidate,url)+content hash (dupe feed items observed), build as a queue drain like
+FEC/state-finance (new cron → guardrail #2 review).
+
+**State** (verified)
+Spike numbers above measured live from the scratch tables (kept for review alongside
+`_enrich_stmt_staging`). Lint 0 errors, **48/48** tests. Spike fn deployed at v1 == repo code.
+Decision recorded in ROADMAP changelog + plan doc. NOT verified: the RSS-body design note
+(spike fetched pages, didn't parse description payloads — first thing the production drain
+should prove out), and Senate CMS variety beyond these two (Lee fix + Booker fallback cover
+the two patterns seen; expect more).
+
+**Next**
+Build the production slice for review: `member_statements` schema as a REVIEWED migration
+(guardrail #1 — do not auto-apply) + the drain function reading RSS bodies first, then run it
+over the ~539 sitting members and measure coverage before any answer-derivation work.
+
+**Deferred**
+Lee-pattern (query-string CMS) extractor; house.gov fetch hardening (only needed where feeds
+lack body payloads); challengers' campaign sites (phase 2); statement↔topic indexing + say-vs-do
+layer (after corpus exists); (carried) 6 error rows in _enrich_stmt_staging; orphaned
+candidate_ids; inferred-denominator question; populate-civic-answers 'ai_inferred' CHECK
+violation; legacy sponsorship ids; bills spot-check; the rest below.
+
+---
+
 ## 2026-06-11 (3rd arc: part-1b phase 1 BUILT + GATE FAILED → fabricated provenance found) — claude/cool-mendel-q22rt6
 
 **What happened & why**
