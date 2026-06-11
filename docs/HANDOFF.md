@@ -27,6 +27,57 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-11 (3rd arc: part-1b phase 1 BUILT + GATE FAILED → fabricated provenance found) — claude/cool-mendel-q22rt6
+
+**What happened & why**
+Owner said "next step" → executed part-1b phase 1 per the plan, entirely from the sandbox via
+MCP: built `enrich-statement-citations` (STAGING-ONLY edge fn — never writes candidate_answers;
+strict verify_citation distiller with identity/claim/stance guards that can only pick a
+source_index from real research citations) + `_shared/statement-citation-utils.ts` (+5 tests),
+created `_enrich_stmt_staging`, enqueued a stratified 50-answer gate sample (sitting members,
+artifact-naming public_statement descriptions: 25 press release / 10 interview / 10 speech /
+5 op-ed), deployed via MCP and drove batches through pg_net + vault cron secret. **Three
+iterations to get research working** (each its own commit, PR #362, merged): v1/lite → 50/50
+instant "NONE."; v2 diagnostics proved the You.com research model takes any "find the exact
+source, else say NONE" command as an instant bail (caption pipeline's question-shaped query
+works in prod — 6/6 real cached hooks); v3 standard effort alone didn't fix it; v4
+question-shaped query with NO bail-out token (rejection authority moved fully into the
+distiller) → research finally returned real citations and the distiller issued real verdicts.
+**GATE RESULT: 2 cited / 42 none / 6 transient distiller errors.** Eyeball of the 2: Chip Roy
+= REJECT (2024 re-election page cited for a claimed Jan-2020 tweet — the distiller rationalized
+past its CLAIM guard); Mike Lee = borderline (real lee.senate.gov release, right identity+
+stance, generic rather than the claimed artifact). The 42 nones are the finding: "the specified
+press release/exact quote could not be found" over and over, incl. certainly-indexed-if-real
+artifacts, plus positive fabrication evidence (Deluzio's real Mar-14-2024 release was about a
+DIFFERENT topic than the answer claims; quoted language matching White House boilerplate
+attributed to the wrong speaker). **Conclusion: the answer generator fabricated concrete
+provenance (dates, titles, verbatim quotes) at scale — integrity finding #3.** Zero URLs were
+applied; the gate did exactly what the plan built it for. Docs updated (plan §gate result +
+§pivots, DATA-ACCURACY §Answers, ROADMAP changelog).
+
+**State** (verified)
+Gate numbers measured live; `_enrich_stmt_staging` (50 rows, batches p1b-gate2-*) KEPT as the
+audit trail — do not drop until the owner has reviewed. Function deployed at v4 == repo code
+(PR #362 merged; CI redeploy is a no-op). Lint 0 errors, 41/41 tests. Ops lesson: standard-
+effort runs exceed the edge wall-clock (~6-8 rows/invocation) — batches were re-kicked until
+pending=0 (the pending-rows design is resumable); production use needs self-chaining. The 6
+"distiller unavailable" errors are transient gateway failures, re-runnable, immaterial to the
+verdict. NOT verified: whether generic-prose (non-artifact) descriptions are equally fabricated
+— same generator wrote them, untested.
+
+**Next**
+Owner pivot decision (plan §"Where this goes next"): (1) verify-and-flag via has_discrepancy —
+RECOMMENDED, reuses today's machinery with only the apply step changed; (2) crawl official
+newsrooms into an evidence index and match answers to REAL artifacts; (3) demote artifact-
+claiming descriptions to inferred pending regeneration. Until then: no citation scale-up.
+
+**Deferred**
+Self-chaining invocation for long batches; the 6 error rows (re-kick after a pivot decision);
+(carried) orphaned candidate_ids; inferred-denominator metric question; populate-civic-answers
+'ai_inferred' CHECK violation; legacy sponsorship ids; bills spot-check; the rest below.
+
+---
+
 ## 2026-06-11 (2nd arc: dilution decided, 47k mislabels fixed + write guard, part-1b planned) — claude/cool-mendel-q22rt6
 
 **What happened & why**

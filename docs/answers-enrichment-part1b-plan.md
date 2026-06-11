@@ -1,5 +1,39 @@
 # Answers enrichment part 1b — research-pipeline citations (plan)
 
+> **PHASE-1 GATE RESULT (2026-06-11): FAILED — and the failure is the finding.**
+> 50-sample run (sitting members, artifact-naming `public_statement` descriptions, batches
+> `p1b-gate2-*` in `_enrich_stmt_staging` — kept as the audit trail): **2 cited / 42 none /
+> 6 transient errors**. Of the 2 cited, one violates the CLAIM guard (a 2024 re-election
+> page cited for a claimed 2020 tweet) and one is borderline (real lee.senate.gov release,
+> right stance, wrong specificity). The 42 nones are dominated by verdicts of the form
+> "the specified press release / exact quote could not be found" — including artifacts that
+> would certainly be indexed if real — and several with positive fabrication evidence (the
+> real release of the claimed date was about a different topic; quoted language matching
+> White House boilerplate attributed to the wrong speaker). **Conclusion: the answer
+> generator fabricated concrete-looking provenance (dates, titles, verbatim quotes) at
+> scale.** Do NOT scale this as a citation pipeline; see "Where this goes next" below.
+> Mechanics note: standard-effort runs exceed the edge wall-clock — batches need re-kicking
+> until pending=0 (resumable by design), or a self-chaining invocation for production use.
+
+## Where this goes next (owner decision)
+
+The machinery built for phase 1 (research → strict identity/claim/stance verifier →
+staging) is sound — the gate caught everything before a single URL landed. Three pivots:
+
+1. **Verify-and-flag (recommended):** run the same pipeline in reverse — answers whose
+   claimed artifacts can't be found get `has_discrepancy=true` + a `discrepancy_note`
+   (the column machinery exists and is unused). Turns fabricated provenance into a visible
+   trust signal instead of silently shipping it. Cheap: the function already produces the
+   verdict; only the apply step changes.
+2. **Match against real artifacts:** crawl official press archives (house.gov/senate.gov
+   newsrooms are structured) into an evidence index, then attach answers to REAL releases
+   by topic+stance match — citations come from the index, not from trusting descriptions.
+   Bigger build; honest by construction.
+3. **Demote/regenerate:** treat artifact-claiming descriptions as inferred-grade
+   (`evidence_type='inferred'`) until re-generated under a no-fabrication prompt with
+   citation-required research. Most invasive; touches ~15k artifact-claiming answers
+   (~8.9k on sitting members).
+
 > **Decision (owner, 2026-06-11):** accept the coverage-vs-% dilution (no throttle on
 > `batch-populate-answers-job`), do the mislabel hygiene (done — see below), then pursue
 > **option (b): research-pipeline citations**, starting with `public_statement` answers.

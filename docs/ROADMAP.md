@@ -71,6 +71,12 @@ X/TikTok posting, Remotion social cards, AI-generated analysis. Deferred until t
   *(parked 2026-06-09)*
 
 ## Changelog
+- **2026-06-11 (later — part-1b phase-1 gate FAILED, finding: fabricated provenance)** — the
+  50-sample precision gate on artifact-naming `public_statement` answers yielded 2/44 citable:
+  the AI answer generator fabricated concrete-looking provenance (dated press releases, named
+  interviews, verbatim quotes) at scale. The gate worked — zero URLs were applied. Citation
+  scale-up is OFF pending an owner pivot decision (verify-and-flag recommended); details in
+  `docs/answers-enrichment-part1b-plan.md` + DATA-ACCURACY §Answers (integrity finding #3).
 - **2026-06-08** — created with the four ranked priorities + blockers.
 - **2026-06-09** — added status markers; added Code health & cleanup section (Phase C triage);
   parked Social/AI content for v1 (per VISION); recorded `.env` safe fix as done; aligned north
