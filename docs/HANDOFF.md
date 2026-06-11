@@ -27,6 +27,47 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-11 (caption styles STILL bleeding → broaden news + never-null composers) — claude/caption-styles-distinct-v2
+
+**What happened & why**
+Owner: the three styles still "bleed into each other" — confirmed ALL symptoms (news shows
+finance text, analysis shows finance/news, all sound the same, text doesn't change). Diagnosed
+against LIVE data (Supabase get_logs + execute_sql on social_post_platforms / ai_analysis_cache),
+not guesses. Two root causes: (1) "In the news" ran on `researchControversy`, which is
+**controversy-gated** — for any rep without a scandal it returns NONE → null → the UI silently
+keeps the finance seed (the bleed). The owner re-scoped it to "top news of the day" anyway.
+(2) `composeNewsCaption`/`composeRecordCaption` returned **null** when their data was thin, and the
+ShareCardModal keeps the current caption on null → styles collapse onto finance / "text doesn't
+change". Fixes: broadened the news lookup (query + distiller) to the single most significant recent
+item — bills, votes, primaries, statements, endorsements, disputes — explicitly NOT money, NONE only
+when there's no coverage at all; renamed `researchControversy` → `researchTopNews`. Made BOTH
+single-angle composers **never return null**: no news → an honest "📰 No major recent news on X…"
+line; no record → "🗳️ …positions and goals isn't available yet." So a pinned style ALWAYS replaces
+the box with its OWN clearly-different content — it can never show finance. Also gave each a distinct
+voice/lead (news → "Per <source>…" + 📰; analysis → "Where X stands:" + 🗳️; finance keeps $/💰) to
+fix "all sound the same". Confirmed the analysis cache already has positions/goals (Cline 2/3, etc.),
+so Analysis has real data to draw on. Auto-poster path unchanged (still its own chain; now uses the
+broader `researchTopNews`).
+
+**State** (verified)
+Typecheck (tsconfig.app.json) clean, lint **0 errors** (154 pre-existing warnings, unchanged),
+**32/32** unit tests (4 new in `finance-caption.test.ts` asserting the composers never return null
++ lead distinctly, deterministic via no-AI-key template path), `bunx vite build` clean. Diagnosis
+grounded in live prod data via MCP. NOT verified (sandbox egress blocked): the live round-trips —
+that broadened news now returns real top-news for low-profile reps, and that the three read visibly
+different end-to-end. No frontend change (picker already sends the right ids).
+
+**Next**
+Smoke-test from a networked env: open a rep profile → Share, click Finance / In the news / Analysis
+on a NON-scandal rep (e.g. a quiet backbencher) and confirm all three now change AND read different
+(money / a real recent headline / positions+goals). Repeat in admin SocialPosts.
+
+**Deferred**
+"No recent news"/"positions not available yet" lines are honest but not postable — they should be
+rare now (broad news + analysis generate-on-cold), but a future pass could auto-fall to a 2nd-choice
+angle WITH a clear style label instead. On-demand analysis generation still adds up to ~45s on a cold
+cache. Aliased candidates still read `v2:candidate:<id>`. `callYouSmart` still has no request timeout.
+
 ## 2026-06-11 (caption styles made DISTINCT: dedicated composers) — claude/caption-styles-distinct
 
 **What happened & why**
