@@ -14,6 +14,156 @@ export type Database = {
   }
   public: {
     Tables: {
+      _enrich_stmt_staging: {
+        Row: {
+          answer_id: string
+          answer_value: number
+          batch_id: string
+          candidate_id: string
+          candidate_name: string
+          description: string
+          enqueued_at: string
+          http_status: number | null
+          office: string | null
+          question_id: string
+          question_text: string
+          reason: string | null
+          researched_at: string | null
+          source_host: string | null
+          state: string | null
+          supporting_quote: string | null
+          title: string | null
+          url: string | null
+          verdict: string
+        }
+        Insert: {
+          answer_id: string
+          answer_value: number
+          batch_id: string
+          candidate_id: string
+          candidate_name: string
+          description: string
+          enqueued_at?: string
+          http_status?: number | null
+          office?: string | null
+          question_id: string
+          question_text: string
+          reason?: string | null
+          researched_at?: string | null
+          source_host?: string | null
+          state?: string | null
+          supporting_quote?: string | null
+          title?: string | null
+          url?: string | null
+          verdict?: string
+        }
+        Update: {
+          answer_id?: string
+          answer_value?: number
+          batch_id?: string
+          candidate_id?: string
+          candidate_name?: string
+          description?: string
+          enqueued_at?: string
+          http_status?: number | null
+          office?: string | null
+          question_id?: string
+          question_text?: string
+          reason?: string | null
+          researched_at?: string | null
+          source_host?: string | null
+          state?: string | null
+          supporting_quote?: string | null
+          title?: string | null
+          url?: string | null
+          verdict?: string
+        }
+        Relationships: []
+      }
+      _evidence_spike_log: {
+        Row: {
+          candidate_id: string
+          discovery_method: string | null
+          error: string | null
+          feed_url: string | null
+          homepage_status: number | null
+          items_found: number | null
+          items_ingested: number | null
+          listing_url: string | null
+          member_name: string | null
+          ran_at: string
+          site_url: string | null
+        }
+        Insert: {
+          candidate_id: string
+          discovery_method?: string | null
+          error?: string | null
+          feed_url?: string | null
+          homepage_status?: number | null
+          items_found?: number | null
+          items_ingested?: number | null
+          listing_url?: string | null
+          member_name?: string | null
+          ran_at?: string
+          site_url?: string | null
+        }
+        Update: {
+          candidate_id?: string
+          discovery_method?: string | null
+          error?: string | null
+          feed_url?: string | null
+          homepage_status?: number | null
+          items_found?: number | null
+          items_ingested?: number | null
+          listing_url?: string | null
+          member_name?: string | null
+          ran_at?: string
+          site_url?: string | null
+        }
+        Relationships: []
+      }
+      _evidence_spike_statements: {
+        Row: {
+          body_chars: number | null
+          body_text: string | null
+          candidate_id: string
+          fetched_at: string
+          http_status: number | null
+          id: string
+          member_name: string | null
+          method: string | null
+          published_at_raw: string | null
+          title: string | null
+          url: string
+        }
+        Insert: {
+          body_chars?: number | null
+          body_text?: string | null
+          candidate_id: string
+          fetched_at?: string
+          http_status?: number | null
+          id?: string
+          member_name?: string | null
+          method?: string | null
+          published_at_raw?: string | null
+          title?: string | null
+          url: string
+        }
+        Update: {
+          body_chars?: number | null
+          body_text?: string | null
+          candidate_id?: string
+          fetched_at?: string
+          http_status?: number | null
+          id?: string
+          member_name?: string | null
+          method?: string | null
+          published_at_raw?: string | null
+          title?: string | null
+          url?: string
+        }
+        Relationships: []
+      }
       admin_stats_cache: {
         Row: {
           stat_key: string
@@ -2961,6 +3111,99 @@ export type Database = {
         }
         Relationships: []
       }
+      member_statement_sync: {
+        Row: {
+          candidate_id: string
+          discovery_method: string | null
+          feed_url: string | null
+          items_new: number | null
+          items_seen: number | null
+          last_sync_completed_at: string | null
+          last_sync_started_at: string | null
+          site_url: string | null
+          sync_error: string | null
+          updated_at: string
+        }
+        Insert: {
+          candidate_id: string
+          discovery_method?: string | null
+          feed_url?: string | null
+          items_new?: number | null
+          items_seen?: number | null
+          last_sync_completed_at?: string | null
+          last_sync_started_at?: string | null
+          site_url?: string | null
+          sync_error?: string | null
+          updated_at?: string
+        }
+        Update: {
+          candidate_id?: string
+          discovery_method?: string | null
+          feed_url?: string | null
+          items_new?: number | null
+          items_seen?: number | null
+          last_sync_completed_at?: string | null
+          last_sync_started_at?: string | null
+          site_url?: string | null
+          sync_error?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      member_statements: {
+        Row: {
+          body_chars: number
+          body_source: string
+          body_text: string | null
+          candidate_id: string
+          content_hash: string | null
+          created_at: string
+          discovery_method: string | null
+          fetched_at: string
+          http_status: number | null
+          id: string
+          published_at: string | null
+          published_at_raw: string | null
+          source_feed: string | null
+          title: string | null
+          url: string
+        }
+        Insert: {
+          body_chars?: number
+          body_source?: string
+          body_text?: string | null
+          candidate_id: string
+          content_hash?: string | null
+          created_at?: string
+          discovery_method?: string | null
+          fetched_at?: string
+          http_status?: number | null
+          id?: string
+          published_at?: string | null
+          published_at_raw?: string | null
+          source_feed?: string | null
+          title?: string | null
+          url: string
+        }
+        Update: {
+          body_chars?: number
+          body_source?: string
+          body_text?: string | null
+          candidate_id?: string
+          content_hash?: string | null
+          created_at?: string
+          discovery_method?: string | null
+          fetched_at?: string
+          http_status?: number | null
+          id?: string
+          published_at?: string | null
+          published_at_raw?: string | null
+          source_feed?: string | null
+          title?: string | null
+          url?: string
+        }
+        Relationships: []
+      }
       news_article_questions: {
         Row: {
           article_id: string
@@ -5521,6 +5764,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      _mcp_ddl_test: { Args: never; Returns: string }
       _user_question_scope: { Args: { p_user_id: string }; Returns: string }
       admin_delete_roster_row: {
         Args: { _id: string; _source: string }
@@ -5587,6 +5831,10 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      claim_statement_sync_members: {
+        Args: { p_limit?: number }
+        Returns: string[]
+      }
       cleanup_redundant_ai_candidates: { Args: never; Returns: number }
       cleanup_tiktok_oauth_pending: { Args: never; Returns: undefined }
       cleanup_x_oauth_pending: { Args: never; Returns: undefined }
@@ -5618,6 +5866,18 @@ export type Database = {
       get_candidate_caption_facts: {
         Args: { _candidate_id: string; _cycle?: string }
         Returns: Json
+      }
+      get_candidate_earmark_rollups: {
+        Args: { p_candidate_id: string; p_cycle?: string }
+        Returns: {
+          cycle: string
+          direct_amount: number
+          direct_count: number
+          org_label: string
+          org_type: string
+          routed_amount: number
+          routed_count: number
+        }[]
       }
       get_committee_card_facts: { Args: { _fec_id: string }; Returns: Json }
       get_committee_cycles: { Args: never; Returns: string[] }
