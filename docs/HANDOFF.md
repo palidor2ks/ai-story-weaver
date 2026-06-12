@@ -27,6 +27,52 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-12 (follow-up: review-council fixes for the conduit/earmark change) — claude/amazing-bohr-nwzgsv
+
+**What happened & why**
+PR #368 (the conduit/memo-X donor-accuracy change below) merged while the frontend reviewer's
+report was still landing, so its findings ship as this follow-up. Must-fixes applied:
+(1) **DonorProfile conduit banner no longer claims "$0" before it's true** — the zeroing
+backfill (`20260612120000`) is merged but NOT applied, so until then conduit pages show real
+dollars; the banner's "$0" sentence is now conditional on the page total actually being 0.
+(2) **Rollup↔donor matching is alias-aware** — the donor list consolidates spellings by
+`display_name`/`name_variations` while the RPC groups raw contributor names, so matching only
+`d.name` could double-display an org (donor row AND rollup card); now every known spelling is
+tried, first (largest) match wins the profile link. Also: six dead computations removed from
+CandidateProfile (incl. `visibleDonorsTotal`, orphaned by removing the "+$X conduit" line);
+conduit rows no longer eat donor-cause lookup slots; `is_conduit_org` declared on
+DonorProfile's `DonorRecord`; the rollup hook now fails soft ONLY on "function does not
+exist" (PGRST202/42883) and throws real errors so React Query retries instead of caching `[]`.
+The merged migration was NOT touched (never mutate a merged migration; its security hardening
+had already landed pre-merge in 350a264e). The migration-safety review that previously died on
+a session limit was re-run bounded: **GO** for applying `20260612120000`. Its one conditional
+finding (add an `is_transfer=false` filter to the backfill recompute?) was **refuted with a
+prod audit** — 40 committees / 1,994 memo-contaminated groups: 0 non-contribution lines
+co-occur, and the 556 co-occurring countable transfers ($54M) are legitimate JFC transfer
+rows whose display depends on staying counted. That decision + benign hash-miss causes are
+recorded in docs/DATA-ACCURACY.md; a full pre-apply runbook (steps + expected before/after
+numbers) was delivered to the owner's Google Drive. All of this ships as **draft PR #369**.
+
+**State** (verified)
+`bunx tsc --noEmit -p tsconfig.app.json` OK (the CI typecheck config — the root tsconfig
+misses errors, lesson learned on #368) · lint 0 errors · tests 61/61 · `bunx vite build` OK
+(all re-run after the last code change; the two later commits are docs-only). Draft **PR #369**
+open with commits 8a99c7f9 + 4928a191; CI pending at close-out. NOT verified: live UI with
+the RPC (migration still unapplied anywhere except the #368 preview branch, which carries the
+pre-hardening RPC version — drift is preview-only and harmless).
+
+**Next**
+Owner: merge PR #369, then apply `20260612120000` to prod deliberately following the runbook
+(Drive doc / migration header): quiet hour → capture the NOTICE counts → audits →
+`SELECT public.refresh_donor_consolidated_mv();` → check /candidate/E000297 (ActBlue absent;
+AIPAC ≈ $145K "by or through"; real donors ranked) → security advisors.
+
+**Deferred**
+(carried) member-level earmark drilldown; alias-aware grouping inside the RPC (two raw
+spellings of one org still yield two rollup cards); everything in the entry below.
+
+---
+
 ## 2026-06-12 (donor accuracy: conduits are not donors; "by or through" for AIPAC-style orgs) — claude/amazing-bohr-nwzgsv
 
 **What happened & why**

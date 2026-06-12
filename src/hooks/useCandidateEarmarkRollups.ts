@@ -24,15 +24,21 @@ export const useCandidateEarmarkRollups = (candidateId: string | undefined, cycl
       // Untyped RPC cast: same pattern as useDonorsPaginated (types regenerate
       // after the migration lands).
       const { data, error } = await (supabase as unknown as {
-        rpc: (fn: string, args: Record<string, unknown>) => PromiseLike<{ data: unknown; error: { message: string } | null }>;
+        rpc: (fn: string, args: Record<string, unknown>) => PromiseLike<{ data: unknown; error: { message: string; code?: string } | null }>;
       }).rpc('get_candidate_earmark_rollups', {
         p_candidate_id: candidateId,
         p_cycle: cycle && cycle !== 'all' ? cycle : null,
       });
       if (error) {
-        // Fail soft: the RPC ships in a migration applied after this code
-        // deploys; until then the page simply shows no rollups.
-        console.warn('[earmark-rollups] RPC unavailable:', error.message);
+        // Fail soft ONLY while the RPC doesn't exist yet (it ships in a
+        // migration applied after this code deploys). Anything else is a real
+        // failure — throw so React Query retries instead of caching [].
+        const missingFn =
+          error.code === 'PGRST202' ||
+          error.code === '42883' ||
+          /could not find the function|does not exist/i.test(error.message);
+        if (!missingFn) throw new Error(error.message);
+        console.warn('[earmark-rollups] RPC not deployed yet:', error.message);
         return [];
       }
       const rows = Array.isArray(data) ? data : [];

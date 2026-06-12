@@ -53,6 +53,15 @@
   $708,925) → $0/flagged; AIPAC 2024 row was $171,360 = $10,000 direct (11C) +
   $161,360 memo-X member earmarks → $10,000, with the $161,360 surfaced as
   "earmarked through AIPAC" on the rollup entry.
+  *Pre-apply review notes (2026-06-12, migration-safety GO):* the backfill's Arm 2
+  deliberately keeps countable line-12 transfers in recomputed amounts — audited on prod
+  (40-committee sample, 1,994 memo-contaminated groups): 0 non-contribution lines co-occur,
+  and the 556 co-occurring countable transfers ($54M) are legitimate JFC transfer rows whose
+  display depends on staying counted, so do NOT add an `is_transfer=false` filter. Known
+  benign causes of the backfill's reported hash misses: Postgres `btrim()` strips only ASCII
+  spaces while the importers' JS `.trim()` strips all Unicode whitespace (NBSP/tab names hash
+  differently), and the replay guard compares pre-cast sums (fractional-sum groups rewrite to
+  the same value on replay — convergent, not a bug).
 
 ### 2. Voting records — `voting_records_stats`
 - **Goal:** every sitting federal legislator's sponsored/cosponsored/floor-vote record is

@@ -121,7 +121,8 @@ export const CandidateProfile = () => {
       )
       : donors;
 
-    return matchingDonors.slice(0, lookupLimit);
+    // Conduit rows never render, so don't let them eat cause-lookup slots.
+    return matchingDonors.filter((d) => !isConduitDonor(d)).slice(0, lookupLimit);
   }, [donors, donorSearch, visibleDonorCount]);
   const donorCauseInputs = useMemo(
     () => donorCauseLookupDonors.flatMap(d => {
@@ -290,11 +291,6 @@ export const CandidateProfile = () => {
   const agreements = comparisons.filter(c => c.isAgreement).sort((a, b) => a.difference - b.difference).slice(0, 3);
   const disagreements = comparisons.filter(c => !c.isAgreement && c.score !== 0).sort((a, b) => b.difference - a.difference).slice(0, 3);
 
-  // Use finance_reconciliation as single source of truth for totals when available
-  // Prefer local_itemized_net (excludes earmark pass-throughs) for accurate display
-  const totalDonations = financeReconciliation?.local_itemized_net ?? financeReconciliation?.local_itemized ?? donors.reduce((sum, d) => sum + d.amount, 0);
-  const earmarkPassThroughs = (financeReconciliation?.local_itemized ?? 0) - (financeReconciliation?.local_itemized_net ?? 0);
-
   // Normalize FEC totals to use reconciliation first, then live API as a fallback
   const fecItemized = financeReconciliation?.fec_itemized ?? fecTotals?.individual_itemized_contributions ?? null;
   const fecUnitemized = financeReconciliation?.fec_unitemized ?? fecTotals?.individual_unitemized_contributions ?? null;
@@ -303,21 +299,11 @@ export const CandidateProfile = () => {
   const hasFecBreakdown = fecTotalReceipts !== null && fecTotalReceipts > 0;
   const fecSourceLabel = financeReconciliation ? 'Nightly reconciliation (cached)' : fecTotals ? 'Live FEC API (fallback)' : null;
 
-  // Properly categorize donors to match FEC categories and avoid double-counting.
+  // Donor-count badges for the FEC category cards (conduits never count).
   // Conduit detection (is_conduit_org flag + name match) lives in src/lib/conduits.
-
-  // Itemized Individual = is_contribution && !is_transfer && !is_conduit_org (Line 11 contributions)
   const itemizedIndividualDonors = donors.filter(d => d.is_contribution !== false && !d.is_transfer && !isConduitDonor(d));
-  const itemizedIndividualTotal = itemizedIndividualDonors.reduce((sum, d) => sum + d.amount, 0);
-  
-  // PAC/Committee contributions (Line 11C - typically type = 'PAC' or 'Organization')
   const pacDonors = donors.filter(d => d.is_contribution !== false && !d.is_transfer && !isConduitDonor(d) && (d.type === 'PAC' || d.type === 'Organization'));
-  const pacTotal = pacDonors.reduce((sum, d) => sum + d.amount, 0);
-  
-  // Transfers (Line 12 - is_transfer = true)
-  const transferDonors = donors.filter(d => d.is_transfer);
-  const transferTotal = transferDonors.reduce((sum, d) => sum + d.amount, 0);
-  
+
   // Conduit orgs (pass-throughs) are excluded from the list entirely; their
   // donors are itemized individually and no aggregated conduit amount is shown.
   const conduitDonors = donors.filter(d => isConduitDonor(d));
@@ -332,9 +318,6 @@ export const CandidateProfile = () => {
   const fecTransfers = financeReconciliation?.fec_transfers ?? fecTotals?.transfers ?? 0;
   const fecCandidateContribution = financeReconciliation?.fec_candidate_contribution ?? fecTotals?.candidate_contribution ?? 0;
   const fecOtherReceipts = financeReconciliation?.fec_other_receipts ?? fecTotals?.other_receipts ?? 0;
-  
-  // Visible donors total (from donors table - may be incomplete due to aggregation)
-  const visibleDonorsTotal = donors.filter(d => !isConduitDonor(d)).reduce((sum, d) => sum + d.amount, 0);
   
   // Contribution list total: Sum of all FEC breakdown components (should exactly equal FEC Total Receipts)
   // This ensures our breakdown table rows always sum to the FEC total
@@ -1023,11 +1006,23 @@ export const CandidateProfile = () => {
                           const isTransfer = d.line_number?.startsWith('12') || d.is_transfer;
                           const displayName = d.display_name || d.name;
 
-                          // Replaced by the org's combined earmark entry below.
+                          // Replaced by the org's combined earmark entry below. The
+                          // donor group consolidates alias spellings (display_name +
+                          // name_variations), while the RPC groups by raw contributor
+                          // name — so try every known spelling. (Residual limitation:
+                          // an org with routed dollars under two raw spellings yields
+                          // two RPC rows/cards; merging those needs alias-awareness in
+                          // the RPC, not here.)
                           if (!isTransfer) {
-                            const rollupKey = `${normalizeOrgKey(d.name)}|${d.cycle}`;
-                            if (rollupByKey.has(rollupKey)) {
-                              rollupDonorMatch.set(rollupKey, { donorId: d.id, displayName });
+                            const matchedKey = [d.name, d.display_name, ...(d.name_variations ?? [])]
+                              .filter((n): n is string => Boolean(n))
+                              .map(n => `${normalizeOrgKey(n)}|${d.cycle}`)
+                              .find(k => rollupByKey.has(k));
+                            if (matchedKey) {
+                              // Donors iterate amount-desc: keep the first (largest) match.
+                              if (!rollupDonorMatch.has(matchedKey)) {
+                                rollupDonorMatch.set(matchedKey, { donorId: d.id, displayName });
+                              }
                               return;
                             }
                           }

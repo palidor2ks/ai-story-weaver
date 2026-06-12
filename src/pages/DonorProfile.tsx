@@ -55,6 +55,7 @@ interface DonorRecord {
   contributor_city?: string | null;
   contributor_state?: string | null;
   transaction_count?: number | null;
+  is_conduit_org?: boolean | null;
   candidates?: {
     id: string;
     name: string;
@@ -670,15 +671,15 @@ const DonorProfile = () => {
           Back to Donors
         </Link>
 
-        {/* Conduit explainer — these rows intentionally carry $0 */}
+        {/* Conduit explainer — only claim "$0" once the zeroing backfill has run */}
         {isConduitDonor(donor) && (
           <div className="p-4 rounded-lg bg-muted/50 border border-border text-sm text-muted-foreground flex items-start gap-2">
             <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
             <span>
               <span className="font-medium text-foreground">{displayName}</span> is a payment
               processor (an FEC “conduit”), not a donor. Donations made through it are credited
-              to the individual donors who gave them, so the dollar totals on this page are
-              intentionally $0.
+              to the individual donors who gave them and excluded from candidate donor lists
+              {combinedTotal === 0 ? ', so the dollar totals on this page are intentionally $0' : ''}.
             </span>
           </div>
         )}
