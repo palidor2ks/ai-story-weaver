@@ -5764,7 +5764,6 @@ export type Database = {
         }
         Returns: undefined
       }
-      _mcp_ddl_test: { Args: never; Returns: string }
       _user_question_scope: { Args: { p_user_id: string }; Returns: string }
       admin_delete_roster_row: {
         Args: { _id: string; _source: string }
