@@ -14,6 +14,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { choosePrimaryCauseLabel, type CauseDisplayInfo } from '@/lib/committeeCauseDisplay';
 import { useQuery } from '@tanstack/react-query';
 import { isConduitDonor } from '@/lib/conduits';
+import { useCandidateEarmarkRollups } from '@/hooks/useCandidateEarmarkRollups';
+import { buildEarmarkRollupIndex, earmarkRollupKey, matchEarmarkRollupKey } from '@/lib/earmarkRollups';
 
 async function imageUrlToBase64(url: string): Promise<string | null> {
   try {
@@ -55,7 +57,7 @@ export interface CandidateShareCardData {
   outsideSupport: number | null;
   outsideOppose: number | null;
   topSpenders: { name: string; support: number; oppose: number; primaryCause?: string | null }[];
-  topDonors: { name: string; amount: number; primaryCause?: string | null }[];
+  topDonors: { name: string; amount: number; primaryCause?: string | null; viaEarmarks?: boolean }[];
   fundingBreakdown:
     | { label: string; pct: number; color: string }[]
     | undefined;
@@ -79,6 +81,10 @@ export function useCandidateShareCardData(
     id,
     effectiveCycle,
   );
+  const { data: earmarkRollups = [], isLoading: rollupsLoading } = useCandidateEarmarkRollups(
+    id,
+    effectiveCycle,
+  );
   const { data: representativeDetails } = useRepresentativeDetails(id);
 
   const committeeId = donors[0]?.recipient_committee_id ?? null;
@@ -99,12 +105,24 @@ export function useCandidateShareCardData(
   const topDonorSummaries = useMemo(() => {
     const donorAgg = new Map<
       string,
-      { name: string; amount: number; type: (typeof donors)[number]['type'] }
+      { name: string; amount: number; type: (typeof donors)[number]['type']; viaEarmarks?: boolean }
     >();
+    // Earmark-program orgs (e.g. AIPAC) rank by their combined "by or
+    // through" figure (direct + member earmarks), matching the profile page:
+    // the matched donor row is skipped (its direct dollars are inside the
+    // rollup) so nothing is double-listed.
+    const rollupIndex = buildEarmarkRollupIndex(earmarkRollups);
+    const rollupMatch = new Map<string, { name: string; type: (typeof donors)[number]['type'] }>();
     donors
       .filter((d) => !isConduitDonor(d) && !d.is_transfer)
       .forEach((d) => {
         const name = (d.display_name || d.name || 'Unknown').trim();
+        const matchedKey = matchEarmarkRollupKey(d, rollupIndex);
+        if (matchedKey) {
+          // Donors iterate amount-desc: keep the first (largest) match.
+          if (!rollupMatch.has(matchedKey)) rollupMatch.set(matchedKey, { name, type: d.type });
+          return;
+        }
         const existing = donorAgg.get(name);
         if (existing) {
           existing.amount += Number(d.amount ?? 0);
@@ -119,11 +137,28 @@ export function useCandidateShareCardData(
           });
         }
       });
+    earmarkRollups.forEach((r) => {
+      const match = rollupMatch.get(earmarkRollupKey(r.org_label, r.cycle));
+      const name = match?.name || r.org_label;
+      const type = match?.type ?? (r.org_type === 'Organization' ? 'Organization' : 'PAC');
+      const key = `${name}|earmark`;
+      const existing = donorAgg.get(key);
+      if (existing) {
+        existing.amount += r.direct_amount + r.routed_amount;
+      } else {
+        donorAgg.set(key, {
+          name,
+          amount: r.direct_amount + r.routed_amount,
+          type,
+          viaEarmarks: true,
+        });
+      }
+    });
 
     return Array.from(donorAgg.values())
       .sort((a, b) => b.amount - a.amount)
       .slice(0, 3);
-  }, [donors]);
+  }, [donors, earmarkRollups]);
 
   const { data: donorCauseMap } = useDonorCauses(
     topDonorSummaries.map((d) => ({ name: d.name, type: d.type })),
@@ -240,6 +275,7 @@ export function useCandidateShareCardData(
       name: donor.name,
       amount: donor.amount,
       primaryCause: getDonorCause(donorCauseMap, donor.name, donor.type)?.label ?? null,
+      viaEarmarks: donor.viaEarmarks,
     }));
 
     const fecItemized =
@@ -384,6 +420,7 @@ export function useCandidateShareCardData(
     candidateLoading ||
     cyclesLoading ||
     donorsLoading ||
+    rollupsLoading ||
     cycleIeLoading ||
     latestIeLoading ||
     cycleIeFetching ||

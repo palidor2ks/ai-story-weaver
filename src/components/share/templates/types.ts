@@ -33,7 +33,9 @@ export interface CardData {
   // Outside (independent-expenditure) spending split by stance.
   outsideSupport?: number | null;
   outsideOppose?: number | null;
-  topDonors?: { name: string; amount: number; primaryCause?: string | null; primaryCauseStance?: string | null }[];
+  // viaEarmarks marks an earmark-program org whose amount is the combined
+  // "by or through" figure (direct + member earmarks) — labeled on the card.
+  topDonors?: { name: string; amount: number; primaryCause?: string | null; primaryCauseStance?: string | null; viaEarmarks?: boolean }[];
   topSpenders?: { name: string; support: number; oppose: number; primaryCause?: string | null; primaryCauseStance?: string | null }[];
   aiPositions?: { topic: string; stance: string }[];
   aiGoals?: string[];

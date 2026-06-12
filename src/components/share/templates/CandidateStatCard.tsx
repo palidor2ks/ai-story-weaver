@@ -682,6 +682,20 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
                     <div style={{ fontSize: 18, fontWeight: 800, color: FLAG_WHITE }}>
                       {fmtMoneyShort(d.amount)}
                     </div>
+                    {d.viaEarmarks && (
+                      <div
+                        style={{
+                          fontSize: 11,
+                          color: mutedColor,
+                          fontWeight: 800,
+                          letterSpacing: 0.6,
+                          textTransform: 'uppercase',
+                          marginTop: 2,
+                        }}
+                      >
+                        by or through
+                      </div>
+                    )}
                     {d.primaryCause && (
                       <div
                         style={{

@@ -27,6 +27,39 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-12 (follow-up: earmark orgs rank on the stat card) — claude/amazing-bohr-nwzgsv
+
+**What happened & why**
+Owner eyeballed `/candidate/E000297` (the "Next" below): profile page correct, but asked for
+AIPAC's number to show **on the stat card as a top donor** — post-backfill its donor row holds
+only direct dollars ($5,000/2026), so it fell out of the card's top-3 while the page list
+showed the combined $145K "by or through" entry. Both stat-card data paths — the
+`ShareProfileButton` `topDonors` prop in CandidateProfile and the admin auto-card hook
+(`useCandidateShareCardData`) — now merge `useCandidateEarmarkRollups` exactly like the
+on-page funding list: matched donor rows are skipped (their direct dollars live inside the
+rollup, so nothing double-lists) and one combined entry ranks in their place, marked with a
+small "BY OR THROUGH" label on the card (`viaEarmarks` flag through ShareProfileButton →
+CardData → CandidateStatCard). The rollup↔donor alias matching was extracted to
+**`src/lib/earmarkRollups.ts`** (+ tests) and CandidateProfile's inline copy now uses it —
+one copy instead of three. Expected card for E000297/2026: AIPAC $145K (by or through) #1,
+then the $10K PACs (AFSCME, AFT…), verified against live donor rows.
+
+**State** (verified)
+`bunx tsc --noEmit -p tsconfig.app.json` OK · lint 0 errors (154 pre-existing warnings) ·
+tests **64/64** (3 new) · `bunx vite build` OK. NOT verified: the rendered card in a browser
+(open the share modal on /candidate/E000297 and check AIPAC at #1 with the label).
+
+**Next**
+Eyeball the stat card via the profile Share button on /candidate/E000297 (AIPAC $145K,
+"by or through" label, no ActBlue), then mark PR #372 ready and merge.
+
+**Deferred**
+'All cycles' mode keeps page parity: a multi-cycle consolidated org row doesn't match
+per-cycle rollups, so the org can appear as both donor row and rollup entries (visible, not
+summed — same as the funding list). Fixes with alias/cycle-awareness in the RPC (carried).
+
+---
+
 ## 2026-06-12 (quota discipline: why a week of usage died in one night, and the new defaults) — claude/funny-shannon-tfvsg4
 
 **What happened & why**
@@ -60,6 +93,55 @@ window frees, then merge the draft PR for this branch.
 Dial frontend/migration reviewers down to `haiku` if sonnet-quality reviews hold up; revisit
 plan tier / usage credits only after a week under the new defaults; (carried) everything in the
 entries below.
+
+---
+
+## 2026-06-12 (applied: conduit/memo-X donor backfill + MV refresh on prod) — claude/amazing-bohr-nwzgsv
+
+**What happened & why**
+The owner asked for the merged-but-unapplied backfill (`20260612120000`) to be applied via the
+Supabase MCP — no local `SUPABASE_DB_URL`. Two hard limits made the file unusable as-is: the
+MCP's 60s HTTP timeout and `work_mem=3.5MB` (the DO block's full-table GROUP BY over 11.6M
+`contributions` rows spills to disk for tens of minutes). Solution shipped as migration
+**`20260612130000_conduit_donor_backfill_cron.sql`** (commit 56f69eab): the RPC DDL was applied
+directly via `execute_sql`, and the backfill was rewritten as procedure
+`_run_conduit_backfill_v2()` — per-committee batched (index seeks instead of one giant
+GROUP BY), trigger-disable/re-enable preserved, both arms idempotent — scheduled through
+**pg_cron with `statement_timeout = 0`** so no connection or statement limit could kill it; it
+self-unschedules on success. It ran as job 45: **15:50:00 → 17:16:21 UTC (1h 26m), succeeded**
+(the cron runner discards RAISE NOTICE, so Arm-1/Arm-2 counts weren't captured — the audits
+below are the evidence). The MV refresh then hit the same wall: the owner's dashboard attempt
+(`refresh_donor_consolidated_mv()`, 3× REFRESH **CONCURRENTLY**) couldn't fit its 10-min cap, so
+it was terminated and replaced with a one-shot pg_cron job cloning the **daily job 23 pattern**
+(plain, non-concurrent REFRESH ×3 — proven ~4 min nightly at 08:00): job 46 ran 19:02:00 →
+19:06:35, succeeded, self-unscheduled. Lesson recorded: on this DB, **pg_cron + statement_timeout=0
+is the only reliable lane for >60s work**, and plain REFRESH beats CONCURRENTLY by ~10×.
+
+**State** (verified, live prod 2026-06-12 ~19:10 UTC)
+All runbook audits pass: **A** ActBlue & Democracy Engine rows for E000297 (both cycles) =
+$0 / 0 txns / `is_conduit_org=true` (was $334,428/93). **B** ground truth untouched — 617
+memo-X ActBlue lines / $708,925 still in `contributions` (2026). **C** AIPAC (full FEC name,
+display "AIPAC") 2024 = $10,000/2 (was $171,360/140), 2026 = $5,000/1 (was $53,400/15).
+**D** 0 conduit-named donor rows anywhere with amount or txns ≠ 0. **E** RPC returns AIPAC
+2024 $10,000 direct + $161,360/138 routed; 2026 $5,000 direct + $140,178/108 routed; no
+conduit rows. **F** `finance_reconciliation` untouched (764 error — better than the 777
+standing, under the 900 gate). Coverage trigger re-enabled (`tgenabled='O'`); both one-shot
+cron jobs gone from `cron.job`; consolidated MVs show conduits at **federal_amount=0**; /donors
+top-5 is now Musk / Harris Victory Fund / Trump Natl / Future Forward / Senate Majority. NOT
+verified: the live UI at /candidate/E000297 (data is right; nobody eyeballed the page yet).
+
+**Next**
+Eyeball `/candidate/E000297` in the browser: ActBlue absent, AIPAC ≈ $145K "by or through"
+with the earmark badge, real individuals ranked — then run security advisors per the runbook.
+
+**Deferred**
+**State-finance conduit residue**: NJ/FL/NY import paths have no conduit rule, so the
+consolidated MV still shows ActBlue $1,228 / WinRed $72 / Democracy Engine $48 of *state*
+dollars (trivial vs the $334K federal bug; candidate pages hide them by name-filter, /donors
+ranks them near the bottom). Apply the conduit rule to state importers when state finance gets
+its accuracy pass. Also carried: member-level earmark drilldown; alias-aware grouping inside
+the RPC; `_run_conduit_backfill_v2` left in place (harmless, unscheduled — dropping it would
+drift from the applied migration).
 
 ---
 
