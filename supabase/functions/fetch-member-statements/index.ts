@@ -14,8 +14,10 @@
 //     self-chains: pass max_chain > 0 and each invocation re-invokes itself (service-role
 //     bearer — the escape hatch cron-auth explicitly supports) while work remains.
 //
-// No cron is registered for this function (guardrail #2 — needs review first); coverage
-// runs are kicked manually via pg_net with the vault cron secret.
+// Scheduled by the owner-approved freshness cron 'fetch-member-statements-6h'
+// (migration 20260612013000; guardrail #2 review done 2026-06-12): every 6h with
+// {limit:4, max_chain:20}. One-off coverage runs can still be kicked manually via
+// pg_net with the vault cron secret.
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { getCronSecret, requireCronAuth } from '../_shared/cron-auth.ts';
