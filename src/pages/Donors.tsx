@@ -240,6 +240,7 @@ export const Donors = () => {
               size="sm"
               onClick={() => goToPage(currentPage - 1)}
               disabled={currentPage === 1}
+              aria-label="Previous page"
             >
               <ChevronLeft className="h-4 w-4" />
               <span className="hidden sm:inline ml-1">Previous</span>
@@ -249,6 +250,7 @@ export const Donors = () => {
               size="sm"
               onClick={() => goToPage(currentPage + 1)}
               disabled={currentPage === totalPages}
+              aria-label="Next page"
             >
               <span className="hidden sm:inline mr-1">Next</span>
               <ChevronRight className="h-4 w-4" />

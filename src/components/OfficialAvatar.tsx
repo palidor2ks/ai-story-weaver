@@ -8,6 +8,7 @@ interface OfficialAvatarProps {
   size?: 'sm' | 'md' | 'lg' | 'xl';
   className?: string;
   imageClassName?: string;
+  loading?: 'eager' | 'lazy';
 }
 
 const getPartyRingColor = (party: string) => {
@@ -68,6 +69,7 @@ export const OfficialAvatar = ({
   size = 'md',
   className,
   imageClassName,
+  loading = 'lazy',
 }: OfficialAvatarProps) => {
   const [imageError, setImageError] = useState(false);
   useEffect(() => { setImageError(false); }, [imageUrl]);
@@ -86,7 +88,7 @@ export const OfficialAvatar = ({
         <img
           src={imageUrl}
           alt={`Portrait of ${name}`}
-          loading="lazy"
+          loading={loading}
           decoding="async"
           width="160"
           height="160"
