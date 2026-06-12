@@ -112,7 +112,10 @@ as $$
       and cc.candidate_id = p_candidate_id
       and cc.active = true
       and cc.designation in ('P','A','J')   -- mirrors isAuthorizedRecipient (src/hooks/useCandidates.ts)
-      and coalesce(c.contributor_type, 'Unknown') <> 'Individual'
+      -- Orgs only. Stricter than <> 'Individual' so a mistyped/Unknown individual
+      -- can never surface here (security review 2026-06-12); live data has zero
+      -- Unknown-typed memo-X rows on line 11, so nothing is lost.
+      and coalesce(c.contributor_type, 'Unknown') in ('PAC', 'Organization')
       and upper(coalesce(c.line_number,'')) like '11%'  -- contribution lines only (not Line-12 JFC attribution)
       and coalesce(c.is_transfer, false) = false
       and coalesce(c.is_contribution, true) = true
@@ -133,7 +136,8 @@ as $$
     coalesce(routed_count, 0)::bigint
   from lines
   where coalesce(routed_amount, 0) > 0
-  order by coalesce(routed_amount, 0) + coalesce(direct_amount, 0) desc, cycle desc;
+  order by coalesce(routed_amount, 0) + coalesce(direct_amount, 0) desc, cycle desc
+  limit 500;
 $$;
 
 comment on function public.get_candidate_earmark_rollups(text, text) is
