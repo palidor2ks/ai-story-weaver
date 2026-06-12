@@ -45,18 +45,27 @@ DonorProfile's `DonorRecord`; the rollup hook now fails soft ONLY on "function d
 exist" (PGRST202/42883) and throws real errors so React Query retries instead of caching `[]`.
 The merged migration was NOT touched (never mutate a merged migration; its security hardening
 had already landed pre-merge in 350a264e). The migration-safety review that previously died on
-a session limit was re-run bounded as the owner's **pre-apply gate** — verdict recorded in PR.
+a session limit was re-run bounded: **GO** for applying `20260612120000`. Its one conditional
+finding (add an `is_transfer=false` filter to the backfill recompute?) was **refuted with a
+prod audit** — 40 committees / 1,994 memo-contaminated groups: 0 non-contribution lines
+co-occur, and the 556 co-occurring countable transfers ($54M) are legitimate JFC transfer
+rows whose display depends on staying counted. That decision + benign hash-miss causes are
+recorded in docs/DATA-ACCURACY.md; a full pre-apply runbook (steps + expected before/after
+numbers) was delivered to the owner's Google Drive. All of this ships as **draft PR #369**.
 
 **State** (verified)
 `bunx tsc --noEmit -p tsconfig.app.json` OK (the CI typecheck config — the root tsconfig
-misses errors, lesson learned on #368) · lint 0 errors · tests 61/61 · `bunx vite build` OK.
-NOT verified: live UI with the RPC (migration still unapplied anywhere except the PR preview
-branch, which carries the pre-hardening RPC version — drift is preview-only and harmless).
+misses errors, lesson learned on #368) · lint 0 errors · tests 61/61 · `bunx vite build` OK
+(all re-run after the last code change; the two later commits are docs-only). Draft **PR #369**
+open with commits 8a99c7f9 + 4928a191; CI pending at close-out. NOT verified: live UI with
+the RPC (migration still unapplied anywhere except the #368 preview branch, which carries the
+pre-hardening RPC version — drift is preview-only and harmless).
 
 **Next**
-Owner: merge this follow-up, then apply `20260612120000` to prod deliberately (quiet hour),
-run the audit queries in the migration header, `SELECT public.refresh_donor_consolidated_mv();`,
-and check /candidate/E000297 (ActBlue absent; AIPAC ≈ $145K "by or through"; real donors ranked).
+Owner: merge PR #369, then apply `20260612120000` to prod deliberately following the runbook
+(Drive doc / migration header): quiet hour → capture the NOTICE counts → audits →
+`SELECT public.refresh_donor_consolidated_mv();` → check /candidate/E000297 (ActBlue absent;
+AIPAC ≈ $145K "by or through"; real donors ranked) → security advisors.
 
 **Deferred**
 (carried) member-level earmark drilldown; alias-aware grouping inside the RPC (two raw
