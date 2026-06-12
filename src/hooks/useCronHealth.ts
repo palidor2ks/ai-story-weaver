@@ -7,6 +7,7 @@ export interface CronJobHealth {
   schedule: string;
   active: boolean;
   totalRuns: number;
+  totalRunsAlltime: number;
   succeeded: number;
   failed: number;
   lastRun: string | null;
@@ -52,6 +53,7 @@ export function useCronJobHealth(days = 7) {
         schedule: r.schedule,
         active: !!r.active,
         totalRuns: Number(r.total_runs) || 0,
+        totalRunsAlltime: Number(r.total_runs_alltime) || 0,
         succeeded: Number(r.succeeded) || 0,
         failed: Number(r.failed) || 0,
         lastRun: r.last_run ?? null,
