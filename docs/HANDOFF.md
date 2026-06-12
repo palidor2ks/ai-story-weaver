@@ -27,6 +27,39 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-12 (follow-up: earmark orgs rank on the stat card) — claude/amazing-bohr-nwzgsv
+
+**What happened & why**
+Owner eyeballed `/candidate/E000297` (the "Next" below): profile page correct, but asked for
+AIPAC's number to show **on the stat card as a top donor** — post-backfill its donor row holds
+only direct dollars ($5,000/2026), so it fell out of the card's top-3 while the page list
+showed the combined $145K "by or through" entry. Both stat-card data paths — the
+`ShareProfileButton` `topDonors` prop in CandidateProfile and the admin auto-card hook
+(`useCandidateShareCardData`) — now merge `useCandidateEarmarkRollups` exactly like the
+on-page funding list: matched donor rows are skipped (their direct dollars live inside the
+rollup, so nothing double-lists) and one combined entry ranks in their place, marked with a
+small "BY OR THROUGH" label on the card (`viaEarmarks` flag through ShareProfileButton →
+CardData → CandidateStatCard). The rollup↔donor alias matching was extracted to
+**`src/lib/earmarkRollups.ts`** (+ tests) and CandidateProfile's inline copy now uses it —
+one copy instead of three. Expected card for E000297/2026: AIPAC $145K (by or through) #1,
+then the $10K PACs (AFSCME, AFT…), verified against live donor rows.
+
+**State** (verified)
+`bunx tsc --noEmit -p tsconfig.app.json` OK · lint 0 errors (154 pre-existing warnings) ·
+tests **64/64** (3 new) · `bunx vite build` OK. NOT verified: the rendered card in a browser
+(open the share modal on /candidate/E000297 and check AIPAC at #1 with the label).
+
+**Next**
+Eyeball the stat card via the profile Share button on /candidate/E000297 (AIPAC $145K,
+"by or through" label, no ActBlue), then mark PR #372 ready and merge.
+
+**Deferred**
+'All cycles' mode keeps page parity: a multi-cycle consolidated org row doesn't match
+per-cycle rollups, so the org can appear as both donor row and rollup entries (visible, not
+summed — same as the funding list). Fixes with alias/cycle-awareness in the RPC (carried).
+
+---
+
 ## 2026-06-12 (applied: conduit/memo-X donor backfill + MV refresh on prod) — claude/amazing-bohr-nwzgsv
 
 **What happened & why**
