@@ -98,11 +98,26 @@ A local symbol index speeds up "where is this / what calls this / what breaks if
 
 ## Review council (delegate risky diffs)
 
-Subagents in `.claude/agents/` — hand a diff to the matching reviewer before merging:
+Subagents in `.claude/agents/` — hand the diff to the **one matching** reviewer before merging
+(not the whole council; reviewers are pinned to sonnet and bounded — see Quota discipline):
 - **data-accuracy-verifier** — finance/voting data vs. source (priority #1 gate).
 - **migration-safety-reviewer** — SQL migrations vs. the four guardrails.
 - **frontend-reviewer** — React/TS reuse + one-front-door data access.
 - **security-reviewer** — RLS, authz, secret hygiene.
+
+## Quota discipline (the week is a budget)
+
+Subscription usage is one rolling 7-day pool shared by every surface — main sessions, subagents,
+and web/remote sessions all draw from it, weighted by model. June 2026 lesson: 30 sessions in
+3 days on the top-tier model (+ `model: inherit` reviewers, one of which ran to the session
+limit) consumed the whole week. Defaults are now tuned for that:
+1. **Project default model is `sonnet`** (`.claude/settings.json`). Escalate to opus/fable
+   deliberately for a genuinely hard arc, then drop back.
+2. **One matching reviewer per diff**, scoped to the diff, with a ~20-tool-call budget (each
+   agent file has a "Stay bounded" section).
+3. **Sample, don't sweep.** Bulk data checks belong in `scripts/` emitting a summary line —
+   don't pull thousands of rows through model context via MCP.
+4. **Batch small tasks into one session** — every fresh session re-reads this doc stack first.
 
 ## Skills (the rituals)
 
