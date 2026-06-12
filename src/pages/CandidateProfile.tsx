@@ -9,6 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useCandidate, useCandidateDonors, useCandidateVotes, calculateMatchScore } from '@/hooks/useCandidates';
+import { useCandidateEarmarkRollups } from '@/hooks/useCandidateEarmarkRollups';
+import { isConduitDonor } from '@/lib/conduits';
 import { useProfile, useUserTopicScores } from '@/hooks/useProfile';
 import { useRepresentativeDetails } from '@/hooks/useRepresentativeDetails';
 import { useAdminRole } from '@/hooks/useAdminRole';
@@ -105,6 +107,7 @@ export const CandidateProfile = () => {
   const [donorSearch, setDonorSearch] = useState('');
   const effectiveCycle = selectedCycle ?? cycleInfo?.defaultCycle;
   const { data: donors = [], refetch: refetchDonors } = useCandidateDonors(id, effectiveCycle);
+  const { data: earmarkRollups = [] } = useCandidateEarmarkRollups(id, effectiveCycle);
   const donorCauseLookupDonors = useMemo(() => {
     const search = donorSearch.trim().toLowerCase();
     const lookupLimit = Math.max(visibleDonorCount, 60);
@@ -300,12 +303,9 @@ export const CandidateProfile = () => {
   const hasFecBreakdown = fecTotalReceipts !== null && fecTotalReceipts > 0;
   const fecSourceLabel = financeReconciliation ? 'Nightly reconciliation (cached)' : fecTotals ? 'Live FEC API (fallback)' : null;
 
-  // FIX: Properly categorize donors to match FEC categories and avoid double-counting
-  // Filter by is_contribution, is_transfer, and is_conduit_org flags from database
-  // Use display_name (canonical name) for conduit detection
-  const conduitOrgNames = ['WINRED', 'ACTBLUE', 'DEMOCRACY ENGINE'];
-  const isConduitDonor = (d: typeof donors[0]) => d.is_conduit_org || conduitOrgNames.some(c => (d.display_name || d.name).toUpperCase().includes(c));
-  
+  // Properly categorize donors to match FEC categories and avoid double-counting.
+  // Conduit detection (is_conduit_org flag + name match) lives in src/lib/conduits.
+
   // Itemized Individual = is_contribution && !is_transfer && !is_conduit_org (Line 11 contributions)
   const itemizedIndividualDonors = donors.filter(d => d.is_contribution !== false && !d.is_transfer && !isConduitDonor(d));
   const itemizedIndividualTotal = itemizedIndividualDonors.reduce((sum, d) => sum + d.amount, 0);
@@ -318,9 +318,9 @@ export const CandidateProfile = () => {
   const transferDonors = donors.filter(d => d.is_transfer);
   const transferTotal = transferDonors.reduce((sum, d) => sum + d.amount, 0);
   
-  // Conduit orgs (pass-throughs - should have $0 after fix, but display for transparency)
+  // Conduit orgs (pass-throughs) are excluded from the list entirely; their
+  // donors are itemized individually and no aggregated conduit amount is shown.
   const conduitDonors = donors.filter(d => isConduitDonor(d));
-  const conduitTotal = conduitDonors.reduce((sum, d) => sum + d.amount, 0);
   
   // FEC PAC and Party contributions — prefer nightly reconciliation, fall back to
   // live FEC totals so these land in real buckets instead of "Other / Uncategorized".
@@ -940,9 +940,6 @@ export const CandidateProfile = () => {
                           <p className="text-xl font-bold text-foreground">
                             {formatCurrency(fecTotalReceipts ?? 0)}
                           </p>
-                          {conduitTotal > 0 && (
-                            <p className="text-[10px] text-amber-600 mt-1">+${conduitTotal.toLocaleString()} conduit (excluded)</p>
-                          )}
                         </div>
                       </div>
                     </div>
@@ -982,7 +979,7 @@ export const CandidateProfile = () => {
                           id: string;
                           name: string;
                           amount: number;
-                          sourceType: 'donor' | 'small_donors' | 'candidate_loan' | 'candidate_contribution' | 'committee_transfer';
+                          sourceType: 'donor' | 'small_donors' | 'candidate_loan' | 'candidate_contribution' | 'committee_transfer' | 'earmark_org';
                           donor?: typeof donors[0];
                           badgeLabel?: string;
                           badgeStyle?: string;
@@ -993,10 +990,27 @@ export const CandidateProfile = () => {
                         };
 
                         const allSources: FundingSource[] = [];
-                        
+
+                        // Earmark-program orgs (e.g. AIPAC) get ONE combined "by or
+                        // through" entry: direct dollars + member earmarks attributed
+                        // to the org. The matched per-cycle donor row is replaced by
+                        // that entry (its direct dollars are inside the rollup), so
+                        // nothing is double-listed; the routed dollars stay out of
+                        // every total — the members are themselves listed as donors.
+                        const normalizeOrgKey = (name: string) => name.replace(/\s+/g, ' ').trim().toUpperCase();
+                        const rollupByKey = new Map<string, (typeof earmarkRollups)[number]>(
+                          earmarkRollups.map(r => [`${normalizeOrgKey(r.org_label)}|${r.cycle}`, r]),
+                        );
+                        const rollupDonorMatch = new Map<string, { donorId: string; displayName: string }>();
+
                         // Add regular donors - but exclude entries already shown as FEC summary categories
                         // EXCEPT: Show transfer donors with their names for transparency (they just won't count toward totals)
                         donors.forEach(d => {
+                          // Conduits (ActBlue/WinRed/Democracy Engine) are payment
+                          // processors, not donors: never listed, no aggregate shown.
+                          if (isConduitDonor(d)) {
+                            return;
+                          }
                           // Skip loan entries (line 13A) if fecLoans is already shown as FEC aggregate
                           if (fecLoans > 0 && d.line_number === '13A') {
                             return;
@@ -1005,10 +1019,19 @@ export const CandidateProfile = () => {
                           if (fecCandidateContribution > 0 && d.line_number === '11AI') {
                             return;
                           }
-                          
+
                           const isTransfer = d.line_number?.startsWith('12') || d.is_transfer;
                           const displayName = d.display_name || d.name;
-                          
+
+                          // Replaced by the org's combined earmark entry below.
+                          if (!isTransfer) {
+                            const rollupKey = `${normalizeOrgKey(d.name)}|${d.cycle}`;
+                            if (rollupByKey.has(rollupKey)) {
+                              rollupDonorMatch.set(rollupKey, { donorId: d.id, displayName });
+                              return;
+                            }
+                          }
+
                           // Show transfer donors with their names but mark them as transfers
                           if (isTransfer) {
                             // For transfers, the conduit_committee_id is the originating committee
@@ -1037,7 +1060,29 @@ export const CandidateProfile = () => {
                             });
                           }
                         });
-                        
+
+                        // Combined "by or through" entries for earmark-program orgs.
+                        // Ranked by direct + routed; the breakdown is stated on the
+                        // card so the overlap with individual donors is explicit.
+                        earmarkRollups.forEach(r => {
+                          const rollupKey = `${normalizeOrgKey(r.org_label)}|${r.cycle}`;
+                          const match = rollupDonorMatch.get(rollupKey);
+                          const orgName = match?.displayName || r.org_label;
+                          const combined = r.direct_amount + r.routed_amount;
+                          allSources.push({
+                            id: `earmark|${rollupKey}`,
+                            name: orgName,
+                            amount: combined,
+                            sourceType: 'earmark_org',
+                            badgeLabel: 'Earmark program',
+                            badgeStyle: 'border-amber-500/50 text-amber-600 bg-amber-500/10',
+                            description: `${formatCurrency(r.direct_amount)} given directly + ${formatCurrency(r.routed_amount)} earmarked through ${orgName} by its donors (${r.routed_count.toLocaleString()} contributions). Those donors are also listed individually — earmarked dollars are never counted twice.`,
+                            subLabel: `${r.cycle} · by or through`,
+                            searchText: [orgName, r.org_label, 'earmark', 'by or through', r.org_type].join(' ').toLowerCase(),
+                            linkTo: match ? `/donor/${match.donorId}` : undefined,
+                          });
+                        });
+
                         // Add FEC aggregate sources
                         if (fecUnitemized && fecUnitemized > 0) {
                           allSources.push({
@@ -1120,48 +1165,23 @@ export const CandidateProfile = () => {
                             )}
                             {visibleSources.map(source => {
                               // Render donor-type sources
+                              // (conduit rows never reach here — they're filtered out
+                              // of allSources; earmark-program orgs render as
+                              // 'earmark_org' aggregate cards instead)
                               if (source.sourceType === 'donor' && source.donor) {
                                 const donor = source.donor;
                                 const displayName = donor.display_name || donor.name;
-                                const conduitOrgs = ['WINRED', 'ACTBLUE', 'DEMOCRACY ENGINE'];
-                                const isConduit = donor.is_conduit_org || conduitOrgs.some(c => displayName.toUpperCase().includes(c));
-                                const cycleBreakdown = donor.cycle_breakdown ?? [];
-                                const hasCycleBreakdown = isConduit && cycleBreakdown.length > 1;
-                                const cycleBreakdownLabel = cycleBreakdown
-                                  .map(entry => `${entry.cycle}: ${formatCurrency(entry.amount)}`)
-                                  .join(' · ');
-                                
+
                                 return (
                                   <Link
                                     key={source.id}
                                     to={`/donor/${donor.id}`}
                                     className="block group"
                                   >
-                                    <div className={cn(
-                                      "flex items-center justify-between p-4 rounded-lg border transition-all",
-                                      isConduit 
-                                        ? "border-amber-500/30 bg-amber-500/5 hover:border-amber-500/50" 
-                                        : "border-border hover:border-primary/30 hover:shadow-sm"
-                                    )}>
+                                    <div className="flex items-center justify-between p-4 rounded-lg border transition-all border-border hover:border-primary/30 hover:shadow-sm">
                                       <div>
                                         <div className="flex items-center gap-2">
                                           <p className="font-medium text-foreground group-hover:text-primary transition-colors">{displayName}</p>
-                                          {isConduit && (
-                                            <TooltipProvider>
-                                              <Tooltip>
-                                                <TooltipTrigger>
-                                                  <Badge variant="outline" className="text-[10px] border-amber-500/50 text-amber-600 bg-amber-500/10">
-                                                    Conduit
-                                                  </Badge>
-                                                </TooltipTrigger>
-                                                <TooltipContent className="max-w-xs">
-                                                  <p className="font-medium mb-1">Pass-Through Organization</p>
-                                                  <p className="text-xs">This organization processes donations on behalf of individual donors. 
-                                                  The amount shown is the total routed through this conduit — individual donors are listed separately to avoid double-counting.</p>
-                                                </TooltipContent>
-                                              </Tooltip>
-                                            </TooltipProvider>
-                                          )}
                                           {donor.is_consolidated && donor.name_variations && donor.name_variations.length > 1 && (
                                             <TooltipProvider>
                                               <Tooltip>
@@ -1191,30 +1211,6 @@ export const CandidateProfile = () => {
                                             const cause = getDonorCause(donorCauseMap, displayName, donor.type);
                                             return cause ? <CauseBadge cause={cause} /> : null;
                                           })()}
-                                          {isConduit && (
-                                            <span className="text-xs text-amber-600">Pass-through</span>
-                                          )}
-                                          {hasCycleBreakdown && (
-                                            <TooltipProvider>
-                                              <Tooltip>
-                                                <TooltipTrigger asChild>
-                                                  <Badge variant="outline" className="text-[10px] border-amber-500/50 text-amber-700 bg-amber-500/10 dark:text-amber-400">
-                                                    {cycleBreakdown.length} cycles merged
-                                                  </Badge>
-                                                </TooltipTrigger>
-                                                <TooltipContent className="max-w-xs">
-                                                  <p className="font-medium mb-1">Cycle breakdown</p>
-                                                  <ul className="text-xs space-y-0.5">
-                                                    {cycleBreakdown.map(entry => (
-                                                      <li key={entry.cycle}>
-                                                        {entry.cycle}: ${entry.amount.toLocaleString()} · {entry.transaction_count.toLocaleString()} contributions
-                                                      </li>
-                                                    ))}
-                                                  </ul>
-                                                </TooltipContent>
-                                              </Tooltip>
-                                            </TooltipProvider>
-                                          )}
                                           {(() => {
                                             const via = donor.via_committees ?? [];
                                             const external = via.filter(v => v.designation !== 'P' && v.designation !== 'A');
@@ -1272,29 +1268,22 @@ export const CandidateProfile = () => {
                                             </span>
                                           )}
                                         </div>
-                                        {hasCycleBreakdown && (
-                                          <p className="text-xs text-muted-foreground mt-1">
-                                            {cycleBreakdownLabel}
-                                          </p>
-                                        )}
                                       </div>
                                       <div className="text-right">
-                                        <p className={cn("font-bold", isConduit ? "text-amber-600" : "text-foreground")}>
+                                        <p className="font-bold text-foreground">
                                           {formatCurrency(donor.amount)}
                                         </p>
                                         <p className="text-xs text-muted-foreground">
-                                          {hasCycleBreakdown
-                                            ? `${donor.transaction_count.toLocaleString()} contributions · ${cycleBreakdown.length} cycles`
-                                            : donor.transaction_count > 1
-                                              ? `${donor.transaction_count.toLocaleString()} contributions`
-                                              : donor.cycle}
+                                          {donor.transaction_count > 1
+                                            ? `${donor.transaction_count.toLocaleString()} contributions`
+                                            : donor.cycle}
                                         </p>
                                       </div>
                                     </div>
                                   </Link>
                                 );
                               }
-                              
+
                               // Render FEC aggregate sources
                               const getBorderStyle = () => {
                                 switch (source.sourceType) {
@@ -1302,15 +1291,17 @@ export const CandidateProfile = () => {
                                   case 'candidate_loan':
                                   case 'candidate_contribution': return 'border-blue-500/30 bg-blue-500/5';
                                   case 'committee_transfer': return 'border-purple-500/30 bg-purple-500/5';
+                                  case 'earmark_org': return 'border-amber-500/30 bg-amber-500/5';
                                   default: return 'border-border';
                                 }
                               };
-                              
+
                               const getAmountColor = () => {
                                 switch (source.sourceType) {
                                   case 'candidate_loan':
                                   case 'candidate_contribution': return 'text-blue-600';
                                   case 'committee_transfer': return 'text-purple-600';
+                                  case 'earmark_org': return 'text-amber-700';
                                   default: return 'text-foreground';
                                 }
                               };
@@ -1376,16 +1367,16 @@ export const CandidateProfile = () => {
                       })()}
                     </div>
                     
-                    {/* Conduit explanation */}
-                    {donors.some(d => ['WINRED', 'ACTBLUE', 'DEMOCRACY ENGINE'].some(c => (d.display_name || d.name).toUpperCase().includes(c))) && (
-                      <div className="mt-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs">
+                    {/* Conduit explanation — no aggregated conduit amounts are shown anywhere */}
+                    {conduitDonors.length > 0 && (
+                      <div className="mt-4 p-3 rounded-lg bg-muted/50 border border-border text-xs text-muted-foreground">
                         <div className="flex items-start gap-2">
-                          <Info className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
-                          <div className="text-amber-700">
-                            <span className="font-medium">Conduit Organizations: </span>
-                            WinRed, ActBlue, and Democracy Engine are payment processors that route donations from individual donors. 
-                            Their totals represent pass-through amounts — the original donors are listed separately in this table.
-                          </div>
+                          <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                          <span>
+                            Donations made via payment processors (ActBlue, WinRed, Democracy Engine) are
+                            credited to the individual donors listed above; the processors themselves are
+                            not donors and are not shown.
+                          </span>
                         </div>
                       </div>
                     )}

@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { crypto } from "https://deno.land/std@0.177.0/crypto/mod.ts";
 import { encode as hexEncode } from "https://deno.land/std@0.177.0/encoding/hex.ts";
+import { isKnownConduitOrg, shouldCountDonorLine } from "../_shared/conduits.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -156,6 +157,7 @@ interface AggregatedDonor {
   employer: string;
   occupation: string;
   lineNumber: string;
+  isConduitOrg: boolean;
 }
 
 serve(async (req) => {
@@ -312,6 +314,23 @@ serve(async (req) => {
       const lineNumber = (receipt.line_number || '').toString().toUpperCase();
       const isRealContribution = !NON_CONTRIBUTION_LINES.has(lineNumber);
       const isVendorRefund = VENDOR_REFUND_LINES.has(lineNumber);
+      const memoText = receipt.memo_text || null;
+
+      // Same effective memo-code forcing as the other importers: Line-12
+      // individual attribution records and conduit aggregate lines are
+      // informational duplicates (FEC excludes them from totals).
+      const contributorType = mapEntityType(entityType);
+      const isLine12Attribution = lineNumber.startsWith('12') && contributorType === 'Individual';
+      const isConduitAggregate =
+        lineNumber === '11AI' &&
+        contributorType !== 'Individual' &&
+        (memoText || '').toUpperCase().includes('EARMARKED THROUGH CONDUIT');
+      const effectiveMemoCode = (isLine12Attribution || isConduitAggregate) ? 'X' : (receipt.memo_code || null);
+
+      // One counting rule, shared across all importers (see _shared/conduits.ts).
+      const donorIsConduitOrg = isKnownConduitOrg(contributorName);
+      const countable = shouldCountDonorLine({ contributorName, effectiveMemoCode, memoText });
+      const countedAmount = countable ? amount : 0;
 
       // Generate contribution hash
       const identityHash = await generateContributionHash(
@@ -327,7 +346,7 @@ serve(async (req) => {
         identity_hash: identityHash,
         fec_transaction_id: receipt.sub_id || null,
         contributor_name: contributorName,
-        contributor_type: mapEntityType(entityType),
+        contributor_type: contributorType,
         contributor_city: city,
         contributor_state: state,
         contributor_zip: zip,
@@ -338,8 +357,8 @@ serve(async (req) => {
         cycle,
         candidate_id: committee.candidate_id, // Will be null for orphan committees
         line_number: receipt.line_number || null,
-        memo_text: receipt.memo_text || null,
-        memo_code: receipt.memo_code || null,
+        memo_text: memoText,
+        memo_code: effectiveMemoCode,
         employer: receipt.contributor_employer || null,
         occupation: receipt.contributor_occupation || null,
         is_contribution: isRealContribution,
@@ -352,8 +371,11 @@ serve(async (req) => {
       
       if (donorMap.has(donorId)) {
         const donor = donorMap.get(donorId)!;
-        donor.amount += amount;
-        donor.transactionCount++;
+        donor.amount += countedAmount;
+        if (countable) {
+          donor.transactionCount++;
+        }
+        donor.isConduitOrg = donor.isConduitOrg || donorIsConduitOrg;
         if (receiptDate) {
           if (!donor.firstReceiptDate || receiptDate < donor.firstReceiptDate) {
             donor.firstReceiptDate = receiptDate;
@@ -365,9 +387,9 @@ serve(async (req) => {
       } else {
         donorMap.set(donorId, {
           name: contributorName,
-          type: mapEntityType(entityType),
-          amount,
-          transactionCount: 1,
+          type: contributorType,
+          amount: countedAmount,
+          transactionCount: countable ? 1 : 0,
           firstReceiptDate: receiptDate,
           lastReceiptDate: receiptDate,
           city,
@@ -376,6 +398,7 @@ serve(async (req) => {
           employer: receipt.contributor_employer || '',
           occupation: receipt.contributor_occupation || '',
           lineNumber: receipt.line_number || '',
+          isConduitOrg: donorIsConduitOrg,
         });
       }
     }
@@ -417,6 +440,7 @@ serve(async (req) => {
       is_contribution: !NON_CONTRIBUTION_LINES.has((donor.lineNumber || '').toUpperCase()),
       is_vendor_refund: VENDOR_REFUND_LINES.has((donor.lineNumber || '').toUpperCase()),
       is_transfer: false,
+      is_conduit_org: donor.isConduitOrg,
     }));
 
     let donorsSaved = 0;

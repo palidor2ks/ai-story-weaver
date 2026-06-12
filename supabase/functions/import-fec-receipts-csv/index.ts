@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { crypto } from "https://deno.land/std@0.177.0/crypto/mod.ts";
 import { encode as hexEncode } from "https://deno.land/std@0.177.0/encoding/hex.ts";
+import { isKnownConduitOrg, shouldCountDonorLine } from "../_shared/conduits.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -532,13 +533,24 @@ Deno.serve(async (req) => {
       
       const effectiveMemoCode = (isLine12Attribution || isConduitAggregate) ? 'X' : (rd.memoCode || null);
 
+      // One counting rule, shared with the API importer (see _shared/conduits.ts):
+      // conduit-named lines, memo-X informational lines, and SEE-BELOW
+      // pass-throughs carry $0 toward donor rows — that money is counted on the
+      // underlying countable lines. This path previously counted everything,
+      // which is how conduit rows (e.g. ActBlue) ended up with aggregated amounts.
+      const donorIsConduitOrg = isKnownConduitOrg(rd.contributorName);
+      const countable = shouldCountDonorLine({
+        contributorName: rd.contributorName,
+        effectiveMemoCode,
+        memoText: rd.memoText,
+      });
+      const countedAmount = countable ? Math.round(rd.amount) : 0;
+
       contributions.push({
         identity_hash: identityHash,
         fec_transaction_id: rd.subId,
         fec_committee_transaction_id: rd.transactionId,
         contributor_name: rd.contributorName,
-        contributor_type: contributorType,
-        amount: Math.round(rd.amount),
         contributor_type: contributorType,
         amount: Math.round(rd.amount),
         cycle: rd.rowCycle,
@@ -562,11 +574,19 @@ Deno.serve(async (req) => {
         import_session_id: sessionId || null
       });
 
-      // Aggregate for donors table
+      // Aggregate for donors table — only countable lines move dollars/counts;
+      // receipt dates track every line (sync provenance).
       if (donorAggregates.has(rd.donorId)) {
         const existing = donorAggregates.get(rd.donorId);
-        existing.amount += Math.round(rd.amount);
-        existing.transactionCount++;
+        existing.amount += countedAmount;
+        if (countable) {
+          existing.transactionCount++;
+        }
+        existing.isConduitOrg = existing.isConduitOrg || donorIsConduitOrg;
+        if (rd.conduitCommitteeName && !existing.conduitName) {
+          existing.conduitName = rd.conduitCommitteeName;
+          existing.conduitCommitteeId = rd.conduitCommitteeId;
+        }
         if (rd.receiptDate) {
           if (!existing.firstReceiptDate || rd.receiptDate < existing.firstReceiptDate) {
             existing.firstReceiptDate = rd.receiptDate;
@@ -580,9 +600,9 @@ Deno.serve(async (req) => {
           id: rd.donorId,
           name: rd.contributorName,
           type: mapEntityType(rd.entityType),
-          amount: Math.round(rd.amount),
+          amount: countedAmount,
           cycle: rd.rowCycle,
-          transactionCount: 1,
+          transactionCount: countable ? 1 : 0,
           firstReceiptDate: rd.receiptDate,
           lastReceiptDate: rd.receiptDate,
           city: rd.city,
@@ -593,6 +613,9 @@ Deno.serve(async (req) => {
           lineNumber: rd.lineNumber,
           isContribution: classifyLineNumber(rd.lineNumber).isContribution,
           isTransfer: classifyLineNumber(rd.lineNumber).isTransfer,
+          isConduitOrg: donorIsConduitOrg,
+          conduitName: rd.conduitCommitteeName,
+          conduitCommitteeId: rd.conduitCommitteeId,
           recipientCommitteeId: rd.recipientCommitteeId,
           recipientCommitteeName: rd.recipientCommitteeName,
           candidateId: rowCandidateId
@@ -699,6 +722,9 @@ Deno.serve(async (req) => {
       line_number: d.lineNumber,
       is_contribution: d.isContribution,
       is_transfer: d.isTransfer,
+      is_conduit_org: d.isConduitOrg,
+      conduit_name: d.conduitName,
+      conduit_committee_id: d.conduitCommitteeId,
       recipient_committee_id: d.recipientCommitteeId,
       recipient_committee_name: d.recipientCommitteeName,
       candidate_id: d.candidateId,

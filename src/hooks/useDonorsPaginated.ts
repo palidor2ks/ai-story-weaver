@@ -17,7 +17,6 @@ export interface DonorFilters {
   minAmount: number | null;
   maxAmount: number | null;
   includeTransfers: boolean;
-  includeConduitOrgs: boolean;
   candidateId: string | null;
   party: string;
 }
@@ -75,7 +74,6 @@ const DEFAULT_FILTERS: DonorFilters = {
   minAmount: null,
   maxAmount: null,
   includeTransfers: true,
-  includeConduitOrgs: true,
   candidateId: null,
   party: 'all',
 };

@@ -17,16 +17,17 @@ import { CauseBadge } from '@/components/CauseBadge';
 import { useAuth } from '@/context/AuthContext';
 import { cn, formatCompactCurrency, formatFullCurrency } from '@/lib/utils';
 import { normalizeOfficeName } from '@/lib/officeLabel';
-import { 
-  ArrowLeft, 
-  Building2, 
-  Calendar, 
-  DollarSign, 
+import {
+  ArrowLeft,
+  Building2,
+  Calendar,
+  DollarSign,
   Filter,
-  Hash, 
+  Hash,
+  Info,
   Layers,
-  Loader2, 
-  MapPin, 
+  Loader2,
+  MapPin,
   TrendingUp,
   User as UserIcon,
   Users,
@@ -34,6 +35,7 @@ import {
   Landmark,
   Sparkles
 } from 'lucide-react';
+import { isConduitDonor } from '@/lib/conduits';
 import { logBadgeEvent } from '@/lib/badges';
 import { useNjDonorGiving } from '@/hooks/useNjDonorGiving';
 import { DonorStateGiving } from '@/components/DonorStateGiving';
@@ -667,6 +669,19 @@ const DonorProfile = () => {
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back to Donors
         </Link>
+
+        {/* Conduit explainer — these rows intentionally carry $0 */}
+        {isConduitDonor(donor) && (
+          <div className="p-4 rounded-lg bg-muted/50 border border-border text-sm text-muted-foreground flex items-start gap-2">
+            <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
+            <span>
+              <span className="font-medium text-foreground">{displayName}</span> is a payment
+              processor (an FEC “conduit”), not a donor. Donations made through it are credited
+              to the individual donors who gave them, so the dollar totals on this page are
+              intentionally $0.
+            </span>
+          </div>
+        )}
 
         {/* Mobile sticky identity bar */}
         <div className="md:hidden sticky top-16 z-30 -mx-4 px-4 py-2 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border flex items-center gap-3">
