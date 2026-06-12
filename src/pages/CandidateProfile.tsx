@@ -998,8 +998,8 @@ export const CandidateProfile = () => {
                         // nothing is double-listed; the routed dollars stay out of
                         // every total — the members are themselves listed as donors.
                         const normalizeOrgKey = (name: string) => name.replace(/\s+/g, ' ').trim().toUpperCase();
-                        const rollupByKey = new Map(
-                          earmarkRollups.map(r => [`${normalizeOrgKey(r.org_label)}|${r.cycle}`, r] as const),
+                        const rollupByKey = new Map<string, (typeof earmarkRollups)[number]>(
+                          earmarkRollups.map(r => [`${normalizeOrgKey(r.org_label)}|${r.cycle}`, r]),
                         );
                         const rollupDonorMatch = new Map<string, { donorId: string; displayName: string }>();
 
