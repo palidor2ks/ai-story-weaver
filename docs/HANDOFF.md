@@ -60,6 +60,42 @@ summed — same as the funding list). Fixes with alias/cycle-awareness in the RP
 
 ---
 
+## 2026-06-12 (quota discipline: why a week of usage died in one night, and the new defaults) — claude/funny-shannon-tfvsg4
+
+**What happened & why**
+The owner burned the entire weekly Claude subscription quota in ~one night and asked for a
+breakdown + fix. Reconstructed from this repo's own logs: **30 HANDOFF close-outs in 3 days**
+(18 on 06-10 alone, ~17 PRs), all remote sessions on the top-tier model — and every
+review-council agent was `model: inherit`, so each reviewer pass also ran premium in a fresh
+context. One migration-safety review ran to the session limit and was re-run (double burn), and
+several sessions piped bulk prod data row-by-row through model context via MCP (541-member
+coverage run, 47k mislabel repair, 1,994-group conduit audit). Docs check confirmed the weekly
+limit is a rolling 7-day pool shared across CLI/web/subagents, weighted by model. Fixes applied:
+(1) all four `.claude/agents/*` pinned **`model: sonnet`** + a "Stay bounded" section (scope to
+the dispatched diff, ~20-tool-call budget; data-accuracy additionally "sample ≤ ~20 rows, use
+SQL aggregates, big audits live in scripts"); (2) **project default model set to `sonnet`** in
+`.claude/settings.json` — escalate per-session deliberately (`/model opus|fable`) for hard arcs;
+(3) CLAUDE.md gained a **Quota discipline** section (one matching reviewer per diff, sample
+don't sweep, batch small tasks) and the review-council intro now says "one matching reviewer".
+
+**State** (verified)
+`.claude/settings.json` parses as valid JSON; `git diff` shows exactly the 6 intended files
+(+43/−5). Docs/config-only change — no `src/` or `supabase/` files touched, so lint/build/test
+were intentionally not run (nothing they cover changed). NOT verified: whether the web session
+launcher respects the project-default model — owner should glance at the model indicator on the
+next remote session.
+
+**Next**
+Owner: run `/usage` in the CLI (toggle `w`) to see the real usage split and when the rolling
+window frees, then merge the draft PR for this branch.
+
+**Deferred**
+Dial frontend/migration reviewers down to `haiku` if sonnet-quality reviews hold up; revisit
+plan tier / usage credits only after a week under the new defaults; (carried) everything in the
+entries below.
+
+---
+
 ## 2026-06-12 (applied: conduit/memo-X donor backfill + MV refresh on prod) — claude/amazing-bohr-nwzgsv
 
 **What happened & why**
