@@ -12,5 +12,10 @@ Allow: /
 
 User-agent: *
 Allow: /
+Disallow: /admin/
+Disallow: /donor/
+Disallow: /profile
+Disallow: /quiz
+Disallow: /r/card/
 
 Sitemap: https://www.polipulseapp.com/sitemap.xml

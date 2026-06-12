@@ -109,6 +109,7 @@ export const CandidateCard = ({
               name={candidate.name}
               party={candidate.party}
               size="md"
+              loading={index < 6 ? 'eager' : 'lazy'}
             />
 
             {/* Name & Info */}

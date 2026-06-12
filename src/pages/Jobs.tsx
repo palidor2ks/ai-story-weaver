@@ -159,7 +159,7 @@ export default function Jobs() {
               <h1 className="font-display text-4xl font-bold tracking-tight md:text-6xl">
                 Help build the political data platform voters can actually use.
               </h1>
-              <p className="max-w-3xl text-lg leading-8 text-white/85 md:text-xl">
+              <p className="max-w-3xl text-lg leading-8 text-white md:text-xl">
                 Pulse needs a hands-on full-stack developer and a political scientist who understands polling and data. Together, these roles will support the product, research, methodology, and technical infrastructure behind the app.
               </p>
               <div className="flex flex-col gap-3 sm:flex-row">

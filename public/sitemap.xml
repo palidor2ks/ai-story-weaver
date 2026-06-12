@@ -2956,11 +2956,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00343871</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://www.polipulseapp.com/committee/C00895763</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -16377,6 +16372,11 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/committee/C00937573</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00343871</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
