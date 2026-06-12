@@ -111,7 +111,7 @@ export function BadgeShelf({ userId, showLocked = true, family = 'voter' }: Prop
                         {b.description}
                       </p>
                       {b.points > 0 && (
-                        <p className="text-[10px] text-muted-foreground/70">+{b.points} pts</p>
+                        <p className="text-[10px] text-muted-foreground">+{b.points} pts</p>
                       )}
                       {b.is_repeatable && count > 1 && (
                         <span className="absolute -top-1 -right-1 text-[10px] bg-primary text-primary-foreground rounded-full px-1.5 py-0.5 font-bold">
