@@ -191,6 +191,53 @@ spellings of one org still yield two rollup cards); everything in the entry belo
 
 ---
 
+## 2026-06-12 (7th arc: freshness cron SHIPPED + corpus verified 541/541; literal saga) — claude/cool-mendel-q22rt6
+
+**What happened & why**
+Closing arc of the evidence-index push. (1) **Freshness cron approved & shipped end-to-end**:
+owner approved the spec (every 6h, limit 4, max_chain 20 → ~84 stalest members/run, full
+corpus refresh ~1-2 days); migration `20260612013000_member_statements_freshness_cron.sql`
+written in the bills-cron house pattern (vault-read keys — `nj_elec_cron_anon_key` +
+`cron_secret`, both verified present — guarded do-blocks, unschedule-then-schedule);
+migration-safety-reviewer **GO** with two polish items applied (schedule failures now
+`raise notice`; the drain's "no cron" breadcrumb updated). Applied deliberately via MCP +
+ledgered in `claude_migration_log` (the apply-prod-migrations workflow is STILL blocked on the
+unset `SUPABASE_DB_URL` repo secret — owner action). **Job verified live**: `cron.job` row
+active, `20 */6 * * *`. PR #367 merged. (2) **GitGuardian saga resolved properly**: the anon-key
+literal added as a chain fallback tripped the scanner (red X on #366). Removing it was correct,
+not cosmetic — `SUPABASE_ANON_KEY` is a reserved platform-injected env var, so the literal was
+dead code. Branch history was REWRITTEN (squash to one commit) so no commit carries the
+literal; scanner flipped green; v6 deployed without it. (3) **v6 verified in prod**: a
+1-hop kick re-walked exactly 8 members with 0 chain errors — the handoff works on the
+injected key alone. **Final corpus state: 541/541 members walked, 5,460 statements**
+(during idle hours the chain self-finished). 13 real sync errors = the known no-feed members.
+(4) **Citation consumer sized & designed** (not built): pool = 96,069 URL-less answers across
+464 members with held statements (73,493 directional). Design inverts the failed part-1b
+approach: AI only SELECTS from held `member_statements.body_text`; every supporting quote is
+mechanically verified as a literal substring of held text server-side → fabrication
+structurally impossible; identity structural; stage → 50-sample gate → apply.
+
+**State** (verified)
+cron.job `fetch-member-statements-6h` active in prod (next run 06:20 UTC); corpus 541/541 +
+5,460 statements measured live; v6 == repo HEAD == main (PR #367 merged; CI redeploy no-op).
+Lint 0 errors, 51/51 tests at the final commit. Working tree clean, branch == main. NOT
+verified: the first scheduled cron run (06:20 UTC — check cron.job_run_details +
+member_statement_sync.updated_at after); the consumer design (no code yet).
+
+**Next**
+Build the citation consumer: enqueue a 50-answer gate sample (answers × held statements via
+the topical keyword map), AI-verify with the held-text substring guard, eyeball the gate,
+apply only on a pass. Expectation honestly set: with ~10 recent releases/member today the
+immediate hit rate will be modest and grows as the cron deepens the corpus.
+
+**Deferred**
+SUPABASE_DB_URL repo secret (OWNER — the migration workflow stays broken without it); first
+scheduled cron run check; 13 no-feed members classification; 1,299 'none'-body backfill;
+listing pagination; spike fn + `_evidence_spike_*` + `_enrich_stmt_staging` cleanup (after
+owner review); say-vs-do layer (after the consumer); (carried) the 6th-arc list.
+
+---
+
 ## 2026-06-12 (donor accuracy: conduits are not donors; "by or through" for AIPAC-style orgs) — claude/amazing-bohr-nwzgsv
 
 **What happened & why**
