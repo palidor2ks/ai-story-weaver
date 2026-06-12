@@ -27,6 +27,55 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-11 (6th arc: evidence index LIVE — 541-member coverage run COMPLETE) — claude/cool-mendel-q22rt6
+
+**What happened & why**
+Post-merge of #365 the slice went live the hard way — every step verified, three real bugs fixed:
+(1) **The apply-prod-migrations workflow has NEVER worked: the SUPABASE_DB_URL repo secret is
+unset** (every run failed, incl. Lovable's 13:05 push — Lovable applies its own, so nobody
+noticed). **OWNER ACTION: add the secret** (GitHub → Settings → Secrets → Actions;
+value = Session-pooler URI, port 5432). Meanwhile the reviewed migration was applied
+deliberately via MCP `apply_migration` (identical file content) and recorded in
+`claude_migration_log` so a future workflow re-run no-ops. (2) **Verification kick passed**
+(4 members, RSS-payload bodies confirmed live). (3) **Coverage run took three drain fixes**,
+each diagnosed from the sync-table instrumentation added for the purpose: run 1 stalled at
+16/541 — bot-walled members burned 10×12s page-fetch timeouts and the END-placed chain call
+died with the wall-clocked instance → chain now fires after ONE bounded walk + caps tightened
+(PAGE_FETCH_CAP 4, timeout 8s); run 2 stalled — `AbortSignal.timeout` doesn't exist in this
+edge runtime and its synchronous throw silently killed every chain → AbortController; runs 3/4
+401'd at the handoff — captured response body named it: the functions gateway rejects
+**"Conflicting API keys"** when apikey (anon) and Authorization (service bearer) differ →
+send exactly what working pg_net crons send: apikey + x-cron-secret (via getCronSecret()), no
+Authorization. v5 chain became self-sustaining: **36 → 524 members in 8 minutes** (pipeline
+depth compounds — each instance spawns its successor after its first walk; ~hits distinct
+hosts so per-host load stays polite; chains die when claims run short).
+
+**State** (verified, live)
+**Corpus: 5,300+ statements / 524+ of 541 members walked** (last few in flight, chain
+self-finishing): discovery 86% RSS (257 probed + 210 advertised) + 58 html-listing + ~16
+none/error; bodies 3,894 rss_payload (avg 1.9k chars, 431 members) + 237 page_fetch (avg
+3.6k) + 1,299 title/URL/date-only (backfill candidates). 0 walk errors on members with feeds.
+member_statement_sync is the per-member ledger (stale 'chain handoff' notes on a few
+COMPLETED rows are run-3/4 artifacts, harmless). Schema applied to prod (objects verified) +
+ledgered. Drain at v5 == repo HEAD (5 commits on the branch incl. fixes). Lint 0 errors,
+51/51 tests. NOT verified: the ~16 discovery failures (enumerate + classify next session);
+freshness cron not yet proposed/created (guardrail #2).
+
+**Next**
+Propose the freshness cron for `fetch-member-statements` (e.g. every 6h, limit 4-6, max_chain
+~20 — incremental: claims pick the stalest members; new releases upsert-dedupe) for owner
+review per guardrail #2. Then the corpus consumers: statement↔topic indexing and the
+say-vs-do layer.
+
+**Deferred**
+SUPABASE_DB_URL repo secret (OWNER — unblocks the migration workflow); the ~16
+no-feed members (classify: JS-only newsrooms vs no site); 'none'-body backfill (1,299);
+listing-page pagination (html-listing members only got first-page items); spike fn +
+`_evidence_spike_*` + `_enrich_stmt_staging` cleanup (after owner reviews); (carried) the
+5th-arc list.
+
+---
+
 ## 2026-06-11 (5th arc: evidence-index slice 1 — reviewed schema + production drain) — claude/cool-mendel-q22rt6
 
 **What happened & why**

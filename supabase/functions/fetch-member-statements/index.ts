@@ -18,7 +18,7 @@
 // runs are kicked manually via pg_net with the vault cron secret.
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import { requireCronAuth } from '../_shared/cron-auth.ts';
+import { getCronSecret, requireCronAuth } from '../_shared/cron-auth.ts';
 import {
   candidateFeedPaths,
   extractPressLinks,
@@ -38,14 +38,19 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+// SUPABASE_ANON_KEY is a reserved env var the platform always injects into edge
+// functions; the chain handoff needs it because the gateway 401s an empty apikey
+// header. If it ever goes missing the captured chain diagnostics will say so.
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
 const LEGISLATORS_URL = 'https://unitedstates.github.io/congress-legislators/legislators-current.json';
-const FETCH_TIMEOUT_MS = 12000;
+const FETCH_TIMEOUT_MS = 8000;  // bot-walled hosts eat the whole budget at 12s — fail faster
 const DELAY_MS = 300;
 const MAX_LIMIT = 6;            // members per invocation (wall-clock budget)
 const MAX_CHAIN = 150;          // hard ceiling on self-chaining depth
 const MAX_ITEMS_PER_MEMBER = 40;
-const PAGE_FETCH_CAP = 10;      // page-fetch fallbacks per member when the feed has no body
+const PAGE_FETCH_CAP = 4;       // page-fetch fallbacks per member when the feed has no body
+                                // (kept small: a bot-walled member at cap 10 × 12s starved the
+                                // whole invocation past the edge wall-clock on the first run)
 
 // SSRF allowlist (security review 2026-06-11): fetched bodies are published into the
 // world-readable member_statements table, so every crawl target must be a public
@@ -223,27 +228,61 @@ async function runBatch(limit: number, maxChain: number): Promise<void> {
   if (ids.length === 0) return;
 
   const sites = await loadOfficialSites();
-  for (const candidateId of ids) {
-    await walkMember(supabase, candidateId, sites?.get(candidateId));
-  }
 
-  // Self-chain while there is likely more work (a full claim) and budget remains.
+  // Walk ONE member, then fire the successor, then walk the rest. The first coverage
+  // run proved the edge wall-clock can kill an invocation mid-walk, and a chain call
+  // placed at the very end dies with it (the run stalled at 16/541) — while chaining
+  // before any work would spawn the whole chain depth at once (a thundering herd on
+  // .gov hosts). One bounded walk (~90s worst case with the tightened fetch caps)
+  // paces the pipeline AND survives later members killing this instance. Short claims
+  // mean the queue is draining — stop chaining.
+  await walkMember(supabase, ids[0], sites?.get(ids[0]));
+
   if (maxChain > 0 && ids.length === limit) {
+    // AbortController, NOT AbortSignal.timeout — the latter is missing in this edge
+    // runtime and its synchronous TypeError silently killed every chain on run 2.
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), 8000);
     try {
-      await fetch(`${SUPABASE_URL}/functions/v1/fetch-member-statements`, {
+      // apikey + x-cron-secret ONLY — exactly what the working pg_net cron calls send.
+      // Run 3 (service bearer alone) and run 4 (bearer + apikey) both 401'd; run 4's
+      // captured body named it: the gateway rejects "Conflicting API keys" when the
+      // apikey and Authorization headers carry different keys.
+      const cronSecret = await getCronSecret();
+      const resp = await fetch(`${SUPABASE_URL}/functions/v1/fetch-member-statements`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${SERVICE_KEY}`,
           'apikey': ANON_KEY,
+          ...(cronSecret ? { 'x-cron-secret': cronSecret } : {}),
         },
         body: JSON.stringify({ limit, max_chain: maxChain - 1 }),
-        signal: AbortSignal.timeout(8000),
+        signal: ctl.signal,
       });
-      console.log(`[statements] chained; remaining budget ${maxChain - 1}`);
+      console.log(`[statements] chained (${resp.status}); remaining budget ${maxChain - 1}`);
+      // surface non-2xx chain handoffs (incl. the response body — gateway and
+      // function 401s are indistinguishable by status alone) in the sync row so a
+      // stalled run is diagnosable from SQL even when the request log is flooded
+      if (resp.status >= 300) {
+        const body = await resp.text().catch(() => '');
+        await supabase.from('member_statement_sync')
+          .update({ sync_error: `chain handoff got HTTP ${resp.status}: ${body.slice(0, 160)}` })
+          .eq('candidate_id', ids[0]);
+      } else {
+        await resp.body?.cancel();
+      }
     } catch (e) {
       console.error('[statements] chain invoke failed', e);
+      await supabase.from('member_statement_sync')
+        .update({ sync_error: `chain invoke failed: ${String(e).slice(0, 200)}` })
+        .eq('candidate_id', ids[0]);
+    } finally {
+      clearTimeout(t);
     }
+  }
+
+  for (const candidateId of ids.slice(1)) {
+    await walkMember(supabase, candidateId, sites?.get(candidateId));
   }
   console.log('[statements] batch done');
 }
