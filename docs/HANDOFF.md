@@ -27,6 +27,58 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-12 (donor accuracy: conduits are not donors; "by or through" for AIPAC-style orgs) — claude/amazing-bohr-nwzgsv
+
+**What happened & why**
+Owner circled ActBlue ranking #1 on Espaillat's donor list ($334K) and asked whether a conduit
+should be a top donor — and, crucially, "if I want to know how much AIPAC-related money goes to
+a rep, how do we do that without double counting?" Investigation (read-only SQL vs prod) found:
+(1) the 2026 ActBlue donors row ($334,428/93, `is_conduit_org=false`) was written by
+`import-fec-receipts-csv`, which had **zero** conduit/memo logic (fetch-fec-donors zeroes
+conduits; the CSV path was the hole; `fetch-committee-donors` had the same hole); the figure is
+a stale partial sum of memo-X batch lines really worth $708,925. (2) The same disease inflates
+AIPAC: its 2024 row $171,360 = exactly $10,000 direct (11C) + $161,360 memo-X member-earmark
+attribution lines — a PAC can only give ~$10K directly. Owner decisions: conduits
+(ActBlue/WinRed/Democracy Engine) NEVER appear and **no aggregated conduit amount is shown
+anywhere**; earmark-program orgs get ONE combined ranked "by or through" entry with the
+direct/via breakdown stated; every dollar counts once (under the individual donor).
+Built: one shared counting rule (`_shared/conduits.ts` + `src/lib/conduits.ts` — line counts
+iff not memo-X, not SEE-BELOW, not conduit-named) wired into all THREE importer paths;
+migration `20260612120000` (NOT applied — guardrail #1): `get_candidate_earmark_rollups` RPC
+(SECURITY DEFINER aggregates over RLS-locked contributions, conduits excluded) + donors
+backfill (Arm 1 zeroes/flags conduit rows; Arm 2 recomputes memo-contaminated donor ids by
+replicating the importers' sha-256 donor-id hash in SQL; coverage trigger disabled, recalc
+once per candidate; hash misses reported not touched); CandidateProfile filters conduits,
+renders combined earmark entries (Espaillat 2026 AIPAC → $145,178 = $5,000 direct +
+$140,178 via 108 member contributions), dollar-free conduit footnote; DonorProfile conduit
+banner; dead "Show conduits" toggle removed; rule documented in docs/DATA-ACCURACY.md.
+
+**State** (verified)
+Lint 0 errors · `bunx vite build` passes (`bun run build`'s sitemap prebuild 403s in this
+container — env, not code) · tests **61/61** (10 new for the counting rule + lib helper).
+Pre-apply SQL audits recorded in the PR (ActBlue/AIPAC numbers above). NOT verified: the
+migration has not been applied anywhere (owner applies on merge; then refresh donor MVs:
+`SELECT public.refresh_donor_consolidated_mv();` and re-run the audits in the migration
+header); live UI not checked end-to-end (RPC doesn't exist until the migration lands —
+the hook fails soft to "no rollup entries" by design). Review council (migration-safety,
+security, frontend) was launched on this diff; findings land as follow-up commits on the PR.
+
+**Next**
+Owner: merge → apply `20260612120000` deliberately (quiet hour; it scans contributions once
+and holds donor row locks for the duration) → run the audits in the migration header →
+`SELECT public.refresh_donor_consolidated_mv();` → check /candidate/E000297 (ActBlue absent,
+AIPAC ≈ $145K "by or through", real donors ranked) and /donors page 1.
+
+**Deferred**
+Member-level drilldown ("which members gave via AIPAC" — needs FEC back-reference parsing);
+earmark orgs whose filings lack memo-X attribution (can't compute "through" yet);
+"opposite-pattern" filings (countable conduit batch + memo-X individuals) stay out of donor
+lists (still in FEC totals) — re-attribution later; cross-candidate org rollups on donor
+profiles; CSV importer's cross-batch amount-replacement wart (pre-existing; worst case now
+writes 0); executive synthetic ids (federal_president) don't resolve for the rollup RPC.
+
+---
+
 ## 2026-06-11 (6th arc: evidence index LIVE — 541-member coverage run COMPLETE) — claude/cool-mendel-q22rt6
 
 **What happened & why**

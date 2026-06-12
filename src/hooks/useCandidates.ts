@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { CoverageTier, ConfidenceLevel } from '@/lib/scoreFormat';
 import { resolveCandidateImageUrl } from '@/lib/candidateImages';
+import { isConduitDonor } from '@/lib/conduits';
 
 interface CandidateTopicScore {
   topic_id: string;
@@ -538,10 +539,7 @@ export const useCandidateDonors = (candidateId: string | undefined, cycle?: stri
       // an authorized Trump campaign committee).
       const isAuthorizedRecipient = (d: string | null) =>
         d === 'P' || d === 'A' || d === 'J';
-      const conduitOrgNames = ['WINRED', 'ACTBLUE', 'DEMOCRACY ENGINE'];
-      const isConduitDonor = (d: { display_name?: string | null; name: string; is_conduit_org?: boolean | null }) =>
-        Boolean(d.is_conduit_org) ||
-        conduitOrgNames.some(c => (d.display_name || d.name).toUpperCase().includes(c));
+      // Conduit detection (flag + name match) lives in src/lib/conduits.
 
       // Fetch IE-excluded committees so we drop their donor rows too.
       const { data: ieExcludedRows } = await supabase

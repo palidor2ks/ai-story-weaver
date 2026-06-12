@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { crypto } from "https://deno.land/std@0.177.0/crypto/mod.ts";
 import { encode as hexEncode } from "https://deno.land/std@0.177.0/encoding/hex.ts";
+import { isKnownConduitOrg, shouldCountDonorLine } from "../_shared/conduits.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -325,13 +326,8 @@ function parseEarmarkInfo(memoText: string | null, _memoCode: string | null): Ea
   return { isEarmarked: false, isEarmarkPassThrough: false, earmarkedForName: null, conduitCommitteeId: null };
 }
 
-// Known conduit organizations that process individual donations
-const KNOWN_CONDUITS = ['ACTBLUE', 'WINRED', 'DEMOCRACY ENGINE'];
-
-function isKnownConduitOrg(name: string): boolean {
-  const upperName = name.toUpperCase();
-  return KNOWN_CONDUITS.some(c => upperName.includes(c));
-}
+// Known conduit organizations live in ../_shared/conduits.ts (shared with the
+// CSV and committee importers so all three apply the same counting rule).
 
 interface AggregatedDonor {
   name: string;
@@ -1332,16 +1328,25 @@ serve(async (req) => {
         
         const existing = aggregatedDonors.get(donorId);
         const donorIsConduitOrg = isKnownConduitOrg(name);
-        
-        // FIX: Conduit orgs should NOT aggregate amounts - they're pass-throughs
-        // The individual donors behind them are already counted separately
-        // Also skip earmark pass-throughs (SEE BELOW entries) to avoid double-counting
-        const shouldCountAmount = !donorIsConduitOrg && !earmarkInfo.isEarmarkPassThrough;
+
+        // One counting rule, shared across all importers (see _shared/conduits.ts):
+        // conduit-named lines, memo-X informational lines (effectiveMemoCode covers
+        // Line-12 attributions and conduit aggregates), and SEE-BELOW pass-throughs
+        // carry $0 — that money is counted on the underlying countable lines.
+        const shouldCountAmount = shouldCountDonorLine({
+          contributorName: name,
+          effectiveMemoCode,
+          memoText,
+        });
         const amountToAggregate = shouldCountAmount ? amount : 0;
-        
+
         if (existing) {
           existing.amount += amountToAggregate;
-          existing.transactionCount++;
+          // transaction_count must agree with the dollars shown next to it:
+          // only countable lines increment it.
+          if (shouldCountAmount) {
+            existing.transactionCount++;
+          }
           if (receiptDate) {
             if (!existing.firstReceiptDate || receiptDate < existing.firstReceiptDate) {
               existing.firstReceiptDate = receiptDate;
@@ -1356,11 +1361,11 @@ serve(async (req) => {
             existing.conduitCommitteeId = conduitCommitteeId;
           }
         } else {
-          aggregatedDonors.set(donorId, { 
+          aggregatedDonors.set(donorId, {
             id: donorId,
-            name, type, 
+            name, type,
             amount: amountToAggregate,
-            transactionCount: 1,
+            transactionCount: shouldCountAmount ? 1 : 0,
             firstReceiptDate: receiptDate,
             lastReceiptDate: receiptDate,
             city, state, zip, employer, occupation,

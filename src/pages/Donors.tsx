@@ -25,7 +25,6 @@ export const Donors = () => {
     minAmount: null,
     maxAmount: null,
     includeTransfers: true,
-    includeConduitOrgs: true,
     candidateId: null,
     party: 'all',
   });

@@ -52,7 +52,6 @@ export const DonorFilters = ({
       minAmount: null,
       maxAmount: null,
       includeTransfers: true,
-      includeConduitOrgs: true,
       candidateId: null,
       party: 'all',
     });
@@ -66,8 +65,7 @@ export const DonorFilters = ({
     (filters.party && filters.party !== 'all') ||
     filters.minAmount !== null ||
     filters.maxAmount !== null ||
-    !filters.includeTransfers ||
-    !filters.includeConduitOrgs;
+    !filters.includeTransfers;
 
   const currentAmountPreset = AMOUNT_PRESETS.find(
     p => p.min === filters.minAmount && p.max === filters.maxAmount
@@ -176,7 +174,6 @@ export const DonorFilters = ({
                     filters.party !== 'all' && filters.party,
                     filters.minAmount !== null,
                     !filters.includeTransfers,
-                    !filters.includeConduitOrgs,
                   ].filter(Boolean).length}
                 </span>
               )}
@@ -301,17 +298,6 @@ export const DonorFilters = ({
                   id="include-transfers"
                   checked={filters.includeTransfers !== false}
                   onCheckedChange={(checked) => updateFilter('includeTransfers', checked)}
-                  disabled={isLoading}
-                />
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <Label htmlFor="include-conduit" className="text-sm text-muted-foreground cursor-pointer">
-                  Show conduits
-                </Label>
-                <Switch
-                  id="include-conduit"
-                  checked={filters.includeConduitOrgs !== false}
-                  onCheckedChange={(checked) => updateFilter('includeConduitOrgs', checked)}
                   disabled={isLoading}
                 />
               </div>

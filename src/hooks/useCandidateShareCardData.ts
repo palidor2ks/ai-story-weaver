@@ -13,8 +13,7 @@ import { BRAND_HOST } from '@/lib/brand';
 import { supabase } from '@/integrations/supabase/client';
 import { choosePrimaryCauseLabel, type CauseDisplayInfo } from '@/lib/committeeCauseDisplay';
 import { useQuery } from '@tanstack/react-query';
-
-const CONDUIT_NAMES = ['WINRED', 'ACTBLUE', 'DEMOCRACY ENGINE'];
+import { isConduitDonor } from '@/lib/conduits';
 
 async function imageUrlToBase64(url: string): Promise<string | null> {
   try {
@@ -98,12 +97,6 @@ export function useCandidateShareCardData(
   const { data: latestIeData, isLoading: latestIeLoading, isFetching: latestIeFetching } = useCandidateIE(id ?? null, null);
 
   const topDonorSummaries = useMemo(() => {
-    const isConduitDonor = (d: (typeof donors)[number]) =>
-      d.is_conduit_org ||
-      CONDUIT_NAMES.some((c) =>
-        (d.display_name || d.name || '').toUpperCase().includes(c),
-      );
-
     const donorAgg = new Map<
       string,
       { name: string; amount: number; type: (typeof donors)[number]['type'] }

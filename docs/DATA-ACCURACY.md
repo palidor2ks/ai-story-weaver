@@ -36,6 +36,23 @@
   presidential IE slice is verified (ROADMAP changelog 2026-06-10); donors/committees remain
   the open front.
 - **Threshold:** error count must not exceed **900** (regression guard; ratchet down).
+- **Donor-row aggregation rule (2026-06-12):** a Schedule A line counts toward
+  `donors.amount`/`transaction_count` **iff** it is not a memo line (`memo_code='X'`,
+  including the importer-forced Line-12-attribution and conduit-aggregate cases), not a
+  "SEE BELOW"/"EARMARKED CONTRIBUTION:" pass-through, and not under a conduit org's name
+  (ActBlue/WinRed/Democracy Engine). Enforced at write time by all three importers via
+  `supabase/functions/_shared/conduits.ts`; history repaired by migration
+  `20260612120000` (conduit rows zeroed + flagged; memo-contaminated donor ids recomputed
+  from `contributions` via a SQL replication of the donor-id hash).
+  *Display policy:* conduits never appear as donors and **no aggregated conduit amount is
+  shown anywhere**; earmark-program orgs (e.g. AIPAC) get ONE combined "by or through"
+  entry (direct + member earmarks, breakdown stated) powered by
+  `get_candidate_earmark_rollups()` — routed dollars are a labeled lens, never added to
+  totals. *Verified example (E000297, Espaillat):* ActBlue 2026 donor row was
+  $334,428/93 txns/`is_conduit_org=false` (stale partial sum of memo batch lines worth
+  $708,925) → $0/flagged; AIPAC 2024 row was $171,360 = $10,000 direct (11C) +
+  $161,360 memo-X member earmarks → $10,000, with the $161,360 surfaced as
+  "earmarked through AIPAC" on the rollup entry.
 
 ### 2. Voting records — `voting_records_stats`
 - **Goal:** every sitting federal legislator's sponsored/cosponsored/floor-vote record is
