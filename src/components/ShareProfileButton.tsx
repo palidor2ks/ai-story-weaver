@@ -50,7 +50,7 @@ interface ShareProfileButtonProps {
   confidence?: string;
   totalRaised?: number | null;
   totalSpent?: number | null;
-  topDonors?: { name: string; amount: number; primaryCause?: string | null; primaryCauseStance?: string | null }[];
+  topDonors?: { name: string; amount: number; primaryCause?: string | null; primaryCauseStance?: string | null; viaEarmarks?: boolean }[];
   fundingBreakdown?: { label: string; pct: number; color: string }[];
   fundingCycle?: string;
 }

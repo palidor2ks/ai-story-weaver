@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useCandidate, useCandidateDonors, useCandidateVotes, calculateMatchScore } from '@/hooks/useCandidates';
 import { useCandidateEarmarkRollups } from '@/hooks/useCandidateEarmarkRollups';
 import { isConduitDonor } from '@/lib/conduits';
+import { buildEarmarkRollupIndex, earmarkRollupKey, matchEarmarkRollupKey } from '@/lib/earmarkRollups';
 import { useProfile, useUserTopicScores } from '@/hooks/useProfile';
 import { useRepresentativeDetails } from '@/hooks/useRepresentativeDetails';
 import { useAdminRole } from '@/hooks/useAdminRole';
@@ -528,12 +529,24 @@ export const CandidateProfile = () => {
                     totalRaised={fecTotalReceipts}
                     totalSpent={fecTotalDisbursements}
                     topDonors={(() => {
-                      const agg = new Map<string, { name: string; amount: number; primaryCause?: string | null; primaryCauseStance?: string | null }>();
+                      const agg = new Map<string, { name: string; amount: number; primaryCause?: string | null; primaryCauseStance?: string | null; viaEarmarks?: boolean }>();
+                      // Earmark-program orgs (e.g. AIPAC) rank on the stat card by
+                      // their combined "by or through" figure, same as the funding
+                      // list below: the matched donor row is skipped (its direct
+                      // dollars are inside the rollup) so nothing is double-listed.
+                      const rollupIndex = buildEarmarkRollupIndex(earmarkRollups);
+                      const rollupMatch = new Map<string, { name: string; type: string }>();
                       donors
                         .filter((d) => !isConduitDonor(d) && !d.is_transfer)
                         .forEach((d) => {
                           const aliasName = donorAliasNameMap?.get(`${d.name.trim().toUpperCase()}|${d.type}`);
                           const n = (aliasName || d.display_name || d.name || 'Unknown').trim();
+                          const matchedKey = matchEarmarkRollupKey(d, rollupIndex);
+                          if (matchedKey) {
+                            // Donors iterate amount-desc: keep the first (largest) match.
+                            if (!rollupMatch.has(matchedKey)) rollupMatch.set(matchedKey, { name: n, type: d.type });
+                            return;
+                          }
                           const cause = getDonorCause(donorCauseMap, d.name, d.type) ?? getDonorCause(donorCauseMap, n, d.type);
                           const key = `${n.toUpperCase()}|${d.type}`;
                           const current = agg.get(key) ?? {
@@ -549,6 +562,22 @@ export const CandidateProfile = () => {
                           }
                           agg.set(key, current);
                         });
+                      earmarkRollups.forEach((r) => {
+                        const match = rollupMatch.get(earmarkRollupKey(r.org_label, r.cycle));
+                        const name = match?.name || r.org_label;
+                        const type = match?.type ?? (r.org_type === 'Organization' ? 'Organization' : 'PAC');
+                        const cause = getDonorCause(donorCauseMap, r.org_label, type) ?? getDonorCause(donorCauseMap, name, type);
+                        const key = `${name.toUpperCase()}|${type}|earmark`;
+                        const current = agg.get(key) ?? {
+                          name,
+                          amount: 0,
+                          primaryCause: cause?.label ?? null,
+                          primaryCauseStance: cause?.stance ?? null,
+                          viaEarmarks: true,
+                        };
+                        current.amount += r.direct_amount + r.routed_amount;
+                        agg.set(key, current);
+                      });
                       return Array.from(agg.values())
                         .sort((a, b) => b.amount - a.amount)
                         .slice(0, 3);
@@ -980,10 +1009,7 @@ export const CandidateProfile = () => {
                         // that entry (its direct dollars are inside the rollup), so
                         // nothing is double-listed; the routed dollars stay out of
                         // every total — the members are themselves listed as donors.
-                        const normalizeOrgKey = (name: string) => name.replace(/\s+/g, ' ').trim().toUpperCase();
-                        const rollupByKey = new Map<string, (typeof earmarkRollups)[number]>(
-                          earmarkRollups.map(r => [`${normalizeOrgKey(r.org_label)}|${r.cycle}`, r]),
-                        );
+                        const rollupByKey = buildEarmarkRollupIndex(earmarkRollups);
                         const rollupDonorMatch = new Map<string, { donorId: string; displayName: string }>();
 
                         // Add regular donors - but exclude entries already shown as FEC summary categories
@@ -1014,10 +1040,7 @@ export const CandidateProfile = () => {
                           // two RPC rows/cards; merging those needs alias-awareness in
                           // the RPC, not here.)
                           if (!isTransfer) {
-                            const matchedKey = [d.name, d.display_name, ...(d.name_variations ?? [])]
-                              .filter((n): n is string => Boolean(n))
-                              .map(n => `${normalizeOrgKey(n)}|${d.cycle}`)
-                              .find(k => rollupByKey.has(k));
+                            const matchedKey = matchEarmarkRollupKey(d, rollupByKey);
                             if (matchedKey) {
                               // Donors iterate amount-desc: keep the first (largest) match.
                               if (!rollupDonorMatch.has(matchedKey)) {
@@ -1060,7 +1083,7 @@ export const CandidateProfile = () => {
                         // Ranked by direct + routed; the breakdown is stated on the
                         // card so the overlap with individual donors is explicit.
                         earmarkRollups.forEach(r => {
-                          const rollupKey = `${normalizeOrgKey(r.org_label)}|${r.cycle}`;
+                          const rollupKey = earmarkRollupKey(r.org_label, r.cycle);
                           const match = rollupDonorMatch.get(rollupKey);
                           const orgName = match?.displayName || r.org_label;
                           const combined = r.direct_amount + r.routed_amount;
