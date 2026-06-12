@@ -28,4 +28,4 @@ do $$ begin
       timeout_milliseconds := 15000
     );
   $cron$);
-exception when others then null; end $$;
+exception when others then raise notice 'fetch-member-statements-6h not scheduled: %', sqlerrm; end $$;
