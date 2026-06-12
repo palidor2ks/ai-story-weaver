@@ -5684,6 +5684,7 @@ export type Database = {
           schedule: string
           succeeded: number
           total_runs: number
+          total_runs_alltime: number
         }[]
       }
       get_cron_secret: { Args: never; Returns: string }

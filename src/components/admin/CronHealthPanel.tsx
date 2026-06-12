@@ -362,7 +362,7 @@ export function CronHealthPanel() {
                       <TableRow>
                         <TableHead className="h-8">Job</TableHead>
                         <TableHead className="h-8">Schedule</TableHead>
-                        <TableHead className="h-8 text-right">Attempts</TableHead>
+                        <TableHead className="h-8 text-right" title="All-time run count">Attempts</TableHead>
                         <TableHead className="h-8 text-right">Failures</TableHead>
                         <TableHead className="h-8 text-right">Last run</TableHead>
                         <TableHead className="h-8 w-8" />
@@ -387,7 +387,7 @@ export function CronHealthPanel() {
                                 {j.schedule}
                               </TableCell>
                               <TableCell className="py-1.5 text-right tabular-nums">
-                                {j.totalRuns.toLocaleString()}
+                                {j.totalRunsAlltime.toLocaleString()}
                               </TableCell>
                               <TableCell className="py-1.5 text-right tabular-nums">
                                 {j.failed > 0 ? (
