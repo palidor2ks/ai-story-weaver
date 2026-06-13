@@ -27,6 +27,51 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-13 (answer URL-sourcing: rounds 5–6 + strategic pivot) — claude/zen-sagan-7ofwx2
+
+**What happened & why**
+Completed two more enrichment rounds, then decided to park the URL-sourcing metric and shift focus to a deeper data strategy.
+
+**Round 5 (inferred back-fill)**: Found that 541 candidates had party-alignment (inferred) answers + real bill sponsorships in `candidate_votes`, but tier-2 was silently skipping them (`ELIGIBLE` required `source_type='voting_record'`). Extended to `ELIGIBLE_INFERRED`. 2,051 new congress.gov URLs applied.
+
+**Round 6 (restage)**: 104 more pairs found (98 new voting_record + 6 new inferred answers). Applied. Also tightened two more exclusion patterns found in spot-check ("welcoming" resolutions, "to rename" bills).
+
+**Final state**: `sourcedWithUrl` = 32,502 / 581,498 = **5.59%** (was 5.34% at session start)
+
+**Strategic decision: parking URL-sourcing for now**
+The 35% target is not achievable through the current pipeline:
+- 204k+ party-alignment (inferred) answers have no underlying artifact — they can never get a citation without being replaced with actual research
+- The congressional press-release corpus (`member_statements`) is too procedural to cite policy positions reliably (gate 5 failed at 0% precision on the distiller)
+- The keyword/bill-sponsorship pipeline has been squeezed to near-exhaustion; new rounds yield diminishing returns
+
+**Future path to meaningful URL%** (owner notes):
+1. **Perplexity API** — when quota is available, re-run the AI enrichment with Perplexity instead of Lovable/Gemini. Perplexity has live web search and can find actual source URLs for a candidate's policy position. This could replace or supplement the `public_statement` citation path.
+2. **Deepen the congressional data corpus** — votes and bill sponsorships are loaded, but the following are missing and would dramatically improve citation coverage:
+   - **Committee hearing testimony** — candidates' recorded statements in committee
+   - **Floor speeches** (Congressional Record) — explicit position statements, not just procedural votes
+   - **Committee markup notes** — amendment sponsorships show nuanced positions
+   - **FEC/campaign materials** — candidates' own published platforms
+   These should be explored as a separate data-ingestion task (new edge functions + corpus expansion).
+3. **Replace party-alignment answers with researched ones** — the 204k inferred rows are the real blocker. A Perplexity-powered re-answering pass could replace them with `evidence_type='sourced'` answers that have real URLs.
+
+**State** (verified)
+- Round 5: 2,051 rows updated ✓
+- Round 6: 104 rows updated ✓
+- `sourcedWithUrl` = 32,502, pct = 5.59%, admin stats cache refreshed ✓
+- Exclusion filters tightened (welcoming resolutions, rename bills, gold medal bills) ✓
+- All pushed to `claude/zen-sagan-7ofwx2` ✓
+
+**Next**
+Different task — see ROADMAP.md for priorities.
+
+**Deferred (URL-sourcing)**
+- evidence_type promotion migration: 2,051+ rows at `evidence_type='inferred'` with `source_url IS NOT NULL` (SQL in previous HANDOFF entry)
+- Perplexity-powered re-answering of inferred rows (when quota available)
+- Congressional floor speech / committee testimony corpus ingestion (new task)
+- Senate votes (lis_member_id → bioguide mapping)
+
+---
+
 ## 2026-06-13 (answer URL-sourcing: round 5 — inferred answer back-fill) — claude/zen-sagan-7ofwx2
 
 **What happened & why**
