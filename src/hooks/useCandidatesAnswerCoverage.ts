@@ -59,6 +59,7 @@ export interface CandidateAnswerCoverage {
   localPacContributions: number;   // PACs (Line 11C)
   localPartyContributions: number; // Party (Line 11B)
   localOrganization: number;       // Organizations (11A non-individual)
+  conduitExcluded: number;         // Conduit pass-throughs excluded from localOrganization (display-only)
   // FEC category data
   fecItemized: number | null;    // FEC itemized contributions (individuals)
   fecUnitemized: number | null;  // FEC unitemized contributions
@@ -174,6 +175,7 @@ function makeCivicCoverage(
     localLoans: 0, localOtherReceipts: 0,
     localIndividualItemized: 0, localGrossIndividual: 0, memoXAmount: 0,
     localPacContributions: 0, localPartyContributions: 0, localOrganization: 0,
+    conduitExcluded: 0,
     fecItemized: null, fecUnitemized: null, fecTotalReceipts: null,
     fecPacContributions: 0, fecPartyContributions: 0, fecLoans: 0,
     fecTransfers: 0, fecCandidateContribution: 0, fecOtherReceipts: 0,
@@ -395,6 +397,7 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
         local_pac_contributions: number | null;
         local_party_contributions: number | null;
         local_organization: number | null;
+        conduit_excluded: number | null;
         fec_itemized: number | null;
         fec_unitemized: number | null;
         fec_total_receipts: number | null;
@@ -605,6 +608,7 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
           localPacContributions: rec?.local_pac_contributions || 0,
           localPartyContributions: rec?.local_party_contributions || 0,
           localOrganization: rec?.local_organization || 0,
+          conduitExcluded: rec?.conduit_excluded || 0,
           // FEC data
           fecItemized: rec?.fec_itemized ?? null,
           fecUnitemized: rec?.fec_unitemized ?? null,

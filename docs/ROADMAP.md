@@ -71,6 +71,12 @@ X/TikTok posting, Remotion social cards, AI-generated analysis. Deferred until t
   *(parked 2026-06-09)*
 
 ## Changelog
+- **2026-06-12 (evidence index LIVE + self-maintaining)** — the statement corpus shipped end to
+  end: `member_statements` holds **5,460 official statements across all 541 sitting members**
+  (86% via RSS, bodies held locally, provenance by construction), refreshed by the
+  owner-approved `fetch-member-statements-6h` cron (guardrail #2 review done). Next consumer:
+  citation enrichment from held text (quotes mechanically substring-verified), then the
+  say-vs-do layer. Run record: HANDOFF 2026-06-11/12 arcs 4–7.
 - **2026-06-11 (latest — pivot decided: statement EVIDENCE INDEX)** — owner picked option 2:
   build a primary-source corpus of members' official statements (the statements-equivalent of
   the bills corpus) instead of verifying AI prose. Same-day 5-member spike validated the

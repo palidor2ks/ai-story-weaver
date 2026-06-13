@@ -183,6 +183,30 @@ Register for a ProPublica Congress API key (free, ~1 day) at propublica.org/data
 
 ---
 
+## 2026-06-13 (conduit pass-throughs inflating Line-11A finance totals) — claude/april-mcclaindelany-finances-vyjv0x
+
+**What happened & why**
+Owner asked why April McClain Delaney's (M001232, H4MD06340) finances looked "off" — the /candidate stat-card Category Comparison showed Line 11A at +38% over FEC ($2.2M local vs $1.6M FEC), status=error. Traced it: her entire $734K "Organization" bucket on Line 11AI was a single contributor — **ActBlue**. FEC reports an earmarked contribution as a PAIR of Schedule-A rows: the real donor (contributor_type='Individual', memo_text "EARMARKED CONTRIBUTION: SEE BELOW", counted correctly) and a conduit memo under the processor's own name (ActBlue/WinRed/Democracy Engine, memo_text "...EARMARKED THROUGH THIS ORGANIZATION", conduit_committee_id NULL). FEC tags the memo so it doesn't double-count, but ~85% of these arrived with memo_code NULL instead of 'X', so `get_contribution_totals` summed them into `organization_total` ON TOP of the individual donors they merely forwarded. The existing `conduit_excluded` branch only caught rows with a non-null `conduit_committee_id`, which these lack. Fleet-wide the same defect inflated ~13 candidates in 2024 — worst John Thune at +503.9% ($5.55M Democracy Engine memos).
+
+Fix (PR #377, **merged**): aligned both totals RPCs (`get_contribution_totals` + `_by_committee`) with the canonical conduit/pass-through rule already shared by the donor layer (`_shared/conduits.ts`, `src/lib/conduits.ts`) and `get_candidate_earmark_rollups` — a Line-11AI Organization/Unknown row routes to `conduit_excluded` (not `organization_total`) on a conduit name match, non-null conduit_committee_id, or SEE BELOW / EARMARKED CONTRIBUTION: memo_text. The `contributions` table was left untouched (faithful per-line provenance; exclusion is an aggregation concern). Also added a persisted `conduit_excluded` column on `finance_reconciliation` + wired it through the nightly fn → hook → FinanceCategoryBreakdown's amber "Conduits excluded" line so the removed dollars are labeled, not silently dropped. Migration: `20260613030000_conduit_exclusion_in_contribution_totals.sql`. Read-only sim confirmed Delaney 2024: org_total $734,006→$2,250, conduit_excluded $0→$731,756, Line 11A +38.0%→−8.3%.
+
+Also fixed an unrelated CI blocker discovered in passing: migration `20260612233033` (a Lovable-bot dev-snapshot RLS lock-down) ran bare ALTER/POLICY/GRANT on tables not created by any migration (_enrich_stmt_staging, _evidence_spike_log, _evidence_spike_statements, job_queue, candidate_merge_map, donor_card_causes, fl/nj/ny sync_runs, fec_candidates) — so a from-scratch Supabase preview replay died with 42P01, blocking the Migrations check on EVERY PR off main. Wrapped every statement in to_regclass existence guards (+ DROP POLICY IF EXISTS for idempotency); validated end-to-end against dev. Owner approved this defensive patch.
+
+**State** (verified)
+- PR #377 merged. All 7 CI checks green (Lint/Typecheck/Test/Build/Lockfile/GitGuardian/Supabase Preview). Local preflight: 64/64 tests, lint 0 errors, vite build clean.
+- Migration `20260613030000` **APPLIED to prod** (ornnzinjrcyigazecctf) via apply_migration; RPC verified live (Delaney 2024 org_total $734,006→$2,250, conduit_excluded→$731,756).
+- Cached `finance_reconciliation` rows refreshed for the **39 affected rows** (set-based recompute of category/itemized + delta + status fields from the corrected RPC, reusing unchanged stored FEC values). Headline 2024 over-counts now reconcile: Thune +503.9%→+0.18%, Trahan +69%→+0.75%, Gray/Latimer/Griffith→~0%, Delaney +38%→−5.43% (status error→warning).
+- `partial`-status rows and rows without real FEC data were intentionally skipped.
+
+**Next**
+Let the next `nightly-finance-reconciliation` run canonically rewrite the touched rows. Then chase the deferred −8% coverage gap if finance accuracy is the current priority.
+
+**Deferred**
+- The residual **−8.3%** on Delaney after the fix is a SEPARATE issue: a Schedule-A coverage gap (~$131K). Not a categorization bug — needs a donor re-sync to confirm/close.
+- Root cause of the CI blocker not fully addressed: those ad-hoc tables should be created by migrations so the chain reproduces the schema.
+
+---
+
 ## 2026-06-13 (statement↔topic indexing + evidence-index citation matcher) — claude/zen-sagan-7ofwx2
 
 **What happened & why**
@@ -372,6 +396,53 @@ AIPAC ≈ $145K "by or through"; real donors ranked) → security advisors.
 **Deferred**
 (carried) member-level earmark drilldown; alias-aware grouping inside the RPC (two raw
 spellings of one org still yield two rollup cards); everything in the entry below.
+
+---
+
+## 2026-06-12 (7th arc: freshness cron SHIPPED + corpus verified 541/541; literal saga) — claude/cool-mendel-q22rt6
+
+**What happened & why**
+Closing arc of the evidence-index push. (1) **Freshness cron approved & shipped end-to-end**:
+owner approved the spec (every 6h, limit 4, max_chain 20 → ~84 stalest members/run, full
+corpus refresh ~1-2 days); migration `20260612013000_member_statements_freshness_cron.sql`
+written in the bills-cron house pattern (vault-read keys — `nj_elec_cron_anon_key` +
+`cron_secret`, both verified present — guarded do-blocks, unschedule-then-schedule);
+migration-safety-reviewer **GO** with two polish items applied (schedule failures now
+`raise notice`; the drain's "no cron" breadcrumb updated). Applied deliberately via MCP +
+ledgered in `claude_migration_log` (the apply-prod-migrations workflow is STILL blocked on the
+unset `SUPABASE_DB_URL` repo secret — owner action). **Job verified live**: `cron.job` row
+active, `20 */6 * * *`. PR #367 merged. (2) **GitGuardian saga resolved properly**: the anon-key
+literal added as a chain fallback tripped the scanner (red X on #366). Removing it was correct,
+not cosmetic — `SUPABASE_ANON_KEY` is a reserved platform-injected env var, so the literal was
+dead code. Branch history was REWRITTEN (squash to one commit) so no commit carries the
+literal; scanner flipped green; v6 deployed without it. (3) **v6 verified in prod**: a
+1-hop kick re-walked exactly 8 members with 0 chain errors — the handoff works on the
+injected key alone. **Final corpus state: 541/541 members walked, 5,460 statements**
+(during idle hours the chain self-finished). 13 real sync errors = the known no-feed members.
+(4) **Citation consumer sized & designed** (not built): pool = 96,069 URL-less answers across
+464 members with held statements (73,493 directional). Design inverts the failed part-1b
+approach: AI only SELECTS from held `member_statements.body_text`; every supporting quote is
+mechanically verified as a literal substring of held text server-side → fabrication
+structurally impossible; identity structural; stage → 50-sample gate → apply.
+
+**State** (verified)
+cron.job `fetch-member-statements-6h` active in prod (next run 06:20 UTC); corpus 541/541 +
+5,460 statements measured live; v6 == repo HEAD == main (PR #367 merged; CI redeploy no-op).
+Lint 0 errors, 51/51 tests at the final commit. Working tree clean, branch == main. NOT
+verified: the first scheduled cron run (06:20 UTC — check cron.job_run_details +
+member_statement_sync.updated_at after); the consumer design (no code yet).
+
+**Next**
+Build the citation consumer: enqueue a 50-answer gate sample (answers × held statements via
+the topical keyword map), AI-verify with the held-text substring guard, eyeball the gate,
+apply only on a pass. Expectation honestly set: with ~10 recent releases/member today the
+immediate hit rate will be modest and grows as the cron deepens the corpus.
+
+**Deferred**
+SUPABASE_DB_URL repo secret (OWNER — the migration workflow stays broken without it); first
+scheduled cron run check; 13 no-feed members classification; 1,299 'none'-body backfill;
+listing pagination; spike fn + `_evidence_spike_*` + `_enrich_stmt_staging` cleanup (after
+owner review); say-vs-do layer (after the consumer); (carried) the 6th-arc list.
 
 ---
 
