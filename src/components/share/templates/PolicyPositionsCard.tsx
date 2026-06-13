@@ -6,24 +6,24 @@ interface Props {
   data: CardData;
 }
 
+// Matches CandidateStatCard shell exactly
+const FLAG_NAVY = 'hsl(220 70% 18%)';
+const FLAG_NAVY_DEEP = 'hsl(220 78% 11%)';
+const FLAG_RED = 'hsl(0 76% 46%)';
+const FLAG_WHITE = 'hsl(0 0% 100%)';
+const MUTED = 'hsl(214 35% 82%)';
+const PANEL_BG = 'hsl(220 50% 14% / 0.78)';
+const INNER_BG = 'linear-gradient(180deg, hsl(220 60% 13%) 0%, hsl(220 55% 16%) 100%)';
+
+// Violet accent — "quiz / alignment" theme
 const VIOLET = '#7C3AED';
 const VIOLET_LIT = '#A78BFA';
 const VIOLET_GLOW = '#C4B5FD';
-const BG = '#0A0812';
-const BG2 = '#120D1E';
-const PANEL = '#16102A';
-const PANEL2 = '#1C1535';
-const INK = '#F1F5F9';
-const MUTED = '#64748B';
-const MUTED_LIGHT = '#94A3B8';
-const BORDER = '#231B3A';
-const GREEN = '#10B981';
-const RED = '#EF4444';
 
 const partyColor = (party?: string) => {
   const p = (party ?? '').toLowerCase();
-  if (p.startsWith('dem')) return '#3B82F6';
-  if (p.startsWith('rep')) return '#EF4444';
+  if (p.startsWith('dem')) return 'hsl(214 89% 52%)';
+  if (p.startsWith('rep')) return FLAG_RED;
   if (p.startsWith('ind')) return '#A855F7';
   return MUTED;
 };
@@ -36,7 +36,6 @@ const partyInitial = (party?: string) => {
   return '?';
 };
 
-// Maps score -10…10 to 0…100%
 const scoreToPercent = (score?: number | null) => {
   if (score == null || !Number.isFinite(score)) return 50;
   return ((Math.max(-10, Math.min(10, score)) + 10) / 20) * 100;
@@ -55,8 +54,6 @@ const ideologyLabel = (score?: number | null) => {
 
 const truncate = (s: string, max = 22) => (s.length > max ? s.slice(0, max - 1) + '…' : s);
 
-// Derive 3 "key issue" labels from available data, in priority order:
-// 1. aiCauses (AI-labeled topics), 2. primaryCause from top donors, 3. generic fallback
 const deriveIssues = (data: CardData): string[] => {
   const seen = new Set<string>();
   const out: string[] = [];
@@ -66,58 +63,45 @@ const deriveIssues = (data: CardData): string[] => {
     seen.add(k);
     out.push(s.trim());
   };
-
-  // aiCauses come from AI analysis (may not always be present)
   (data.aiCauses ?? []).forEach((c) => add(c));
-  // primaryCause labels from top donors (always available when donors exist)
   (data.topDonors ?? []).forEach((d) => d.primaryCause && add(d.primaryCause));
-  // primaryCause from outside spenders
   (data.topSpenders ?? []).forEach((s) => s.primaryCause && add(s.primaryCause));
-  // Funding breakdown labels
-  (data.fundingBreakdown ?? []).forEach((b) => b.label && out.length < 3 && add(b.label));
-
   return out.slice(0, 3);
 };
 
-// A blurred "locked" alignment bar — represents the user's own match score
-const LockedAlignmentBar = () => (
+const LockedAlignmentBar = ({ lastName }: { lastName: string }) => (
   <div style={{ position: 'relative' }}>
-    {/* Fake gradient bar */}
     <div style={{
-      height: 64,
+      height: 72,
       borderRadius: 14,
-      background: `linear-gradient(90deg, ${PANEL2}, ${VIOLET}33, ${PANEL2})`,
-      border: `1.5px solid ${BORDER}`,
+      background: PANEL_BG,
+      border: `1.5px solid ${FLAG_WHITE}22`,
       overflow: 'hidden',
-      position: 'relative',
     }}>
-      {/* Fake content stripes inside */}
       <div style={{
         position: 'absolute', inset: 0,
         display: 'flex', alignItems: 'center', padding: '0 24px', gap: 16,
       }}>
-        <div style={{ width: 40, height: 40, borderRadius: '50%', background: BORDER }} />
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ height: 12, borderRadius: 999, background: BORDER, width: '60%' }} />
-          <div style={{ height: 8, borderRadius: 999, background: BORDER, width: '40%' }} />
+        <div style={{ width: 44, height: 44, borderRadius: '50%', background: `${FLAG_WHITE}18` }} />
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ height: 13, borderRadius: 999, background: `${FLAG_WHITE}18`, width: '55%' }} />
+          <div style={{ height: 9, borderRadius: 999, background: `${FLAG_WHITE}12`, width: '38%' }} />
         </div>
-        <div style={{ width: 64, height: 28, borderRadius: 8, background: BORDER }} />
+        <div style={{ width: 72, height: 30, borderRadius: 8, background: `${FLAG_WHITE}18` }} />
       </div>
     </div>
-    {/* Lock overlay */}
     <div style={{
       position: 'absolute', inset: 0,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      gap: 12,
-      background: 'rgba(10, 8, 18, 0.55)',
-      borderRadius: 14,
+      gap: 12, borderRadius: 14,
+      background: 'rgba(8, 10, 24, 0.52)',
     }}>
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={VIOLET_GLOW} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={VIOLET_GLOW} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
         <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
         <path d="M7 11V7a5 5 0 0 1 10 0v4" />
       </svg>
-      <span style={{ fontSize: 17, fontWeight: 700, color: VIOLET_GLOW, letterSpacing: 0.3 }}>
-        Your alignment score — sign up to see
+      <span style={{ fontSize: 16, fontWeight: 700, color: VIOLET_GLOW, letterSpacing: 0.3 }}>
+        Your alignment with {lastName} — sign up to see
       </span>
     </div>
   </div>
@@ -132,254 +116,223 @@ export const PolicyPositionsCard = forwardRef<HTMLDivElement, Props>(({ data }, 
   const ideologyPct = scoreToPercent(data.candidateScore);
   const hasScore = data.candidateScore != null && Number.isFinite(data.candidateScore);
 
+  const cardBg = `linear-gradient(160deg, ${FLAG_NAVY_DEEP} 0%, ${FLAG_NAVY} 50%, ${FLAG_RED} 100%)`;
+  const issueColors = [
+    { bg: `${VIOLET}28`, border: `${VIOLET_LIT}55`, text: VIOLET_GLOW },
+    { bg: 'hsl(142 72% 35% / 0.22)', border: 'hsl(142 72% 56% / 0.5)', text: 'hsl(142 76% 82%)' },
+    { bg: 'hsl(38 92% 45% / 0.22)', border: 'hsl(38 92% 58% / 0.55)', text: 'hsl(45 96% 82%)' },
+  ];
+
   return (
     <div
       ref={ref}
       style={{
         width: CARD_SIZE,
         height: CARD_SIZE,
-        background: `linear-gradient(155deg, ${BG} 0%, ${BG2} 100%)`,
-        color: INK,
-        padding: '52px 60px',
-        display: 'flex',
-        flexDirection: 'column',
+        background: cardBg,
+        color: FLAG_WHITE,
+        padding: 32,
         fontFamily: 'var(--font-sans, ui-sans-serif, system-ui, sans-serif)',
-        position: 'relative',
-        overflow: 'hidden',
       }}
     >
-      {/* Left violet accent stripe */}
+      {/* Inner panel — mirrors CandidateStatCard */}
       <div style={{
-        position: 'absolute',
-        left: 0, top: 0, bottom: 0,
-        width: 10,
-        background: `linear-gradient(180deg, ${VIOLET_LIT} 0%, ${VIOLET} 100%)`,
-      }} />
-
-      {/* Top-right decorative glow */}
-      <div style={{
-        position: 'absolute',
-        right: -120, top: -140,
-        width: 460, height: 460,
-        borderRadius: '50%',
-        background: `radial-gradient(circle, ${VIOLET}1A 0%, transparent 65%)`,
-        pointerEvents: 'none',
-      }} />
-
-      {/* ── Header ── */}
-      <div style={{
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        marginBottom: 38,
+        height: '100%',
+        border: `5px solid ${FLAG_WHITE}`,
+        borderRadius: 36,
+        overflow: 'hidden',
+        position: 'relative',
+        background: INNER_BG,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <PulseMark size={44} />
-          <span style={{ fontWeight: 800, fontSize: 27, letterSpacing: -0.3 }}>PoliPulse</span>
-        </div>
+        {/* Red bottom stripe */}
         <div style={{
-          background: `${VIOLET}22`,
-          border: `2px solid ${VIOLET_LIT}55`,
-          color: VIOLET_GLOW,
-          borderRadius: 999,
-          padding: '9px 22px',
-          fontSize: 14,
-          fontWeight: 800,
-          letterSpacing: 2.5,
-          textTransform: 'uppercase' as const,
-        }}>
-          Where Do They Stand?
-        </div>
-      </div>
+          position: 'absolute', left: 0, right: 0, bottom: 0, height: 10,
+          background: FLAG_RED,
+        }} />
 
-      {/* ── Candidate identity ── */}
-      <div style={{ marginBottom: 32 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 8 }}>
-          <span style={{ fontSize: 58, fontWeight: 900, letterSpacing: -2, lineHeight: 1.02 }}>
-            {truncate(lastName, 18)}'s
-          </span>
-          <span style={{
-            fontSize: 30, fontWeight: 900, color: VIOLET_LIT, letterSpacing: -0.5,
+        <div style={{
+          position: 'relative', height: '100%',
+          padding: 28, paddingBottom: 28,
+          display: 'flex', flexDirection: 'column', gap: 0,
+        }}>
+          {/* ── Header ── */}
+          <div style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            marginBottom: 26,
           }}>
-            record
-          </span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' as const }}>
-          <span style={{ fontSize: 22, color: MUTED_LIGHT, fontWeight: 500 }}>{officeLine}</span>
-          {party && (
-            <span style={{
-              background: `${partyColor(party)}22`,
-              border: `1.5px solid ${partyColor(party)}66`,
-              color: partyColor(party),
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <PulseMark size={42} />
+              <span style={{ fontWeight: 800, fontSize: 25, letterSpacing: -0.3 }}>PoliPulse</span>
+            </div>
+            <div style={{
+              background: `${VIOLET}28`,
+              border: `2px solid ${VIOLET_LIT}55`,
+              color: VIOLET_GLOW,
               borderRadius: 999,
-              padding: '4px 14px',
-              fontSize: 18,
+              padding: '8px 20px',
+              fontSize: 13,
               fontWeight: 800,
+              letterSpacing: 2.5,
+              textTransform: 'uppercase' as const,
             }}>
-              {partyInitial(party)} · {party.split(' ')[0]}
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* ── Ideology spectrum ── */}
-      <div style={{
-        background: PANEL,
-        border: `1.5px solid ${BORDER}`,
-        borderRadius: 18,
-        padding: '22px 26px',
-        marginBottom: 24,
-      }}>
-        <div style={{
-          display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
-          marginBottom: 20,
-        }}>
-          <div style={{
-            fontSize: 13, color: MUTED, letterSpacing: 2.5,
-            textTransform: 'uppercase' as const, fontWeight: 700,
-          }}>
-            Voting record ideology
+              Where Do They Stand?
+            </div>
           </div>
-          <div style={{
-            fontSize: 22, fontWeight: 800,
-            color: hasScore ? INK : MUTED,
-            letterSpacing: -0.3,
-          }}>
-            {ideologyLabel(data.candidateScore)}
-          </div>
-        </div>
 
-        {/* Spectrum bar */}
-        <div style={{ position: 'relative', height: 48, margin: '0 6px' }}>
-          {/* Track */}
-          <div style={{
-            position: 'absolute', left: 0, right: 0, top: 14,
-            height: 18, borderRadius: 999,
-            background: 'linear-gradient(90deg, #3B82F6 0%, #8B5CF6 50%, #EF4444 100%)',
-            opacity: hasScore ? 1 : 0.35,
-            boxShadow: 'inset 0 0 0 2px rgba(255,255,255,0.15)',
-          }} />
-          {/* Center tick */}
-          <div style={{
-            position: 'absolute', left: '50%', top: 8, width: 3, height: 30,
-            background: 'rgba(255,255,255,0.5)', transform: 'translateX(-50%)', borderRadius: 999,
-          }} />
-          {/* Candidate dot */}
-          <div style={{
-            position: 'absolute',
-            left: `${ideologyPct}%`,
-            top: 0,
-            transform: 'translateX(-50%)',
-            width: 48, height: 48,
-            borderRadius: '50%',
-            border: `5px solid ${INK}`,
-            background: hasScore ? PANEL2 : MUTED,
-            boxShadow: `0 0 0 3px ${VIOLET}88, 0 8px 20px rgba(0,0,0,0.5)`,
-          }} />
-        </div>
-
-        {/* Axis labels */}
-        <div style={{
-          display: 'grid', gridTemplateColumns: '1fr 1fr 1fr',
-          fontSize: 14, color: MUTED, fontWeight: 700,
-          letterSpacing: 1.2, textTransform: 'uppercase' as const, marginTop: 8,
-        }}>
-          <span>← Progressive</span>
-          <span style={{ textAlign: 'center' }}>Moderate</span>
-          <span style={{ textAlign: 'right' }}>Conservative →</span>
-        </div>
-      </div>
-
-      {/* ── Key issues / causes ── */}
-      {issues.length > 0 && (
-        <div style={{ marginBottom: 24 }}>
-          <div style={{
-            fontSize: 13, color: MUTED, letterSpacing: 2.5,
-            textTransform: 'uppercase' as const, fontWeight: 700, marginBottom: 14,
-          }}>
-            Key issues their donors care about
-          </div>
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' as const }}>
-            {issues.map((issue, i) => {
-              const colors = [
-                { bg: `${VIOLET}20`, border: `${VIOLET_LIT}55`, text: VIOLET_GLOW },
-                { bg: `${GREEN}18`, border: `${GREEN}44`, text: '#6EE7B7' },
-                { bg: `${RED}18`, border: `${RED}44`, text: '#FCA5A5' },
-              ];
-              const c = colors[i % colors.length];
-              return (
-                <div key={issue} style={{
-                  background: c.bg,
-                  border: `1.5px solid ${c.border}`,
-                  color: c.text,
-                  borderRadius: 10,
-                  padding: '10px 20px',
-                  fontSize: 20,
-                  fontWeight: 800,
-                  letterSpacing: 0.2,
+          {/* ── Candidate identity ── */}
+          <div style={{ marginBottom: 22 }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' as const, marginBottom: 8 }}>
+              <span style={{ fontSize: 60, fontWeight: 900, letterSpacing: -2, lineHeight: 1.02 }}>
+                {truncate(lastName, 18)}'s
+              </span>
+              <span style={{ fontSize: 36, fontWeight: 900, color: VIOLET_LIT, letterSpacing: -0.5 }}>
+                record
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' as const }}>
+              <span style={{ fontSize: 20, color: MUTED, fontWeight: 500 }}>{officeLine}</span>
+              {party && (
+                <span style={{
+                  background: `${partyColor(party)}22`,
+                  border: `1.5px solid ${partyColor(party)}66`,
+                  color: partyColor(party),
+                  borderRadius: 999, padding: '4px 14px',
+                  fontSize: 16, fontWeight: 800,
                 }}>
-                  {issue}
-                </div>
-              );
-            })}
+                  {partyInitial(party)} · {party.split(' ')[0]}
+                </span>
+              )}
+            </div>
           </div>
-        </div>
-      )}
 
-      {/* ── Section label for locked area ── */}
-      <div style={{
-        fontSize: 13, color: MUTED, letterSpacing: 2.5,
-        textTransform: 'uppercase' as const, fontWeight: 700, marginBottom: 12,
-      }}>
-        Your alignment with {lastName}
-      </div>
-
-      {/* ── Locked alignment bar ── */}
-      <LockedAlignmentBar />
-
-      {/* ── CTA banner ── */}
-      <div style={{
-        background: `linear-gradient(90deg, ${VIOLET}D0, #5B21B6D0)`,
-        borderRadius: 18,
-        padding: '22px 32px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginTop: 24,
-        gap: 20,
-      }}>
-        <div>
+          {/* ── Ideology spectrum ── */}
           <div style={{
-            fontSize: 24, fontWeight: 900, color: INK, letterSpacing: -0.4, lineHeight: 1.1,
+            background: PANEL_BG,
+            border: `2px solid ${FLAG_WHITE}22`,
+            borderRadius: 18,
+            padding: '18px 22px',
+            marginBottom: 20,
           }}>
-            Do you agree with their record?
+            <div style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+              marginBottom: 18,
+            }}>
+              <div style={{
+                fontSize: 12, color: MUTED, letterSpacing: 2.5,
+                textTransform: 'uppercase' as const, fontWeight: 700,
+              }}>
+                Voting record ideology
+              </div>
+              <div style={{
+                fontSize: 20, fontWeight: 800,
+                color: hasScore ? FLAG_WHITE : MUTED,
+                letterSpacing: -0.3,
+              }}>
+                {ideologyLabel(data.candidateScore)}
+              </div>
+            </div>
+            <div style={{ position: 'relative', height: 46, margin: '0 4px' }}>
+              <div style={{
+                position: 'absolute', left: 0, right: 0, top: 13,
+                height: 18, borderRadius: 999,
+                background: 'linear-gradient(90deg, hsl(214 89% 56%) 0%, hsl(270 72% 66%) 50%, hsl(0 76% 52%) 100%)',
+                boxShadow: 'inset 0 0 0 2px hsl(0 0% 100% / 0.2)',
+                opacity: hasScore ? 1 : 0.4,
+              }} />
+              <div style={{
+                position: 'absolute', left: '50%', top: 7, width: 3, height: 30,
+                background: `${FLAG_WHITE}60`, transform: 'translateX(-50%)', borderRadius: 999,
+              }} />
+              <div style={{
+                position: 'absolute',
+                left: `${ideologyPct}%`, top: 0,
+                transform: 'translateX(-50%)',
+                width: 46, height: 46, borderRadius: '50%',
+                border: `5px solid ${FLAG_WHITE}`,
+                background: hasScore ? FLAG_NAVY_DEEP : MUTED,
+                boxShadow: `0 0 0 3px ${VIOLET}88, 0 8px 20px rgba(0,0,0,0.5)`,
+              }} />
+            </div>
+            <div style={{
+              display: 'grid', gridTemplateColumns: '1fr 1fr 1fr',
+              fontSize: 13, color: MUTED, fontWeight: 700,
+              letterSpacing: 1.2, textTransform: 'uppercase' as const, marginTop: 6,
+            }}>
+              <span>← Progressive</span>
+              <span style={{ textAlign: 'center' }}>Moderate</span>
+              <span style={{ textAlign: 'right' }}>Conservative →</span>
+            </div>
           </div>
-          <div style={{
-            fontSize: 16, color: VIOLET_GLOW, marginTop: 4, fontWeight: 600,
-          }}>
-            2-min quiz · free · polipulseapp.com
-          </div>
-        </div>
-        <div style={{
-          background: INK,
-          color: VIOLET,
-          borderRadius: 12,
-          padding: '12px 26px',
-          fontSize: 18,
-          fontWeight: 900,
-          letterSpacing: 0.3,
-          whiteSpace: 'nowrap' as const,
-          flexShrink: 0,
-        }}>
-          Find My Match →
-        </div>
-      </div>
 
-      {/* ── Footer ── */}
-      <div style={{
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        marginTop: 18, fontSize: 16, color: MUTED,
-      }}>
-        <span>Based on voting record & FEC data</span>
-        <span style={{ fontWeight: 700, color: MUTED_LIGHT }}>{data.brandHost}</span>
+          {/* ── Key issue chips ── */}
+          {issues.length > 0 && (
+            <div style={{ marginBottom: 20 }}>
+              <div style={{
+                fontSize: 12, color: MUTED, letterSpacing: 2.5,
+                textTransform: 'uppercase' as const, fontWeight: 700, marginBottom: 12,
+              }}>
+                Key issues their donors care about
+              </div>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' as const }}>
+                {issues.map((issue, i) => {
+                  const c = issueColors[i % issueColors.length];
+                  return (
+                    <div key={issue} style={{
+                      background: c.bg,
+                      border: `1.5px solid ${c.border}`,
+                      color: c.text,
+                      borderRadius: 10, padding: '10px 18px',
+                      fontSize: 19, fontWeight: 800, letterSpacing: 0.1,
+                    }}>
+                      {issue}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ── Locked alignment bar ── */}
+          <LockedAlignmentBar lastName={lastName} />
+
+          {/* ── CTA banner ── */}
+          <div style={{
+            background: `linear-gradient(90deg, ${VIOLET}D8, #5B21B6D8)`,
+            borderRadius: 16,
+            padding: '18px 28px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginTop: 18,
+            gap: 16,
+          }}>
+            <div>
+              <div style={{ fontSize: 22, fontWeight: 900, color: FLAG_WHITE, letterSpacing: -0.3, lineHeight: 1.1 }}>
+                Do you agree with their record?
+              </div>
+              <div style={{ fontSize: 14, color: VIOLET_GLOW, marginTop: 3, fontWeight: 600 }}>
+                2-min quiz · free · polipulseapp.com
+              </div>
+            </div>
+            <div style={{
+              background: FLAG_WHITE, color: VIOLET,
+              borderRadius: 10, padding: '10px 22px',
+              fontSize: 17, fontWeight: 900, letterSpacing: 0.3,
+              whiteSpace: 'nowrap' as const, flexShrink: 0,
+            }}>
+              Find My Match →
+            </div>
+          </div>
+
+          {/* ── Footer ── */}
+          <div style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            marginTop: 14, fontSize: 15, color: MUTED,
+          }}>
+            <span>Based on voting record &amp; FEC data</span>
+            <span style={{ fontWeight: 700, color: FLAG_WHITE }}>{data.brandHost}</span>
+          </div>
+        </div>
       </div>
     </div>
   );
