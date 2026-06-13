@@ -32,8 +32,9 @@ export function formatCandidateName(name: string | null | undefined): string {
   if (name.includes(',')) {
     const comma = name.indexOf(',');
     const last = name.slice(0, comma).trim();
-    const first = name.slice(comma + 1).trim();
-    result = first ? `${first} ${last}` : last;
+    // Strip any extra leading commas (e.g. "BRINK,, BRIDGET" → first="BRIDGET")
+    const first = name.slice(comma + 1).replace(/^[,\s]+/, '').trim();
+    result = first && last ? `${first} ${last}` : first || last;
   }
   return isAllCaps ? toNameTitleCase(result) : result;
 }
