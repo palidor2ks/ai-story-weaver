@@ -38,11 +38,12 @@ Also fixed an unrelated CI blocker discovered in passing: migration `20260612233
 
 **State** (verified)
 - PR #377 merged. All 7 CI checks green (Lint/Typecheck/Test/Build/Lockfile/GitGuardian/Supabase Preview). Local preflight: 64/64 tests, lint 0 errors, vite build clean.
-- RPC fix verified by **read-only** sim against Pulse Dev only — the migration is **NOT yet applied** to prod (guardrail #1), so live `finance_reconciliation` rows still show the old inflated numbers until applied + nightly re-run.
-- data-accuracy-verifier subagent was launched on the diff but the PR merged before it reported; its verdict was not captured.
+- Migration `20260613030000` **APPLIED to prod** (ornnzinjrcyigazecctf) via apply_migration; RPC verified live (Delaney 2024 org_total $734,006→$2,250, conduit_excluded→$731,756).
+- Cached `finance_reconciliation` rows refreshed for the **39 affected rows** (set-based recompute of category/itemized + delta + status fields from the corrected RPC, reusing unchanged stored FEC values). Headline 2024 over-counts now reconcile: Thune +503.9%→+0.18%, Trahan +69%→+0.75%, Gray/Latimer/Griffith→~0%, Delaney +38%→−5.43% (status error→warning). I did NOT rewrite total-receipts-delta or `local_itemized` (grand_total) — the nightly `nightly-finance-reconciliation` (admin-JWT + FEC_API_KEY, can't invoke from MCP) will canonically rewrite full rows on its next stale pass; my SQL set only the category fields the breakdown card renders.
+- `partial`-status rows and rows without real FEC data were intentionally skipped (my simplified status recompute can't reproduce `partial`).
 
 **Next**
-Apply migration `20260613030000` to prod (deliberately), then re-run `nightly-finance-reconciliation` (or kick it for the ~13 affected 2024 candidates) so the corrected `organization_total` / `conduit_excluded` land in `finance_reconciliation`. Spot-check Delaney M001232 2024 reads ~−8% (not +38%) afterward.
+Let the next `nightly-finance-reconciliation` run canonically rewrite the touched rows (it uses the corrected RPC now, so values will match what's displayed). Then chase the deferred −8% coverage gap (see below) if finance accuracy is the current priority.
 
 **Deferred**
 - The residual **−8.3%** on Delaney after the fix is a SEPARATE issue: a Schedule-A coverage gap (~$131K) between our summed itemized transactions and FEC's reported F3-summary Line 11A (`individual_itemized_contributions`). Not a categorization bug — needs a donor re-sync (fetch-fec-donors) to confirm/close; a few-% transactions-vs-summary residual is normal. Last donor sync 2026-06-03.
