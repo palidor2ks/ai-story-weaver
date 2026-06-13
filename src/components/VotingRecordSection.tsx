@@ -57,24 +57,32 @@ const topicNameToId: Record<string, string> = {
   'Electoral Reform': 'government-democracy',
 };
 
-export const VotingRecordSection = ({ 
-  votes, 
-  userTopicScores, 
-  representativeParty 
+export const VotingRecordSection = ({
+  votes,
+  userTopicScores,
+  representativeParty
 }: VotingRecordSectionProps) => {
+  const [expandedYears, setExpandedYears] = useState<Set<string>>(new Set());
   const [expandedTopics, setExpandedTopics] = useState<Set<string>>(new Set());
   const [expandedVotes, setExpandedVotes] = useState<Set<string>>(new Set());
 
-  // Group votes by topic
-  const votesByTopic = useMemo(() => {
-    const grouped: Record<string, Vote[]> = {};
+  // Group votes by year (desc), then by topic within each year
+  const votesByYearAndTopic = useMemo(() => {
+    const byYear: Record<string, Record<string, Vote[]>> = {};
     votes.forEach(vote => {
+      const year = vote.date ? new Date(vote.date).getFullYear().toString() : 'Unknown';
       const topic = vote.topic || 'Other';
-      if (!grouped[topic]) grouped[topic] = [];
-      grouped[topic].push(vote);
+      if (!byYear[year]) byYear[year] = {};
+      if (!byYear[year][topic]) byYear[year][topic] = [];
+      byYear[year][topic].push(vote);
     });
-    // Sort topics by vote count descending
-    return Object.entries(grouped).sort((a, b) => b[1].length - a[1].length);
+    return Object.entries(byYear)
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .map(([year, topicMap]) => ({
+        year,
+        topics: Object.entries(topicMap).sort((a, b) => b[1].length - a[1].length),
+        totalVotes: Object.values(topicMap).reduce((s, v) => s + v.length, 0),
+      }));
   }, [votes]);
 
   // Create a map of topic_id -> user score for quick lookup
@@ -135,14 +143,18 @@ export const VotingRecordSection = ({
     };
   }, [votes, userScoreMap, representativeParty]);
 
-  const toggleTopic = (topic: string) => {
+  const toggleYear = (year: string) => {
+    setExpandedYears(prev => {
+      const next = new Set(prev);
+      if (next.has(year)) next.delete(year); else next.add(year);
+      return next;
+    });
+  };
+
+  const toggleTopic = (key: string) => {
     setExpandedTopics(prev => {
       const next = new Set(prev);
-      if (next.has(topic)) {
-        next.delete(topic);
-      } else {
-        next.add(topic);
-      }
+      if (next.has(key)) next.delete(key); else next.add(key);
       return next;
     });
   };
@@ -150,20 +162,20 @@ export const VotingRecordSection = ({
   const toggleVote = (voteId: string) => {
     setExpandedVotes(prev => {
       const next = new Set(prev);
-      if (next.has(voteId)) {
-        next.delete(voteId);
-      } else {
-        next.add(voteId);
-      }
+      if (next.has(voteId)) next.delete(voteId); else next.add(voteId);
       return next;
     });
   };
 
   const expandAll = () => {
-    setExpandedTopics(new Set(votesByTopic.map(([topic]) => topic)));
+    setExpandedYears(new Set(votesByYearAndTopic.map(y => y.year)));
+    setExpandedTopics(new Set(
+      votesByYearAndTopic.flatMap(y => y.topics.map(([topic]) => `${y.year}-${topic}`))
+    ));
   };
 
   const collapseAll = () => {
+    setExpandedYears(new Set());
     setExpandedTopics(new Set());
     setExpandedVotes(new Set());
   };
@@ -275,113 +287,139 @@ export const VotingRecordSection = ({
         </div>
       </CardHeader>
       <CardContent className="space-y-2">
-        {votesByTopic.map(([topic, topicVotes]) => {
-          const isExpanded = expandedTopics.has(topic);
-          
+        {votesByYearAndTopic.map(({ year, topics, totalVotes }) => {
+          const isYearExpanded = expandedYears.has(year);
+
           return (
-            <Collapsible key={topic} open={isExpanded} onOpenChange={() => toggleTopic(topic)}>
+            <Collapsible key={year} open={isYearExpanded} onOpenChange={() => toggleYear(year)}>
               <CollapsibleTrigger asChild>
-                <button className="w-full flex items-center justify-between p-3 rounded-lg border border-border hover:bg-accent/50 transition-colors">
+                <button className="w-full flex items-center justify-between p-3 rounded-lg border border-border bg-secondary/30 hover:bg-accent/50 transition-colors">
                   <div className="flex items-center gap-2">
-                    {isExpanded ? (
+                    {isYearExpanded ? (
                       <ChevronDown className="w-4 h-4 text-muted-foreground" />
                     ) : (
                       <ChevronRight className="w-4 h-4 text-muted-foreground" />
                     )}
-                    <span className="font-medium text-foreground">{topic}</span>
+                    <span className="font-semibold text-foreground">{year}</span>
                   </div>
                   <Badge variant="secondary" className="text-xs">
-                    {topicVotes.length} {topicVotes.length === 1 ? 'vote' : 'votes'}
+                    {totalVotes} {totalVotes === 1 ? 'vote' : 'votes'}
                   </Badge>
                 </button>
               </CollapsibleTrigger>
               <CollapsibleContent>
-                <div className="ml-4 mt-2 space-y-1 border-l-2 border-border pl-4">
-                  {topicVotes.map(vote => {
-                    const support = getUserSupport(vote);
-                    const isVoteExpanded = expandedVotes.has(vote.id);
-                    const congressUrl = getCongressGovUrl(vote.bill_id);
-                    
+                <div className="ml-2 mt-1 space-y-1 border-l-2 border-border pl-2">
+                  {topics.map(([topic, topicVotes]) => {
+                    const topicKey = `${year}-${topic}`;
+                    const isTopicExpanded = expandedTopics.has(topicKey);
+
                     return (
-                      <div key={vote.id} className="rounded-md border border-border/50 overflow-hidden">
-                        <button
-                          onClick={() => toggleVote(vote.id)}
-                          className="w-full p-2 flex items-center gap-2 text-left hover:bg-accent/30 transition-colors"
-                        >
-                          <span className="text-xs font-mono text-muted-foreground w-20 flex-shrink-0">
-                            {vote.bill_id}
-                          </span>
-                          <span className="text-sm flex-1 truncate text-foreground">
-                            {vote.bill_name.length > 60 
-                              ? vote.bill_name.slice(0, 60) + '...' 
-                              : vote.bill_name}
-                          </span>
-                          
-                          {/* User support indicator */}
-                          {support === 'support' && (
-                            <span className="flex items-center gap-1 text-xs text-agree flex-shrink-0">
-                              <ThumbsUp className="w-3 h-3" />
-                            </span>
-                          )}
-                          {support === 'oppose' && (
-                            <span className="flex items-center gap-1 text-xs text-disagree flex-shrink-0">
-                              <ThumbsDown className="w-3 h-3" />
-                            </span>
-                          )}
-                          {support === 'unknown' && (
-                            <span className="flex items-center gap-1 text-xs text-muted-foreground flex-shrink-0">
-                              <HelpCircle className="w-3 h-3" />
-                            </span>
-                          )}
-                          
-                          {/* Position badge */}
-                          <Badge 
-                            variant="secondary"
-                            className={cn(
-                              "text-xs flex-shrink-0",
-                              (vote.position === 'Yea' || vote.position === 'Sponsored') && 
-                                "bg-agree/20 text-agree border-agree/30",
-                              vote.position === 'Nay' && 
-                                "bg-disagree/20 text-disagree border-disagree/30",
-                              vote.position === 'Cosponsored' && 
-                                "bg-primary/20 text-primary border-primary/30"
-                            )}
-                          >
-                            {vote.position}
-                          </Badge>
-                          
-                          <span className="text-xs text-muted-foreground flex-shrink-0">
-                            {new Date(vote.date).toLocaleDateString('en-US', { 
-                              month: 'short', 
-                              day: 'numeric' 
+                      <Collapsible key={topicKey} open={isTopicExpanded} onOpenChange={() => toggleTopic(topicKey)}>
+                        <CollapsibleTrigger asChild>
+                          <button className="w-full flex items-center justify-between px-3 py-2 rounded-lg border border-border/60 hover:bg-accent/50 transition-colors">
+                            <div className="flex items-center gap-2">
+                              {isTopicExpanded ? (
+                                <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                              ) : (
+                                <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                              )}
+                              <span className="font-medium text-foreground text-sm">{topic}</span>
+                            </div>
+                            <Badge variant="secondary" className="text-xs">
+                              {topicVotes.length} {topicVotes.length === 1 ? 'vote' : 'votes'}
+                            </Badge>
+                          </button>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent>
+                          <div className="ml-4 mt-1 space-y-1 border-l-2 border-border pl-3">
+                            {topicVotes.map(vote => {
+                              const support = getUserSupport(vote);
+                              const isVoteExpanded = expandedVotes.has(vote.id);
+                              const congressUrl = getCongressGovUrl(vote.bill_id);
+
+                              return (
+                                <div key={vote.id} className="rounded-md border border-border/50 overflow-hidden">
+                                  <button
+                                    onClick={() => toggleVote(vote.id)}
+                                    className="w-full p-2 flex items-center gap-2 text-left hover:bg-accent/30 transition-colors"
+                                  >
+                                    <span className="text-xs font-mono text-muted-foreground w-20 flex-shrink-0">
+                                      {vote.bill_id}
+                                    </span>
+                                    <span className="text-sm flex-1 truncate text-foreground">
+                                      {vote.bill_name.length > 60
+                                        ? vote.bill_name.slice(0, 60) + '...'
+                                        : vote.bill_name}
+                                    </span>
+
+                                    {support === 'support' && (
+                                      <span className="flex items-center gap-1 text-xs text-agree flex-shrink-0">
+                                        <ThumbsUp className="w-3 h-3" />
+                                      </span>
+                                    )}
+                                    {support === 'oppose' && (
+                                      <span className="flex items-center gap-1 text-xs text-disagree flex-shrink-0">
+                                        <ThumbsDown className="w-3 h-3" />
+                                      </span>
+                                    )}
+                                    {support === 'unknown' && (
+                                      <span className="flex items-center gap-1 text-xs text-muted-foreground flex-shrink-0">
+                                        <HelpCircle className="w-3 h-3" />
+                                      </span>
+                                    )}
+
+                                    <Badge
+                                      variant="secondary"
+                                      className={cn(
+                                        "text-xs flex-shrink-0",
+                                        (vote.position === 'Yea' || vote.position === 'Sponsored') &&
+                                          "bg-agree/20 text-agree border-agree/30",
+                                        vote.position === 'Nay' &&
+                                          "bg-disagree/20 text-disagree border-disagree/30",
+                                        vote.position === 'Cosponsored' &&
+                                          "bg-primary/20 text-primary border-primary/30"
+                                      )}
+                                    >
+                                      {vote.position}
+                                    </Badge>
+
+                                    <span className="text-xs text-muted-foreground flex-shrink-0">
+                                      {new Date(vote.date).toLocaleDateString('en-US', {
+                                        month: 'short',
+                                        day: 'numeric'
+                                      })}
+                                    </span>
+                                  </button>
+
+                                  {isVoteExpanded && (
+                                    <div className="px-3 pb-3 pt-1 bg-accent/20 border-t border-border/50">
+                                      <p className="text-sm font-medium text-foreground mb-1">
+                                        {vote.bill_name}
+                                      </p>
+                                      {vote.description && (
+                                        <p className="text-xs text-muted-foreground mb-2">
+                                          {vote.description}
+                                        </p>
+                                      )}
+                                      {congressUrl && (
+                                        <a
+                                          href={congressUrl}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="text-xs text-primary hover:underline flex items-center gap-1"
+                                        >
+                                          <ExternalLink className="w-3 h-3" />
+                                          View on Congress.gov
+                                        </a>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              );
                             })}
-                          </span>
-                        </button>
-                        
-                        {isVoteExpanded && (
-                          <div className="px-3 pb-3 pt-1 bg-accent/20 border-t border-border/50">
-                            <p className="text-sm font-medium text-foreground mb-1">
-                              {vote.bill_name}
-                            </p>
-                            {vote.description && (
-                              <p className="text-xs text-muted-foreground mb-2">
-                                {vote.description}
-                              </p>
-                            )}
-                            {congressUrl && (
-                              <a 
-                                href={congressUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-xs text-primary hover:underline flex items-center gap-1"
-                              >
-                                <ExternalLink className="w-3 h-3" />
-                                View on Congress.gov
-                              </a>
-                            )}
                           </div>
-                        )}
-                      </div>
+                        </CollapsibleContent>
+                      </Collapsible>
                     );
                   })}
                 </div>
