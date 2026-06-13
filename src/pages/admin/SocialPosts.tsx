@@ -19,6 +19,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CandidateStatCard } from '@/components/share/templates/CandidateStatCard';
 import { SignupTeaserCard } from '@/components/share/templates/SignupTeaserCard';
+import { PolicyPositionsCard } from '@/components/share/templates/PolicyPositionsCard';
 import { CARD_SIZE } from '@/components/share/templates/types';
 import { nodeToBlob } from '@/lib/shareImage';
 import { uploadShareCard } from '@/lib/shareUpload';
@@ -50,6 +51,7 @@ const SUBJECT_TYPE_LABELS: Record<string, string> = {
   top_donor: 'Top Donor',
   race_comparison: 'Race Comparison',
   signup_teaser: 'Signup Teaser',
+  policy_positions: 'Policy Positions',
 };
 const subjectTypeLabel = (t: string | null | undefined): string => SUBJECT_TYPE_LABELS[t ?? ''] ?? 'Rep Profile';
 
@@ -59,8 +61,9 @@ const subjectTypeLabel = (t: string | null | undefined): string => SUBJECT_TYPE_
 const isServerRenderedType = (t: string | null | undefined): boolean =>
   t === 'committee_spender' || t === 'top_donor' || t === 'race_comparison';
 
-// signup_teaser shares the candidate data pipeline but uses SignupTeaserCard as its template
+// signup_teaser / policy_positions share the candidate data pipeline but use different templates
 const isSignupTeaserType = (t: string | null | undefined): boolean => t === 'signup_teaser';
+const isPolicyPositionsType = (t: string | null | undefined): boolean => t === 'policy_positions';
 
 interface PlatformRow {
   id: string;
@@ -458,7 +461,7 @@ function SettingsTab() {
             Generate a draft now — one button per card type. (The daily auto-run drafts one of each.)
           </p>
           <div className="flex flex-wrap gap-2">
-            {(['rep_profile', 'committee_spender', 'top_donor', 'signup_teaser'] as const).map((type) => (
+            {(['rep_profile', 'committee_spender', 'top_donor', 'signup_teaser', 'policy_positions'] as const).map((type) => (
               <Button
                 key={type}
                 variant="outline"
@@ -490,7 +493,8 @@ function PostCard({ post, platforms, onChanged }: { post: SocialPost; platforms:
     post.subject_type === 'candidate' ||
     post.subject_type === 'rep_profile' ||
     post.subject_type === 'ai_analysis' ||
-    post.subject_type === 'signup_teaser';
+    post.subject_type === 'signup_teaser' ||
+    post.subject_type === 'policy_positions';
 
   // Offscreen renderer for the rep-profile share card. We always mount it so
   // the underlying hooks pre-fetch donor/finance/IE data — by the time the
@@ -712,6 +716,8 @@ function PostCard({ post, platforms, onChanged }: { post: SocialPost; platforms:
             <div ref={cardNodeRef} style={{ width: CARD_SIZE, height: CARD_SIZE }}>
               {cardData && isSignupTeaserType(post.subject_type)
                 ? <SignupTeaserCard data={{ kind: 'candidate-alignment', ...cardData } as any} />
+                : cardData && isPolicyPositionsType(post.subject_type)
+                ? <PolicyPositionsCard data={{ kind: 'candidate-alignment', ...cardData } as any} />
                 : cardData && <CandidateStatCard data={{ kind: 'candidate-alignment', ...cardData } as any} />}
             </div>
           </div>

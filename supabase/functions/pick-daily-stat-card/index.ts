@@ -16,7 +16,7 @@ const corsHeaders = {
 };
 
 const PLATFORMS = ['x', 'facebook', 'instagram', 'tiktok'] as const;
-const ALLOWED_TYPES = new Set(['rep_profile', 'committee_spender', 'top_donor', 'ai_analysis', 'signup_teaser']);
+const ALLOWED_TYPES = new Set(['rep_profile', 'committee_spender', 'top_donor', 'ai_analysis', 'signup_teaser', 'policy_positions']);
 
 const supaUrl = Deno.env.get('SUPABASE_URL')!;
 const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -221,9 +221,8 @@ Deno.serve(async (req) => {
 
       const picked = avail[Math.floor(Math.random() * avail.length)];
       const statKey = type === 'ai_analysis' ? 'ai_summary' : 'overall_score';
-      // signup_teaser picks the same candidate pool as rep_profile but uses a
-      // different client-side render template (SignupTeaserCard). No server-side
-      // SVG needed — it is always client-rendered.
+      // signup_teaser / policy_positions pick the same candidate pool as rep_profile
+      // but use different client-side render templates. No server-side SVG needed.
 
       const subjectLabel = `${picked.name} — ${picked.office}${picked.state ? `, ${picked.state}` : ''}`;
       const { data: post, error: insErr } = await admin.from('social_posts').insert({
