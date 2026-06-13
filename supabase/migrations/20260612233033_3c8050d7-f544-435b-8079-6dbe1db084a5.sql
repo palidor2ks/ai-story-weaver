@@ -1,21 +1,37 @@
 
-ALTER TABLE public._enrich_stmt_staging ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public._evidence_spike_log ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public._evidence_spike_statements ENABLE ROW LEVEL SECURITY;
-
-REVOKE ALL ON public._enrich_stmt_staging FROM anon, authenticated;
-REVOKE ALL ON public._evidence_spike_log FROM anon, authenticated;
-REVOKE ALL ON public._evidence_spike_statements FROM anon, authenticated;
-GRANT ALL ON public._enrich_stmt_staging TO service_role;
-GRANT ALL ON public._evidence_spike_log TO service_role;
-GRANT ALL ON public._evidence_spike_statements TO service_role;
-
-CREATE POLICY "admins read enrich staging" ON public._enrich_stmt_staging
-  FOR SELECT TO authenticated USING (public.has_role(auth.uid(), 'admin'));
-CREATE POLICY "admins read evidence spike log" ON public._evidence_spike_log
-  FOR SELECT TO authenticated USING (public.has_role(auth.uid(), 'admin'));
-CREATE POLICY "admins read evidence spike statements" ON public._evidence_spike_statements
-  FOR SELECT TO authenticated USING (public.has_role(auth.uid(), 'admin'));
+-- These three underscore-prefixed staging tables are created ad-hoc by the
+-- evidence-index tooling, not by any migration, so a from-scratch replay (e.g.
+-- a Supabase preview branch) does not have them and the bare ALTER/GRANT/POLICY
+-- statements error with 42P01. Guard each on table existence (to_regclass) so
+-- the lock-down runs where the table exists and is skipped cleanly where it
+-- does not — mirrors the "skip cleanly on missing schema" pattern in
+-- 20260612120000_conduit_memox_donor_backfill_and_earmark_rollups.sql.
+-- Replay-safe: DROP POLICY IF EXISTS before CREATE so a re-run is a no-op.
+do $stage$
+declare
+  t text;
+  pol text;
+begin
+  foreach t in array array['_enrich_stmt_staging', '_evidence_spike_log', '_evidence_spike_statements'] loop
+    if to_regclass('public.' || t) is null then
+      raise notice 'lockdown skipped: table public.% does not exist on this database', t;
+      continue;
+    end if;
+    execute format('alter table public.%I enable row level security', t);
+    execute format('revoke all on public.%I from anon, authenticated', t);
+    execute format('grant all on public.%I to service_role', t);
+    pol := case t
+      when '_enrich_stmt_staging' then 'admins read enrich staging'
+      when '_evidence_spike_log' then 'admins read evidence spike log'
+      else 'admins read evidence spike statements'
+    end;
+    execute format('drop policy if exists %I on public.%I', pol, t);
+    execute format(
+      'create policy %I on public.%I for select to authenticated using (public.has_role(auth.uid(), ''admin''))',
+      pol, t);
+  end loop;
+end
+$stage$;
 
 CREATE POLICY "admins read candidate_merge_map" ON public.candidate_merge_map
   FOR SELECT TO authenticated USING (public.has_role(auth.uid(), 'admin'));
