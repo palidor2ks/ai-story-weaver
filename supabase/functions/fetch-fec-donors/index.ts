@@ -149,6 +149,9 @@ function classifyLineNumber(lineNumber: string | null): LineClassification {
   if (!lineNumber) return { isContribution: true, isTransfer: false, receiptType: 'contribution', contributionCategory: 'individual' };
   
   const line = lineNumber.toUpperCase();
+  // Line 11D = candidate's own personal funds (self-funding, FEC entity "candidate").
+  // It's surfaced via fec_candidate_contribution and must stay OUT of donor lists.
+  const isCandidateSelfFund = line.startsWith('11D');
   const isLine11 = line.startsWith('11'); // Individual contributions
   const isLine12 = line.startsWith('12'); // Authorized committee transfers
   const isLine14 = line.startsWith('14'); // Refunds/rebates/returns from vendors & committees
@@ -173,7 +176,10 @@ function classifyLineNumber(lineNumber: string | null): LineClassification {
     contributionCategory = 'other';
   }
   
-  if (isLine11) {
+  if (isCandidateSelfFund) {
+    // Candidate self-funding — not a donor contribution.
+    return { isContribution: false, isTransfer: false, receiptType: 'other_receipt', contributionCategory: 'other' };
+  } else if (isLine11) {
     return { isContribution: true, isTransfer: false, receiptType: 'contribution', contributionCategory };
   } else if (isLine12) {
     return { isContribution: true, isTransfer: true, receiptType: 'transfer', contributionCategory: 'other' };
