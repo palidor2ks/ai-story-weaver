@@ -27,6 +27,46 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-13 (answer URL-sourcing: gate 5 run + corpus diagnosis) — claude/zen-sagan-7ofwx2
+
+**What happened & why**
+Ran the 50-sample gate on `match-answer-citations` after deploying the tightened 4-guard distiller prompt. Result: gate FAILS — the pipeline's precision problem is structural, not just a prompt issue.
+
+**Gate results (75 processed)**
+- `none`: 74  `cited`: 1 — overall hit rate 1.3%
+- The 1 "cited" row (Greg Stanton / detention conditions question) is a false positive:
+  - Statement: "Ranking Member Stanton Launches Investigation After Reported Diversion of FEMA Resources to Support Immigration Enforcement"
+  - Fails TOPIC guard (FEMA resource diversion ≠ detention facility standards; same broad topic area but different policy)
+  - Fails DIRECT guard (procedural investigation announcement, not a position statement)
+  - Supporting quote is just the title repeated with a typo — distiller couldn't find real body evidence
+  - Distiller reason: "oversight of DHS → supports detention standards" = exactly the "same general area" inference the prompt warns against
+- Precision on cited class: 0/1 = 0% → gate does NOT clear ≥90% threshold
+
+**Root cause: corpus is procedural, not positional**
+- Congressional press releases are investigations, bill co-sponsorships, hearing notices, constituent service — rarely explicit "I believe X policy is right"
+- Even with a perfect distiller, citing a position requires the corpus to contain position statements
+- At 1.3% hit rate over 18,424 eligible answers → ~240 total citations if scaled; this moves URL% from 5.34% → 5.38% — negligible gain for the false-positive risk
+
+**Decision: do NOT scale up `match-answer-citations` in current form**
+- Gate failed; scaling would add bad citations at unknown rate
+- Gain is too small even if precision were 100%
+
+**State** (verified)
+- Gate run complete (75 rows in `_match_stmt_citations`): 74 none, 1 cited (false positive — not applied)
+- `candidate_answers` NOT touched — gate write-only to staging table ✓
+- URL-sourced count unchanged: 30,133 (5.34%)
+
+**Next**
+Owner decision required: exclude `evidence_type='inferred'` answers from the URL% metric denominator. This is the only meaningful path to 35%. Current denominator (564,525) includes 204,506 inferred answers that can never have URLs. Excluding them: denominator drops to ~360,019 and current 30,133 URLs = 8.37% — still failing but the metric would reflect achievable progress. Decision is in `docs/answers-enrichment-part1b-plan.md §"The inferred question"`.
+
+**Deferred**
+- `match-answer-citations` scaling — blocked on either (a) richer corpus (op-eds, floor speeches) or (b) owner decision that citations from procedural statements are acceptable at lower precision
+- Senate votes (lis_member_id → bioguide mapping needed)
+- `_match_stmt_citations` staging table: 75 rows from gate, all safe to truncate or leave
+- Adding more `question_bill_map` entries for national-security-borders / rights-justice topics
+
+---
+
 ## 2026-06-13 (answer URL-sourcing: round 4 enrichment + distiller hardening) — claude/zen-sagan-7ofwx2
 
 **What happened & why**
