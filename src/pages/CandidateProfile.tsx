@@ -126,15 +126,20 @@ export const CandidateProfile = () => {
     return matchingDonors.filter((d) => !isConduitDonor(d)).slice(0, lookupLimit);
   }, [donors, donorSearch, visibleDonorCount]);
   const donorCauseInputs = useMemo(
-    () => donorCauseLookupDonors.flatMap(d => {
-      const names = [d.name, d.display_name, ...(d.name_variations ?? [])]
-        .filter((name): name is string => Boolean(name?.trim()));
-      return Array.from(new Set(names.map((name) => name.trim()))).map((name) => ({
-        name,
-        type: d.type,
-      }));
-    }),
-    [donorCauseLookupDonors],
+    () => [
+      ...donorCauseLookupDonors.flatMap(d => {
+        const names = [d.name, d.display_name, ...(d.name_variations ?? [])]
+          .filter((name): name is string => Boolean(name?.trim()));
+        return Array.from(new Set(names.map((name) => name.trim()))).map((name) => ({
+          name,
+          type: d.type,
+        }));
+      }),
+      // Earmark-program orgs (e.g. AIPAC) are not in the donor list but need
+      // a cause lookup so their cards show the same cause badge as donor cards.
+      ...earmarkRollups.map(r => ({ name: r.org_label, type: r.org_type })),
+    ],
+    [donorCauseLookupDonors, earmarkRollups],
   );
   const { data: donorCauseMap } = useDonorCauses(donorCauseInputs);
 
