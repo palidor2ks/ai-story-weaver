@@ -179,7 +179,14 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
     Number.isFinite(data.outsideOppose) &&
     data.outsideOppose > 0;
   const hasOutside = hasOutsideSupport || hasOutsideOppose;
-  const showFinanceTotals = hasRaisedTotal || hasOutside;
+  const hasSelfFunded =
+    data.selfFunded !== null &&
+    data.selfFunded !== undefined &&
+    Number.isFinite(data.selfFunded) &&
+    (data.selfFunded ?? 0) > 0;
+  const financeBoxCount =
+    (hasRaisedTotal ? 1 : 0) + (hasOutside ? 1 : 0) + (hasSelfFunded ? 1 : 0);
+  const showFinanceTotals = hasRaisedTotal || hasOutside || hasSelfFunded;
   const dataYearLabel = formatDataYearLabel(displayCycle);
   const cycleDateRange = formatCycleDateRange(displayCycle);
   const cycleLabel = data.ieCycle ? ` · ${data.ieCycle}` : '';
@@ -359,10 +366,10 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
                 <div
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: hasRaisedTotal && hasOutside ? '1fr 1fr' : '1fr',
+                    gridTemplateColumns: `repeat(${Math.max(1, financeBoxCount)}, 1fr)`,
                     gap: 10,
                     marginTop: 12,
-                    maxWidth: 430,
+                    maxWidth: financeBoxCount >= 3 ? 620 : 430,
                   }}
                 >
                   {hasRaisedTotal && (
@@ -449,6 +456,32 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
                             </span>
                           </div>
                         )}
+                      </div>
+                    </div>
+                  )}
+                  {hasSelfFunded && (
+                    <div
+                      style={{
+                        border: `2px solid hsl(220 14% 72% / 0.8)`,
+                        borderRadius: 12,
+                        padding: '7px 10px',
+                        background: 'hsl(220 14% 45% / 0.16)',
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: 10,
+                          letterSpacing: 1.2,
+                          textTransform: 'uppercase',
+                          color: mutedColor,
+                          fontWeight: 800,
+                          lineHeight: 1.1,
+                        }}
+                      >
+                        Self-Funded
+                      </div>
+                      <div style={{ fontSize: 22, fontWeight: 900, color: 'hsl(220 14% 82%)', lineHeight: 1.15 }}>
+                        {fmtMoneyShort(data.selfFunded)}
                       </div>
                     </div>
                   )}

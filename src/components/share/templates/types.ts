@@ -48,6 +48,8 @@ export interface CardData {
   // Funding sources breakdown (candidate cards only)
   fundingBreakdown?: { label: string; pct: number; color: string }[];
   fundingCycle?: string;
+  // Candidate self-funding (FEC loans + candidate contributions) for the cycle.
+  selfFunded?: number | null;
   // AI analysis card
   analysisTitle?: string; // subject name (donor / candidate / committee / bill)
   analysisSubtitle?: string; // e.g. "Donor Analysis", "Candidate Analysis"

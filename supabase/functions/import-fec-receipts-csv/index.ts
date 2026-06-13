@@ -36,22 +36,22 @@ function classifyLineNumber(lineNumber: string | null): LineClassification {
   if (!lineNumber) return { isContribution: true, isTransfer: false, receiptType: 'contribution' };
   
   const line = lineNumber.toUpperCase();
-  const isLine11 = line.startsWith('11');
-  const isLine12 = line.startsWith('12');
-  const isLine15 = line.startsWith('15');
-  const isLine17 = line.startsWith('17');
-  
+  const isLine11 = line.startsWith('11'); // Contributions (individuals, party, PACs)
+  const isLine12 = line.startsWith('12'); // Authorized committee transfers
+  // Everything else is NOT a donor contribution and must not feed donor lists:
+  //   13 = loans (incl. candidate self-loans), 14 = refunds/returns,
+  //   15 = offsets to operating expenditures, 17 = other federal receipts, etc.
+  // (Mirrors classifyLineNumber in fetch-fec-donors/index.ts.) Previously every
+  // branch returned isContribution:true, so candidate loans (Line 13A) were
+  // aggregated into the donors table and surfaced as bogus "top donors".
+
   if (isLine11) {
     return { isContribution: true, isTransfer: false, receiptType: 'contribution' };
   } else if (isLine12) {
     return { isContribution: true, isTransfer: true, receiptType: 'transfer' };
-  } else if (isLine15) {
-    return { isContribution: true, isTransfer: false, receiptType: 'other_receipt' };
-  } else if (isLine17) {
-    return { isContribution: true, isTransfer: false, receiptType: 'contribution' };
   }
-  
-  return { isContribution: true, isTransfer: false, receiptType: 'other_receipt' };
+
+  return { isContribution: false, isTransfer: false, receiptType: 'other_receipt' };
 }
 
 // Parse earmark info from memo text
