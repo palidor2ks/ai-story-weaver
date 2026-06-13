@@ -4,7 +4,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
-import { ChevronRight, ChevronDown, ThumbsUp, ThumbsDown, HelpCircle, ExternalLink } from 'lucide-react';
+import { ChevronRight, ChevronDown, ThumbsUp, ThumbsDown, HelpCircle, ExternalLink, Sparkles } from 'lucide-react';
+import { BillAIAnalysisDialog } from '@/components/BillAIAnalysisDialog';
 
 interface Vote {
   id: string;
@@ -29,6 +30,9 @@ interface VotingRecordSectionProps {
   votes: Vote[];
   userTopicScores: TopicScore[];
   representativeParty: string;
+  candidateName?: string;
+  candidateState?: string | null;
+  candidateOffice?: string | null;
 }
 
 // Map display topic names to the 6 consolidated federal topic IDs
@@ -60,7 +64,10 @@ const topicNameToId: Record<string, string> = {
 export const VotingRecordSection = ({
   votes,
   userTopicScores,
-  representativeParty
+  representativeParty,
+  candidateName,
+  candidateState,
+  candidateOffice,
 }: VotingRecordSectionProps) => {
   const [expandedYears, setExpandedYears] = useState<Set<string>>(new Set());
   const [expandedTopics, setExpandedTopics] = useState<Set<string>>(new Set());
@@ -401,17 +408,39 @@ export const VotingRecordSection = ({
                                           {vote.description}
                                         </p>
                                       )}
-                                      {congressUrl && (
-                                        <a
-                                          href={congressUrl}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          className="text-xs text-primary hover:underline flex items-center gap-1"
-                                        >
-                                          <ExternalLink className="w-3 h-3" />
-                                          View on Congress.gov
-                                        </a>
-                                      )}
+                                      <div className="flex items-center gap-3 flex-wrap mt-2">
+                                        {congressUrl && (
+                                          <a
+                                            href={congressUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-xs text-primary hover:underline flex items-center gap-1"
+                                          >
+                                            <ExternalLink className="w-3 h-3" />
+                                            View on Congress.gov
+                                          </a>
+                                        )}
+                                        {candidateName && (
+                                          <BillAIAnalysisDialog
+                                            billId={vote.bill_id}
+                                            billName={vote.bill_name}
+                                            topic={vote.topic}
+                                            candidateName={candidateName}
+                                            candidateParty={representativeParty}
+                                            candidateState={candidateState}
+                                            candidateOffice={candidateOffice}
+                                            isSponsor={vote.position === 'Sponsored'}
+                                            votePosition={vote.position}
+                                            userAlignment={support}
+                                            trigger={
+                                              <Button size="sm" variant="outline" className="h-6 text-xs gap-1 px-2">
+                                                <Sparkles className="w-3 h-3" />
+                                                AI Analysis
+                                              </Button>
+                                            }
+                                          />
+                                        )}
+                                      </div>
                                     </div>
                                   )}
                                 </div>
