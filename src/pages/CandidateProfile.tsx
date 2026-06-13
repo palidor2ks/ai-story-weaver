@@ -1417,10 +1417,13 @@ export const CandidateProfile = () => {
 
 
           <TabsContent value="votes">
-            <VotingRecordSection 
+            <VotingRecordSection
               votes={votes}
               userTopicScores={userTopicScores}
               representativeParty={candidate.party}
+              candidateName={candidate.name}
+              candidateState={candidate.state}
+              candidateOffice={candidate.office}
             />
           </TabsContent>
 

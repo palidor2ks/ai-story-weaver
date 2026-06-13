@@ -10,6 +10,7 @@ export interface CandidateAnswer {
   source_url: string | null;
   source_description: string | null;
   source_type: 'voting_record' | 'public_statement' | 'campaign_website' | 'interview' | 'legislation' | 'other';
+  evidence_type: string | null;
   confidence: 'high' | 'medium' | 'low';
   created_at: string;
   updated_at: string;
@@ -49,6 +50,7 @@ export const useCandidateAnswers = (candidateId: string | undefined) => {
           source_url,
           source_description,
           source_type,
+          evidence_type,
           confidence,
           created_at,
           updated_at,
@@ -112,6 +114,7 @@ export const useSmartCandidateAnswers = (
           source_url,
           source_description,
           source_type,
+          evidence_type,
           confidence,
           created_at,
           updated_at,
@@ -300,6 +303,7 @@ export const useCandidateAnswersForUser = (
           source_url,
           source_description,
           source_type,
+          evidence_type,
           confidence,
           created_at,
           updated_at,

@@ -1,6 +1,7 @@
 import { ReactNode, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import {
   DialogClose,
   Dialog,
@@ -10,7 +11,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Sparkles, Loader2, ExternalLink, AlertTriangle, BookOpen, RefreshCw, X, Globe } from 'lucide-react';
+import { Sparkles, Loader2, ExternalLink, AlertTriangle, BookOpen, RefreshCw, X, Globe, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { ShareAIAnalysisButton } from '@/components/ShareAIAnalysisButton';
 
@@ -47,6 +48,8 @@ interface Props {
   candidateOffice?: string | null;
   candidateState?: string | null;
   isSponsor: boolean;
+  votePosition?: string | null;
+  userAlignment?: 'support' | 'oppose' | 'unknown';
   trigger: ReactNode;
 }
 
@@ -78,13 +81,23 @@ const toOneSentence = (items: unknown[]) => {
 
 export const BillAIAnalysisDialog = ({
   billId, billType, billNumber, billName, congress, topic, status, billUrl, sponsorshipDate,
-  candidateName, candidateParty, candidateOffice, candidateState, isSponsor, trigger,
+  candidateName, candidateParty, candidateOffice, candidateState, isSponsor,
+  votePosition, userAlignment, trigger,
 }: Props) => {
   const [analysis, setAnalysis] = useState<BillAnalysis | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const billLabel = billType && billNumber ? `${String(billType).toUpperCase()} ${billNumber}` : billName;
+
+  const roleLabel = (() => {
+    const p = (votePosition ?? '').toLowerCase();
+    if (p === 'sponsored') return 'sponsored';
+    if (p === 'cosponsored') return 'cosponsored';
+    if (p === 'yea' || p === 'aye') return 'voted Yes on';
+    if (p === 'nay' || p === 'no') return 'voted No on';
+    return isSponsor ? 'sponsored' : 'cosponsored';
+  })();
 
   const fetchAnalysis = async (force = false) => {
     setIsLoading(true);
@@ -142,7 +155,7 @@ export const BillAIAnalysisDialog = ({
               <span className="min-w-0 break-words">{billLabel}: {billName}</span>
             </DialogTitle>
             <DialogDescription>
-              AI-generated analysis of this bill and {candidateName}'s {isSponsor ? 'sponsorship' : 'cosponsorship'} — grounded in live web search.
+              AI-generated analysis of this bill and why {candidateName} {roleLabel} it — grounded in live web search.
             </DialogDescription>
           </div>
           {analysis && !isLoading && (
@@ -212,6 +225,24 @@ export const BillAIAnalysisDialog = ({
               </div>
             )}
 
+            {userAlignment && userAlignment !== 'unknown' && (
+              <div className={cn(
+                "flex items-start gap-2 p-3 rounded-md border text-sm",
+                userAlignment === 'support'
+                  ? "bg-agree/10 border-agree/30 text-agree"
+                  : "bg-disagree/10 border-disagree/30 text-disagree"
+              )}>
+                {userAlignment === 'support'
+                  ? <ThumbsUp className="h-4 w-4 mt-0.5 shrink-0" />
+                  : <ThumbsDown className="h-4 w-4 mt-0.5 shrink-0" />}
+                <span>
+                  <strong>Based on your quiz answers</strong>, you'd likely{' '}
+                  <strong>{userAlignment === 'support' ? 'agree' : 'disagree'}</strong>{' '}
+                  with this vote. See "Policy positions" below to understand why.
+                </span>
+              </div>
+            )}
+
             <p className="text-foreground leading-relaxed">{analysis.summary}</p>
 
             {analysis.key_provisions && analysis.key_provisions.length > 0 && (
@@ -226,7 +257,7 @@ export const BillAIAnalysisDialog = ({
             {analysis.candidate_role_explanation && (
               <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3">
                 <h4 className="font-semibold text-foreground text-xs uppercase tracking-wide">
-                  Why {candidateName} {isSponsor ? 'sponsored' : 'cosponsored'} it
+                  Why {candidateName} {roleLabel} it
                 </h4>
                 <p className="text-foreground leading-relaxed">{analysis.candidate_role_explanation}</p>
               </div>

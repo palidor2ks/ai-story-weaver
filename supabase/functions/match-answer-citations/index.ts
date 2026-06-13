@@ -60,7 +60,9 @@ const SERVICE_KEY  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
 
 const BATCH_LIMIT    = 10;   // per invocation during gate phase; increase after gate clears
-const STMT_LIMIT     = 5;    // topic-matched statements passed to distiller
+const TOPIC_LIMIT    = 3;    // topic-tag matched statements (broad recall)
+const FTS_LIMIT      = 5;    // question-text FTS matched statements (narrow precision)
+const STMT_LIMIT     = 6;    // max merged statements passed to distiller
 const BODY_EXCERPT   = 600;  // chars of body text in distiller context
 const DELAY_MS       = 500;  // courtesy gap between Lovable gateway calls
 
@@ -88,6 +90,7 @@ interface PickResult {
   index: number;              // 0-based into statements list, or -1
   supporting_quote?: string;
   reason: string;
+  _gatewayError?: string;     // set only on gateway failure; signals caller to store as error
 }
 
 async function callDistiller(
@@ -129,7 +132,7 @@ ${stmtList}`;
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-3-flash-preview',  // proven for tool-calls in this repo
+        model: 'google/gemini-2.5-flash',
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user',   content: userPrompt },
@@ -165,12 +168,17 @@ ${stmtList}`;
     });
 
     if (!resp.ok) {
-      console.warn('[distiller] gateway non-ok', resp.status, await resp.text().catch(() => ''));
-      return null;
+      const body = await resp.text().catch(() => '');
+      console.warn('[distiller] gateway non-ok', resp.status, body);
+      return { index: -1, reason: '', _gatewayError: `HTTP ${resp.status}: ${body.slice(0, 300)}` };
     }
     const data = await resp.json();
     const args = data?.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
-    if (!args) return null;
+    if (!args) {
+      const summary = JSON.stringify(data).slice(0, 300);
+      console.warn('[distiller] no tool_call args', summary);
+      return { index: -1, reason: '', _gatewayError: `no tool_call args: ${summary}` };
+    }
 
     const parsed = JSON.parse(args) as PickResult;
     // Clamp to valid range — model must not name an index outside the list
@@ -179,7 +187,7 @@ ${stmtList}`;
     return parsed;
   } catch (err) {
     console.warn('[distiller] error', err);
-    return null;
+    return { index: -1, reason: '', _gatewayError: String(err).slice(0, 300) };
   }
 }
 
@@ -216,17 +224,36 @@ async function processAnswers(limit: number): Promise<void> {
         { onConflict: 'answer_id' },
       );
 
-      // Retrieve topic-matched statements for this candidate.
-      const { data: stmts } = await supabase
+      // Pass 1: topic-tag match (broad recall — any statement tagged with this topic).
+      const { data: topicStmts } = await supabase
         .from('member_statements')
         .select('id, url, title, body_text, published_at')
         .eq('candidate_id', answer.candidate_id)
         .filter('topic_tags', 'cs', `{${answer.topic_id}}`)
         .gt('body_chars', 200)
         .order('published_at', { ascending: false })
-        .limit(STMT_LIMIT);
+        .limit(TOPIC_LIMIT);
 
-      const statements = (stmts ?? []) as StatementRow[];
+      // Pass 2: FTS on question text (narrow precision — finds statements that
+      // actually use the question's specific vocabulary).
+      const { data: ftsStmts } = await supabase
+        .rpc('search_member_statements_fts', {
+          p_candidate_id: answer.candidate_id,
+          p_query: answer.question_text,
+          p_limit: FTS_LIMIT,
+        });
+
+      // Merge: topic-tag first, FTS second, deduplicated by id, up to STMT_LIMIT.
+      const seen = new Set<string>();
+      const merged: StatementRow[] = [];
+      for (const s of [...(topicStmts ?? []), ...(ftsStmts ?? [])]) {
+        const row = s as StatementRow;
+        if (!seen.has(row.id) && merged.length < STMT_LIMIT) {
+          seen.add(row.id);
+          merged.push(row);
+        }
+      }
+      const statements = merged;
       patch.statements_considered = statements.length;
 
       if (statements.length === 0) {
@@ -234,9 +261,9 @@ async function processAnswers(limit: number): Promise<void> {
         patch.reason  = `no topic-matched statements with body for topic ${answer.topic_id}`;
       } else {
         const result = await callDistiller(answer, statements);
-        if (!result) {
+        if (!result || result._gatewayError) {
           patch.verdict = 'error';
-          patch.reason  = 'distiller unavailable';
+          patch.reason  = result?._gatewayError ?? 'distiller unavailable';
         } else if (result.index < 0) {
           patch.verdict = 'none';
           patch.reason  = (result.reason ?? 'no qualifying statement').slice(0, 500);
