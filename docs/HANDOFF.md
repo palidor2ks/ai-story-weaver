@@ -27,6 +27,31 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-13 (earmark rollup alias consolidation + cause badge) — claude/affectionate-sagan-iroj5s
+
+**What happened & why**
+User reported AIPAC showing as two separate earmark entries on Mike Johnson's profile — "AMERICAN ISRAEL PUBLIC AFFAIRS COMMITTEE PAC" ($358K) and "AIPAC" ($47K). Root cause: `get_candidate_earmark_rollups` RPC grouped by raw FEC `contributor_name`, so orgs with multiple FEC spellings produced duplicate cards. The `earmarkRollups.ts` comment even flagged this as a known "residual limitation."
+
+Three fixes across PRs #388, #389, #390:
+1. **RPC alias consolidation** (#388): Added LEFT JOIN to `donor_alias_members` + `donor_aliases` in `get_candidate_earmark_rollups` so aliased orgs group under their canonical name. Two AIPAC entries merged into one $404K entry. Migration applied to production (`ornnzinjrcyigazecctf`).
+2. **CauseBadge render** (#389): The earmark card renderer never called `getDonorCause`/`CauseBadge` — added it alongside the "Earmark program" badge.
+3. **Cause map inputs** (#390): `donorCauseInputs` was built only from `donors`, never including earmark rollup org names — so the cause map was always empty for earmark orgs. Added `earmarkRollups` to the inputs.
+
+**State** (verified)
+- Migration applied to `ornnzinjrcyigazecctf` and verified: `get_candidate_earmark_rollups('J000299', '2026')` returns one "AIPAC" row ($404,196 routed, 20 contributions).
+- All three PRs merged; CI green on all (Lint, Build, Test, Typecheck, Lockfile guard, GitGuardian, Supabase Preview).
+- TypeScript passes locally (`tsc --noEmit`).
+- User confirmed AIPAC consolidation and cause badge both work on live site.
+
+**Next**
+Audit other earmark-program orgs (ACEC PAC, MORPAC, etc.) for spelling variants that may need aliases created for consolidation.
+
+**Deferred**
+- The `useCandidateShareCardData.ts` hook has the same earmark rollup rendering logic (for social cards) but doesn't include earmark orgs in its cause lookup — may need the same fix if cause badges are desired on share cards.
+- Candidate self-contributions (Line 11D under own name) as self-funding — still a deferred product question from the prior session.
+
+---
+
 ## 2026-06-13 (loans-as-donors backfill APPLIED + disk-full incident) — claude/candidate-loans-not-donors
 
 **What happened & why**
