@@ -27,6 +27,35 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-13 (gate run + FTS retrieval + voting-records plan) — claude/zen-sagan-7ofwx2
+
+**What happened & why**
+Gate run for the citation matcher was never firing — the pg_net call was missing the `Authorization` header Supabase's gateway requires even with verify_jwt=false. Fixed by adding the anon key. First run had 100% "distiller unavailable" errors — model name `google/gemini-2.5-flash-preview` isn't in the Lovable gateway's allowed list. Fixed to `google/gemini-2.5-flash` and surfaced real error detail in the reason field (was previously swallowed).
+
+Second run (50 answers, v4): 3 cited / 47 none — ~6% citation rate. Added a second retrieval pass using FTS on question text (`search_member_statements_fts` DB function, merging up to 6 deduped statements). Third run (50 answers, v5): 2 cited / 48 none — no improvement. Root cause is fundamental: press releases express legislative actions, quiz questions ask for policy positions. The distiller is correct to reject most matches; the data is the mismatch.
+
+Wrote `docs/answers-enrichment-part2-plan.md`: voting-record citations. Roll call votes are 100% precise by construction. Key confirmed fact: `candidates.id` = bioguide ID for incumbents (from part1b spike). ~40–50% of questions map to specific bills (IRA, CHIPS, IIJA, PRO Act, Raise the Wage Act, NDAA, TCJA, AHCA). Plan covers: `question_bill_map` table, `member_votes` cache, ProPublica Congress API fetch function, and evidence application SQL.
+
+**State** (verified)
+- `match-answer-citations` v5 deployed (model fixed, FTS retrieval added) ✓
+- Migration `20260613020000_search_member_statements_fts` applied to production ✓
+- Gate run result: 3 cited / 47 none = ~6% rate — too low to apply; part-2 planned ✓
+- All commits pushed to claude/zen-sagan-7ofwx2 ✓
+- Tests NOT run this session (no frontend changes)
+- PR #375 still draft; CI has pre-existing MIGRATIONS_FAILED on all branches (not caused by this work)
+
+**Next**
+Register for a ProPublica Congress API key (free, ~1 day) at propublica.org/datastore/api/propublica-congress-api, then store it in Supabase vault as `propublica_api_key`. That unblocks Phase 1 of part-2: create `question_bill_map` table and populate the ~15 priority bills in `docs/answers-enrichment-part2-plan.md`.
+
+**Deferred**
+- The 3 press-release citations from the gate run — sample too small to apply; hold
+- `local-education` topic: only 13 tagged statements — keyword patterns may need widening
+- 45% of target answers with no topic-matched statement need more drain coverage
+- Say-vs-do discrepancy layer (statements × votes → has_discrepancy) — after part-2 lands
+- PR #375 draft: merge after part-2 lands or close it
+
+---
+
 ## 2026-06-13 (statement↔topic indexing + evidence-index citation matcher) — claude/zen-sagan-7ofwx2
 
 **What happened & why**
