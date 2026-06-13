@@ -68,6 +68,15 @@ const ELIGIBLE = `
     and ca.source_url is null
     and coalesce(array_length(ca.source_urls, 1), 0) = 0`;
 
+// Inferred (party-alignment) answers: same URL/array guards but different type.
+// Tier-2 only — tier-1 relies on bill titles in source_description which
+// party-alignment text doesn't contain.
+const ELIGIBLE_INFERRED = `
+    ca.evidence_type = 'inferred'
+    and ca.source_type = 'other'
+    and ca.source_url is null
+    and coalesce(array_length(ca.source_urls, 1), 0) = 0`;
+
 const RANK_AND_AGG = (auditKeyExpr: string) => `
 ranked as (
   select *,
@@ -181,6 +190,9 @@ where upper(b.bill_type) in (${CANONICAL_TYPES})
   -- cross-word matches ('national park' inside "National Parkinson's"), plus commemorative
   -- coins — each cites the wrong topic for its keyword's question
   and b.name !~* '(head start on vaccinations|parkinson|commemorative coin|visual pollution|medicaid clawback|senior citizens. right to work)'
+  -- Congressional Gold Medal bills start "To award a Congressional Gold Medal to..." — they
+  -- match topic keywords incidentally (e.g. "voting rights" for Bloody Sunday), not as policy.
+  and b.name !~* 'congressional gold medal'
 group by k.question_id, k.axis, b.congress, upper(b.bill_type), b.bill_number;
 revoke all on _enrich_bill_kw from anon, authenticated;
 analyze _enrich_bill_kw;
@@ -228,12 +240,15 @@ ${RANK_AND_AGG(`'ref_kind', ref_kind`)};
 revoke all on _enrich_vc_tier1 from anon, authenticated;
 
 -- >>> 6. tier 2: sponsor/cosponsor actions on keyword-matched bills, sign-consistent
+-- Covers both voting_record answers (${ELIGIBLE}) and inferred/party-alignment
+-- answers (${ELIGIBLE_INFERRED}) — the keyword+sign-consistency guard is the same
+-- for both; the only difference is evidence_type/source_type set during apply.
 drop table if exists _enrich_vc_tier2;
 create unlogged table _enrich_vc_tier2 as
 with targets as (
   select ca.candidate_id, ca.question_id, sign(ca.answer_value) as answer_sign
   from candidate_answers ca
-  where ${ELIGIBLE}
+  where (${ELIGIBLE} or ${ELIGIBLE_INFERRED})
     and ca.answer_value <> 0
     and ca.candidate_id in (select distinct candidate_id from _enrich_member_bills)
 ),
@@ -264,12 +279,16 @@ ${RANK_AND_AGG(`'keyword', matched_keyword`)};
 revoke all on _enrich_vc_tier2 from anon, authenticated;
 
 -- >>> 7. staging summary
-select 'tier1' as tier, count(*) as answers, coalesce(sum(n_cites),0) as citations,
+select 'tier1' as tier, null as source, count(*) as answers, coalesce(sum(n_cites),0) as citations,
        count(distinct candidate_id) as candidates, count(distinct question_id) as questions
 from _enrich_vc_tier1
 union all
-select 'tier2', count(*), coalesce(sum(n_cites),0), count(distinct candidate_id), count(distinct question_id)
-from _enrich_vc_tier2;`;
+select 'tier2', ca.evidence_type, count(*), coalesce(sum(s.n_cites),0),
+       count(distinct s.candidate_id), count(distinct s.question_id)
+from _enrich_vc_tier2 s
+join candidate_answers ca using (candidate_id, question_id)
+group by ca.evidence_type
+order by tier, source;`;
 }
 
 function verifySql(): string {
@@ -282,15 +301,27 @@ join candidate_answers ca using (candidate_id, question_id)
 join candidates c on c.id = s.candidate_id
 order by random() limit 10;
 
--- Tier 2 sample: bill title must plausibly support the answer's direction
+-- Tier 2 sample (voting_record): bill title must plausibly support the answer's direction
 -- (answer_value < 0 = left, > 0 = right; src/lib/scoring.ts).
 select s.candidate_id, c.name as candidate, s.question_id, q.text as question,
-       ca.answer_value, s.titles, s.urls, s.audit
+       ca.evidence_type, ca.answer_value, s.titles, s.urls, s.audit
 from _enrich_vc_tier2 s
 join candidate_answers ca using (candidate_id, question_id)
 join candidates c on c.id = s.candidate_id
 join questions q on q.id = s.question_id
-order by random() limit 15;
+where ca.evidence_type = 'sourced' or ca.source_type = 'voting_record'
+order by random() limit 10;
+
+-- Tier 2 sample (inferred upgrades): party-alignment answers getting real bill URLs.
+-- The bill direction must match the party-alignment answer direction.
+select s.candidate_id, c.name as candidate, ca.evidence_type as from_type,
+       s.question_id, q.text as question, ca.answer_value, s.titles, s.urls, s.audit
+from _enrich_vc_tier2 s
+join candidate_answers ca using (candidate_id, question_id)
+join candidates c on c.id = s.candidate_id
+join questions q on q.id = s.question_id
+where ca.evidence_type = 'inferred'
+order by random() limit 10;
 
 -- No staged row may target an answer that already has a URL (must return 0).
 select count(*) as collisions
@@ -313,6 +344,17 @@ from _enrich_vc_tier1 t1 join _enrich_vc_tier2 t2 using (candidate_id, question_
 }
 
 function applySql(tier: 1 | 2): string {
+  // Tier 2 covers both voting_record and inferred (party-alignment) answers.
+  // NOTE: we do NOT change evidence_type/source_type here. The prevent_politician_score_tampering
+  // trigger blocks evidence_type changes unless auth.role() = 'service_role' (JWT context), but
+  // the MCP executor runs as postgres superuser without JWT — auth.role() = null. URL-only update
+  // is sufficient for the sourced_with_url metric, and inferred answers that gain a source_url
+  // are excluded from future re-processing by the ELIGIBLE_INFERRED guard (source_url IS NULL).
+  // To promote evidence_type='inferred' → 'sourced' for URL-upgraded rows, run a separate
+  // admin migration with proper service_role JWT context.
+  const eligibleClause = tier === 2
+    ? `(${ELIGIBLE} or ${ELIGIBLE_INFERRED})`
+    : ELIGIBLE;
   return `-- ===== APPLY tier ${tier} (idempotent; never overwrites an existing URL) =====
 with updated as (
   update candidate_answers ca
@@ -323,7 +365,7 @@ with updated as (
   from _enrich_vc_tier${tier} s
   where ca.candidate_id = s.candidate_id
     and ca.question_id = s.question_id
-    and ${ELIGIBLE}
+    and ${eligibleClause}
   returning ca.id
 )
 select count(*) as tier${tier}_rows_updated from updated;`;

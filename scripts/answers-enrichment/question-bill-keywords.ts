@@ -139,7 +139,7 @@ export const QUESTION_BILL_KEYWORDS: QuestionKeywordRule[] = [
   // === Immigration ===
   { questionId: 'immigration-q10', axis: -1, keywords: ['dream act', 'american dream and promise', 'dreamer'] },
   { questionId: 'immigration-q3', axis: -1, keywords: ['refugee admissions', 'refugee protection', 'grace act'] },
-  { questionId: 'immigration-q18', axis: -1, keywords: ['refugee'] },
+  { questionId: 'immigration-q18', axis: -1, keywords: ['refugee resettlement', 'refugee services', 'reception and placement'] },
   { questionId: 'immigration-q6', axis: -1, keywords: ['asylum seeker'] },
   { questionId: 'immigration-q9', axis: 1, keywords: ['chain migration', 'merit-based immigration', 'raise act'] },
   { questionId: 'immigration-q15', axis: -1, keywords: ['family reunification'] },
@@ -150,7 +150,7 @@ export const QUESTION_BILL_KEYWORDS: QuestionKeywordRule[] = [
   { questionId: 'immigration-q20', axis: -1, keywords: ['root causes of migration'] },
 
   // === Defense / foreign policy ===
-  { questionId: 'def16', axis: -1, keywords: ['arms control', 'nuclear test ban', 'disarmament'] },
+  { questionId: 'def16', axis: -1, keywords: ['arms control', 'nuclear test ban', 'nuclear disarmament', 'multilateral disarmament'] },
   { questionId: 'def17', axis: 1, keywords: ['nuclear deterrent'] },
   { questionId: 'def2', axis: -1, keywords: ['war powers'] },
   { questionId: 'defense-q3', axis: -1, keywords: ['war powers', 'aumf'] },
