@@ -98,6 +98,8 @@ const SkeletonRow = () => (
 export const PolicyPositionsCard = forwardRef<HTMLDivElement, Props>(({ data }, ref) => {
   const name = data.candidateName ?? 'This Candidate';
   const lastName = name.split(' ').slice(-1)[0] ?? name;
+  const displayName = truncate(name, 28);
+  const heroFontSize = name.length > 20 ? 38 : name.length > 14 ? 44 : 52;
   const party = data.candidateParty ?? '';
   const officeLine = [data.candidateOffice, data.candidateState].filter(Boolean).join(' · ');
   const ideologyPct = scoreToPercent(data.candidateScore);
@@ -196,10 +198,10 @@ export const PolicyPositionsCard = forwardRef<HTMLDivElement, Props>(({ data }, 
           {/* ── Candidate identity ── */}
           <div style={{ marginBottom: 18 }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' as const, marginBottom: 8 }}>
-              <span style={{ fontSize: 52, fontWeight: 900, letterSpacing: -2, lineHeight: 1.02 }}>
-                {truncate(lastName, 18)}'s
+              <span style={{ fontSize: heroFontSize, fontWeight: 900, letterSpacing: -2, lineHeight: 1.02 }}>
+                {displayName}'s
               </span>
-              <span style={{ fontSize: 32, fontWeight: 900, color: VIOLET_LIT, letterSpacing: -0.5 }}>
+              <span style={{ fontSize: Math.round(heroFontSize * 0.62), fontWeight: 900, color: VIOLET_LIT, letterSpacing: -0.5 }}>
                 record
               </span>
             </div>
@@ -315,8 +317,23 @@ export const PolicyPositionsCard = forwardRef<HTMLDivElement, Props>(({ data }, 
                 <SkeletonRow />
               </div>
             ) : positions.length === 0 ? (
-              <div style={{ color: MUTED, fontSize: 16, fontStyle: 'italic' as const }}>
-                Position data not available
+              <div style={{
+                flex: 1,
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                gap: 16, opacity: 0.5, padding: '20px 0',
+              }}>
+                <svg width="44" height="44" viewBox="0 0 24 24" fill="none"
+                  stroke={MUTED} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="12" y1="8" x2="12" y2="12"/>
+                  <line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+                <div style={{ fontSize: 17, color: MUTED, fontWeight: 700, textAlign: 'center' as const }}>
+                  Topic-level analysis not yet available
+                </div>
+                <div style={{ fontSize: 13, color: MUTED, fontWeight: 400, textAlign: 'center' as const, maxWidth: 360, lineHeight: 1.5 }}>
+                  Voting record ideology is shown above — issue-by-issue breakdown is pending
+                </div>
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
