@@ -1036,10 +1036,9 @@ export const CandidateProfile = () => {
                           // Replaced by the org's combined earmark entry below. The
                           // donor group consolidates alias spellings (display_name +
                           // name_variations), while the RPC groups by raw contributor
-                          // name — so try every known spelling. (Residual limitation:
-                          // an org with routed dollars under two raw spellings yields
-                          // two RPC rows/cards; merging those needs alias-awareness in
-                          // the RPC, not here.)
+                          // name — so try every known spelling. (The RPC now
+                          // groups by canonical alias name when one exists, so
+                          // most multi-spelling orgs consolidate server-side.)
                           if (!isTransfer) {
                             const matchedKey = matchEarmarkRollupKey(d, rollupByKey);
                             if (matchedKey) {
