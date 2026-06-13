@@ -84,7 +84,7 @@ function parseHouseXml(xml: string): ParsedVote[] {
   const results: ParsedVote[] = [];
   for (const block of xml.matchAll(/<recorded-vote>([\s\S]*?)<\/recorded-vote>/g)) {
     const inner    = block[1];
-    const bioguide = inner.match(/bioguide-id="([^"]+)"/)?.[1]?.trim();
+    const bioguide = inner.match(/name-id="([^"]+)"/)?.[1]?.trim();
     const position = inner.match(/<vote>([^<]+)<\/vote>/)?.[1]?.trim();
     if (bioguide && position) results.push({ bioguideId: bioguide, position });
   }
