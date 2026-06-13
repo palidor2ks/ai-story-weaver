@@ -27,6 +27,36 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-13 (voting-records Part 2 — tables + fetch script) — claude/zen-sagan-7ofwx2
+
+**What happened & why**
+Continued answers-enrichment Part 2. The 6% citation rate from press releases is a ceiling (data mismatch, not fixable), so we built the voting-record path which gives 100%-precise citations by construction. Roll call votes ARE policy positions — no distiller needed.
+
+Looked up all 9 key bill roll call numbers against clerk.house.gov references (IRA Roll 394/2022, IIJA Roll 369/2021, CHIPS Roll 404/2022, PRO Act Roll 70/2021, ARP Roll 72/2021, Raise the Wage Act H.R.582 Roll 496/2019, AHCA Roll 256/2017, TCJA Roll 699/2017, Dodd-Frank rollback S.2155 Roll 216/2018). All confirmed. Note: H.R.603 (117th Raise the Wage Act) never came to a House floor vote — used the 116th version (H.R.582) instead.
+
+Created `question_bill_map` and `member_votes` tables with migration `20260613030000`. Seeded 21 rows covering 19 quiz questions (economy-q18 and economy-q19 have dual IRA/TCJA mappings for progressive/conservative direction matching). Added `scripts/fetch-roll-call-votes.ts`: reads question_bill_map, fetches Clerk of the House XML (no API key needed), parses bioguide-id + vote position, bulk-upserts into member_votes.
+
+**State** (verified)
+- Migration `20260613030000_voting_records_tables` applied to production ✓
+- `question_bill_map` has 21 rows across 9 bills (verified via SQL) ✓
+- `member_votes` table exists, empty (fetch script not yet run) ✓
+- `scripts/fetch-roll-call-votes.ts` written and committed ✓
+- All commits pushed to claude/zen-sagan-7ofwx2 ✓
+- Tests NOT run (no frontend changes)
+
+**Next**
+Run `SUPABASE_SERVICE_ROLE_KEY=<key> bun scripts/fetch-roll-call-votes.ts --dry-run` to verify URL construction, then without `--dry-run` to populate member_votes. After that, run the Phase 3 preview SQL from docs/answers-enrichment-part2-plan.md to eyeball alignment before applying citations.
+
+**Deferred**
+- Phase 3 apply SQL (not safe to run until member_votes is populated + eyeballed)
+- Senate votes: Senate.gov XML uses lis_member_id not bioguide_id — separate mapping needed
+- NDAA Huawei provision: need conference report roll call number (not initial House vote)
+- KOSA / Dream Act / H.R.3076 Postal Service Reform: more questions can be mapped later
+- The 3 press-release citations from the gate run — sample too small to apply; hold
+- PR #375 draft: merge after Part 2 fetch + apply land, or close it
+
+---
+
 ## 2026-06-13 (gate run + FTS retrieval + voting-records plan) — claude/zen-sagan-7ofwx2
 
 **What happened & why**
