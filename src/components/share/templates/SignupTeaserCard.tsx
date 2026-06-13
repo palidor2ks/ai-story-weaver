@@ -116,9 +116,9 @@ export const SignupTeaserCard = forwardRef<HTMLDivElement, Props>(({ data }, ref
               <span style={{ fontWeight: 800, fontSize: 25, letterSpacing: -0.3 }}>PoliPulse</span>
             </div>
             <div style={{
-              background: `${AMBER}28`,
-              border: `2px solid ${AMBER}70`,
-              color: AMBER_LIT,
+              background: `${FLAG_WHITE}18`,
+              border: `2px solid ${FLAG_WHITE}35`,
+              color: FLAG_WHITE,
               borderRadius: 999,
               padding: '8px 20px',
               fontSize: 13,
@@ -238,7 +238,8 @@ export const SignupTeaserCard = forwardRef<HTMLDivElement, Props>(({ data }, ref
 
           {/* ── CTA banner ── */}
           <div style={{
-            background: `linear-gradient(90deg, hsl(33 96% 38%) 0%, hsl(38 96% 48%) 100%)`,
+            background: `linear-gradient(90deg, hsl(220 78% 11%) 0%, hsl(220 60% 16%) 100%)`,
+            border: `1.5px solid ${FLAG_WHITE}22`,
             borderRadius: 16,
             padding: '18px 28px',
             display: 'flex',
@@ -251,12 +252,12 @@ export const SignupTeaserCard = forwardRef<HTMLDivElement, Props>(({ data }, ref
               <div style={{ fontSize: 22, fontWeight: 900, color: FLAG_WHITE, letterSpacing: -0.3, lineHeight: 1.1 }}>
                 See every donor — free
               </div>
-              <div style={{ fontSize: 14, color: AMBER_LIT, marginTop: 3, fontWeight: 600 }}>
+              <div style={{ fontSize: 14, color: MUTED, marginTop: 3, fontWeight: 600 }}>
                 Track money across every race · polipulseapp.com
               </div>
             </div>
             <div style={{
-              background: FLAG_WHITE, color: AMBER_DARK,
+              background: AMBER, color: FLAG_NAVY_DEEP,
               borderRadius: 10, padding: '10px 22px',
               fontSize: 17, fontWeight: 900, letterSpacing: 0.3,
               whiteSpace: 'nowrap' as const, flexShrink: 0,
