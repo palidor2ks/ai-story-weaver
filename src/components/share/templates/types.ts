@@ -37,7 +37,7 @@ export interface CardData {
   // "by or through" figure (direct + member earmarks) — labeled on the card.
   topDonors?: { name: string; amount: number; primaryCause?: string | null; primaryCauseStance?: string | null; viaEarmarks?: boolean }[];
   topSpenders?: { name: string; support: number; oppose: number; primaryCause?: string | null; primaryCauseStance?: string | null }[];
-  aiPositions?: { topic: string; stance: string }[];
+  aiPositions?: { topic: string; stance: string; detail?: string }[];
   aiGoals?: string[];
   aiCauses?: string[];
   aiAnalysisLoading?: boolean;
