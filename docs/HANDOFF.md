@@ -27,6 +27,29 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-13 (conduit pass-throughs inflating Line-11A finance totals) — claude/april-mcclaindelany-finances-vyjv0x
+
+**What happened & why**
+Owner asked why April McClain Delaney's (M001232, H4MD06340) finances looked "off" — the /candidate stat-card Category Comparison showed Line 11A at +38% over FEC ($2.2M local vs $1.6M FEC), status=error. Traced it: her entire $734K "Organization" bucket on Line 11AI was a single contributor — **ActBlue**. FEC reports an earmarked contribution as a PAIR of Schedule-A rows: the real donor (contributor_type='Individual', memo_text "EARMARKED CONTRIBUTION: SEE BELOW", counted correctly) and a conduit memo under the processor's own name (ActBlue/WinRed/Democracy Engine, memo_text "...EARMARKED THROUGH THIS ORGANIZATION", conduit_committee_id NULL). FEC tags the memo so it doesn't double-count, but ~85% of these arrived with memo_code NULL instead of 'X', so `get_contribution_totals` summed them into `organization_total` ON TOP of the individual donors they merely forwarded. The existing `conduit_excluded` branch only caught rows with a non-null `conduit_committee_id`, which these lack. Fleet-wide the same defect inflated ~13 candidates in 2024 — worst John Thune at +503.9% ($5.55M Democracy Engine memos).
+
+Fix (PR #377, **merged**): aligned both totals RPCs (`get_contribution_totals` + `_by_committee`) with the canonical conduit/pass-through rule already shared by the donor layer (`_shared/conduits.ts`, `src/lib/conduits.ts`) and `get_candidate_earmark_rollups` — a Line-11AI Organization/Unknown row routes to `conduit_excluded` (not `organization_total`) on a conduit name match, non-null conduit_committee_id, or SEE BELOW / EARMARKED CONTRIBUTION: memo_text. The `contributions` table was left untouched (faithful per-line provenance; exclusion is an aggregation concern). Also added a persisted `conduit_excluded` column on `finance_reconciliation` + wired it through the nightly fn → hook → FinanceCategoryBreakdown's amber "Conduits excluded" line so the removed dollars are labeled, not silently dropped. Migration: `20260613030000_conduit_exclusion_in_contribution_totals.sql`. Read-only sim confirmed Delaney 2024: org_total $734,006→$2,250, conduit_excluded $0→$731,756, Line 11A +38.0%→−8.3%.
+
+Also fixed an unrelated CI blocker discovered in passing: migration `20260612233033` (a Lovable-bot dev-snapshot RLS lock-down) ran bare ALTER/POLICY/GRANT on tables not created by any migration (_enrich_stmt_staging, _evidence_spike_log, _evidence_spike_statements, job_queue, candidate_merge_map, donor_card_causes, fl/nj/ny sync_runs, fec_candidates) — so a from-scratch Supabase preview replay died with 42P01, blocking the Migrations check on EVERY PR off main. Wrapped every statement in to_regclass existence guards (+ DROP POLICY IF EXISTS for idempotency); validated end-to-end against dev. Owner approved this defensive patch.
+
+**State** (verified)
+- PR #377 merged. All 7 CI checks green (Lint/Typecheck/Test/Build/Lockfile/GitGuardian/Supabase Preview). Local preflight: 64/64 tests, lint 0 errors, vite build clean.
+- RPC fix verified by **read-only** sim against Pulse Dev only — the migration is **NOT yet applied** to prod (guardrail #1), so live `finance_reconciliation` rows still show the old inflated numbers until applied + nightly re-run.
+- data-accuracy-verifier subagent was launched on the diff but the PR merged before it reported; its verdict was not captured.
+
+**Next**
+Apply migration `20260613030000` to prod (deliberately), then re-run `nightly-finance-reconciliation` (or kick it for the ~13 affected 2024 candidates) so the corrected `organization_total` / `conduit_excluded` land in `finance_reconciliation`. Spot-check Delaney M001232 2024 reads ~−8% (not +38%) afterward.
+
+**Deferred**
+- The residual **−8.3%** on Delaney after the fix is a SEPARATE issue: a Schedule-A coverage gap (~$131K) between our summed itemized transactions and FEC's reported F3-summary Line 11A (`individual_itemized_contributions`). Not a categorization bug — needs a donor re-sync (fetch-fec-donors) to confirm/close; a few-% transactions-vs-summary residual is normal. Last donor sync 2026-06-03.
+- Root cause of the CI blocker not fully addressed: those ad-hoc tables (job_queue, candidate_merge_map, etc.) should be created by migrations so the chain reproduces the schema. The guard makes replays pass but the preview DB still lacks those tables — evidence-index/infra owner should add proper CREATE TABLE migrations.
+
+---
+
 ## 2026-06-13 (statement↔topic indexing + evidence-index citation matcher) — claude/zen-sagan-7ofwx2
 
 **What happened & why**
