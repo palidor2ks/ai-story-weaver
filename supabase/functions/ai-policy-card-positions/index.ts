@@ -7,7 +7,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const CACHE_CYCLE = 'policy-card-v1';
+const CACHE_CYCLE = 'policy-card-v2'; // v2: includes per-topic score
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -153,9 +153,18 @@ Return up to 4 positions as JSON:
       if (f !== -1 && l > f) { try { parsed = JSON.parse(raw.slice(f, l + 1)); } catch { /* ignore */ } }
     }
 
+    // Build a lookup so we can attach the actual numeric score to each position
+    const scoreByTopic = new Map(topicScores.map((t) => [t.topic.toLowerCase(), t.score]));
+
     const positions = (Array.isArray(parsed.positions) ? parsed.positions : [])
       .slice(0, 4)
-      .filter((p: any) => p && typeof p.topic === 'string' && typeof p.stance === 'string' && typeof p.detail === 'string');
+      .filter((p: any) => p && typeof p.topic === 'string' && typeof p.stance === 'string' && typeof p.detail === 'string')
+      .map((p: any) => ({
+        topic: p.topic as string,
+        stance: p.stance as string,
+        detail: p.detail as string,
+        score: scoreByTopic.get((p.topic as string).toLowerCase()) ?? undefined,
+      }));
 
     const result = { positions };
     await writeCache(cacheKey, result, 'google/gemini-3-flash-preview');

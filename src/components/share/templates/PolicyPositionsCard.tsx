@@ -1,7 +1,7 @@
 import { forwardRef } from 'react';
 import { CardData, CARD_SIZE } from './types';
 import { PulseMark } from './PulseMark';
-import { formatScore } from '@/lib/scoreFormat';
+import { formatScore, getScoreLabelProgCon } from '@/lib/scoreFormat';
 
 interface Props {
   data: CardData;
@@ -103,6 +103,7 @@ export const PolicyPositionsCard = forwardRef<HTMLDivElement, Props>(({ data }, 
   const ideologyPct = scoreToPercent(data.candidateScore);
   const hasScore = data.candidateScore != null && Number.isFinite(data.candidateScore);
   const pulseScore = hasScore ? formatScore(data.candidateScore) : null;
+  const pulseLabel = hasScore ? getScoreLabelProgCon(data.candidateScore) : 'Not yet scored';
   const positions = data.aiPositions; // undefined = loading, [] = none found
 
   const cardBg = `linear-gradient(160deg, ${FLAG_NAVY_DEEP} 0%, ${FLAG_NAVY} 50%, ${FLAG_RED} 100%)`;
@@ -226,7 +227,7 @@ export const PolicyPositionsCard = forwardRef<HTMLDivElement, Props>(({ data }, 
             padding: '16px 20px',
             marginBottom: 18,
           }}>
-            {/* Score row */}
+            {/* Score row — pulse score badge always visible */}
             <div style={{
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
               marginBottom: 14,
@@ -242,25 +243,24 @@ export const PolicyPositionsCard = forwardRef<HTMLDivElement, Props>(({ data }, 
                   fontSize: 18, fontWeight: 800,
                   color: hasScore ? FLAG_WHITE : MUTED,
                 }}>
-                  {ideologyLabel(data.candidateScore)}
+                  {pulseLabel}
                 </div>
               </div>
-              {pulseScore && (
-                <div style={{
-                  background: `${VIOLET}30`,
-                  border: `2px solid ${VIOLET_LIT}50`,
-                  borderRadius: 12,
-                  padding: '8px 16px',
-                  textAlign: 'center' as const,
-                }}>
-                  <div style={{ fontSize: 10, color: MUTED, letterSpacing: 2, textTransform: 'uppercase' as const, fontWeight: 700, marginBottom: 2 }}>
-                    Pulse Score
-                  </div>
-                  <div style={{ fontSize: 26, fontWeight: 900, color: VIOLET_GLOW, letterSpacing: -0.5 }}>
-                    {pulseScore}
-                  </div>
+              <div style={{
+                background: `${VIOLET}30`,
+                border: `2px solid ${VIOLET_LIT}50`,
+                borderRadius: 12,
+                padding: '8px 16px',
+                textAlign: 'center' as const,
+                minWidth: 90,
+              }}>
+                <div style={{ fontSize: 10, color: MUTED, letterSpacing: 2, textTransform: 'uppercase' as const, fontWeight: 700, marginBottom: 2 }}>
+                  Pulse Score
                 </div>
-              )}
+                <div style={{ fontSize: pulseScore ? 26 : 16, fontWeight: 900, color: pulseScore ? VIOLET_GLOW : MUTED, letterSpacing: -0.5 }}>
+                  {pulseScore ?? '—'}
+                </div>
+              </div>
             </div>
 
             {/* Spectrum bar */}
@@ -345,8 +345,24 @@ export const PolicyPositionsCard = forwardRef<HTMLDivElement, Props>(({ data }, 
                       </div>
                       {/* Topic + detail */}
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 17, fontWeight: 800, color: FLAG_WHITE, lineHeight: 1.2 }}>
-                          {pos.topic}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' as const }}>
+                          <span style={{ fontSize: 17, fontWeight: 800, color: FLAG_WHITE, lineHeight: 1.2 }}>
+                            {pos.topic}
+                          </span>
+                          {pos.score != null && Number.isFinite(pos.score) && (
+                            <span style={{
+                              fontSize: 11, fontWeight: 900,
+                              color: pos.score < 0 ? 'hsl(214 89% 72%)' : 'hsl(0 76% 72%)',
+                              background: pos.score < 0 ? 'hsl(214 89% 52% / 0.18)' : 'hsl(0 76% 46% / 0.18)',
+                              border: `1px solid ${pos.score < 0 ? 'hsl(214 89% 52% / 0.4)' : 'hsl(0 76% 46% / 0.4)'}`,
+                              borderRadius: 6,
+                              padding: '2px 7px',
+                              letterSpacing: 0.3,
+                              flexShrink: 0,
+                            }}>
+                              {formatScore(pos.score)}
+                            </span>
+                          )}
                         </div>
                         {pos.detail && (
                           <div style={{ fontSize: 13, color: MUTED, fontWeight: 500, marginTop: 2, lineHeight: 1.3 }}>
