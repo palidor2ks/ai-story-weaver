@@ -27,6 +27,41 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-13 (AIPAC alias missing from stat card) — claude/aipac-alias-missing-j7bjx3
+
+**What happened & why**
+User noticed the top donor on Ben Cline's stat card showed the full raw FEC name
+"AMERICAN ISRAEL PUBLIC AFFAIRS COMMITTEE POLITICAL" instead of "AIPAC".
+
+Root cause: donor aliases consolidate by an exact (donor_name, donor_type) member list
+in donor_alias_members — not a wildcard — deliberately, because a naive %aipac% match
+would wrongly merge "CITIZENS AGAINST AIPAC CORRUPTION" and unrelated SAIPAC/RAIPAC
+entities. The cost is that each new raw FEC spelling must be attached by hand. Ben
+Cline's 2024 rows were correctly aliased, but his 2026 contribution was filed under the
+truncated spelling "...COMMITTEE POLITICAL" (drops "ACTION COMMITTEE"), which was never
+registered. The stat card defaults to the latest cycle, so it surfaced the un-aliased row.
+
+Fix: migration 20260613030000 attaches four missing AIPAC spelling variants to the AIPAC
+alias and backfills donors.display_name. Applied directly to the dev DB; the card reads
+donors directly so it was immediately corrected. PR #378 merged.
+
+**State** (verified)
+- Migration 20260613030000 applied to Pulse Dev ✓
+- Ben Cline 2026 donor row display_name = 'AIPAC' ✓
+- CITIZENS AGAINST AIPAC CORRUPTION / SHIELD AI PAC / REYNOLDS AMERICAN INC. PAC left untouched ✓
+- CI passed (SQL-only migration, no TypeScript changes) ✓
+- Donor-explorer consolidation MV refresh kicked (async, timed out in MCP — normal) ✓
+- NOT verified: the stat card in the browser (no UI run this session, but the data fix is confirmed)
+
+**Next**
+Continue the evidence-index gate run (from the previous session): POST /functions/v1/match-answer-citations {"limit": 50} with cron-secret auth, eyeball _match_stmt_citations for precision ≥ ~90%, then run the apply SQL and refresh_admin_stats_cache.
+
+**Deferred**
+- The alias exact-match design requires manual upkeep as new FEC spellings appear. Consider
+  adding a periodic query to catch un-aliased %american israel% rows above some dollar threshold.
+
+---
+
 ## 2026-06-13 (statement↔topic indexing + evidence-index citation matcher) — claude/zen-sagan-7ofwx2
 
 **What happened & why**
