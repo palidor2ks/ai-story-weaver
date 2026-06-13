@@ -27,6 +27,40 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-13 (signup social cards + migration dedup fix) — claude/social-signup-post-design-gzuvjm
+
+**What happened & why**
+Built two new signup-oriented social share card types for the Admin → Social Posts panel, then fixed a CI-breaking migration timestamp collision, then aligned both cards' visual shell to match the existing CandidateStatCard design (after user feedback from a screenshot).
+
+1. **`SignupTeaserCard`** (`signup_teaser` type) — "Follow The Money" FOMO card. Shows top 3 ranked donors with amber progress bars, 2 permanently-locked rows with padlock SVG, and an amber CTA banner ("See every donor — free" / "Sign Up Free →"). When `topDonors` is empty, renders 3 locked skeleton rows instead of a loading text message.
+
+2. **`PolicyPositionsCard`** (`policy_positions` type) — "Where Do They Stand?" quiz-tease card. Shows the candidate's ideology spectrum bar (real `candidateScore`), 3 issue chips derived from `aiCauses`/`topDonors.primaryCause`, a locked alignment bar ("Your alignment with [Name] — sign up to see"), and a violet CTA ("Find My Match →").
+
+3. **Migration dedup fix** — four files shared two timestamps (020000×2 and 030000×3), causing Supabase preview-branch CI to fail with PK violations. Fixed by renaming to 020001, 030001, 030002. All renamed files are idempotent (`IF NOT EXISTS`, `ON CONFLICT DO NOTHING`, `CREATE OR REPLACE`), so production re-apply is a no-op.
+
+4. **Color scheme alignment** — both cards originally had a different outer shell. Rewrote to match the CandidateStatCard exactly: `linear-gradient(160deg, FLAG_NAVY_DEEP, FLAG_NAVY, FLAG_RED)` outer, white 5px border, `borderRadius 36`, inner navy gradient panel, red 10px bottom accent stripe.
+
+Both card types are wired in `SocialPosts.tsx` (admin UI), `pick-daily-stat-card` edge function `ALLOWED_TYPES`, and use the same `useCandidateShareCardData` hook data as the existing stat card. The "Sign Up Free" / "Find My Match" buttons are visual-only in the PNG; the link goes in the caption.
+
+**State** (verified)
+- Both PRs (#383 feature, #384 style fix) merged to `main` ✓
+- Migration timestamps now unique across all 483 files ✓
+- Cards render on same visual shell as CandidateStatCard ✓
+- Empty-donor state shows skeleton rows instead of "loading" text ✓
+- Build (`node_modules/.bin/vite build`) passes; tsc clean ✓
+- **Not verified**: manual render test of both new card types in admin UI (screenshotted SignupTeaserCard after color fix, PolicyPositionsCard not smoke-tested visually)
+
+**Next**
+Open Admin → Social Posts → Settings tab, pick a candidate, click "Signup Teaser" and "Policy Positions" generate buttons, visually verify both cards render correctly with real data.
+
+**Deferred**
+- Senate votes (lis_member_id → bioguide mapping needed)
+- NDAA / KOSA / Dream Act additional question mappings
+- answers URL-sourcing % is ~6% — vote_record path ceiling ~27k, not enough to reach 35% alone; other source types needed
+- The 3 press-release citations from gate run — hold
+
+---
+
 ## 2026-06-13 (loans-as-donors backfill APPLIED + disk-full incident) — claude/candidate-loans-not-donors
 
 **What happened & why**
