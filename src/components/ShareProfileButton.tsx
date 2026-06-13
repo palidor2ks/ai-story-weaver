@@ -53,6 +53,7 @@ interface ShareProfileButtonProps {
   topDonors?: { name: string; amount: number; primaryCause?: string | null; primaryCauseStance?: string | null; viaEarmarks?: boolean }[];
   fundingBreakdown?: { label: string; pct: number; color: string }[];
   fundingCycle?: string;
+  selfFunded?: number | null;
 }
 
 export const ShareProfileButton = ({
@@ -78,6 +79,7 @@ export const ShareProfileButton = ({
   topDonors,
   fundingBreakdown,
   fundingCycle,
+  selfFunded,
 }: ShareProfileButtonProps) => {
   const [open, setOpen] = useState(false);
   const { user } = useAuth();
@@ -366,6 +368,7 @@ export const ShareProfileButton = ({
           topDonors,
           fundingBreakdown,
           fundingCycle,
+          selfFunded,
           aiPositions: !hasFinanceCardInfo ? aiAnalysis?.positions : undefined,
           aiGoals: !hasFinanceCardInfo ? aiAnalysis?.goals : undefined,
           aiCauses: !hasFinanceCardInfo ? aiAnalysis?.causes : undefined,

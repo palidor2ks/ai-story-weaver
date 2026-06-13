@@ -584,6 +584,7 @@ export const CandidateProfile = () => {
                     })()}
                     fundingBreakdown={fundingBreakdownComputed}
                     fundingCycle={fundingInput.cycleLabel}
+                    selfFunded={(fecLoans ?? 0) + (fecCandidateContribution ?? 0)}
                   />
 
 

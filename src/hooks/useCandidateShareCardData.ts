@@ -62,6 +62,8 @@ export interface CandidateShareCardData {
     | { label: string; pct: number; color: string }[]
     | undefined;
   fundingCycle: string | undefined;
+  /** Candidate self-funding (FEC loans + candidate contributions) for the cycle. */
+  selfFunded: number | null;
 }
 
 /**
@@ -398,6 +400,8 @@ export function useCandidateShareCardData(
       topDonors,
       fundingBreakdown,
       fundingCycle: fundingInput.cycleLabel,
+      selfFunded:
+        (fundingInput.fecLoans ?? 0) + (fundingInput.fecCandidateContribution ?? 0) || null,
     };
   }, [
     id,
