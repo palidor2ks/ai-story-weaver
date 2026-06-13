@@ -60,7 +60,9 @@ const SERVICE_KEY  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
 
 const BATCH_LIMIT    = 10;   // per invocation during gate phase; increase after gate clears
-const STMT_LIMIT     = 5;    // topic-matched statements passed to distiller
+const TOPIC_LIMIT    = 3;    // topic-tag matched statements (broad recall)
+const FTS_LIMIT      = 5;    // question-text FTS matched statements (narrow precision)
+const STMT_LIMIT     = 6;    // max merged statements passed to distiller
 const BODY_EXCERPT   = 600;  // chars of body text in distiller context
 const DELAY_MS       = 500;  // courtesy gap between Lovable gateway calls
 
@@ -222,17 +224,36 @@ async function processAnswers(limit: number): Promise<void> {
         { onConflict: 'answer_id' },
       );
 
-      // Retrieve topic-matched statements for this candidate.
-      const { data: stmts } = await supabase
+      // Pass 1: topic-tag match (broad recall — any statement tagged with this topic).
+      const { data: topicStmts } = await supabase
         .from('member_statements')
         .select('id, url, title, body_text, published_at')
         .eq('candidate_id', answer.candidate_id)
         .filter('topic_tags', 'cs', `{${answer.topic_id}}`)
         .gt('body_chars', 200)
         .order('published_at', { ascending: false })
-        .limit(STMT_LIMIT);
+        .limit(TOPIC_LIMIT);
 
-      const statements = (stmts ?? []) as StatementRow[];
+      // Pass 2: FTS on question text (narrow precision — finds statements that
+      // actually use the question's specific vocabulary).
+      const { data: ftsStmts } = await supabase
+        .rpc('search_member_statements_fts', {
+          p_candidate_id: answer.candidate_id,
+          p_query: answer.question_text,
+          p_limit: FTS_LIMIT,
+        });
+
+      // Merge: topic-tag first, FTS second, deduplicated by id, up to STMT_LIMIT.
+      const seen = new Set<string>();
+      const merged: StatementRow[] = [];
+      for (const s of [...(topicStmts ?? []), ...(ftsStmts ?? [])]) {
+        const row = s as StatementRow;
+        if (!seen.has(row.id) && merged.length < STMT_LIMIT) {
+          seen.add(row.id);
+          merged.push(row);
+        }
+      }
+      const statements = merged;
       patch.statements_considered = statements.length;
 
       if (statements.length === 0) {
