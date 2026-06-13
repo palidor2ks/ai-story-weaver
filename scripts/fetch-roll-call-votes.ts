@@ -50,7 +50,7 @@ interface ParsedVote {
 // Senate XML (not yet implemented — uses lis_member_id, not bioguide_id)
 function buildUrl(chamber: string, year: number, roll: number): string {
   if (chamber === 'house') {
-    return `https://clerk.house.gov/xml/rolls/${year}/roll${String(roll).padStart(3, '0')}.xml`;
+    return `https://clerk.house.gov/evs/${year}/roll${String(roll).padStart(3, '0')}.xml`;
   }
   throw new Error(`Senate XML not yet implemented (chamber=${chamber})`);
 }
