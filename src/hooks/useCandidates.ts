@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { CoverageTier, ConfidenceLevel } from '@/lib/scoreFormat';
 import { resolveCandidateImageUrl } from '@/lib/candidateImages';
 import { isConduitDonor } from '@/lib/conduits';
+import { formatCandidateName } from '@/lib/utils';
 
 interface CandidateTopicScore {
   topic_id: string;
@@ -127,7 +128,7 @@ export const useCandidates = () => {
 
         return {
           id: candidate.id,
-          name: override?.name ?? candidate.name,
+          name: formatCandidateName(override?.name ?? candidate.name),
           party: (override?.party as Candidate['party']) ?? candidate.party,
           office: override?.office ?? candidate.office,
           state: override?.state ?? candidate.state,
@@ -201,7 +202,7 @@ export const useCandidate = (id: string | undefined) => {
         // Merge override fields with base candidate data
         const mergedCandidate: CandidateWithOverride = {
           ...candidate,
-          name: override?.name ?? candidate.name,
+          name: formatCandidateName(override?.name ?? candidate.name),
           party: (override?.party as Candidate['party']) ?? candidate.party,
           office: override?.office ?? candidate.office,
           state: override?.state ?? candidate.state,
@@ -242,7 +243,7 @@ export const useCandidate = (id: string | undefined) => {
       if (staticOfficial) {
         const mergedOfficial: CandidateWithOverride = {
           id: staticOfficial.id,
-          name: override?.name ?? staticOfficial.name,
+          name: formatCandidateName(override?.name ?? staticOfficial.name),
           party: (override?.party as Candidate['party']) ?? staticOfficial.party as Candidate['party'],
           office: override?.office ?? staticOfficial.office,
           state: override?.state ?? staticOfficial.state,
@@ -292,7 +293,7 @@ export const useCandidate = (id: string | undefined) => {
 
           const merged: CandidateWithOverride = {
             ...execCandidate,
-            name: execOverride?.name ?? execCandidate.name,
+            name: formatCandidateName(execOverride?.name ?? execCandidate.name),
             party: (execOverride?.party as Candidate['party']) ?? execCandidate.party,
             office: execOverride?.office ?? execCandidate.office,
             state: execOverride?.state ?? execCandidate.state,
@@ -360,7 +361,7 @@ export const useCandidate = (id: string | undefined) => {
 
           return {
             id,
-            name: override.name ?? 'Unknown Official',
+            name: formatCandidateName(override.name) || 'Unknown Official',
             party: (override.party as Candidate['party']) ?? 'Other',
             office: override.office ?? 'Official',
             state: override.state ?? 'US',
@@ -411,7 +412,7 @@ export const useCandidate = (id: string | undefined) => {
       // Apply overrides to API data too
       const mergedMember: CandidateWithOverride = {
         id: member.id,
-        name: override?.name ?? member.name,
+        name: formatCandidateName(override?.name ?? member.name),
         party: (override?.party as Candidate['party']) ?? member.party,
         office: override?.office ?? member.office,
         state: override?.state ?? member.state,

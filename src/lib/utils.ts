@@ -5,6 +5,39 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+function capitalizeNameWord(word: string): string {
+  if (!word) return word;
+  if (word.includes('-')) return word.split('-').map(capitalizeNameWord).join('-');
+  if (word.includes("'")) return word.split("'").map(capitalizeNameWord).join("'");
+  // Mc prefix: McConnell, McDonald
+  if (word.startsWith('mc') && word.length > 3) {
+    return 'Mc' + word[2].toUpperCase() + word.slice(3);
+  }
+  return word[0].toUpperCase() + word.slice(1);
+}
+
+function toNameTitleCase(str: string): string {
+  return str.toLowerCase().split(/\s+/).map(capitalizeNameWord).join(' ');
+}
+
+/**
+ * Normalises a candidate name to "First Last" title-case format.
+ * Handles FEC-style "LAST, FIRST MIDDLE SUFFIX" all-caps strings and
+ * passes through names that are already in proper mixed case.
+ */
+export function formatCandidateName(name: string | null | undefined): string {
+  if (!name) return name ?? '';
+  const isAllCaps = name === name.toUpperCase();
+  let result = name;
+  if (name.includes(',')) {
+    const comma = name.indexOf(',');
+    const last = name.slice(0, comma).trim();
+    const first = name.slice(comma + 1).trim();
+    result = first ? `${first} ${last}` : last;
+  }
+  return isAllCaps ? toNameTitleCase(result) : result;
+}
+
 export function stripHtml(html: string): string {
   const doc = new DOMParser().parseFromString(html, 'text/html');
   return doc.body.textContent || '';
