@@ -27,6 +27,34 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-13 (statement↔topic indexing + evidence-index citation matcher) — claude/zen-sagan-7ofwx2
+
+**What happened & why**
+Owner confirmed the stat card on /candidate/E000297 looked correct (AIPAC at #1, "by or through" label), so PR #372 was marked ready and merged.
+
+Then jumped into the evidence index work — the next item in the roadmap after the drain was already running. The "statement↔topic indexing" step was: add a `topic_tags TEXT[]` column to `member_statements`, populate it with keyword-based SQL tagging (no LLM, intentionally broad recall — 11 topics, the distiller handles precision), add GIN + FTS indexes. An initial UPDATE tagged all 5,543 existing rows. After tagging, 19,012 of the 34,885 public_statement-without-URL answers for sitting members now have at least one topic-matched statement with body text in the corpus (55% coverage).
+
+Then built the citation matcher (`match-answer-citations` edge function + `_match_stmt_citations` staging table + `claim_answers_for_citation()` DB function). The matcher: claims a batch of answers → retrieves topic-matched corpus statements for that candidate → calls the Lovable gateway distiller (tool-call: pick by index, CANNOT mint URLs) → stages verdict. NEVER writes `candidate_answers` — the apply step is a deliberate SQL command only after the 50-sample precision eyeball passes. Both migrations applied to production. Function deployed.
+
+PR #375 (draft) opened; CI is running.
+
+**State** (verified)
+- Migrations 20260613000000 + 20260613010000 applied to Pulse Dev ✓
+- `member_statements.topic_tags` populated (5,543 rows; top topics: economy-work 1,621 stmts, government-democracy 1,357, national-security-borders 1,109) ✓
+- `match-answer-citations` deployed and active ✓
+- Tests 64/64 pass ✓ · lint pre-existing warnings only ✓
+- NOT verified: gate run (function has never been kicked against live data)
+
+**Next**
+Kick the gate run: `POST /functions/v1/match-answer-citations {"limit": 50}` with cron-secret auth → wait ~5 min → eyeball `_match_stmt_citations` for `cited` rows: right candidate? right stance? real verbatim quote from `body_excerpt`? Record precision. If ≥ ~90%, run the apply SQL in the function header and `refresh_admin_stats_cache`. Then mark PR #375 ready and merge.
+
+**Deferred**
+- Say-vs-do discrepancy layer (statements × verified votes → `has_discrepancy`) — next after the gate clears.
+- The 45% of target answers with no topic-matched statement in corpus will need more drain coverage or a wider keyword set once precision is known.
+- The `local-education` topic has only 13 tagged statements — patterns may need widening for that topic specifically.
+
+---
+
 ## 2026-06-12 (follow-up: earmark orgs rank on the stat card) — claude/amazing-bohr-nwzgsv
 
 **What happened & why**
