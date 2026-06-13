@@ -238,7 +238,7 @@ export const SignupTeaserCard = forwardRef<HTMLDivElement, Props>(({ data }, ref
 
           {/* ── CTA banner ── */}
           <div style={{
-            background: `linear-gradient(90deg, ${AMBER_DARK}E8, ${AMBER}E8)`,
+            background: `linear-gradient(90deg, hsl(33 96% 38%) 0%, hsl(38 96% 48%) 100%)`,
             borderRadius: 16,
             padding: '18px 28px',
             display: 'flex',
@@ -248,15 +248,15 @@ export const SignupTeaserCard = forwardRef<HTMLDivElement, Props>(({ data }, ref
             gap: 16,
           }}>
             <div>
-              <div style={{ fontSize: 22, fontWeight: 900, color: '#0A0A0A', letterSpacing: -0.3, lineHeight: 1.1 }}>
+              <div style={{ fontSize: 22, fontWeight: 900, color: FLAG_WHITE, letterSpacing: -0.3, lineHeight: 1.1 }}>
                 See every donor — free
               </div>
-              <div style={{ fontSize: 14, color: '#2A1500', marginTop: 3, fontWeight: 600 }}>
+              <div style={{ fontSize: 14, color: AMBER_LIT, marginTop: 3, fontWeight: 600 }}>
                 Track money across every race · polipulseapp.com
               </div>
             </div>
             <div style={{
-              background: '#0A0A0A', color: AMBER_LIT,
+              background: FLAG_WHITE, color: AMBER_DARK,
               borderRadius: 10, padding: '10px 22px',
               fontSize: 17, fontWeight: 900, letterSpacing: 0.3,
               whiteSpace: 'nowrap' as const, flexShrink: 0,

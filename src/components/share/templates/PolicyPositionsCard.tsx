@@ -85,13 +85,13 @@ const stanceStyle = (stance: string) => {
 };
 
 const SkeletonRow = () => (
-  <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 0' }}>
-    <div style={{ width: 28, height: 28, borderRadius: '50%', background: `${FLAG_WHITE}12`, flexShrink: 0 }} />
-    <div style={{ flex: 1 }}>
-      <div style={{ height: 12, borderRadius: 999, background: `${FLAG_WHITE}15`, width: '50%', marginBottom: 6 }} />
-      <div style={{ height: 10, borderRadius: 999, background: `${FLAG_WHITE}10`, width: '70%' }} />
+  <div style={{ marginBottom: 4 }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 7 }}>
+      <div style={{ height: 14, borderRadius: 999, background: `${FLAG_WHITE}15`, width: '38%' }} />
+      <div style={{ width: 80, height: 22, borderRadius: 8, background: `${FLAG_WHITE}10` }} />
     </div>
-    <div style={{ width: 76, height: 24, borderRadius: 8, background: `${FLAG_WHITE}10` }} />
+    <div style={{ height: 12, borderRadius: 999, background: `${FLAG_WHITE}10`, marginBottom: 5 }} />
+    <div style={{ height: 10, borderRadius: 999, background: `${FLAG_WHITE}08`, width: '65%' }} />
   </div>
 );
 
@@ -308,7 +308,7 @@ export const PolicyPositionsCard = forwardRef<HTMLDivElement, Props>(({ data }, 
 
             {positions === undefined ? (
               // Loading skeleton
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <SkeletonRow />
                 <SkeletonRow />
                 <SkeletonRow />
@@ -319,72 +319,81 @@ export const PolicyPositionsCard = forwardRef<HTMLDivElement, Props>(({ data }, 
                 Position data not available
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 {positions.map((pos, i) => {
                   const s = stanceStyle(pos.stance);
+                  const hasTopicScore = pos.score != null && Number.isFinite(pos.score);
+                  const topicPct = hasTopicScore ? scoreToPercent(pos.score) : 50;
+                  const scoreCode = hasTopicScore ? formatScore(pos.score) : null;
+                  // Clamp label position so it doesn't overflow edges
+                  const labelLeft = Math.max(8, Math.min(88, topicPct));
+                  const dotColor = hasTopicScore
+                    ? (pos.score! < -0.5 ? 'hsl(214 89% 52%)' : pos.score! > 0.5 ? 'hsl(0 76% 52%)' : 'hsl(270 72% 60%)')
+                    : MUTED;
                   return (
-                    <div key={i} style={{
-                      background: `${FLAG_WHITE}06`,
-                      border: `1px solid ${FLAG_WHITE}14`,
-                      borderRadius: 12,
-                      padding: '10px 14px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 12,
-                    }}>
-                      {/* Icon circle */}
+                    <div key={i}>
+                      {/* Topic name + stance pill */}
                       <div style={{
-                        width: 30, height: 30, borderRadius: '50%',
-                        background: s.iconBg,
-                        border: `1.5px solid ${s.iconBorder}`,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 15, fontWeight: 900, color: s.iconColor,
-                        flexShrink: 0,
+                        display: 'flex', alignItems: 'center',
+                        justifyContent: 'space-between', marginBottom: 7, gap: 10,
                       }}>
-                        {s.symbol}
+                        <span style={{ fontSize: 16, fontWeight: 800, color: FLAG_WHITE, lineHeight: 1.1 }}>
+                          {pos.topic}
+                        </span>
+                        <span style={{
+                          background: s.pillBg,
+                          border: `1.5px solid ${s.pillBorder}`,
+                          color: s.pillText,
+                          borderRadius: 8, padding: '3px 12px',
+                          fontSize: 12, fontWeight: 800, letterSpacing: 0.2,
+                          whiteSpace: 'nowrap' as const, flexShrink: 0,
+                        }}>
+                          {s.symbol} {pos.stance}
+                        </span>
                       </div>
-                      {/* Topic + detail */}
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' as const }}>
-                          <span style={{ fontSize: 17, fontWeight: 800, color: FLAG_WHITE, lineHeight: 1.2 }}>
-                            {pos.topic}
-                          </span>
-                          {pos.score != null && Number.isFinite(pos.score) && (
-                            <span style={{
-                              fontSize: 11, fontWeight: 900,
-                              color: pos.score < 0 ? 'hsl(214 89% 72%)' : 'hsl(0 76% 72%)',
-                              background: pos.score < 0 ? 'hsl(214 89% 52% / 0.18)' : 'hsl(0 76% 46% / 0.18)',
-                              border: `1px solid ${pos.score < 0 ? 'hsl(214 89% 52% / 0.4)' : 'hsl(0 76% 46% / 0.4)'}`,
-                              borderRadius: 6,
-                              padding: '2px 7px',
-                              letterSpacing: 0.3,
-                              flexShrink: 0,
-                            }}>
-                              {formatScore(pos.score)}
-                            </span>
-                          )}
-                        </div>
-                        {pos.detail && (
-                          <div style={{ fontSize: 13, color: MUTED, fontWeight: 500, marginTop: 2, lineHeight: 1.3 }}>
-                            {pos.detail}
+                      {/* Mini spectrum bar */}
+                      <div style={{ position: 'relative', height: 30, marginBottom: pos.detail ? 5 : 0 }}>
+                        {/* Track */}
+                        <div style={{
+                          position: 'absolute', left: 0, right: 0, top: 9, height: 12, borderRadius: 999,
+                          background: 'linear-gradient(90deg, hsl(214 89% 56%) 0%, hsl(270 72% 66%) 50%, hsl(0 76% 52%) 100%)',
+                          opacity: 0.85,
+                        }} />
+                        {/* Center tick */}
+                        <div style={{
+                          position: 'absolute', left: '50%', top: 4, width: 1.5, height: 22,
+                          background: `${FLAG_WHITE}35`, transform: 'translateX(-50%)',
+                        }} />
+                        {/* Score dot */}
+                        <div style={{
+                          position: 'absolute',
+                          left: `${topicPct}%`, top: 3,
+                          transform: 'translateX(-50%)',
+                          width: 24, height: 24, borderRadius: '50%',
+                          border: `3px solid ${FLAG_WHITE}`,
+                          background: dotColor,
+                          boxShadow: `0 0 0 2px ${dotColor}55, 0 3px 8px rgba(0,0,0,0.4)`,
+                        }} />
+                        {/* Score code label */}
+                        {scoreCode && (
+                          <div style={{
+                            position: 'absolute', top: -14,
+                            left: `${labelLeft}%`,
+                            transform: 'translateX(-50%)',
+                            fontSize: 11, fontWeight: 900,
+                            color: pos.score! < 0 ? 'hsl(214 89% 75%)' : 'hsl(0 76% 75%)',
+                            letterSpacing: 0.3, whiteSpace: 'nowrap' as const,
+                          }}>
+                            {scoreCode}
                           </div>
                         )}
                       </div>
-                      {/* Stance pill */}
-                      <div style={{
-                        background: s.pillBg,
-                        border: `1.5px solid ${s.pillBorder}`,
-                        color: s.pillText,
-                        borderRadius: 8,
-                        padding: '4px 12px',
-                        fontSize: 12,
-                        fontWeight: 800,
-                        letterSpacing: 0.2,
-                        whiteSpace: 'nowrap' as const,
-                        flexShrink: 0,
-                      }}>
-                        {pos.stance}
-                      </div>
+                      {/* Detail */}
+                      {pos.detail && (
+                        <div style={{ fontSize: 12, color: MUTED, fontWeight: 500, lineHeight: 1.3, marginTop: 2 }}>
+                          {pos.detail}
+                        </div>
+                      )}
                     </div>
                   );
                 })}

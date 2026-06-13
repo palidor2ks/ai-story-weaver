@@ -7,7 +7,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const CACHE_CYCLE = 'policy-card-v2'; // v2: includes per-topic score
+const CACHE_CYCLE = 'policy-card-v3'; // v3: lower threshold (|score|>1), bar graph design
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -79,16 +79,14 @@ serve(async (req) => {
       .map((r: any) => ({ topic: r.topics?.name as string | undefined, score: Number(r.score) }))
       .filter((t): t is { topic: string; score: number } => !!t.topic && Number.isFinite(t.score));
 
-    if (topicScores.length === 0) {
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    if (!LOVABLE_API_KEY || topicScores.length === 0) {
       const result = { positions: [] };
       await writeCache(cacheKey, result, null);
       return new Response(JSON.stringify(result), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY not configured');
 
     const topicList = topicScores
       .sort((a, b) => Math.abs(b.score) - Math.abs(a.score))
@@ -101,7 +99,7 @@ serve(async (req) => {
     const systemPrompt = `You are a non-partisan political analyst generating concise position summaries for a social media card.
 
 Rules:
-- Only include a topic if |score| > 2.0 (clear stance)
+- Only include a topic if |score| > 1.0 (any lean counts)
 - stance must be exactly: "Supports", "Opposes", or "Mixed record on"
 - detail must be one sentence, max 55 characters, factual, does NOT start with the candidate name
 - Pick the 4 topics with the highest |score| (most decisive positions)
@@ -133,7 +131,18 @@ Return up to 4 positions as JSON:
 
     if (!aiResp.ok) {
       console.error('AI error', aiResp.status, await aiResp.text());
-      const result = { positions: [] };
+      // Fallback: synthesize positions directly from the top 4 highest-|score| topics
+      const fallbackPositions = topicScores
+        .sort((a, b) => Math.abs(b.score) - Math.abs(a.score))
+        .slice(0, 4)
+        .map((t) => ({
+          topic: t.topic,
+          stance: t.score < -1 ? 'Opposes' : t.score > 1 ? 'Supports' : 'Mixed record on',
+          detail: '',
+          score: t.score,
+        }));
+      const result = { positions: fallbackPositions };
+      await writeCache(cacheKey, result, null);
       return new Response(JSON.stringify(result), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
