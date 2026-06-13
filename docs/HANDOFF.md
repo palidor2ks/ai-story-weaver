@@ -27,6 +27,30 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-13 (loans-as-donors backfill APPLIED + disk-full incident) — claude/candidate-loans-not-donors
+
+**What happened & why**
+Follow-through on the loans-as-donors fix (PR #381). Owner ran backfill `20260613040000` against prod (`ornnzinjrcyigazecctf`) via the dashboard SQL editor — the browser showed "Failed to fetch" but the statement kept running server-side (confirmed via pg_stat_activity, ~7 min) and committed. Verified fleet-wide afterward:
+- `misflagged_contributions = 0` — every non-11/12 line (loans 13, refunds 14, offsets/other 15/17/19) is now `is_contribution=false`.
+- Donor amounts recomputed correctly — spot-checks: Delaney loan gone; Arquette's $29k loan zeroed; Perry Johnson's $12.5M loan + $13M of 19A excluded (his donor row = only his $1.884M Line-11D contributions).
+- A "loan-named donors still visible" probe returned 495 / $28.8M, but those were FALSE POSITIVES: candidates who self-fund via direct **contributions on Line 11** (e.g. Arquette $3.3M on 11D, Perry Johnson $1.88M on 11D) — legitimate contributions, not loans. **Open question / possible follow-up:** should a candidate's own self-*contributions* (Line 11D-style, under their own name) also be rolled into "Self-Funded" rather than shown as their own top donor? Distinct from the loan bug; Line 11D looks non-standard and warrants a look before acting.
+
+**Disk-full incident (important):** the manual `refresh_donor_consolidated_mv()` and today's 08:00 cron (#23 `refresh-donor-consolidated-daily`) both FAILED — root cause was the **database disk being full** ("No space left on device"), not a cron/logic gap. DB is 16 GB (contributions 8.4 GB, donors 2.9 GB). The large backfill UPDATE almost certainly tipped it over (dead-tuple bloat; autovacuum has since reclaimed it internally — contributions `n_dead_tup=0` — but the file stayed at high-water mark). Owner increased the disk; a subsequent non-concurrent `REFRESH MATERIALIZED VIEW private.donor_consolidated_mv` then ran successfully (no space error), confirming the bump was sufficient.
+
+**State** (verified)
+- Loans-as-donors fix is **live and complete fleet-wide** on `ornnzinjrcyigazecctf`. Candidate stat cards read `donors` directly, so they already reflect it.
+- Disk increased; MV refresh works again. Cron **#23 already refreshes `donor_consolidated_mv` daily at 08:00 UTC** (statement_timeout=0, non-concurrent) — no new cron needed. donor-explorer pages catch up at the next successful run (a manual refresh was also kicked).
+- NOT verified: that the manual MV refresh fully finished at time of writing (it was running server-side).
+
+**Next**
+Confirm the donor-explorer MVs (`donor_consolidated_mv`, `donor_consolidated_all_mv`) finished refreshing, then nothing required — #23 keeps them current. Watch disk headroom after large backfills.
+
+**Deferred**
+- Possible follow-up: treat candidate self-*contributions* (Line 11D under own name) as self-funding, like loans. Needs a product call + a look at what Line 11D actually represents.
+- Migration-history hygiene (MCP `apply_migration` vs Git branching) still stands from the prior entry.
+
+---
+
 ## 2026-06-13 (candidate loans miscounted as donors + self-funded callout) — claude/candidate-loans-not-donors
 
 **What happened & why**
