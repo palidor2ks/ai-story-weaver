@@ -8,9 +8,9 @@
 // member earmarks) so nothing is double-listed. Routed dollars are a labeled
 // display lens — never add them into category/list totals.
 //
-// Residual limitation (carried from the profile list): an org with routed
-// dollars under two raw spellings yields two rollup rows; merging those needs
-// alias-awareness in the RPC, not here.
+// The RPC now groups by donor_aliases.canonical_name when an active alias
+// exists, so multiple raw FEC spellings of the same org (e.g. "AIPAC" vs
+// "AMERICAN ISRAEL PUBLIC AFFAIRS COMMITTEE PAC") consolidate into one row.
 
 export interface EarmarkRollupLike {
   org_label: string;
