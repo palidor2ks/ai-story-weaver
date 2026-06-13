@@ -27,6 +27,39 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-13 (voting record UX — year grouping + AI analysis button) — claude/zen-sagan-7ofwx2
+
+**What happened & why**
+Two UX improvements to the Voting Record tab on candidate profiles:
+
+1. **Year-first grouping**: `VotingRecordSection` now groups votes by year (newest first) as the outer collapsible, then topic within each year. Previously topic was the only grouping, hiding recency. Expand/collapse state updated to track year keys + `${year}-${topic}` keys.
+
+2. **AI Analysis button per vote**: Each expanded vote row now has a "✨ AI Analysis" button. Opens `BillAIAnalysisDialog` (which already exists + calls `ai-bill-analysis` edge function with caching). Extended the dialog with:
+   - `votePosition` prop → accurate label ("voted Yes on" / "voted No on" vs "sponsored")
+   - `userAlignment` prop → green/red banner at top: "Based on your quiz answers, you'd likely agree/disagree with this vote"
+   - `candidateName/State/Office` added to `VotingRecordSection` props; passed from `CandidateProfile`
+
+Build passes (3168 modules, tsc clean).
+
+**State** (verified)
+- `VotingRecordSection` groups by year desc → topic; Expand All works ✓
+- AI Analysis button appears in expanded vote rows when candidateName is provided ✓
+- `BillAIAnalysisDialog` renders role label + alignment banner correctly ✓
+- `bunx tsc --noEmit` clean, `bunx vite build` passes ✓
+- All commits pushed to `claude/zen-sagan-7ofwx2` ✓
+- **PR not created** — GitHub OAuth unavailable in this session; create manually on GitHub
+
+**Next**
+Create PR `claude/zen-sagan-7ofwx2` → `main` on GitHub (covers all Part 2 work: migration, fetch edge function, 916 citations, UI surface, year grouping, AI analysis button). Then do a manual smoke test on a real profile: expand a vote, tap AI Analysis, verify the alignment banner is correct.
+
+**Deferred**
+- Senate votes (lis_member_id → bioguide mapping needed)
+- NDAA / KOSA / Dream Act additional question mappings
+- answers URL-sourcing % is ~6% — vote_record path ceiling ~27k, not enough to reach 35% alone; other source types needed
+- The 3 press-release citations from gate run — hold
+
+---
+
 ## 2026-06-13 (voting-records Part 2 — UI surface + source_description fix) — claude/zen-sagan-7ofwx2
 
 **What happened & why**
