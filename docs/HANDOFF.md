@@ -49,6 +49,39 @@ Nothing required. The 11AI self-contribution item is on the data-accuracy backlo
 
 ---
 
+## 2026-06-13 (policy card bar graphs + CTA color fix + AI threshold) — claude/social-signup-post-design-gzuvjm
+
+**What happened & why**
+Three UX fixes to the social share cards based on user feedback (screenshots):
+
+1. **`PolicyPositionsCard` — positions redesigned as mini spectrum bars.** Each AI position row now shows the topic name + stance pill, then a full-width blue-to-red gradient bar with a colored dot at the candidate's exact topic score position and a score code (e.g. `R4.2`, `L6.1`) floating above the dot. Loading skeleton updated to match the bar layout. This replaces the icon-chip row design from the previous session.
+
+2. **`SignupTeaserCard` CTA fix.** The CTA banner had near-black text on a dark-amber gradient — illegible. Changed to white headline + `AMBER_LIT` subtitle + white button with `AMBER_DARK` text, matching the readable pattern of PolicyPositionsCard's violet CTA.
+
+3. **`ai-policy-card-positions` edge function → v3 cache cycle.** Two changes to fix "Position data not available" for many candidates:
+   - Lowered AI stance threshold from `|score|>2.0` to `|score|>1.0` so leaning candidates (many senators) produce positions instead of empty arrays
+   - Added AI-failure fallback: when the Gemini call fails, synthesize the top-4 positions directly from topic scores (score sign → Supports/Opposes) rather than returning `[]`
+   - Combined `!LOVABLE_API_KEY` and `topicScores.length === 0` into a single clean early-return
+
+PR #391 merged; all 7 CI checks passed (Lint, Build, Typecheck, Test, Lockfile, GitGuardian, Supabase Preview).
+
+**State** (verified)
+- PR #391 merged to `main` ✓
+- tsc clean (ran locally before push) ✓
+- All CI green ✓
+- **Not verified**: live card render — manual test in Admin → Social Posts still needed to confirm bar graphs render correctly with real candidate data and that senators now get positions
+
+**Next**
+Open Admin → Social Posts, pick a candidate with clear topic scores (e.g. Stauber MN-08), generate "Policy Positions" card, verify bar graphs appear with dots at correct spectrum positions and score codes above them. Also test a senator (e.g. Klobuchar) to confirm the lower threshold produces results.
+
+**Deferred**
+- "Donor data unavailable" for senators (Schiff, Smith) — root cause is no FEC committee data for them in our cycle; would need to wire Senate finance data source
+- Senate votes (lis_member_id → bioguide mapping needed)
+- NDAA / KOSA / Dream Act additional question mappings
+- answers URL-sourcing % is ~6% — vote_record path ceiling ~27k, not enough to reach 35% alone; other source types needed
+
+---
+
 ## 2026-06-13 (signup social cards + migration dedup fix) — claude/social-signup-post-design-gzuvjm
 
 **What happened & why**
