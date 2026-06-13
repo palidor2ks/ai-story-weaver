@@ -193,6 +193,9 @@ where upper(b.bill_type) in (${CANONICAL_TYPES})
   -- Congressional Gold Medal bills start "To award a Congressional Gold Medal to..." — they
   -- match topic keywords incidentally (e.g. "voting rights" for Bloody Sunday), not as policy.
   and b.name !~* 'congressional gold medal'
+  -- "Welcoming X to the United States" resolutions mention policy terms incidentally in a list
+  -- of the honoree's qualities — not a policy position. "To rename" bills are administrative.
+  and b.name !~* '^(welcoming|to rename )'
 group by k.question_id, k.axis, b.congress, upper(b.bill_type), b.bill_number;
 revoke all on _enrich_bill_kw from anon, authenticated;
 analyze _enrich_bill_kw;
