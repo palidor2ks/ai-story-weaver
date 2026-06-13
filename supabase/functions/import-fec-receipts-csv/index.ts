@@ -36,6 +36,10 @@ function classifyLineNumber(lineNumber: string | null): LineClassification {
   if (!lineNumber) return { isContribution: true, isTransfer: false, receiptType: 'contribution' };
   
   const line = lineNumber.toUpperCase();
+  // Line 11D is the candidate's own personal funds (FEC entity type "candidate",
+  // which this feed mislabels as Organization). It is self-funding, NOT a donor
+  // contribution — surfaced via fec_candidate_contribution, kept out of donor lists.
+  const isCandidateSelfFund = line.startsWith('11D');
   const isLine11 = line.startsWith('11'); // Contributions (individuals, party, PACs)
   const isLine12 = line.startsWith('12'); // Authorized committee transfers
   // Everything else is NOT a donor contribution and must not feed donor lists:
@@ -45,7 +49,9 @@ function classifyLineNumber(lineNumber: string | null): LineClassification {
   // branch returned isContribution:true, so candidate loans (Line 13A) were
   // aggregated into the donors table and surfaced as bogus "top donors".
 
-  if (isLine11) {
+  if (isCandidateSelfFund) {
+    return { isContribution: false, isTransfer: false, receiptType: 'other_receipt' };
+  } else if (isLine11) {
     return { isContribution: true, isTransfer: false, receiptType: 'contribution' };
   } else if (isLine12) {
     return { isContribution: true, isTransfer: true, receiptType: 'transfer' };

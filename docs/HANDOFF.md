@@ -52,6 +52,95 @@ Audit other earmark-program orgs (ACEC PAC, MORPAC, etc.) for spelling variants 
 
 ---
 
+## 2026-06-13 (candidate self-contributions Line 11D → self-funding; 11AI deferred) — claude/candidate-self-contributions-self-funding
+
+**What happened & why**
+Owner: "self contributions should count as self-funding." Investigated how candidate self-funding is represented. Findings:
+- **Line 11D = FEC `candidate_contribution`** (personal-funds contributions; entity "candidate" mislabeled "Organization" by the feed). `local SUM(11D)` matches `fec_candidate_contribution` to the dollar where reconciliation is fresh. These were showing as the candidate's own #1 "top donor" (Arquette $3.3M, Rick Scott, Jacobs, Steel "- PERSONAL FUNDS").
+- Fix (PR #387, merged): importers classify Line 11D as `is_contribution=false`; backfill `20260613050000` removes existing 11D from donor lists. Self-funding already surfaced via the stat card "Self-Funded" callout (`fec_loans + fec_candidate_contribution`). **Applied to prod** (ornnzinjrcyigazecctf) directly via MCP in two stages (Arm A 11D flag, then Arm B donor recompute scoped to the 1,221 11D committees — ran server-side past the 60s MCP cutoff). Verified: 0 Line-11D rows remain as donors; Arquette's $3.3M gone.
+- **Investigated a durable name-match rule for 11AI self-contributions and REJECTED it as unsafe** (see DATA-ACCURACY.md §1 backlog): committee names containing the candidate's name ("TEAM RICK SCOTT" $7.4M, victory funds) produce massive false positives. Owner decision: leave the ~22 person-name 11AI cases as-is for now; logged on the data-accuracy backlog.
+
+**State** (verified)
+- PR #387 merged; all CI green (preview clean this time). Line-11D backfill APPLIED to prod + verified. Loans backfill (`20260613040000`) also applied earlier this day + verified (0 misflagged contributions fleet-wide).
+- donor-explorer MVs: refreshed manually earlier; cron #23 keeps them current nightly (disk-full incident resolved by owner disk bump).
+- Candidate stat cards read `donors` directly → already reflect both fixes.
+
+**Next**
+Nothing required. The 11AI self-contribution item is on the data-accuracy backlog (DATA-ACCURACY.md §1) — revisit only with a reliable candidate-entity signal.
+
+**Deferred**
+- 11AI candidate self-contributions (~22 cases) — see DATA-ACCURACY.md §1 backlog.
+- Earlier deferred items stand: Delaney residual −8%/−1.7% coverage gap (donor re-sync); MCP-apply vs Git-branching migration-history hygiene.
+
+---
+
+## 2026-06-13 (policy card bar graphs + CTA color fix + AI threshold) — claude/social-signup-post-design-gzuvjm
+
+**What happened & why**
+Three UX fixes to the social share cards based on user feedback (screenshots):
+
+1. **`PolicyPositionsCard` — positions redesigned as mini spectrum bars.** Each AI position row now shows the topic name + stance pill, then a full-width blue-to-red gradient bar with a colored dot at the candidate's exact topic score position and a score code (e.g. `R4.2`, `L6.1`) floating above the dot. Loading skeleton updated to match the bar layout. This replaces the icon-chip row design from the previous session.
+
+2. **`SignupTeaserCard` CTA fix.** The CTA banner had near-black text on a dark-amber gradient — illegible. Changed to white headline + `AMBER_LIT` subtitle + white button with `AMBER_DARK` text, matching the readable pattern of PolicyPositionsCard's violet CTA.
+
+3. **`ai-policy-card-positions` edge function → v3 cache cycle.** Two changes to fix "Position data not available" for many candidates:
+   - Lowered AI stance threshold from `|score|>2.0` to `|score|>1.0` so leaning candidates (many senators) produce positions instead of empty arrays
+   - Added AI-failure fallback: when the Gemini call fails, synthesize the top-4 positions directly from topic scores (score sign → Supports/Opposes) rather than returning `[]`
+   - Combined `!LOVABLE_API_KEY` and `topicScores.length === 0` into a single clean early-return
+
+PR #391 merged; all 7 CI checks passed (Lint, Build, Typecheck, Test, Lockfile, GitGuardian, Supabase Preview).
+
+**State** (verified)
+- PR #391 merged to `main` ✓
+- tsc clean (ran locally before push) ✓
+- All CI green ✓
+- **Not verified**: live card render — manual test in Admin → Social Posts still needed to confirm bar graphs render correctly with real candidate data and that senators now get positions
+
+**Next**
+Open Admin → Social Posts, pick a candidate with clear topic scores (e.g. Stauber MN-08), generate "Policy Positions" card, verify bar graphs appear with dots at correct spectrum positions and score codes above them. Also test a senator (e.g. Klobuchar) to confirm the lower threshold produces results.
+
+**Deferred**
+- "Donor data unavailable" for senators (Schiff, Smith) — root cause is no FEC committee data for them in our cycle; would need to wire Senate finance data source
+- Senate votes (lis_member_id → bioguide mapping needed)
+- NDAA / KOSA / Dream Act additional question mappings
+- answers URL-sourcing % is ~6% — vote_record path ceiling ~27k, not enough to reach 35% alone; other source types needed
+
+---
+
+## 2026-06-13 (signup social cards + migration dedup fix) — claude/social-signup-post-design-gzuvjm
+
+**What happened & why**
+Built two new signup-oriented social share card types for the Admin → Social Posts panel, then fixed a CI-breaking migration timestamp collision, then aligned both cards' visual shell to match the existing CandidateStatCard design (after user feedback from a screenshot).
+
+1. **`SignupTeaserCard`** (`signup_teaser` type) — "Follow The Money" FOMO card. Shows top 3 ranked donors with amber progress bars, 2 permanently-locked rows with padlock SVG, and an amber CTA banner ("See every donor — free" / "Sign Up Free →"). When `topDonors` is empty, renders 3 locked skeleton rows instead of a loading text message.
+
+2. **`PolicyPositionsCard`** (`policy_positions` type) — "Where Do They Stand?" quiz-tease card. Shows the candidate's ideology spectrum bar (real `candidateScore`), 3 issue chips derived from `aiCauses`/`topDonors.primaryCause`, a locked alignment bar ("Your alignment with [Name] — sign up to see"), and a violet CTA ("Find My Match →").
+
+3. **Migration dedup fix** — four files shared two timestamps (020000×2 and 030000×3), causing Supabase preview-branch CI to fail with PK violations. Fixed by renaming to 020001, 030001, 030002. All renamed files are idempotent (`IF NOT EXISTS`, `ON CONFLICT DO NOTHING`, `CREATE OR REPLACE`), so production re-apply is a no-op.
+
+4. **Color scheme alignment** — both cards originally had a different outer shell. Rewrote to match the CandidateStatCard exactly: `linear-gradient(160deg, FLAG_NAVY_DEEP, FLAG_NAVY, FLAG_RED)` outer, white 5px border, `borderRadius 36`, inner navy gradient panel, red 10px bottom accent stripe.
+
+Both card types are wired in `SocialPosts.tsx` (admin UI), `pick-daily-stat-card` edge function `ALLOWED_TYPES`, and use the same `useCandidateShareCardData` hook data as the existing stat card. The "Sign Up Free" / "Find My Match" buttons are visual-only in the PNG; the link goes in the caption.
+
+**State** (verified)
+- Both PRs (#383 feature, #384 style fix) merged to `main` ✓
+- Migration timestamps now unique across all 483 files ✓
+- Cards render on same visual shell as CandidateStatCard ✓
+- Empty-donor state shows skeleton rows instead of "loading" text ✓
+- Build (`node_modules/.bin/vite build`) passes; tsc clean ✓
+- **Not verified**: manual render test of both new card types in admin UI (screenshotted SignupTeaserCard after color fix, PolicyPositionsCard not smoke-tested visually)
+
+**Next**
+Open Admin → Social Posts → Settings tab, pick a candidate, click "Signup Teaser" and "Policy Positions" generate buttons, visually verify both cards render correctly with real data.
+
+**Deferred**
+- Senate votes (lis_member_id → bioguide mapping needed)
+- NDAA / KOSA / Dream Act additional question mappings
+- answers URL-sourcing % is ~6% — vote_record path ceiling ~27k, not enough to reach 35% alone; other source types needed
+- The 3 press-release citations from gate run — hold
+
+---
+
 ## 2026-06-13 (loans-as-donors backfill APPLIED + disk-full incident) — claude/candidate-loans-not-donors
 
 **What happened & why**
