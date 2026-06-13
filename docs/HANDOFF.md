@@ -27,6 +27,28 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-13 (candidate self-contributions Line 11D → self-funding; 11AI deferred) — claude/candidate-self-contributions-self-funding
+
+**What happened & why**
+Owner: "self contributions should count as self-funding." Investigated how candidate self-funding is represented. Findings:
+- **Line 11D = FEC `candidate_contribution`** (personal-funds contributions; entity "candidate" mislabeled "Organization" by the feed). `local SUM(11D)` matches `fec_candidate_contribution` to the dollar where reconciliation is fresh. These were showing as the candidate's own #1 "top donor" (Arquette $3.3M, Rick Scott, Jacobs, Steel "- PERSONAL FUNDS").
+- Fix (PR #387, merged): importers classify Line 11D as `is_contribution=false`; backfill `20260613050000` removes existing 11D from donor lists. Self-funding already surfaced via the stat card "Self-Funded" callout (`fec_loans + fec_candidate_contribution`). **Applied to prod** (ornnzinjrcyigazecctf) directly via MCP in two stages (Arm A 11D flag, then Arm B donor recompute scoped to the 1,221 11D committees — ran server-side past the 60s MCP cutoff). Verified: 0 Line-11D rows remain as donors; Arquette's $3.3M gone.
+- **Investigated a durable name-match rule for 11AI self-contributions and REJECTED it as unsafe** (see DATA-ACCURACY.md §1 backlog): committee names containing the candidate's name ("TEAM RICK SCOTT" $7.4M, victory funds) produce massive false positives. Owner decision: leave the ~22 person-name 11AI cases as-is for now; logged on the data-accuracy backlog.
+
+**State** (verified)
+- PR #387 merged; all CI green (preview clean this time). Line-11D backfill APPLIED to prod + verified. Loans backfill (`20260613040000`) also applied earlier this day + verified (0 misflagged contributions fleet-wide).
+- donor-explorer MVs: refreshed manually earlier; cron #23 keeps them current nightly (disk-full incident resolved by owner disk bump).
+- Candidate stat cards read `donors` directly → already reflect both fixes.
+
+**Next**
+Nothing required. The 11AI self-contribution item is on the data-accuracy backlog (DATA-ACCURACY.md §1) — revisit only with a reliable candidate-entity signal.
+
+**Deferred**
+- 11AI candidate self-contributions (~22 cases) — see DATA-ACCURACY.md §1 backlog.
+- Earlier deferred items stand: Delaney residual −8%/−1.7% coverage gap (donor re-sync); MCP-apply vs Git-branching migration-history hygiene.
+
+---
+
 ## 2026-06-13 (policy card bar graphs + CTA color fix + AI threshold) — claude/social-signup-post-design-gzuvjm
 
 **What happened & why**

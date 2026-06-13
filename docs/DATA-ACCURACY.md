@@ -62,6 +62,29 @@
   spaces while the importers' JS `.trim()` strips all Unicode whitespace (NBSP/tab names hash
   differently), and the replay guard compares pre-cast sums (fractional-sum groups rewrite to
   the same value on replay — convergent, not a bug).
+- **Candidate self-funding kept out of donor lists (2026-06-13):** the candidate's own money
+  must surface as *self-funding*, never as a "top donor". Two classes now excluded from
+  `donors` at write time (importers) and backfilled:
+    * **Line 13 loans** (and other non-11/12 receipts: 14 refunds, 15 offsets, 17 other) —
+      the CSV importer previously marked every line `is_contribution=true`, so candidate
+      self-loans showed as the #1 donor (e.g. McClain-Delaney $300k). Migration
+      `20260613040000`.
+    * **Line 11D candidate personal-funds contributions** (FEC entity "candidate", mislabeled
+      "Organization" here; `local SUM(11D)` == `fec_candidate_contribution` to the dollar).
+      Migration `20260613050000`. Surfaced instead via the stat card's "Self-Funded" callout
+      (`fec_loans + fec_candidate_contribution`).
+  Both backfills repair `donors` via the same donor-id-hash recompute as `20260612120000`.
+- **BACKLOG (data-accuracy, deferred 2026-06-13): candidate self-contributions on Line 11AI.**
+  Some candidates put personal funds on the *regular individual line* (11AI), not 11D — ~22
+  person-name cases still show as their own top donor (e.g. Arquette $1.66M, Bauer $114k).
+  A durable name-match rule was investigated and **rejected as unsafe**: committee names that
+  contain the candidate's name (JFCs / victory funds — "TEAM RICK SCOTT" $7.4M, "ASHLEY MOODY
+  VICTORY FUND" $3.4M; 101/128 matches were committee false positives) would be wrongly hidden
+  as "self-funding", and even a refined person-name rule leaks "X FOR UTAH"-style committees.
+  FEC also counts these as individual contributions (`fec_itemized`, not
+  `candidate_contribution`), so they don't fold cleanly into the Self-Funded total. Needs a
+  reliable candidate-entity signal (raw FEC `entity_type='CAN'` is lost at import) before this
+  is safe to automate. Left as-is for now per owner.
 
 ### 2. Voting records — `voting_records_stats`
 - **Goal:** every sitting federal legislator's sponsored/cosponsored/floor-vote record is
