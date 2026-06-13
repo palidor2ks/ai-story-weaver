@@ -27,6 +27,42 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-13 (answer URL-sourcing: round 4 enrichment + distiller hardening) — claude/zen-sagan-7ofwx2
+
+**What happened & why**
+Investigated the answer URL-sourcing gap (currently 5.34%, threshold 35%) and ran round 4 enrichment.
+
+**Investigation findings**
+- `sourcedWithUrl`: 30,051 → 30,133 (after round 4)
+- Denominator: 564,525 total answers — includes 204,506 `evidence_type='inferred'` which can NEVER have URLs (no artifact to cite); this is what makes 35% so hard
+- Tier-2 vote pipeline (keyword-based sponsorship citations) had 82 new eligible answers since round 3 → applied all 82 (congress.gov bill URLs, sign-consistency guard confirmed)
+- `match-answer-citations` gate reviewed: the 2 "cited" rows were both questionable — McClain match was local infrastructure spending ≠ defense contractor stock buybacks (false positive). Did NOT apply these.
+- Statement corpus (member_statements): 5,550 statements, 527 members, 2,950 with topic_tags, 4,220 with body → 18,424 eligible answers for citation matching
+
+**Distiller prompt tightened** (`match-answer-citations/index.ts`):
+- Added IDENTITY guard (statement must be BY/ABOUT this specific politician)
+- Sharpened TOPIC guard with explicit anti-examples ("military spending ≠ alliances", "govt spending ≠ defense contractor buybacks")
+- Added "default to -1 when in doubt"
+- Capped quote length to 100 chars
+
+**State** (verified)
+- 82 new tier-2 citations applied, triggers re-enabled ✓
+- Admin stats refreshed: 30,133 URL-sourced (5.34%) ✓
+- Distiller hardening committed and pushed ✓
+- `bun tsc --noEmit` not run (no frontend changes)
+
+**Next**
+Re-run `match-answer-citations` 50-sample gate with the tightened prompt. Invoke via: `POST https://<project>.supabase.co/functions/v1/match-answer-citations` with `{ "limit": 50 }` and service-role auth. If precision ≥ 90% on the sample, scale up to process all 18,424 eligible answers (expected yield: 1,800–3,600 new citations → ~9% URL rate).
+
+**The 35% gap is structural**: with 204,506 inferred answers in the denominator, 35% requires ~167k more URLs. Options: (a) exclude inferred from metric denominator (owner decision needed, plan doc §"The inferred question"), or (b) keep it red as a forcing function to replace inferred answers with researched ones.
+
+**Deferred**
+- Senate votes (lis_member_id → bioguide mapping needed)
+- `_match_stmt_citations` has 2 "cited" rows that need human eyeball before applying (both look like over-reaches)
+- Adding more `question_bill_map` entries for national-security-borders / rights-justice topics (requires clerk.house.gov roll call numbers not available from DB)
+
+---
+
 ## 2026-06-13 (voting record UX — year grouping + AI analysis button) — claude/zen-sagan-7ofwx2
 
 **What happened & why**
