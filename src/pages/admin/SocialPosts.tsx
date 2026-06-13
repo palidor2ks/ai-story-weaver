@@ -24,6 +24,7 @@ import { CARD_SIZE } from '@/components/share/templates/types';
 import { nodeToBlob } from '@/lib/shareImage';
 import { uploadShareCard } from '@/lib/shareUpload';
 import { useCandidateShareCardData } from '@/hooks/useCandidateShareCardData';
+import { usePolicyCardPositions } from '@/hooks/usePolicyCardPositions';
 
 const PLATFORMS = ['x', 'facebook', 'instagram', 'tiktok'] as const;
 type Platform = (typeof PLATFORMS)[number];
@@ -508,6 +509,15 @@ function PostCard({ post, platforms, onChanged }: { post: SocialPost; platforms:
   useEffect(() => { cardDataRef.current = cardData; }, [cardData]);
   useEffect(() => { cardLoadingRef.current = cardLoading; }, [cardLoading]);
 
+  // AI positions for policy_positions card type
+  const { data: policyPositions, isLoading: positionsLoading } = usePolicyCardPositions(
+    isPolicyPositionsType(post.subject_type) ? post.subject_id : null,
+  );
+  const policyPositionsRef = useRef(policyPositions);
+  const positionsLoadingRef = useRef(positionsLoading);
+  useEffect(() => { policyPositionsRef.current = policyPositions; }, [policyPositions]);
+  useEffect(() => { positionsLoadingRef.current = positionsLoading; }, [positionsLoading]);
+
   const updatePlatform = async (id: string, patch: Partial<PlatformRow>) => {
     setLocalPlatforms((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
     await supabase.from('social_post_platforms').update(patch).eq('id', id);
@@ -545,8 +555,9 @@ function PostCard({ post, platforms, onChanged }: { post: SocialPost; platforms:
       }
       // Wait up to 10s for offscreen card data + DOM to settle
       const start = Date.now();
+      const isPolicyCard = isPolicyPositionsType(post.subject_type);
       while (
-        !(cardNodeRef.current && cardDataRef.current) &&
+        !(cardNodeRef.current && cardDataRef.current && (!isPolicyCard || !positionsLoadingRef.current)) &&
         Date.now() - start < 10000
       ) {
         await new Promise((r) => setTimeout(r, 150));
@@ -717,7 +728,7 @@ function PostCard({ post, platforms, onChanged }: { post: SocialPost; platforms:
               {cardData && isSignupTeaserType(post.subject_type)
                 ? <SignupTeaserCard data={{ kind: 'candidate-alignment', ...cardData } as any} />
                 : cardData && isPolicyPositionsType(post.subject_type)
-                ? <PolicyPositionsCard data={{ kind: 'candidate-alignment', ...cardData } as any} />
+                ? <PolicyPositionsCard data={{ kind: 'candidate-alignment', ...cardData, aiPositions: policyPositions } as any} />
                 : cardData && <CandidateStatCard data={{ kind: 'candidate-alignment', ...cardData } as any} />}
             </div>
           </div>
