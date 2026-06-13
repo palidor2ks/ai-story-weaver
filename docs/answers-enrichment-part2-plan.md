@@ -64,11 +64,38 @@ question_bill_map (
 | ACA repeal votes 2017 (AHCA) | ACA/health insurance |
 | H.R.3076 (Postal Service Reform) | government reform |
 
-This is an ~afternoon research task: for each bill, look up the ProPublica roll call ID,
-verify the `yea_is_conservative` direction, and record it. Aim for 60–80 mappings covering
-~30 questions initially.
+This is an ~afternoon research task: for each bill, look up the House Clerk or Senate
+roll call number, verify the `yea_is_conservative` direction, and record it. Aim for
+60–80 mappings covering ~30 questions initially.
 
 ### Phase 2 — member_votes cache table + fetch function
+
+**Note: ProPublica Congress API was shut down in 2023. Use official sources instead.**
+
+Two options, both free and no-key-required for the bulk approach:
+
+**Option A — Clerk of the House + Senate.gov XML (recommended for our use case)**
+For each roll call in `question_bill_map`, fetch one XML file that contains every
+member's vote. ~20-30 files total for our initial bill set.
+
+- House: `https://clerk.house.gov/xml/rolls/{year}/roll{NNN}.xml`
+  (e.g. `https://clerk.house.gov/xml/rolls/2022/roll394.xml` for IRA final passage)
+- Senate: `https://www.senate.gov/legislative/LIS/roll_call_votes/vote{congress}{session}/vote_{congress}_{session}_{NNNNN}.xml`
+  (e.g. `vote1182_00325.xml` for IRA Senate vote)
+- No rate limits, no API key, fully authoritative
+- One fetch per mapped bill → all 535 member positions at once
+
+**Option B — congress.gov API v3 (if per-member queries are needed later)**
+- Free API key at api.congress.gov (register at api.congress.gov/sign-up/)
+- Endpoint: `GET https://api.congress.gov/v3/member/{bioguideId}/votes`
+- Returns member's full voting history; filter by bill
+- Better for challenger research or future expansion beyond the mapped-bill set
+- Needs `CONGRESS_API_KEY` in Supabase vault
+
+**Recommended approach:** Use Option A (Clerk XML) for Phase 2 — write a one-time
+script (`scripts/fetch-roll-call-votes.ts`) that reads `question_bill_map`, fetches
+each roll call XML, parses member positions, and bulk-inserts into `member_votes`.
+No edge function needed; run once per new bill mapping.
 
 **Schema:**
 ```sql
@@ -76,25 +103,14 @@ member_votes (
   candidate_id   text    not null,  -- = bioguide_id (confirmed: candidates.id = bioguide for incumbents)
   congress       int     not null,
   chamber        text    not null,
-  session        int,
   roll_call      int     not null,
   bill_id        text,              -- e.g. 'HR5376-117'
-  position       text    not null,  -- 'Yes' | 'No' | 'Not Voting' | 'Present'
-  propublica_url text,              -- source link for citation
+  position       text    not null,  -- 'Yea' | 'Nay' | 'Not Voting' | 'Present'
+  source_url     text,              -- clerk.house.gov or senate.gov roll call URL
   fetched_at     timestamptz default now(),
   primary key (candidate_id, congress, chamber, roll_call)
 )
 ```
-
-**Fetch function** (`fetch-member-votes` edge function):
-- Input: `{ candidate_id, congress }` or bulk mode
-- Call ProPublica Congress API:
-  `GET /members/{bioguide_id}/votes/{congress}/{session}.json`
-- Upsert into `member_votes`
-- Rate limit: 5 req/s (ProPublica is generous; 583 members × 2 sessions = ~1200 calls)
-- Needs `PROPUBLICA_API_KEY` secret (free registration at propublica.org/datastore)
-
-**Alternative (no API key)**: congress.gov bulk XML downloads — but ProPublica is cleaner.
 
 ### Phase 3 — evidence application
 
@@ -170,9 +186,9 @@ second-tier layer. Run it in parallel — different `evidence_type`, doesn't con
 
 ## §Decision needed before starting
 
-1. **ProPublica API key** — free registration, takes ~1 day. Owner to register at
-   `https://www.propublica.org/datastore/api/propublica-congress-api` and store key in
-   Supabase vault as `propublica_api_key`.
+1. **No API key needed for Phase 2** — the Clerk of the House and Senate.gov XML feeds
+   are public and require no registration. If congress.gov API is needed for Phase 4
+   (per-member queries beyond mapped bills), register free at api.congress.gov.
 
 2. **Bill mapping scope** — start with the ~15 high-coverage bills above (covering ~30
    questions), or do a comprehensive pass of all 11 topics first? Recommendation: start
