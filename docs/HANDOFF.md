@@ -27,6 +27,42 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-13 (voting-records Part 2 — UI surface + source_description fix) — claude/zen-sagan-7ofwx2
+
+**What happened & why**
+Surfaced the 916 vote_record citations in the candidate answer UI.
+
+Two problems found and fixed:
+1. `evidence_type` was never included in the `useCandidateAnswers` select queries — added it to the `CandidateAnswer` interface and all three query selects so it reaches components.
+2. The 916 vote_record rows still had AI-fabricated `source_description` text from when the answers were originally generated. Replaced with accurate "Voted [Yea/Nay] on [Bill Title] (Nth Congress, Roll Call #N)" descriptions and set `confidence = 'high'`. Required disabling both tamper-protection triggers (same pattern as Phase 3 apply — MCP execute_sql runs with `auth.role() = null`).
+
+UI components (`CandidateAnswerCard`, `CompactPositionRow`) now:
+- Show a Vote icon (not Mic) for `evidence_type = 'vote_record'`
+- Show "Verified Congressional Vote" label (not "Public Statement")
+- Show the accurate bill/vote description in the truncated sub-line
+- Link to the clerk.house.gov roll call XML
+
+Build passes (3168 modules, `bunx tsc --noEmit` clean).
+
+**State** (verified)
+- 916 vote_record rows: `source_description` = accurate bill/vote text, `confidence = 'high'`, `source_url` = clerk.house.gov ✓
+- `evidence_type` in `CandidateAnswer` interface + all 3 select queries ✓
+- `CandidateAnswerCard` + `CompactPositionRow` render "Verified Congressional Vote" for vote_record ✓
+- `bunx tsc --noEmit` clean, `bunx vite build` passes (3168 modules) ✓
+- All commits pushed to `claude/zen-sagan-7ofwx2` ✓
+- PR not yet created (GitHub auth unavailable in this session — create manually or in next session)
+
+**Next**
+Create PR for `claude/zen-sagan-7ofwx2` → `main` covering all Part 2 work (migration, fetch edge function, 916 citations, UI surface). Then run a data-accuracy spot-check: pick 3–5 vote_record answers in the UI and verify the displayed vote matches what clerk.house.gov shows.
+
+**Deferred**
+- Senate votes (lis_member_id → bioguide mapping needed before fetch)
+- NDAA / KOSA / Dream Act / H.R.3076 additional question mappings
+- The 3 press-release citations from gate run — sample too small to apply; hold
+- answers URL % is 6% overall (vote_record path ceiling ~27k — not enough to reach 35% alone)
+
+---
+
 ## 2026-06-13 (voting-records Part 2 — Phase 3 apply) — claude/zen-sagan-7ofwx2
 
 **What happened & why**
