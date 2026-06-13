@@ -88,6 +88,7 @@ interface PickResult {
   index: number;              // 0-based into statements list, or -1
   supporting_quote?: string;
   reason: string;
+  _gatewayError?: string;     // set only on gateway failure; signals caller to store as error
 }
 
 async function callDistiller(
@@ -129,7 +130,7 @@ ${stmtList}`;
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-3-flash-preview',  // proven for tool-calls in this repo
+        model: 'google/gemini-2.5-flash',
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user',   content: userPrompt },
@@ -165,12 +166,17 @@ ${stmtList}`;
     });
 
     if (!resp.ok) {
-      console.warn('[distiller] gateway non-ok', resp.status, await resp.text().catch(() => ''));
-      return null;
+      const body = await resp.text().catch(() => '');
+      console.warn('[distiller] gateway non-ok', resp.status, body);
+      return { index: -1, reason: '', _gatewayError: `HTTP ${resp.status}: ${body.slice(0, 300)}` };
     }
     const data = await resp.json();
     const args = data?.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
-    if (!args) return null;
+    if (!args) {
+      const summary = JSON.stringify(data).slice(0, 300);
+      console.warn('[distiller] no tool_call args', summary);
+      return { index: -1, reason: '', _gatewayError: `no tool_call args: ${summary}` };
+    }
 
     const parsed = JSON.parse(args) as PickResult;
     // Clamp to valid range — model must not name an index outside the list
@@ -179,7 +185,7 @@ ${stmtList}`;
     return parsed;
   } catch (err) {
     console.warn('[distiller] error', err);
-    return null;
+    return { index: -1, reason: '', _gatewayError: String(err).slice(0, 300) };
   }
 }
 
@@ -234,9 +240,9 @@ async function processAnswers(limit: number): Promise<void> {
         patch.reason  = `no topic-matched statements with body for topic ${answer.topic_id}`;
       } else {
         const result = await callDistiller(answer, statements);
-        if (!result) {
+        if (!result || result._gatewayError) {
           patch.verdict = 'error';
-          patch.reason  = 'distiller unavailable';
+          patch.reason  = result?._gatewayError ?? 'distiller unavailable';
         } else if (result.index < 0) {
           patch.verdict = 'none';
           patch.reason  = (result.reason ?? 'no qualifying statement').slice(0, 500);
