@@ -27,6 +27,37 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-13 (policy card full name + empty state + palette fix) — claude/social-signup-post-design-gzuvjm
+
+**What happened & why**
+Three more fixes from user feedback screenshots:
+
+1. **PolicyPositionsCard: full name in hero** — hero was using `lastName = name.split(' ').slice(-1)[0]` so "Deborah Ross" showed as "Ross's record". Changed to use the full `name` with adaptive font sizing: ≤14 chars → 52px, 15-20 → 44px, >20 → 38px. "record" label scales at 62% of name size.
+
+2. **PolicyPositionsCard: polished empty state** — when `candidate_topic_scores` has no rows for a candidate (e.g. Rep. Ross), the edge function returns `[]` and the card showed ugly italic "Position data not available" with a large blank gap. Replaced with a centered info panel (info-circle SVG, two styled text lines) that looks intentional. The ideology bar + pulse score above still show fine.
+
+3. **SignupTeaserCard: palette match** — amber was dominating the structural chrome (header badge, CTA banner). Changed header badge to white-on-dark (matching other cards' badge style) and CTA banner to dark navy gradient with subtle white border. Amber now only appears on rank circles, progress bars, and the CTA button — reserved for data/money visualization where it has thematic meaning. (PR #393)
+
+All three changes: PRs #393 and #395 merged. `tsc --noEmit` clean, all CI green.
+
+**State** (verified)
+- PR #393 (SignupTeaserCard palette) merged ✓
+- PR #395 (full name + empty state) merged ✓
+- tsc clean before each push ✓
+- All CI checks green ✓
+- **Not verified**: visual smoke test of the card in Admin → Social Posts with real candidates
+
+**Next**
+Open Admin → Social Posts, pick Rep. Deborah Ross (NC) → "Policy Positions" → verify hero reads "Deborah Ross's record" and empty state shows the info panel. Also pick a candidate with topic scores to verify bar graphs still render.
+
+**Deferred**
+- "Donor data unavailable" for senators (no FEC committee data in our cycle for them)
+- Senate votes (lis_member_id → bioguide mapping needed)
+- NDAA / KOSA / Dream Act additional question mappings
+- answers URL-sourcing % is ~6% — vote_record path ceiling ~27k, not enough to reach 35% alone
+
+---
+
 ## 2026-06-13 (earmark rollup alias consolidation + cause badge) — claude/affectionate-sagan-iroj5s
 
 **What happened & why**
