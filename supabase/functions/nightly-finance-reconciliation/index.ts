@@ -222,6 +222,9 @@ serve(async (req) => {
         const localOther = Number(totals.other_total) || 0;
         const localLoans = Number(totals.loan_total) || 0;
         const localOrganization = Number(totals.organization_total) || 0;
+        // Conduit pass-throughs (ActBlue/WinRed/Democracy Engine etc.) removed from
+        // organization_total by get_contribution_totals — persisted for the breakdown UI.
+        const conduitExcluded = Number(totals.conduit_excluded) || 0;
         // get_contribution_totals exposes no contribution-count column; log-only, kept at 0.
         const contributionCount = Number(totals.contribution_count) || 0;
 
@@ -425,6 +428,8 @@ serve(async (req) => {
             local_party_contributions: localPartyContributions,
             local_loans: localLoans,
             local_organization: localOrganization,
+            // Conduit pass-throughs excluded from local_organization (display-only)
+            conduit_excluded: conduitExcluded,
             // Local other receipts (Line 14 + 15)
             local_other_receipts: localOther,
             // FEC data

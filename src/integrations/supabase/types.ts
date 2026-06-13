@@ -2415,6 +2415,7 @@ export type Database = {
         Row: {
           candidate_id: string
           checked_at: string | null
+          conduit_excluded: number
           created_at: string | null
           cycle: string
           delta_amount: number | null
@@ -2456,6 +2457,7 @@ export type Database = {
         Insert: {
           candidate_id: string
           checked_at?: string | null
+          conduit_excluded?: number
           created_at?: string | null
           cycle: string
           delta_amount?: number | null
@@ -2497,6 +2499,7 @@ export type Database = {
         Update: {
           candidate_id?: string
           checked_at?: string | null
+          conduit_excluded?: number
           created_at?: string | null
           cycle?: string
           delta_amount?: number | null

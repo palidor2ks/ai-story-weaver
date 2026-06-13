@@ -2641,6 +2641,7 @@ export function AnswerCoveragePanel() {
                                   localGrossIndividual={candidate.localGrossIndividual}
                                   localOrganization={candidate.localOrganization}
                                   memoXAmount={candidate.memoXAmount}
+                                  conduitExcluded={candidate.conduitExcluded}
                                   localPacContributions={candidate.localPacContributions}
                                   localPartyContributions={candidate.localPartyContributions}
                                   fecItemized={candidate.fecItemized}
