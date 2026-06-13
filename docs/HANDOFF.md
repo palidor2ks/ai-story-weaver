@@ -27,6 +27,28 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-13 (candidate loans miscounted as donors + self-funded callout) — claude/candidate-loans-not-donors
+
+**What happened & why**
+Owner saw April McClain Delaney's (M001232) 2026 stat card list a $300k "top donor" named "MCCLAIN-DELANEY, APRIL" (typed Organization) and asked why self-funding wasn't showing. Root cause: `import-fec-receipts-csv`'s `classifyLineNumber` returned `isContribution:true` for EVERY line (final fall-through — no Line 13/14/17 handling), so FEC Line 13A candidate loans (and 14 refunds / 15 offsets / 17 other) were written `is_contribution=true` and aggregated into `public.donors`. `useCandidateDonors` filters `is_contribution=true`, so her own self-loan surfaced as a top donor. (`fetch-fec-donors` classifies these correctly — only the CSV importer was wrong.) This hits EVERY self-funder imported via the CSV path.
+
+Fix (PR #381, **merged to main**, squash 96dc45d3): (1) importer now marks only Line 11 (contributions) + Line 12 (transfers) as is_contribution, else false; (2) backfill migration `20260613040000` sets is_contribution=false on existing non-11/12 rows and recomputes contaminated `donors` rows (amount/txn_count/is_contribution) via the importers' donor-id SHA-256 hash — same pattern as the 20260612120000 conduit backfill; (3) a "Self-Funded $X" callout (FEC loans + candidate contributions) threaded through useCandidateShareCardData + ShareProfileButton/CandidateProfile into CardData and rendered on CandidateStatCard beside Total Raised. Local preflight green (64/64 tests, lint 0 errors, build clean).
+
+**State** (verified)
+- PR #381 merged. Real CI gates all green; Supabase Preview failed on a `schema_migrations` duplicate-key for the already-merged 030000 — an artifact of having applied 030000 via MCP `apply_migration` out-of-band (the Git-branching preview forks a DIFFERENT project, rcqxiaezdjncylnwzwyn, and re-inserts). Owner chose to merge on green real gates.
+- **Delaney is fixed LIVE** on project ornnzinjrcyigazecctf via a targeted committee-scoped run of the same Arm A/B SQL: her $300k self-loan + two Line-14 refund "donors" (MD Democratic Party $5,250, Perry Parkway $3,985) are gone; real PACs lead. Verified.
+- **The fleet-wide backfill `20260613040000` is NOT yet applied** to ornnzinjrcyigazecctf. Probe `EXISTS(line 13 AND is_contribution=true outside C00854471)` → true. The full backfill (full `contributions` scan + donor recompute) exceeds the MCP 60s timeout, so it must be run manually at a quiet time.
+- NOTE on project topology: ornnzinjrcyigazecctf ("Pulse Dev") is the only project MCP can see/manage and is what my data fixes + the live app reflect. `schema_migrations` there has NEITHER 030000 nor 040000 — MCP `apply_migration` executes DDL without writing a tracking row, so migration history on this project is not Git-tracked.
+
+**Next**
+Apply `20260613040000` to ornnzinjrcyigazecctf manually (dashboard SQL editor / psql — no statement timeout), then `SELECT public.refresh_donor_consolidated_mv();`. Re-run the EXISTS probe to confirm 0 misflagged loans fleet-wide. (Self-funders other than Delaney still show loan "donors" until then.)
+
+**Deferred**
+- Migration-history hygiene: applying migrations via MCP `apply_migration` out-of-band conflicts with the Supabase Git-branching preview CI (the 030000 duplicate-key). Going forward apply via the Git/merge flow; the branching baseline likely needs a one-time dashboard re-sync (owner access).
+- Prior deferred items still stand: Delaney's residual −8% itemized / −1.7% total-receipts coverage gap (needs a donor re-sync, not a code fix).
+
+---
+
 ## 2026-06-13 (voting record UX — year grouping + AI analysis button) — claude/zen-sagan-7ofwx2
 
 **What happened & why**
