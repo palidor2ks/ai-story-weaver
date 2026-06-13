@@ -17,7 +17,8 @@ interface CompactPositionRowProps {
 export const CompactPositionRow = ({ answer, userAnswer, userAnswerText }: CompactPositionRowProps) => {
   const [isOpen, setIsOpen] = useState(false);
 
-  const getSourceIcon = (sourceType: CandidateAnswer['source_type']) => {
+  const getSourceIcon = (sourceType: CandidateAnswer['source_type'], evidenceType?: string | null) => {
+    if (evidenceType === 'vote_record') return Vote;
     switch (sourceType) {
       case 'voting_record': return Vote;
       case 'public_statement': return Mic;
@@ -27,6 +28,11 @@ export const CompactPositionRow = ({ answer, userAnswer, userAnswerText }: Compa
       case 'other': return FileText;
       default: return HelpCircle;
     }
+  };
+
+  const getSourceLabel = (sourceType: CandidateAnswer['source_type'], evidenceType?: string | null) => {
+    if (evidenceType === 'vote_record') return 'Verified Congressional Vote';
+    return getSourceTypeLabel(sourceType);
   };
 
   const getConfidenceInfo = (confidence: CandidateAnswer['confidence']) => {
@@ -69,7 +75,8 @@ export const CompactPositionRow = ({ answer, userAnswer, userAnswerText }: Compa
     return { label: 'Mixed', className: 'text-muted-foreground border-border' };
   };
 
-  const SourceIcon = getSourceIcon(answer.source_type);
+  const SourceIcon = getSourceIcon(answer.source_type, answer.evidence_type);
+  const sourceLabel = getSourceLabel(answer.source_type, answer.evidence_type);
   const confidenceInfo = getConfidenceInfo(answer.confidence);
   const agreementStatus = getAgreementStatus();
 
@@ -105,7 +112,7 @@ export const CompactPositionRow = ({ answer, userAnswer, userAnswerText }: Compa
                   <SourceIcon className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
                 </TooltipTrigger>
                 <TooltipContent side="top" className="text-xs">
-                  {getSourceTypeLabel(answer.source_type)}
+                  {sourceLabel}
                 </TooltipContent>
               </Tooltip>
 
@@ -153,7 +160,7 @@ export const CompactPositionRow = ({ answer, userAnswer, userAnswerText }: Compa
             {/* Source */}
             <div className="flex items-center gap-2 text-xs">
               <SourceIcon className="w-3.5 h-3.5 text-muted-foreground" />
-              <span className="font-medium">{getSourceTypeLabel(answer.source_type)}</span>
+              <span className="font-medium">{sourceLabel}</span>
               {answer.source_description && (
                 <span className="text-muted-foreground truncate">• {answer.source_description}</span>
               )}

@@ -20,7 +20,8 @@ export const CandidateAnswerCard = ({
   userAnswerText,
   showQuestion = true 
 }: CandidateAnswerCardProps) => {
-  const getSourceIcon = (sourceType: CandidateAnswer['source_type']) => {
+  const getSourceIcon = (sourceType: CandidateAnswer['source_type'], evidenceType?: string | null) => {
+    if (evidenceType === 'vote_record') return Vote;
     switch (sourceType) {
       case 'voting_record': return Vote;
       case 'public_statement': return Mic;
@@ -30,6 +31,11 @@ export const CandidateAnswerCard = ({
       case 'other': return FileText;
       default: return HelpCircle;
     }
+  };
+
+  const getSourceLabel = (sourceType: CandidateAnswer['source_type'], evidenceType?: string | null) => {
+    if (evidenceType === 'vote_record') return 'Verified Congressional Vote';
+    return getSourceTypeLabel(sourceType);
   };
 
   const getConfidenceIcon = (confidence: CandidateAnswer['confidence']) => {
@@ -85,7 +91,8 @@ export const CandidateAnswerCard = ({
     return <Badge variant="outline" className="text-muted-foreground">Mixed</Badge>;
   };
 
-  const SourceIcon = getSourceIcon(answer.source_type);
+  const SourceIcon = getSourceIcon(answer.source_type, answer.evidence_type);
+  const sourceLabel = getSourceLabel(answer.source_type, answer.evidence_type);
   const confidenceInfo = getConfidenceIcon(answer.confidence);
 
   return (
@@ -140,7 +147,7 @@ export const CandidateAnswerCard = ({
                 <SourceIcon className="w-4 h-4 text-muted-foreground flex-shrink-0 group-hover:text-primary" />
                 <div className="flex-1 min-w-0">
                   <span className="text-xs font-medium text-foreground block group-hover:text-primary group-hover:underline">
-                    {getSourceTypeLabel(answer.source_type)}
+                    {sourceLabel}
                   </span>
                   {answer.source_description && (
                     <span className="text-xs text-muted-foreground truncate block group-hover:text-primary/80">
@@ -155,7 +162,7 @@ export const CandidateAnswerCard = ({
                 <SourceIcon className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                 <div className="flex-1 min-w-0">
                   <span className="text-xs font-medium text-foreground block">
-                    {getSourceTypeLabel(answer.source_type)}
+                    {sourceLabel}
                   </span>
                   {answer.source_description && (
                     <span className="text-xs text-muted-foreground truncate block">
