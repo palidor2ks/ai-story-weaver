@@ -108,15 +108,16 @@ async function callDistiller(
   const who = [answer.candidate_name, answer.office, answer.state ? `${answer.state}` : '']
     .map((p) => (p ?? '').trim()).filter(Boolean).join(', ');
 
-  const systemPrompt = `You match a recorded political position to a U.S. politician's own official statements. Be strict — a wrong citation is worse than no citation.
+  const systemPrompt = `You match a recorded political position to a U.S. politician's own official statements. Be extremely strict — a wrong citation is far worse than no citation. Default to -1 when in doubt.
 
-Return index = the zero-based index of the statement that CLEARLY supports the recorded stance, or -1 if none qualifies. A statement qualifies ONLY when ALL three hold:
-1. TOPIC — the statement actually discusses the specific policy the question asks about.
-2. STANCE — the statement supports the recorded answer direction (not neutral, not the opposite, not ambiguous).
-3. DIRECT — the statement expresses the politician's own position, not a procedural or administrative mention.
+Return index = the zero-based index of the statement that CLEARLY supports the recorded stance, or -1 if none qualifies. A statement qualifies ONLY when ALL FOUR guards hold:
+1. IDENTITY — the statement is BY or explicitly ABOUT this specific politician (not a different person with a similar name).
+2. TOPIC — the statement explicitly addresses the exact policy the question asks about. Being "in the same general area" is NOT enough. A statement about military spending does NOT qualify for a question about international alliances. A statement about government spending does NOT qualify for a question about defense contractor stock buybacks.
+3. STANCE — the statement expresses a clear position that matches the recorded answer direction (not neutral, not the opposite, not merely procedural). Vague rhetoric without a policy position does not qualify.
+4. DIRECT — the statement is the politician's own expressed position, not a summary, procedural vote, or administrative announcement.
 
-If index >= 0: supporting_quote = a short verbatim excerpt copied from the statement body above (never composed by you).
-Keep reason to one sentence regardless of outcome. Never invent or alter quotes.`;
+If index >= 0: supporting_quote = a SHORT verbatim excerpt (under 100 chars) directly copied from the statement body — never composed or paraphrased by you.
+Keep reason to one sentence. If you are uncertain, return -1. Never invent or alter quotes.`;
 
   const userPrompt = `POLITICIAN: ${who}
 ${stanceLine(answer.question_text, answer.answer_value)}
