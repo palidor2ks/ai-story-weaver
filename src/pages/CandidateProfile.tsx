@@ -1000,6 +1000,7 @@ export const CandidateProfile = () => {
                           subLabel?: string;
                           searchText?: string;
                           linkTo?: string; // For clickable committee links
+                          donorType?: string; // For cause lookup on earmark_org entries
                         };
 
                         const allSources: FundingSource[] = [];
@@ -1098,6 +1099,7 @@ export const CandidateProfile = () => {
                             subLabel: `${r.cycle} · by or through`,
                             searchText: [orgName, r.org_label, 'earmark', 'by or through', r.org_type].join(' ').toLowerCase(),
                             linkTo: match ? `/donor/${match.donorId}` : undefined,
+                            donorType: r.org_type,
                           });
                         });
 
@@ -1341,6 +1343,10 @@ export const CandidateProfile = () => {
                                           {source.badgeLabel}
                                         </Badge>
                                       )}
+                                      {source.sourceType === 'earmark_org' && source.donorType && (() => {
+                                        const cause = getDonorCause(donorCauseMap, source.name, source.donorType);
+                                        return cause ? <CauseBadge cause={cause} /> : null;
+                                      })()}
                                     </div>
                                     {source.description && (
                                       <p className="text-xs text-muted-foreground mt-1">{source.description}</p>
