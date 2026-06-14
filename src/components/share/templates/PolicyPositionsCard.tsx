@@ -65,20 +65,25 @@ const SkeletonRow = () => (
 );
 
 const LockedRow = ({ opacity = 1 }: { opacity?: number }) => (
-  <div style={{ opacity, marginTop: 4 }}>
-    <div style={{
-      height: 46,
-      borderRadius: 10,
-      background: `${FLAG_NAVY_DEEP}CC`,
-      border: `1.5px solid ${FLAG_WHITE}18`,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      gap: 10,
-    }}>
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+  <div style={{ opacity }}>
+    {/* Placeholder topic name + stance pill */}
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 7, gap: 10 }}>
+      <div style={{ height: 14, width: '42%', borderRadius: 999, background: `${FLAG_WHITE}14` }} />
+      <div style={{ height: 22, width: 80, borderRadius: 8, background: `${FLAG_WHITE}10` }} />
+    </div>
+    {/* Faded spectrum bar */}
+    <div style={{ position: 'relative', height: 30 }}>
+      <div style={{ position: 'absolute', left: 0, right: 0, top: 9, height: 12, borderRadius: 999, background: 'linear-gradient(90deg, hsl(214 89% 56%) 0%, hsl(270 72% 66%) 50%, hsl(0 76% 52%) 100%)', opacity: 0.3 }} />
+      <div style={{ position: 'absolute', left: '50%', top: 4, width: 1.5, height: 22, background: `${FLAG_WHITE}18`, transform: 'translateX(-50%)' }} />
+      <div style={{ position: 'absolute', left: '62%', top: 3, transform: 'translateX(-50%)', width: 24, height: 24, borderRadius: '50%', border: `2px solid ${FLAG_WHITE}22`, background: `${FLAG_WHITE}10` }} />
+    </div>
+    {/* Lock indicator */}
+    <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 3 }}>
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
         <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
         <path d="M7 11V7a5 5 0 0 1 10 0v4" />
       </svg>
-      <span style={{ fontSize: 13, fontWeight: 700, color: MUTED, letterSpacing: 0.3 }}>Sign up to see all topics</span>
+      <span style={{ fontSize: 11, fontWeight: 700, color: MUTED, letterSpacing: 0.3 }}>Sign up to unlock</span>
     </div>
   </div>
 );
