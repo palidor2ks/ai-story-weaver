@@ -94,8 +94,26 @@ export const PolicyPositionsCard = forwardRef<HTMLDivElement, Props>(({ data }, 
   const pulseLabel = hasScore ? getScoreLabelProgCon(data.candidateScore) : 'Not yet scored';
   const positions = data.aiPositions; // undefined = loading, [] = none found
 
-  // Topics 5 & 6 by |score| — shown in locked rows
-  const lockedTopics = (data.allTopicScores ?? []).slice(4, 6);
+  // Locked rows: topics not already shown in the 4 visible positions.
+  // Try allTopicScores first (real scores + real names), then fall back to
+  // the hardcoded federal list so locked rows always have a topic name.
+  const STANDARD_FEDERAL = [
+    'Economy & Work',
+    'Health, Education & Welfare',
+    'Environment & Energy',
+    'National Security & Borders',
+    'Rights & Justice',
+    'Constitution & Democracy',
+  ];
+  const shownNames = new Set((positions ?? []).map(p => p.topic));
+  const lockedFromScores = (data.allTopicScores ?? [])
+    .filter(ts => !shownNames.has(ts.topicName))
+    .slice(0, 2);
+  const lockedFallback = STANDARD_FEDERAL
+    .filter(n => !shownNames.has(n))
+    .slice(0, 2 - lockedFromScores.length)
+    .map(topicName => ({ topicName, score: undefined as number | undefined }));
+  const lockedTopics = [...lockedFromScores, ...lockedFallback].slice(0, 2);
 
   const cardBg = `linear-gradient(160deg, ${FLAG_NAVY_DEEP} 0%, ${FLAG_NAVY} 50%, ${FLAG_RED} 100%)`;
 
