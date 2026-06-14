@@ -335,7 +335,12 @@ export const AllTopicsCard = forwardRef<HTMLDivElement, Props>(({ data }, ref) =
                       {/* Topic name + stance pill */}
                       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 2, gap: 10 }}>
                         <div>
-                          <div style={{ fontSize: 15, fontWeight: 800, color: FLAG_WHITE, lineHeight: 1.1 }}>{ts.topicName}</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <div style={{ fontSize: 15, fontWeight: 800, color: FLAG_WHITE, lineHeight: 1.1 }}>{ts.topicName}</div>
+                            {scoreCode && (
+                              <span style={{ fontSize: 11, fontWeight: 900, color: dotColor, letterSpacing: 0.3, lineHeight: 1 }}>{scoreCode}</span>
+                            )}
+                          </div>
                           {desc && (
                             <div style={{ fontSize: 11, color: MUTED, fontWeight: 500, lineHeight: 1.3, marginTop: 1 }}>{desc}</div>
                           )}
@@ -351,9 +356,6 @@ export const AllTopicsCard = forwardRef<HTMLDivElement, Props>(({ data }, ref) =
                         <div style={{ position: 'absolute', left: 0, right: 0, top: 6, height: 11, borderRadius: 999, background: 'linear-gradient(90deg, hsl(214 89% 56%) 0%, hsl(270 72% 66%) 50%, hsl(0 76% 52%) 100%)', opacity: 0.85 }} />
                         <div style={{ position: 'absolute', left: '50%', top: 2, width: 1.5, height: 19, background: `${FLAG_WHITE}35`, transform: 'translateX(-50%)' }} />
                         <div style={{ position: 'absolute', left: `${topicPct}%`, top: 0, transform: 'translateX(-50%)', width: 22, height: 22, borderRadius: '50%', border: `3px solid ${FLAG_WHITE}`, background: dotColor, boxShadow: `0 0 0 2px ${dotColor}55, 0 2px 6px rgba(0,0,0,0.4)` }} />
-                        {scoreCode && (
-                          <div style={{ position: 'absolute', top: -12, left: `${labelLeft}%`, transform: 'translateX(-50%)', fontSize: 10, fontWeight: 900, color: ts.score < 0 ? 'hsl(214 89% 75%)' : 'hsl(0 76% 75%)', letterSpacing: 0.3, whiteSpace: 'nowrap' as const }}>{scoreCode}</div>
-                        )}
                       </div>
                     </div>
                   );
