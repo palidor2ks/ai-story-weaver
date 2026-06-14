@@ -10,10 +10,79 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.1"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
+      _enrich_bill_kw: {
+        Row: {
+          axis: number | null
+          bill_number: number | null
+          bill_type: string | null
+          congress: number | null
+          matched_keyword: string | null
+          name: string | null
+          question_id: string | null
+        }
+        Insert: {
+          axis?: number | null
+          bill_number?: number | null
+          bill_type?: string | null
+          congress?: number | null
+          matched_keyword?: string | null
+          name?: string | null
+          question_id?: string | null
+        }
+        Update: {
+          axis?: number | null
+          bill_number?: number | null
+          bill_type?: string | null
+          congress?: number | null
+          matched_keyword?: string | null
+          name?: string | null
+          question_id?: string | null
+        }
+        Relationships: []
+      }
+      _enrich_member_bills: {
+        Row: {
+          best_action: string | null
+          bill_number: number | null
+          bill_type: string | null
+          candidate_id: string | null
+          congress: number | null
+          first_action: string | null
+          last_action: string | null
+          name: string | null
+          norm_name: string | null
+          strength: number | null
+        }
+        Insert: {
+          best_action?: string | null
+          bill_number?: number | null
+          bill_type?: string | null
+          candidate_id?: string | null
+          congress?: number | null
+          first_action?: string | null
+          last_action?: string | null
+          name?: string | null
+          norm_name?: string | null
+          strength?: number | null
+        }
+        Update: {
+          best_action?: string | null
+          bill_number?: number | null
+          bill_type?: string | null
+          candidate_id?: string | null
+          congress?: number | null
+          first_action?: string | null
+          last_action?: string | null
+          name?: string | null
+          norm_name?: string | null
+          strength?: number | null
+        }
+        Relationships: []
+      }
       _enrich_stmt_staging: {
         Row: {
           answer_id: string
@@ -77,6 +146,90 @@ export type Database = {
           title?: string | null
           url?: string | null
           verdict?: string
+        }
+        Relationships: []
+      }
+      _enrich_t2_hits: {
+        Row: {
+          best_action: string | null
+          bill_number: number | null
+          bill_type: string | null
+          candidate_id: string | null
+          congress: number | null
+          evidence_type: string | null
+          last_action: string | null
+          matched_keyword: string | null
+          name: string | null
+          question_id: string | null
+          strength: number | null
+        }
+        Insert: {
+          best_action?: string | null
+          bill_number?: number | null
+          bill_type?: string | null
+          candidate_id?: string | null
+          congress?: number | null
+          evidence_type?: string | null
+          last_action?: string | null
+          matched_keyword?: string | null
+          name?: string | null
+          question_id?: string | null
+          strength?: number | null
+        }
+        Update: {
+          best_action?: string | null
+          bill_number?: number | null
+          bill_type?: string | null
+          candidate_id?: string | null
+          congress?: number | null
+          evidence_type?: string | null
+          last_action?: string | null
+          matched_keyword?: string | null
+          name?: string | null
+          question_id?: string | null
+          strength?: number | null
+        }
+        Relationships: []
+      }
+      _enrich_vc_keywords: {
+        Row: {
+          axis: number
+          keyword: string
+          question_id: string
+        }
+        Insert: {
+          axis: number
+          keyword: string
+          question_id: string
+        }
+        Update: {
+          axis?: number
+          keyword?: string
+          question_id?: string
+        }
+        Relationships: []
+      }
+      _enrich_vc_tier2: {
+        Row: {
+          candidate_id: string | null
+          n_cites: number | null
+          question_id: string | null
+          titles: string[] | null
+          urls: string[] | null
+        }
+        Insert: {
+          candidate_id?: string | null
+          n_cites?: number | null
+          question_id?: string | null
+          titles?: string[] | null
+          urls?: string[] | null
+        }
+        Update: {
+          candidate_id?: string | null
+          n_cites?: number | null
+          question_id?: string | null
+          titles?: string[] | null
+          urls?: string[] | null
         }
         Relationships: []
       }
@@ -161,6 +314,72 @@ export type Database = {
           published_at_raw?: string | null
           title?: string | null
           url?: string
+        }
+        Relationships: []
+      }
+      _match_stmt_citations: {
+        Row: {
+          answer_id: string
+          answer_value: number | null
+          body_excerpt: string | null
+          candidate_id: string
+          candidate_name: string | null
+          created_at: string
+          matched_statement_id: string | null
+          matched_title: string | null
+          matched_url: string | null
+          office: string | null
+          processed_at: string | null
+          question_id: string
+          question_text: string | null
+          question_topic: string | null
+          reason: string | null
+          state: string | null
+          statements_considered: number
+          supporting_quote: string | null
+          verdict: string
+        }
+        Insert: {
+          answer_id: string
+          answer_value?: number | null
+          body_excerpt?: string | null
+          candidate_id: string
+          candidate_name?: string | null
+          created_at?: string
+          matched_statement_id?: string | null
+          matched_title?: string | null
+          matched_url?: string | null
+          office?: string | null
+          processed_at?: string | null
+          question_id: string
+          question_text?: string | null
+          question_topic?: string | null
+          reason?: string | null
+          state?: string | null
+          statements_considered?: number
+          supporting_quote?: string | null
+          verdict?: string
+        }
+        Update: {
+          answer_id?: string
+          answer_value?: number | null
+          body_excerpt?: string | null
+          candidate_id?: string
+          candidate_name?: string | null
+          created_at?: string
+          matched_statement_id?: string | null
+          matched_title?: string | null
+          matched_url?: string | null
+          office?: string | null
+          processed_at?: string | null
+          question_id?: string
+          question_text?: string | null
+          question_topic?: string | null
+          reason?: string | null
+          state?: string | null
+          statements_considered?: number
+          supporting_quote?: string | null
+          verdict?: string
         }
         Relationships: []
       }
@@ -3169,6 +3388,7 @@ export type Database = {
           published_at_raw: string | null
           source_feed: string | null
           title: string | null
+          topic_tags: string[]
           url: string
         }
         Insert: {
@@ -3186,6 +3406,7 @@ export type Database = {
           published_at_raw?: string | null
           source_feed?: string | null
           title?: string | null
+          topic_tags?: string[]
           url: string
         }
         Update: {
@@ -3203,7 +3424,41 @@ export type Database = {
           published_at_raw?: string | null
           source_feed?: string | null
           title?: string | null
+          topic_tags?: string[]
           url?: string
+        }
+        Relationships: []
+      }
+      member_votes: {
+        Row: {
+          bill_id: string | null
+          candidate_id: string
+          chamber: string
+          congress: number
+          fetched_at: string
+          position: string
+          roll_call: number
+          source_url: string | null
+        }
+        Insert: {
+          bill_id?: string | null
+          candidate_id: string
+          chamber: string
+          congress: number
+          fetched_at?: string
+          position: string
+          roll_call: number
+          source_url?: string | null
+        }
+        Update: {
+          bill_id?: string | null
+          candidate_id?: string
+          chamber?: string
+          congress?: number
+          fetched_at?: string
+          position?: string
+          roll_call?: number
+          source_url?: string | null
         }
         Relationships: []
       }
@@ -4383,6 +4638,59 @@ export type Database = {
           voter_verified_at?: string | null
         }
         Relationships: []
+      }
+      question_bill_map: {
+        Row: {
+          bill_number: number
+          bill_title: string
+          bill_type: string
+          chamber: string
+          congress: number
+          created_at: string
+          id: number
+          notes: string | null
+          question_id: string
+          roll_call_number: number | null
+          roll_call_year: number | null
+          yea_is_conservative: boolean
+        }
+        Insert: {
+          bill_number: number
+          bill_title: string
+          bill_type: string
+          chamber: string
+          congress: number
+          created_at?: string
+          id?: number
+          notes?: string | null
+          question_id: string
+          roll_call_number?: number | null
+          roll_call_year?: number | null
+          yea_is_conservative: boolean
+        }
+        Update: {
+          bill_number?: number
+          bill_title?: string
+          bill_type?: string
+          chamber?: string
+          congress?: number
+          created_at?: string
+          id?: number
+          notes?: string | null
+          question_id?: string
+          roll_call_number?: number | null
+          roll_call_year?: number | null
+          yea_is_conservative?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "question_bill_map_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       question_news_feed_cache: {
         Row: {
@@ -5772,6 +6080,7 @@ export type Database = {
         Args: { _id: string; _source: string }
         Returns: undefined
       }
+      assign_statement_topics: { Args: { p_text: string }; Returns: string[] }
       auto_merge_obvious_persons: { Args: never; Returns: number }
       backfill_candidate_scores: {
         Args: never
@@ -5799,6 +6108,20 @@ export type Database = {
       claim_anon_poll_responses: {
         Args: { p_anon_session_id: string }
         Returns: number
+      }
+      claim_answers_for_citation: {
+        Args: { p_limit?: number }
+        Returns: {
+          answer_value: number
+          candidate_id: string
+          candidate_name: string
+          id: string
+          office: string
+          question_id: string
+          question_text: string
+          state: string
+          topic_id: string
+        }[]
       }
       claim_jobs: {
         Args: {
@@ -6268,6 +6591,16 @@ export type Database = {
           name_variations: string[]
           total_amount: number
           type: string
+        }[]
+      }
+      search_member_statements_fts: {
+        Args: { p_candidate_id: string; p_limit?: number; p_query: string }
+        Returns: {
+          body_text: string
+          id: string
+          published_at: string
+          title: string
+          url: string
         }[]
       }
       search_raw_donors_admin: {
