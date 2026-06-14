@@ -25,6 +25,7 @@ import { nodeToBlob } from '@/lib/shareImage';
 import { uploadShareCard } from '@/lib/shareUpload';
 import { useCandidateShareCardData } from '@/hooks/useCandidateShareCardData';
 import { usePolicyCardPositions } from '@/hooks/usePolicyCardPositions';
+import { useAllCandidateTopicScores } from '@/hooks/useAllCandidateTopicScores';
 
 const PLATFORMS = ['x', 'facebook', 'instagram', 'tiktok'] as const;
 type Platform = (typeof PLATFORMS)[number];
@@ -518,6 +519,11 @@ function PostCard({ post, platforms, onChanged }: { post: SocialPost; platforms:
   useEffect(() => { policyPositionsRef.current = policyPositions; }, [policyPositions]);
   useEffect(() => { positionsLoadingRef.current = positionsLoading; }, [positionsLoading]);
 
+  // All topic scores for locked-row topic names in the policy_positions card
+  const { data: allTopicScores } = useAllCandidateTopicScores(
+    isPolicyPositionsType(post.subject_type) ? post.subject_id : null,
+  );
+
   const updatePlatform = async (id: string, patch: Partial<PlatformRow>) => {
     setLocalPlatforms((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
     await supabase.from('social_post_platforms').update(patch).eq('id', id);
@@ -728,7 +734,7 @@ function PostCard({ post, platforms, onChanged }: { post: SocialPost; platforms:
               {cardData && isSignupTeaserType(post.subject_type)
                 ? <SignupTeaserCard data={{ kind: 'candidate-alignment', ...cardData } as any} />
                 : cardData && isPolicyPositionsType(post.subject_type)
-                ? <PolicyPositionsCard data={{ kind: 'candidate-alignment', ...cardData, aiPositions: policyPositions } as any} />
+                ? <PolicyPositionsCard data={{ kind: 'candidate-alignment', ...cardData, aiPositions: policyPositions, allTopicScores: allTopicScores ?? undefined } as any} />
                 : cardData && <CandidateStatCard data={{ kind: 'candidate-alignment', ...cardData } as any} />}
             </div>
           </div>

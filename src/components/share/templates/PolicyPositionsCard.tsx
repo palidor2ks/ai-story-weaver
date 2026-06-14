@@ -40,53 +40,46 @@ const scoreToPercent = (score?: number | null) => {
   return ((Math.max(-10, Math.min(10, score)) + 10) / 20) * 100;
 };
 
-const ideologyLabel = (score?: number | null) => {
-  if (score == null || !Number.isFinite(score)) return 'Not yet scored';
-  if (score <= -7) return 'Strongly Progressive';
-  if (score <= -4) return 'Progressive';
-  if (score <= -1.5) return 'Center-Left';
-  if (score < 1.5) return 'Moderate / Centrist';
-  if (score < 4) return 'Center-Right';
-  if (score < 7) return 'Conservative';
-  return 'Strongly Conservative';
-};
-
 const truncate = (s: string, max = 22) => (s.length > max ? s.slice(0, max - 1) + '…' : s);
 
 const SkeletonRow = () => (
   <div style={{ marginBottom: 4 }}>
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 7 }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}>
       <div style={{ height: 14, borderRadius: 999, background: `${FLAG_WHITE}15`, width: '38%' }} />
-      <div style={{ width: 80, height: 22, borderRadius: 8, background: `${FLAG_WHITE}10` }} />
     </div>
     <div style={{ height: 12, borderRadius: 999, background: `${FLAG_WHITE}10`, marginBottom: 5 }} />
-    <div style={{ height: 10, borderRadius: 999, background: `${FLAG_WHITE}08`, width: '65%' }} />
   </div>
 );
 
-const LockedRow = ({ opacity = 1 }: { opacity?: number }) => (
-  <div style={{ opacity }}>
-    {/* Placeholder topic name + stance pill */}
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 7, gap: 10 }}>
-      <div style={{ height: 14, width: '42%', borderRadius: 999, background: `${FLAG_WHITE}14` }} />
-      <div style={{ height: 22, width: 80, borderRadius: 8, background: `${FLAG_WHITE}10` }} />
+const LockedRow = ({ topicName, score, opacity = 1 }: { topicName?: string; score?: number; opacity?: number }) => {
+  const hasScore = score != null && Number.isFinite(score);
+  const topicPct = hasScore ? scoreToPercent(score) : 62;
+  return (
+    <div style={{ opacity }}>
+      <div style={{ marginBottom: 5 }}>
+        {topicName ? (
+          <div style={{ fontSize: 15, fontWeight: 800, color: FLAG_WHITE, opacity: 0.4, lineHeight: 1.1 }}>
+            {topicName}
+          </div>
+        ) : (
+          <div style={{ height: 14, width: '42%', borderRadius: 999, background: `${FLAG_WHITE}14` }} />
+        )}
+      </div>
+      <div style={{ position: 'relative', height: 24 }}>
+        <div style={{ position: 'absolute', left: 0, right: 0, top: 6, height: 12, borderRadius: 999, background: 'linear-gradient(90deg, hsl(214 89% 56%) 0%, hsl(270 72% 66%) 50%, hsl(0 76% 52%) 100%)', opacity: 0.3 }} />
+        <div style={{ position: 'absolute', left: '50%', top: 1, width: 1.5, height: 22, background: `${FLAG_WHITE}18`, transform: 'translateX(-50%)' }} />
+        <div style={{ position: 'absolute', left: `${topicPct}%`, top: 0, transform: 'translateX(-50%)', width: 24, height: 24, borderRadius: '50%', border: `2px solid ${FLAG_WHITE}22`, background: `${FLAG_WHITE}10` }} />
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 3 }}>
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        </svg>
+        <span style={{ fontSize: 11, fontWeight: 700, color: MUTED, letterSpacing: 0.3 }}>Sign up to unlock</span>
+      </div>
     </div>
-    {/* Faded spectrum bar */}
-    <div style={{ position: 'relative', height: 30 }}>
-      <div style={{ position: 'absolute', left: 0, right: 0, top: 9, height: 12, borderRadius: 999, background: 'linear-gradient(90deg, hsl(214 89% 56%) 0%, hsl(270 72% 66%) 50%, hsl(0 76% 52%) 100%)', opacity: 0.3 }} />
-      <div style={{ position: 'absolute', left: '50%', top: 4, width: 1.5, height: 22, background: `${FLAG_WHITE}18`, transform: 'translateX(-50%)' }} />
-      <div style={{ position: 'absolute', left: '62%', top: 3, transform: 'translateX(-50%)', width: 24, height: 24, borderRadius: '50%', border: `2px solid ${FLAG_WHITE}22`, background: `${FLAG_WHITE}10` }} />
-    </div>
-    {/* Lock indicator */}
-    <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 3 }}>
-      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-      </svg>
-      <span style={{ fontSize: 11, fontWeight: 700, color: MUTED, letterSpacing: 0.3 }}>Sign up to unlock</span>
-    </div>
-  </div>
-);
+  );
+};
 
 export const PolicyPositionsCard = forwardRef<HTMLDivElement, Props>(({ data }, ref) => {
   const name = data.candidateName ?? 'This Candidate';
@@ -100,6 +93,9 @@ export const PolicyPositionsCard = forwardRef<HTMLDivElement, Props>(({ data }, 
   const pulseScore = hasScore ? formatScore(data.candidateScore) : null;
   const pulseLabel = hasScore ? getScoreLabelProgCon(data.candidateScore) : 'Not yet scored';
   const positions = data.aiPositions; // undefined = loading, [] = none found
+
+  // Topics 5 & 6 by |score| — shown in locked rows
+  const lockedTopics = (data.allTopicScores ?? []).slice(4, 6);
 
   const cardBg = `linear-gradient(160deg, ${FLAG_NAVY_DEEP} 0%, ${FLAG_NAVY} 50%, ${FLAG_RED} 100%)`;
 
@@ -131,24 +127,23 @@ export const PolicyPositionsCard = forwardRef<HTMLDivElement, Props>(({ data }, 
 
         <div style={{
           position: 'relative', height: '100%',
-          padding: 28, paddingBottom: 28,
+          padding: 22,
           display: 'flex', flexDirection: 'column', gap: 0,
         }}>
 
           {/* ── Header ── */}
           <div style={{
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            marginBottom: 22,
+            marginBottom: 14,
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <PulseMark size={42} />
               <span style={{ fontWeight: 800, fontSize: 25, letterSpacing: -0.3 }}>PoliPulse</span>
             </div>
 
-            {/* Candidate photo — shown between logo and badge */}
             {data.candidateImage ? (
               <div style={{
-                width: 68, height: 68, borderRadius: '50%',
+                width: 90, height: 90, borderRadius: '50%',
                 border: `3px solid ${FLAG_WHITE}`,
                 overflow: 'hidden',
                 flexShrink: 0,
@@ -162,12 +157,12 @@ export const PolicyPositionsCard = forwardRef<HTMLDivElement, Props>(({ data }, 
               </div>
             ) : (
               <div style={{
-                width: 68, height: 68, borderRadius: '50%',
+                width: 90, height: 90, borderRadius: '50%',
                 border: `3px solid ${FLAG_WHITE}`,
                 background: `${VIOLET}40`,
                 boxShadow: `0 0 0 2px ${VIOLET}88`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 26, fontWeight: 900, color: VIOLET_GLOW, flexShrink: 0,
+                fontSize: 32, fontWeight: 900, color: VIOLET_GLOW, flexShrink: 0,
               }}>
                 {lastName[0]?.toUpperCase() ?? '?'}
               </div>
@@ -189,8 +184,8 @@ export const PolicyPositionsCard = forwardRef<HTMLDivElement, Props>(({ data }, 
           </div>
 
           {/* ── Candidate identity ── */}
-          <div style={{ marginBottom: 18 }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' as const, marginBottom: 8 }}>
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' as const, marginBottom: 6 }}>
               <span style={{ fontSize: heroFontSize, fontWeight: 900, letterSpacing: -2, lineHeight: 1.02 }}>
                 {displayName}'s
               </span>
@@ -199,7 +194,7 @@ export const PolicyPositionsCard = forwardRef<HTMLDivElement, Props>(({ data }, 
               </span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' as const }}>
-              <span style={{ fontSize: 18, color: MUTED, fontWeight: 500 }}>{officeLine}</span>
+              <span style={{ fontSize: 17, color: MUTED, fontWeight: 500 }}>{officeLine}</span>
               {party && (
                 <span style={{
                   background: `${partyColor(party)}22`,
@@ -219,18 +214,17 @@ export const PolicyPositionsCard = forwardRef<HTMLDivElement, Props>(({ data }, 
             background: PANEL_BG,
             border: `2px solid ${FLAG_WHITE}22`,
             borderRadius: 18,
-            padding: '16px 20px',
-            marginBottom: 18,
+            padding: '12px 18px',
+            marginBottom: 12,
           }}>
-            {/* Score row — pulse score badge always visible */}
             <div style={{
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-              marginBottom: 14,
+              marginBottom: 12,
             }}>
               <div>
                 <div style={{
                   fontSize: 11, color: MUTED, letterSpacing: 2.5,
-                  textTransform: 'uppercase' as const, fontWeight: 700, marginBottom: 4,
+                  textTransform: 'uppercase' as const, fontWeight: 700, marginBottom: 3,
                 }}>
                   Voting record ideology
                 </div>
@@ -252,13 +246,12 @@ export const PolicyPositionsCard = forwardRef<HTMLDivElement, Props>(({ data }, 
                 <div style={{ fontSize: 10, color: MUTED, letterSpacing: 2, textTransform: 'uppercase' as const, fontWeight: 700, marginBottom: 2 }}>
                   Pulse Score
                 </div>
-                <div style={{ fontSize: pulseScore ? 26 : 16, fontWeight: 900, color: pulseScore ? VIOLET_GLOW : MUTED, letterSpacing: -0.5 }}>
+                <div style={{ fontSize: pulseScore ? 34 : 18, fontWeight: 900, color: pulseScore ? VIOLET_GLOW : MUTED, letterSpacing: -0.5 }}>
                   {pulseScore ?? '—'}
                 </div>
               </div>
             </div>
 
-            {/* Spectrum bar */}
             <div style={{ position: 'relative', height: 42, margin: '0 2px' }}>
               <div style={{
                 position: 'absolute', left: 0, right: 0, top: 12,
@@ -293,17 +286,16 @@ export const PolicyPositionsCard = forwardRef<HTMLDivElement, Props>(({ data }, 
           </div>
 
           {/* ── Positions section ── */}
-          <div style={{ flex: 1, marginBottom: 16 }}>
+          <div style={{ flex: 1, marginBottom: 10 }}>
             <div style={{
               fontSize: 11, color: MUTED, letterSpacing: 2.5,
-              textTransform: 'uppercase' as const, fontWeight: 700, marginBottom: 12,
+              textTransform: 'uppercase' as const, fontWeight: 700, marginBottom: 8,
             }}>
               On the issues
             </div>
 
             {positions === undefined ? (
-              // Loading skeleton
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <SkeletonRow />
                 <SkeletonRow />
                 <SkeletonRow />
@@ -329,7 +321,7 @@ export const PolicyPositionsCard = forwardRef<HTMLDivElement, Props>(({ data }, 
                 </div>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {positions.map((pos, i) => {
                   const hasTopicScore = pos.score != null && Number.isFinite(pos.score);
                   const topicPct = hasTopicScore ? scoreToPercent(pos.score) : 50;
@@ -340,34 +332,33 @@ export const PolicyPositionsCard = forwardRef<HTMLDivElement, Props>(({ data }, 
                     : MUTED;
                   return (
                     <div key={i}>
-                      {/* Topic name */}
-                      <div style={{ fontSize: 16, fontWeight: 800, color: FLAG_WHITE, lineHeight: 1.1, marginBottom: 7 }}>
+                      <div style={{ fontSize: 15, fontWeight: 800, color: FLAG_WHITE, lineHeight: 1.1, marginBottom: 5 }}>
                         {pos.topic}
                       </div>
-                      {/* Mini spectrum bar */}
-                      <div style={{ position: 'relative', height: 30, marginBottom: pos.detail ? 5 : 0 }}>
-                        {/* Track */}
+                      {pos.detail && (
+                        <div style={{ fontSize: 11, color: MUTED, fontWeight: 500, lineHeight: 1.3, marginBottom: 4 }}>
+                          {pos.detail}
+                        </div>
+                      )}
+                      <div style={{ position: 'relative', height: 24 }}>
                         <div style={{
-                          position: 'absolute', left: 0, right: 0, top: 9, height: 12, borderRadius: 999,
+                          position: 'absolute', left: 0, right: 0, top: 6, height: 12, borderRadius: 999,
                           background: 'linear-gradient(90deg, hsl(214 89% 56%) 0%, hsl(270 72% 66%) 50%, hsl(0 76% 52%) 100%)',
                           opacity: 0.85,
                         }} />
-                        {/* Center tick */}
                         <div style={{
-                          position: 'absolute', left: '50%', top: 4, width: 1.5, height: 22,
+                          position: 'absolute', left: '50%', top: 1, width: 1.5, height: 22,
                           background: `${FLAG_WHITE}35`, transform: 'translateX(-50%)',
                         }} />
-                        {/* Score dot */}
                         <div style={{
                           position: 'absolute',
-                          left: `${topicPct}%`, top: 3,
+                          left: `${topicPct}%`, top: 0,
                           transform: 'translateX(-50%)',
                           width: 24, height: 24, borderRadius: '50%',
                           border: `3px solid ${FLAG_WHITE}`,
                           background: dotColor,
                           boxShadow: `0 0 0 2px ${dotColor}55, 0 3px 8px rgba(0,0,0,0.4)`,
                         }} />
-                        {/* Score code label */}
                         {scoreCode && (
                           <div style={{
                             position: 'absolute', top: -14,
@@ -381,19 +372,13 @@ export const PolicyPositionsCard = forwardRef<HTMLDivElement, Props>(({ data }, 
                           </div>
                         )}
                       </div>
-                      {/* Detail */}
-                      {pos.detail && (
-                        <div style={{ fontSize: 12, color: MUTED, fontWeight: 500, lineHeight: 1.3, marginTop: 2 }}>
-                          {pos.detail}
-                        </div>
-                      )}
                     </div>
                   );
                 })}
                 {positions.length >= 4 && (
                   <>
-                    <LockedRow />
-                    <LockedRow opacity={0.65} />
+                    <LockedRow topicName={lockedTopics[0]?.topicName} score={lockedTopics[0]?.score} />
+                    <LockedRow topicName={lockedTopics[1]?.topicName} score={lockedTopics[1]?.score} opacity={0.65} />
                   </>
                 )}
               </div>
@@ -404,24 +389,24 @@ export const PolicyPositionsCard = forwardRef<HTMLDivElement, Props>(({ data }, 
           <div style={{
             background: `linear-gradient(90deg, ${VIOLET}D8, #5B21B6D8)`,
             borderRadius: 16,
-            padding: '16px 24px',
+            padding: '12px 20px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
             gap: 16,
           }}>
             <div>
-              <div style={{ fontSize: 20, fontWeight: 900, color: FLAG_WHITE, letterSpacing: -0.3, lineHeight: 1.1 }}>
+              <div style={{ fontSize: 18, fontWeight: 900, color: FLAG_WHITE, letterSpacing: -0.3, lineHeight: 1.1 }}>
                 Do you agree with their record?
               </div>
-              <div style={{ fontSize: 13, color: VIOLET_GLOW, marginTop: 3, fontWeight: 600 }}>
+              <div style={{ fontSize: 12, color: VIOLET_GLOW, marginTop: 3, fontWeight: 600 }}>
                 2-min quiz · free · polipulseapp.com
               </div>
             </div>
             <div style={{
               background: FLAG_WHITE, color: VIOLET,
               borderRadius: 10, padding: '10px 20px',
-              fontSize: 16, fontWeight: 900, letterSpacing: 0.3,
+              fontSize: 15, fontWeight: 900, letterSpacing: 0.3,
               whiteSpace: 'nowrap' as const, flexShrink: 0,
             }}>
               Find My Match →
@@ -431,7 +416,7 @@ export const PolicyPositionsCard = forwardRef<HTMLDivElement, Props>(({ data }, 
           {/* ── Footer ── */}
           <div style={{
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            marginTop: 12, fontSize: 13, color: MUTED,
+            marginTop: 8, fontSize: 13, color: MUTED,
           }}>
             <span>Based on voting record &amp; FEC data</span>
             <span style={{ fontWeight: 700, color: FLAG_WHITE }}>{data.brandHost}</span>
