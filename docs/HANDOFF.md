@@ -27,6 +27,34 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-14 (merge duplicate Cory Booker + unique person_id constraint) — claude/cool-pasteur-pyrka5
+
+**What happened & why**
+Owner spotted duplicate "Cory A. Booker" / "Cory Booker" rows on the admin dashboard (both NJ, Democrat). Investigated: the AI-seeded row (`ai_e807ea6a...`, created June 1) had no FEC data, no votes, no committees, and 251 answers that were all copies of the canonical `B001288` row's answers. Both already shared the same `person_id` — the persons layer knew they were the same human, but no candidate-level merge had been run on this pair. It wasn't in the `candidate_merge_map` so the earlier bulk dedup missed it. The `cleanup_redundant_ai_candidates()` function also missed it because it requires zero answers on the AI row.
+
+Ran `merge_candidate('B001288', 'ai_e807ea6a...', dry_run=true)` first, confirmed clean (251 conflict-drops, 1 election_candidates move), then executed live. Confirmed 0 remaining duplicate pairs across all candidates.
+
+To prevent recurrence from any code path, added a unique partial index `candidates_person_id_unique` on `candidates(person_id) WHERE person_id IS NOT NULL`. This makes same-person duplicates structurally impossible at the DB level.
+
+PR #376 opened, CI green (Lint/Test/Typecheck/Build all pass; Supabase Preview failed on pre-existing `_enrich_stmt_staging` issue, unrelated). Merged.
+
+**State** (verified)
+- Duplicate Cory Booker merged — 0 remaining duplicate candidate pairs ✓
+- Unique index `candidates_person_id_unique` applied to Pulse Dev ✓
+- Migration `20260613020000_unique_candidate_person_id.sql` committed ✓
+- CI: Lint ✓ · Test ✓ · Typecheck ✓ · Build ✓
+- PR #376 merged ✓
+
+**Next**
+Kick the citation matcher gate run (carried over from previous session): `POST /functions/v1/match-answer-citations {"limit": 50}` with cron-secret auth → eyeball `_match_stmt_citations` for precision → if ≥ ~90%, apply and merge PR #375.
+
+**Deferred**
+- Supabase Preview branch failure on `_enrich_stmt_staging` RLS — pre-existing, affects all PRs, not blocking production.
+- Say-vs-do discrepancy layer (statements × verified votes → `has_discrepancy`) — next after the citation gate clears.
+- The 45% of target answers with no topic-matched statement needs more drain coverage or wider keyword set.
+
+---
+
 ## 2026-06-13 (statement↔topic indexing + evidence-index citation matcher) — claude/zen-sagan-7ofwx2
 
 **What happened & why**
