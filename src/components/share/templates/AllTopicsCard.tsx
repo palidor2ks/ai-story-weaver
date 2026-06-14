@@ -314,7 +314,7 @@ export const AllTopicsCard = forwardRef<HTMLDivElement, Props>(({ data }, ref) =
                 </div>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {allTopicScores.map((ts) => {
                   const derivedStance = ts.score > 0.5 ? 'Supports' : ts.score < -0.5 ? 'Opposes' : 'Mixed record on';
                   const s = stanceStyle(derivedStance);
@@ -325,21 +325,21 @@ export const AllTopicsCard = forwardRef<HTMLDivElement, Props>(({ data }, ref) =
                   return (
                     <div key={ts.topicId}>
                       {/* Topic name + stance pill */}
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 7, gap: 10 }}>
-                        <span style={{ fontSize: 16, fontWeight: 800, color: FLAG_WHITE, lineHeight: 1.1 }}>{ts.topicName}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5, gap: 10 }}>
+                        <span style={{ fontSize: 15, fontWeight: 800, color: FLAG_WHITE, lineHeight: 1.1 }}>{ts.topicName}</span>
                         <span style={{
                           background: s.pillBg, border: `1.5px solid ${s.pillBorder}`, color: s.pillText,
-                          borderRadius: 8, padding: '3px 12px', fontSize: 12, fontWeight: 800, letterSpacing: 0.2,
+                          borderRadius: 8, padding: '3px 10px', fontSize: 11, fontWeight: 800, letterSpacing: 0.2,
                           whiteSpace: 'nowrap' as const, flexShrink: 0,
                         }}>{s.symbol} {derivedStance}</span>
                       </div>
                       {/* Mini spectrum bar */}
-                      <div style={{ position: 'relative', height: 30, marginBottom: 0 }}>
-                        <div style={{ position: 'absolute', left: 0, right: 0, top: 9, height: 12, borderRadius: 999, background: 'linear-gradient(90deg, hsl(214 89% 56%) 0%, hsl(270 72% 66%) 50%, hsl(0 76% 52%) 100%)', opacity: 0.85 }} />
-                        <div style={{ position: 'absolute', left: '50%', top: 4, width: 1.5, height: 22, background: `${FLAG_WHITE}35`, transform: 'translateX(-50%)' }} />
-                        <div style={{ position: 'absolute', left: `${topicPct}%`, top: 3, transform: 'translateX(-50%)', width: 24, height: 24, borderRadius: '50%', border: `3px solid ${FLAG_WHITE}`, background: dotColor, boxShadow: `0 0 0 2px ${dotColor}55, 0 3px 8px rgba(0,0,0,0.4)` }} />
+                      <div style={{ position: 'relative', height: 24, marginBottom: 0 }}>
+                        <div style={{ position: 'absolute', left: 0, right: 0, top: 6, height: 11, borderRadius: 999, background: 'linear-gradient(90deg, hsl(214 89% 56%) 0%, hsl(270 72% 66%) 50%, hsl(0 76% 52%) 100%)', opacity: 0.85 }} />
+                        <div style={{ position: 'absolute', left: '50%', top: 2, width: 1.5, height: 19, background: `${FLAG_WHITE}35`, transform: 'translateX(-50%)' }} />
+                        <div style={{ position: 'absolute', left: `${topicPct}%`, top: 0, transform: 'translateX(-50%)', width: 22, height: 22, borderRadius: '50%', border: `3px solid ${FLAG_WHITE}`, background: dotColor, boxShadow: `0 0 0 2px ${dotColor}55, 0 2px 6px rgba(0,0,0,0.4)` }} />
                         {scoreCode && (
-                          <div style={{ position: 'absolute', top: -14, left: `${labelLeft}%`, transform: 'translateX(-50%)', fontSize: 11, fontWeight: 900, color: ts.score < 0 ? 'hsl(214 89% 75%)' : 'hsl(0 76% 75%)', letterSpacing: 0.3, whiteSpace: 'nowrap' as const }}>{scoreCode}</div>
+                          <div style={{ position: 'absolute', top: -12, left: `${labelLeft}%`, transform: 'translateX(-50%)', fontSize: 10, fontWeight: 900, color: ts.score < 0 ? 'hsl(214 89% 75%)' : 'hsl(0 76% 75%)', letterSpacing: 0.3, whiteSpace: 'nowrap' as const }}>{scoreCode}</div>
                         )}
                       </div>
                     </div>
