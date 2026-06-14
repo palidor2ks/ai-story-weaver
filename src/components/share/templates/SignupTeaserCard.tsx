@@ -27,11 +27,41 @@ const fmtMoney = (n?: number | null) => {
 
 const truncate = (s: string, max = 28) => (s.length > max ? s.slice(0, max - 1) + '…' : s);
 
-const fitDonorFontSize = (name: string) => {
-  if (name.length > 26) return 11;
-  if (name.length > 18) return 13;
-  return 15;
+const causeBadgeStyle = (stance?: string | null) => {
+  const normalized = (stance ?? '').toLowerCase();
+  if (normalized === 'pro') return {
+    border: '1px solid hsl(142 72% 56% / 0.6)',
+    color: 'hsl(142 76% 82%)',
+    background: 'hsl(142 72% 35% / 0.18)',
+  };
+  if (normalized === 'anti') return {
+    border: '1px solid hsl(348 84% 60% / 0.6)',
+    color: 'hsl(348 90% 84%)',
+    background: 'hsl(348 84% 45% / 0.18)',
+  };
+  return {
+    border: '1px solid hsl(38 92% 58% / 0.65)',
+    color: 'hsl(45 96% 82%)',
+    background: 'hsl(38 92% 45% / 0.18)',
+  };
 };
+
+const fitNameFontSize = (name: string, baseSize: number, minSize: number) => {
+  const length = name.trim().length;
+  if (length >= 58) return minSize;
+  if (length >= 46) return minSize + 1;
+  if (length >= 34) return minSize + 2;
+  return baseSize;
+};
+
+const fittedNameStyle = {
+  display: '-webkit-box',
+  WebkitBoxOrient: 'vertical',
+  WebkitLineClamp: 2,
+  overflow: 'hidden',
+  overflowWrap: 'anywhere',
+  wordBreak: 'break-word',
+} as const;
 
 const LockedRow = ({ label = 'Sign up to reveal', opacity = 1 }: { label?: string; opacity?: number }) => (
   <div style={{ opacity }}>
@@ -167,33 +197,48 @@ export const SignupTeaserCard = forwardRef<HTMLDivElement, Props>(({ data }, ref
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
                   {donors.map((d, i) => (
                     <div key={`donor-${i}`} style={{
-                      border: `2px solid ${FLAG_WHITE}18`,
+                      border: `2px solid ${FLAG_WHITE}`,
                       borderRadius: 12,
-                      padding: '12px 14px',
+                      padding: '10px 12px',
                       background: PANEL_BG,
                     }}>
                       <div style={{
-                        fontSize: fitDonorFontSize(d.name),
+                        ...fittedNameStyle,
+                        fontSize: fitNameFontSize(d.name, 14, 10),
                         fontWeight: 700,
                         color: FLAG_WHITE,
-                        lineHeight: 1.25,
-                        marginBottom: 6,
-                        minHeight: 38,
+                        lineHeight: 1.15,
+                        marginBottom: 4,
+                        minHeight: 34,
                       }}>
-                        {truncate(d.name, 30)}
+                        {d.name}
                       </div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: FLAG_WHITE }}>
+                        {fmtMoney(d.amount)}
+                      </div>
+                      {d.viaEarmarks && (
+                        <div style={{
+                          fontSize: 11, color: MUTED, fontWeight: 800,
+                          letterSpacing: 0.6, textTransform: 'uppercase' as const, marginTop: 2,
+                        }}>
+                          by or through
+                        </div>
+                      )}
                       {d.primaryCause && (
                         <div style={{
-                          fontSize: 10, color: MUTED, fontWeight: 700,
+                          marginTop: 8,
+                          display: 'inline-flex', alignItems: 'center',
+                          maxWidth: '100%',
+                          ...causeBadgeStyle(d.primaryCauseStance),
+                          borderRadius: 999,
+                          padding: '4px 8px',
+                          fontSize: 11, fontWeight: 800,
+                          letterSpacing: 0.5,
                           textTransform: 'uppercase' as const,
-                          letterSpacing: 0.5, marginBottom: 6,
                         }}>
                           {truncate(d.primaryCause, 18)}
                         </div>
                       )}
-                      <div style={{ fontSize: 22, fontWeight: 900, color: FLAG_WHITE, letterSpacing: -0.5 }}>
-                        {fmtMoney(d.amount)}
-                      </div>
                     </div>
                   ))}
                 </div>
