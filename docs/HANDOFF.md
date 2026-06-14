@@ -27,6 +27,30 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-14 (task-tier agents for auto model+effort routing) — claude/optimistic-allen-mn0nc9
+
+**What happened & why**
+Owner asked to stop manually choosing model and effort level for each task. Created three new
+**doer agents** in `.claude/agents/` that pre-bake the right model and scope for common task
+shapes: `quick-fix` (haiku, ~10 tool calls — typos/one-liners), `build` (sonnet, ~30 — standard
+features/bugs), `architect` (opus, ~40 — cross-cutting refactors/design). The existing four
+review agents are unchanged (read-only quality gates). PR #374 merged to main.
+
+**State** (verified)
+CI passed on PR #374 (Typecheck, Test, Lint, Build, Lockfile guard, GitGuardian). No code
+changes — only `.md` agent definitions — so no runtime risk. NOT verified: actually invoking
+each agent in a live session to confirm model routing works as expected.
+
+**Next**
+Eyeball the stat card via the profile Share button on `/candidate/E000297` (AIPAC $145K,
+"by or through" label, no ActBlue) — carried from the previous session's Next.
+
+**Deferred**
+- 'All cycles' mode earmark parity (carried from prior session).
+- Verifying each new agent actually runs on its declared model tier in practice.
+
+---
+
 ## 2026-06-12 (follow-up: earmark orgs rank on the stat card) — claude/amazing-bohr-nwzgsv
 
 **What happened & why**
