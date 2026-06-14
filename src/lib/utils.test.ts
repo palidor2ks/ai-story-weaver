@@ -31,6 +31,10 @@ test('formatCandidateName: proper-case names pass through unchanged', () => {
   expect(formatCandidateName('Donald J. Trump')).toBe('Donald J. Trump');
 });
 
+test('formatCandidateName: double comma (FEC data artifact)', () => {
+  expect(formatCandidateName('BRINK,, BRIDGET')).toBe('Bridget Brink');
+});
+
 test('formatCandidateName: null/empty', () => {
   expect(formatCandidateName(null)).toBe('');
   expect(formatCandidateName(undefined)).toBe('');
