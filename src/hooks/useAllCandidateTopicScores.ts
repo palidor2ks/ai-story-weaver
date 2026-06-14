@@ -7,6 +7,12 @@ export interface TopicScore {
   score: number;
 }
 
+interface RawTopicScoreRow {
+  topic_id: string;
+  score: number;
+  topics: { name: string } | null;
+}
+
 export function useAllCandidateTopicScores(
   candidateId: string | null | undefined,
   enabled = true,
@@ -22,11 +28,14 @@ export function useAllCandidateTopicScores(
         .eq('candidate_id', candidateId!);
       if (error) throw error;
       return (data ?? [])
-        .map((r: any) => ({
-          topicId: r.topic_id as string,
-          topicName: (r.topics as { name: string } | null)?.name ?? r.topic_id,
-          score: Number(r.score),
-        }))
+        .map((r) => {
+          const row = r as unknown as RawTopicScoreRow;
+          return {
+            topicId: row.topic_id,
+            topicName: row.topics?.name ?? row.topic_id,
+            score: Number(row.score),
+          };
+        })
         .filter((t) => Number.isFinite(t.score))
         .sort((a, b) => Math.abs(b.score) - Math.abs(a.score));
     },
