@@ -72,6 +72,31 @@ ETL creates a new House row for a Bioguide record keyed to a Senate FEC ID.
 
 ---
 
+## 2026-06-14 (merge-conflict unblock: PR #372 merged) — claude/amazing-bohr-nwzgsv
+
+**What happened & why**
+PR #372 (earmark orgs on stat card + as-applied conduit backfill record) had a "Conflicts must
+be resolved" block after PRs #370 and #371 landed on main while the branch was open — both
+sides added entries at the top of HANDOFF.md. Resolved via a normal merge commit keeping all
+three HANDOFF entries in reverse-chronological order (stat-card follow-up, quota discipline,
+backfill apply). PR #372 merged cleanly; Supabase preview ⚠️ on migrations was a preview-only
+out-of-order apply, not a code defect.
+
+**State** (verified)
+PR #372 merged to main. No new code in this session — conflict resolution only. NOT verified:
+the rendered stat card in a browser (open Share on /candidate/E000297, confirm AIPAC $145K
+"by or through" at #1, no ActBlue).
+
+**Next**
+Eyeball the stat card via the Share button on /candidate/E000297: AIPAC ≈ $145K with the
+"by or through" label at #1, no ActBlue row.
+
+**Deferred**
+(carried) State-finance conduit residue (NJ/FL/NY importers); member-level earmark drilldown;
+alias-aware RPC grouping; security advisors check post-schema-change.
+
+---
+
 ## 2026-06-13 (SignupTeaserCard full redesign — no amber, grid donors, prominent raised) — claude/social-signup-post-design-gzuvjm
 
 **What happened & why**
