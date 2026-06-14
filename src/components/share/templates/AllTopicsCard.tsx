@@ -19,6 +19,16 @@ const VIOLET = '#7C3AED';
 const VIOLET_LIT = '#A78BFA';
 const VIOLET_GLOW = '#C4B5FD';
 
+// Short descriptions for the standard 6 federal topics (keyed by topic ID)
+const TOPIC_DESC: Record<string, string> = {
+  'economy-work': 'Taxes, trade, jobs & fiscal policy',
+  'health-safety-net': 'Healthcare, education & social programs',
+  'environment-energy': 'Climate, clean energy & natural resources',
+  'national-security-borders': 'Defense, immigration & foreign policy',
+  'rights-justice': 'Civil rights, courts & law enforcement',
+  'government-democracy': 'Voting rights, elections & governance',
+};
+
 const partyColor = (party?: string) => {
   const p = (party ?? '').toLowerCase();
   if (p.startsWith('dem')) return 'hsl(214 89% 52%)';
@@ -66,11 +76,11 @@ const stanceStyle = (stance: string) => {
 
 const SkeletonRow = () => (
   <div style={{ marginBottom: 4 }}>
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 7 }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}>
       <div style={{ height: 14, borderRadius: 999, background: `${FLAG_WHITE}15`, width: '38%' }} />
       <div style={{ width: 80, height: 22, borderRadius: 8, background: `${FLAG_WHITE}10` }} />
     </div>
-    <div style={{ height: 12, borderRadius: 999, background: `${FLAG_WHITE}10`, marginBottom: 5 }} />
+    <div style={{ height: 12, borderRadius: 999, background: `${FLAG_WHITE}10`, marginBottom: 3 }} />
   </div>
 );
 
@@ -117,24 +127,23 @@ export const AllTopicsCard = forwardRef<HTMLDivElement, Props>(({ data }, ref) =
 
         <div style={{
           position: 'relative', height: '100%',
-          padding: 28, paddingBottom: 28,
+          padding: 22,
           display: 'flex', flexDirection: 'column', gap: 0,
         }}>
 
           {/* ── Header ── */}
           <div style={{
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            marginBottom: 22,
+            marginBottom: 14,
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <PulseMark size={42} />
               <span style={{ fontWeight: 800, fontSize: 25, letterSpacing: -0.3 }}>PoliPulse</span>
             </div>
 
-            {/* Candidate photo — shown between logo and badge */}
             {data.candidateImage ? (
               <div style={{
-                width: 68, height: 68, borderRadius: '50%',
+                width: 90, height: 90, borderRadius: '50%',
                 border: `3px solid ${FLAG_WHITE}`,
                 overflow: 'hidden',
                 flexShrink: 0,
@@ -148,12 +157,12 @@ export const AllTopicsCard = forwardRef<HTMLDivElement, Props>(({ data }, ref) =
               </div>
             ) : (
               <div style={{
-                width: 68, height: 68, borderRadius: '50%',
+                width: 90, height: 90, borderRadius: '50%',
                 border: `3px solid ${FLAG_WHITE}`,
                 background: `${VIOLET}40`,
                 boxShadow: `0 0 0 2px ${VIOLET}88`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 26, fontWeight: 900, color: VIOLET_GLOW, flexShrink: 0,
+                fontSize: 32, fontWeight: 900, color: VIOLET_GLOW, flexShrink: 0,
               }}>
                 {lastName[0]?.toUpperCase() ?? '?'}
               </div>
@@ -175,8 +184,8 @@ export const AllTopicsCard = forwardRef<HTMLDivElement, Props>(({ data }, ref) =
           </div>
 
           {/* ── Candidate identity ── */}
-          <div style={{ marginBottom: 18 }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' as const, marginBottom: 8 }}>
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' as const, marginBottom: 6 }}>
               <span style={{ fontSize: heroFontSize, fontWeight: 900, letterSpacing: -2, lineHeight: 1.02 }}>
                 {displayName}'s
               </span>
@@ -185,7 +194,7 @@ export const AllTopicsCard = forwardRef<HTMLDivElement, Props>(({ data }, ref) =
               </span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' as const }}>
-              <span style={{ fontSize: 18, color: MUTED, fontWeight: 500 }}>{officeLine}</span>
+              <span style={{ fontSize: 17, color: MUTED, fontWeight: 500 }}>{officeLine}</span>
               {party && (
                 <span style={{
                   background: `${partyColor(party)}22`,
@@ -205,18 +214,17 @@ export const AllTopicsCard = forwardRef<HTMLDivElement, Props>(({ data }, ref) =
             background: PANEL_BG,
             border: `2px solid ${FLAG_WHITE}22`,
             borderRadius: 18,
-            padding: '16px 20px',
-            marginBottom: 18,
+            padding: '12px 18px',
+            marginBottom: 12,
           }}>
-            {/* Score row — pulse score badge always visible */}
             <div style={{
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-              marginBottom: 14,
+              marginBottom: 12,
             }}>
               <div>
                 <div style={{
                   fontSize: 11, color: MUTED, letterSpacing: 2.5,
-                  textTransform: 'uppercase' as const, fontWeight: 700, marginBottom: 4,
+                  textTransform: 'uppercase' as const, fontWeight: 700, marginBottom: 3,
                 }}>
                   Voting record ideology
                 </div>
@@ -238,13 +246,12 @@ export const AllTopicsCard = forwardRef<HTMLDivElement, Props>(({ data }, ref) =
                 <div style={{ fontSize: 10, color: MUTED, letterSpacing: 2, textTransform: 'uppercase' as const, fontWeight: 700, marginBottom: 2 }}>
                   Pulse Score
                 </div>
-                <div style={{ fontSize: pulseScore ? 26 : 16, fontWeight: 900, color: pulseScore ? VIOLET_GLOW : MUTED, letterSpacing: -0.5 }}>
+                <div style={{ fontSize: pulseScore ? 34 : 18, fontWeight: 900, color: pulseScore ? VIOLET_GLOW : MUTED, letterSpacing: -0.5 }}>
                   {pulseScore ?? '—'}
                 </div>
               </div>
             </div>
 
-            {/* Spectrum bar */}
             <div style={{ position: 'relative', height: 42, margin: '0 2px' }}>
               <div style={{
                 position: 'absolute', left: 0, right: 0, top: 12,
@@ -279,16 +286,16 @@ export const AllTopicsCard = forwardRef<HTMLDivElement, Props>(({ data }, ref) =
           </div>
 
           {/* ── All Topics section ── */}
-          <div style={{ flex: 1, marginBottom: 16, overflow: 'hidden' }}>
+          <div style={{ flex: 1, overflow: 'hidden' }}>
             <div style={{
               fontSize: 11, color: MUTED, letterSpacing: 2.5,
-              textTransform: 'uppercase' as const, fontWeight: 700, marginBottom: 12,
+              textTransform: 'uppercase' as const, fontWeight: 700, marginBottom: 10,
             }}>
               On the issues
             </div>
 
             {allTopicScores === undefined ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <SkeletonRow />
                 <SkeletonRow />
                 <SkeletonRow />
@@ -322,19 +329,25 @@ export const AllTopicsCard = forwardRef<HTMLDivElement, Props>(({ data }, ref) =
                   const scoreCode = formatScore(ts.score);
                   const labelLeft = Math.max(8, Math.min(88, topicPct));
                   const dotColor = ts.score < -0.5 ? 'hsl(214 89% 52%)' : ts.score > 0.5 ? 'hsl(0 76% 52%)' : 'hsl(270 72% 60%)';
+                  const desc = TOPIC_DESC[ts.topicId];
                   return (
                     <div key={ts.topicId}>
                       {/* Topic name + stance pill */}
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5, gap: 10 }}>
-                        <span style={{ fontSize: 15, fontWeight: 800, color: FLAG_WHITE, lineHeight: 1.1 }}>{ts.topicName}</span>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 2, gap: 10 }}>
+                        <div>
+                          <div style={{ fontSize: 15, fontWeight: 800, color: FLAG_WHITE, lineHeight: 1.1 }}>{ts.topicName}</div>
+                          {desc && (
+                            <div style={{ fontSize: 11, color: MUTED, fontWeight: 500, lineHeight: 1.3, marginTop: 1 }}>{desc}</div>
+                          )}
+                        </div>
                         <span style={{
                           background: s.pillBg, border: `1.5px solid ${s.pillBorder}`, color: s.pillText,
                           borderRadius: 8, padding: '3px 10px', fontSize: 11, fontWeight: 800, letterSpacing: 0.2,
-                          whiteSpace: 'nowrap' as const, flexShrink: 0,
+                          whiteSpace: 'nowrap' as const, flexShrink: 0, marginTop: 1,
                         }}>{s.symbol} {derivedStance}</span>
                       </div>
                       {/* Mini spectrum bar */}
-                      <div style={{ position: 'relative', height: 24, marginBottom: 0 }}>
+                      <div style={{ position: 'relative', height: 24, marginTop: 4 }}>
                         <div style={{ position: 'absolute', left: 0, right: 0, top: 6, height: 11, borderRadius: 999, background: 'linear-gradient(90deg, hsl(214 89% 56%) 0%, hsl(270 72% 66%) 50%, hsl(0 76% 52%) 100%)', opacity: 0.85 }} />
                         <div style={{ position: 'absolute', left: '50%', top: 2, width: 1.5, height: 19, background: `${FLAG_WHITE}35`, transform: 'translateX(-50%)' }} />
                         <div style={{ position: 'absolute', left: `${topicPct}%`, top: 0, transform: 'translateX(-50%)', width: 22, height: 22, borderRadius: '50%', border: `3px solid ${FLAG_WHITE}`, background: dotColor, boxShadow: `0 0 0 2px ${dotColor}55, 0 2px 6px rgba(0,0,0,0.4)` }} />
@@ -349,38 +362,10 @@ export const AllTopicsCard = forwardRef<HTMLDivElement, Props>(({ data }, ref) =
             )}
           </div>
 
-          {/* ── CTA banner ── */}
-          <div style={{
-            background: `linear-gradient(90deg, ${VIOLET}D8, #5B21B6D8)`,
-            borderRadius: 16,
-            padding: '16px 24px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 16,
-          }}>
-            <div>
-              <div style={{ fontSize: 20, fontWeight: 900, color: FLAG_WHITE, letterSpacing: -0.3, lineHeight: 1.1 }}>
-                Do you agree with their record?
-              </div>
-              <div style={{ fontSize: 13, color: VIOLET_GLOW, marginTop: 3, fontWeight: 600 }}>
-                2-min quiz · free · polipulseapp.com
-              </div>
-            </div>
-            <div style={{
-              background: FLAG_WHITE, color: VIOLET,
-              borderRadius: 10, padding: '10px 20px',
-              fontSize: 16, fontWeight: 900, letterSpacing: 0.3,
-              whiteSpace: 'nowrap' as const, flexShrink: 0,
-            }}>
-              Find My Match →
-            </div>
-          </div>
-
           {/* ── Footer ── */}
           <div style={{
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            marginTop: 12, fontSize: 13, color: MUTED,
+            marginTop: 10, fontSize: 13, color: MUTED,
           }}>
             <span>Based on voting record &amp; FEC data</span>
             <span style={{ fontWeight: 700, color: FLAG_WHITE }}>{data.brandHost}</span>
