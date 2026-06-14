@@ -27,6 +27,53 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-14 (PolicyPositions + AllTopics card layout & locked-row fixes) — claude/social-signup-post-design-gzuvjm
+
+**What happened & why**
+Continuation of the social-share-card polish. Two cards refined off user screenshots
+(Baumgartner, WA):
+
+1. **PolicyPositionsCard** (PRs #402, #403)
+   - Rep photo 68→90px, pulse score 26→34px — user wanted the identity/score to "use the
+     space we have".
+   - Tightened spacing throughout (inner pad 28→22, reduced margins) because the CTA banner was
+     being pushed off the bottom of the 1080px card.
+   - **Locked rows**: previously placeholder shimmers with no topic name. Now show the real name
+     of topics NOT in the 4 visible AI positions, dimmed at 40%, with "Sign up to unlock".
+     First tries `allTopicScores`; PR #403 adds a fallback to the 6 standard federal topic names
+     so locked rows always have a name even when a candidate has <6 scored topics (Baumgartner
+     only had 4 — the original `.slice(4,6)` returned empty, causing blank bars).
+   - `SocialPosts.tsx` now calls `useAllCandidateTopicScores` and threads `allTopicScores` into
+     the card.
+
+2. **AllTopicsCard** (PR #402) — the rep-profile-page "all topics" share card
+   - Removed the CTA box entirely (user: "no need to have this box on the rep profile card").
+   - Added a short description line under each topic name via a hardcoded `TOPIC_DESC` map keyed
+     by topicId (topics table has no description column — only name/icon/scope/weight).
+   - Photo 90px + pulse score 34px to match PolicyPositionsCard.
+
+**State** (verified)
+- PRs #402 and #403 both merged to main ✓
+- `tsc --noEmit` clean before each push ✓
+- CI green on both PRs (Build/Lint/Typecheck/Test) ✓
+- **Not verified**: visual smoke test in admin panel after merge. The Baumgartner locked-row
+  fix (#403) was a direct response to a screenshot but has NOT been re-screenshotted post-merge.
+
+**Next**
+Admin → Social Posts → Baumgartner (WA) → re-render "Policy Positions" → confirm the bottom two
+locked rows now read real federal topic names (e.g. "Economy & Work", "Constitution &
+Democracy") with "Sign up to unlock", and the CTA banner + footer are fully visible.
+
+**Deferred**
+- TOPIC_DESC map only covers the 6 standard federal topics by ID; local/state topics or any
+  future topic IDs render with no description line (graceful — just omitted).
+- `candidate_topic_scores` is sparse for some reps (Baumgartner has 4, not 6) — locked-row
+  fallback masks this on the card, but the underlying coverage gap remains.
+- Earlier deferred items still open: "Donor data unavailable" for senators; Senate votes
+  (lis_member_id → bioguide); NDAA/KOSA/Dream Act question mappings.
+
+---
+
 ## 2026-06-13 (SignupTeaserCard full redesign — no amber, grid donors, prominent raised) — claude/social-signup-post-design-gzuvjm
 
 **What happened & why**
