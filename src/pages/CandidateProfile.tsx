@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useCandidate, useCandidateDonors, useCandidateVotes, calculateMatchScore } from '@/hooks/useCandidates';
 import { useCandidateEarmarkRollups } from '@/hooks/useCandidateEarmarkRollups';
 import { isConduitDonor } from '@/lib/conduits';
-import { buildEarmarkRollupIndex, earmarkRollupKey, matchEarmarkRollupKey } from '@/lib/earmarkRollups';
+import { buildEarmarkRollupIndex, earmarkRollupKey, matchEarmarkRollupKey, normalizeOrgKey } from '@/lib/earmarkRollups';
 import { useProfile, useUserTopicScores } from '@/hooks/useProfile';
 import { useRepresentativeDetails } from '@/hooks/useRepresentativeDetails';
 import { useAdminRole } from '@/hooks/useAdminRole';
@@ -1088,20 +1088,58 @@ export const CandidateProfile = () => {
                         // Combined "by or through" entries for earmark-program orgs.
                         // Ranked by direct + routed; the breakdown is stated on the
                         // card so the overlap with individual donors is explicit.
+                        // Group by org across cycles so AIPAC 2024 + AIPAC 2026 appear
+                        // as one card when showing "all" cycles.
+                        const earmarkByOrg = new Map<string, {
+                          r: typeof earmarkRollups[0];
+                          direct_amount: number;
+                          direct_count: number;
+                          routed_amount: number;
+                          routed_count: number;
+                          cycles: string[];
+                        }>();
                         earmarkRollups.forEach(r => {
-                          const rollupKey = earmarkRollupKey(r.org_label, r.cycle);
-                          const match = rollupDonorMatch.get(rollupKey);
+                          const orgKey = normalizeOrgKey(r.org_label);
+                          if (earmarkByOrg.has(orgKey)) {
+                            const existing = earmarkByOrg.get(orgKey)!;
+                            existing.direct_amount += r.direct_amount;
+                            existing.direct_count += r.direct_count;
+                            existing.routed_amount += r.routed_amount;
+                            existing.routed_count += r.routed_count;
+                            existing.cycles.push(r.cycle);
+                          } else {
+                            earmarkByOrg.set(orgKey, {
+                              r,
+                              direct_amount: r.direct_amount,
+                              direct_count: r.direct_count,
+                              routed_amount: r.routed_amount,
+                              routed_count: r.routed_count,
+                              cycles: [r.cycle],
+                            });
+                          }
+                        });
+                        earmarkByOrg.forEach(({ r, direct_amount, direct_count: _dc, routed_amount, routed_count, cycles }) => {
+                          // Find a donor link for any cycle of this org (largest amount first)
+                          let match: { donorId: string; displayName: string } | undefined;
+                          for (const c of cycles) {
+                            const m = rollupDonorMatch.get(earmarkRollupKey(r.org_label, c));
+                            if (m) { match = m; break; }
+                          }
                           const orgName = match?.displayName || r.org_label;
-                          const combined = r.direct_amount + r.routed_amount;
+                          const combined = direct_amount + routed_amount;
+                          const cycleNums = cycles.map(Number).filter(Boolean).sort((a, b) => a - b);
+                          const cycleLabel = cycleNums.length > 1
+                            ? `${cycleNums[0]}–${cycleNums[cycleNums.length - 1]}`
+                            : cycles[0];
                           allSources.push({
-                            id: `earmark|${rollupKey}`,
+                            id: `earmark|${normalizeOrgKey(r.org_label)}`,
                             name: orgName,
                             amount: combined,
                             sourceType: 'earmark_org',
                             badgeLabel: 'Earmark program',
                             badgeStyle: 'border-amber-500/50 text-amber-600 bg-amber-500/10',
-                            description: `${formatCurrency(r.direct_amount)} given directly + ${formatCurrency(r.routed_amount)} earmarked through ${orgName} by its donors (${r.routed_count.toLocaleString()} contributions). Those donors are also listed individually — earmarked dollars are never counted twice.`,
-                            subLabel: `${r.cycle} · by or through`,
+                            description: `${formatCurrency(direct_amount)} given directly + ${formatCurrency(routed_amount)} earmarked through ${orgName} by its donors (${routed_count.toLocaleString()} contributions). Those donors are also listed individually — earmarked dollars are never counted twice.`,
+                            subLabel: `${cycleLabel} · by or through`,
                             searchText: [orgName, r.org_label, 'earmark', 'by or through', r.org_type].join(' ').toLowerCase(),
                             linkTo: match ? `/donor/${match.donorId}` : undefined,
                             donorType: r.org_type,
