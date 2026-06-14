@@ -27,6 +27,32 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-14 (candidate name normalisation) — claude/stoic-curie-kczyff
+
+**What happened & why**
+User noticed candidate names on the /candidates page were displaying in FEC raw format — "ADAMS, GEORGE", "ADEIMY, DEBORAH", "ADAMS-FALCONER, THOMAS MICHAEL JR." — instead of proper "First Last" format. Root cause: names from the FEC database are stored as all-caps "LAST, FIRST MIDDLE SUFFIX" strings, with no formatting layer between the DB and the UI.
+
+Two PRs landed:
+1. **`formatCandidateName()` utility** (PR #396): Added to `src/lib/utils.ts`. Detects all-caps strings, converts "LAST, FIRST" to "FIRST LAST", applies title-case with Mc-prefix handling, hyphenated names, apostrophes (O'Brien), and suffixes (Jr./Sr.). Names already in proper mixed case pass through unchanged. Applied at the data layer in `useCandidates.ts` at all six `name:` assignment sites — every consumer gets clean names with no per-component changes.
+2. **Double-comma edge case** (PR #398): After #396 merged, user spotted ", Bridget Brink" as the first card. DB had `"BRINK,, BRIDGET"` (double comma — FEC data artifact), causing `formatCandidateName` to treat `", BRIDGET"` as the first-name portion. Fixed by stripping leading commas/spaces from the first-name slice. Also corrected the one bad DB record directly in production (`H6MI07256`: `BRINK,, BRIDGET` → `BRINK, BRIDGET`).
+
+**State** (verified)
+- Both PRs merged to main; all CI checks green.
+- `bun test src/lib/utils.test.ts` — 8 tests pass locally (covers FEC format, suffixes, hyphens, Mc prefix, apostrophes, double comma, pass-through, null/empty).
+- TypeScript (`tsc --noEmit`) clean.
+- DB record for Bridget Brink verified corrected in production.
+- Live UI not manually verified (site redeploys on merge via Lovable integration).
+
+**Next**
+Spot-check a handful of candidates with known FEC-style names (e.g. McConnell, O'Brien-pattern names) in the live UI to confirm the formatter handles them correctly.
+
+**Deferred**
+- Other earmark-program orgs (ACEC PAC, MORPAC, etc.) may still need alias creation for spelling-variant consolidation (carried from prior session).
+- `useCandidateShareCardData.ts` earmark rollup cause-badge fix still deferred (from prior session).
+- Admin pages fetch candidate names via their own queries (not through `useCandidates`) — names in admin UI are still raw FEC format, but that's acceptable for admin context.
+
+---
+
 ## 2026-06-13 (earmark rollup alias consolidation + cause badge) — claude/affectionate-sagan-iroj5s
 
 **What happened & why**
