@@ -40,18 +40,29 @@ const scoreToPercent = (score?: number | null) => {
   return ((Math.max(-10, Math.min(10, score)) + 10) / 20) * 100;
 };
 
-const ideologyLabel = (score?: number | null) => {
-  if (score == null || !Number.isFinite(score)) return 'Not yet scored';
-  if (score <= -7) return 'Strongly Progressive';
-  if (score <= -4) return 'Progressive';
-  if (score <= -1.5) return 'Center-Left';
-  if (score < 1.5) return 'Moderate / Centrist';
-  if (score < 4) return 'Center-Right';
-  if (score < 7) return 'Conservative';
-  return 'Strongly Conservative';
-};
-
 const truncate = (s: string, max = 22) => (s.length > max ? s.slice(0, max - 1) + '…' : s);
+
+const stanceStyle = (stance: string) => {
+  const s = stance.toLowerCase();
+  if (s.startsWith('sup')) return {
+    pillBg: 'hsl(142 72% 35% / 0.2)',
+    pillBorder: 'hsl(142 72% 56% / 0.45)',
+    pillText: 'hsl(142 76% 72%)',
+    symbol: '✓',
+  };
+  if (s.startsWith('opp')) return {
+    pillBg: 'hsl(0 76% 46% / 0.18)',
+    pillBorder: 'hsl(0 76% 56% / 0.45)',
+    pillText: 'hsl(0 80% 78%)',
+    symbol: '✕',
+  };
+  return {
+    pillBg: 'hsl(38 92% 45% / 0.18)',
+    pillBorder: 'hsl(38 92% 58% / 0.45)',
+    pillText: 'hsl(45 96% 78%)',
+    symbol: '~',
+  };
+};
 
 const SkeletonRow = () => (
   <div style={{ marginBottom: 4 }}>
@@ -60,30 +71,10 @@ const SkeletonRow = () => (
       <div style={{ width: 80, height: 22, borderRadius: 8, background: `${FLAG_WHITE}10` }} />
     </div>
     <div style={{ height: 12, borderRadius: 999, background: `${FLAG_WHITE}10`, marginBottom: 5 }} />
-    <div style={{ height: 10, borderRadius: 999, background: `${FLAG_WHITE}08`, width: '65%' }} />
   </div>
 );
 
-const LockedRow = ({ opacity = 1 }: { opacity?: number }) => (
-  <div style={{ opacity, marginTop: 4 }}>
-    <div style={{
-      height: 46,
-      borderRadius: 10,
-      background: `${FLAG_NAVY_DEEP}CC`,
-      border: `1.5px solid ${FLAG_WHITE}18`,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      gap: 10,
-    }}>
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-      </svg>
-      <span style={{ fontSize: 13, fontWeight: 700, color: MUTED, letterSpacing: 0.3 }}>Sign up to see all topics</span>
-    </div>
-  </div>
-);
-
-export const PolicyPositionsCard = forwardRef<HTMLDivElement, Props>(({ data }, ref) => {
+export const AllTopicsCard = forwardRef<HTMLDivElement, Props>(({ data }, ref) => {
   const name = data.candidateName ?? 'This Candidate';
   const lastName = name.split(' ').slice(-1)[0] ?? name;
   const displayName = truncate(name, 28);
@@ -94,7 +85,7 @@ export const PolicyPositionsCard = forwardRef<HTMLDivElement, Props>(({ data }, 
   const hasScore = data.candidateScore != null && Number.isFinite(data.candidateScore);
   const pulseScore = hasScore ? formatScore(data.candidateScore) : null;
   const pulseLabel = hasScore ? getScoreLabelProgCon(data.candidateScore) : 'Not yet scored';
-  const positions = data.aiPositions; // undefined = loading, [] = none found
+  const allTopicScores = data.allTopicScores;
 
   const cardBg = `linear-gradient(160deg, ${FLAG_NAVY_DEEP} 0%, ${FLAG_NAVY} 50%, ${FLAG_RED} 100%)`;
 
@@ -287,8 +278,8 @@ export const PolicyPositionsCard = forwardRef<HTMLDivElement, Props>(({ data }, 
             </div>
           </div>
 
-          {/* ── Positions section ── */}
-          <div style={{ flex: 1, marginBottom: 16 }}>
+          {/* ── All Topics section ── */}
+          <div style={{ flex: 1, marginBottom: 16, overflow: 'hidden' }}>
             <div style={{
               fontSize: 11, color: MUTED, letterSpacing: 2.5,
               textTransform: 'uppercase' as const, fontWeight: 700, marginBottom: 12,
@@ -296,15 +287,14 @@ export const PolicyPositionsCard = forwardRef<HTMLDivElement, Props>(({ data }, 
               On the issues
             </div>
 
-            {positions === undefined ? (
-              // Loading skeleton
+            {allTopicScores === undefined ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <SkeletonRow />
                 <SkeletonRow />
                 <SkeletonRow />
                 <SkeletonRow />
               </div>
-            ) : positions.length === 0 ? (
+            ) : allTopicScores.length === 0 ? (
               <div style={{
                 flex: 1,
                 display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
@@ -325,72 +315,36 @@ export const PolicyPositionsCard = forwardRef<HTMLDivElement, Props>(({ data }, 
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                {positions.map((pos, i) => {
-                  const hasTopicScore = pos.score != null && Number.isFinite(pos.score);
-                  const topicPct = hasTopicScore ? scoreToPercent(pos.score) : 50;
-                  const scoreCode = hasTopicScore ? formatScore(pos.score) : null;
+                {allTopicScores.map((ts) => {
+                  const derivedStance = ts.score > 0.5 ? 'Supports' : ts.score < -0.5 ? 'Opposes' : 'Mixed record on';
+                  const s = stanceStyle(derivedStance);
+                  const topicPct = ((Math.max(-10, Math.min(10, ts.score)) + 10) / 20) * 100;
+                  const scoreCode = formatScore(ts.score);
                   const labelLeft = Math.max(8, Math.min(88, topicPct));
-                  const dotColor = hasTopicScore
-                    ? (pos.score! < -0.5 ? 'hsl(214 89% 52%)' : pos.score! > 0.5 ? 'hsl(0 76% 52%)' : 'hsl(270 72% 60%)')
-                    : MUTED;
+                  const dotColor = ts.score < -0.5 ? 'hsl(214 89% 52%)' : ts.score > 0.5 ? 'hsl(0 76% 52%)' : 'hsl(270 72% 60%)';
                   return (
-                    <div key={i}>
-                      {/* Topic name */}
-                      <div style={{ fontSize: 16, fontWeight: 800, color: FLAG_WHITE, lineHeight: 1.1, marginBottom: 7 }}>
-                        {pos.topic}
+                    <div key={ts.topicId}>
+                      {/* Topic name + stance pill */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 7, gap: 10 }}>
+                        <span style={{ fontSize: 16, fontWeight: 800, color: FLAG_WHITE, lineHeight: 1.1 }}>{ts.topicName}</span>
+                        <span style={{
+                          background: s.pillBg, border: `1.5px solid ${s.pillBorder}`, color: s.pillText,
+                          borderRadius: 8, padding: '3px 12px', fontSize: 12, fontWeight: 800, letterSpacing: 0.2,
+                          whiteSpace: 'nowrap' as const, flexShrink: 0,
+                        }}>{s.symbol} {derivedStance}</span>
                       </div>
                       {/* Mini spectrum bar */}
-                      <div style={{ position: 'relative', height: 30, marginBottom: pos.detail ? 5 : 0 }}>
-                        {/* Track */}
-                        <div style={{
-                          position: 'absolute', left: 0, right: 0, top: 9, height: 12, borderRadius: 999,
-                          background: 'linear-gradient(90deg, hsl(214 89% 56%) 0%, hsl(270 72% 66%) 50%, hsl(0 76% 52%) 100%)',
-                          opacity: 0.85,
-                        }} />
-                        {/* Center tick */}
-                        <div style={{
-                          position: 'absolute', left: '50%', top: 4, width: 1.5, height: 22,
-                          background: `${FLAG_WHITE}35`, transform: 'translateX(-50%)',
-                        }} />
-                        {/* Score dot */}
-                        <div style={{
-                          position: 'absolute',
-                          left: `${topicPct}%`, top: 3,
-                          transform: 'translateX(-50%)',
-                          width: 24, height: 24, borderRadius: '50%',
-                          border: `3px solid ${FLAG_WHITE}`,
-                          background: dotColor,
-                          boxShadow: `0 0 0 2px ${dotColor}55, 0 3px 8px rgba(0,0,0,0.4)`,
-                        }} />
-                        {/* Score code label */}
+                      <div style={{ position: 'relative', height: 30, marginBottom: 0 }}>
+                        <div style={{ position: 'absolute', left: 0, right: 0, top: 9, height: 12, borderRadius: 999, background: 'linear-gradient(90deg, hsl(214 89% 56%) 0%, hsl(270 72% 66%) 50%, hsl(0 76% 52%) 100%)', opacity: 0.85 }} />
+                        <div style={{ position: 'absolute', left: '50%', top: 4, width: 1.5, height: 22, background: `${FLAG_WHITE}35`, transform: 'translateX(-50%)' }} />
+                        <div style={{ position: 'absolute', left: `${topicPct}%`, top: 3, transform: 'translateX(-50%)', width: 24, height: 24, borderRadius: '50%', border: `3px solid ${FLAG_WHITE}`, background: dotColor, boxShadow: `0 0 0 2px ${dotColor}55, 0 3px 8px rgba(0,0,0,0.4)` }} />
                         {scoreCode && (
-                          <div style={{
-                            position: 'absolute', top: -14,
-                            left: `${labelLeft}%`,
-                            transform: 'translateX(-50%)',
-                            fontSize: 11, fontWeight: 900,
-                            color: pos.score! < 0 ? 'hsl(214 89% 75%)' : 'hsl(0 76% 75%)',
-                            letterSpacing: 0.3, whiteSpace: 'nowrap' as const,
-                          }}>
-                            {scoreCode}
-                          </div>
+                          <div style={{ position: 'absolute', top: -14, left: `${labelLeft}%`, transform: 'translateX(-50%)', fontSize: 11, fontWeight: 900, color: ts.score < 0 ? 'hsl(214 89% 75%)' : 'hsl(0 76% 75%)', letterSpacing: 0.3, whiteSpace: 'nowrap' as const }}>{scoreCode}</div>
                         )}
                       </div>
-                      {/* Detail */}
-                      {pos.detail && (
-                        <div style={{ fontSize: 12, color: MUTED, fontWeight: 500, lineHeight: 1.3, marginTop: 2 }}>
-                          {pos.detail}
-                        </div>
-                      )}
                     </div>
                   );
                 })}
-                {positions.length >= 4 && (
-                  <>
-                    <LockedRow />
-                    <LockedRow opacity={0.65} />
-                  </>
-                )}
               </div>
             )}
           </div>
@@ -437,4 +391,4 @@ export const PolicyPositionsCard = forwardRef<HTMLDivElement, Props>(({ data }, 
   );
 });
 
-PolicyPositionsCard.displayName = 'PolicyPositionsCard';
+AllTopicsCard.displayName = 'AllTopicsCard';

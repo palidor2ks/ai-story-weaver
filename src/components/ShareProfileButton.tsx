@@ -24,6 +24,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { choosePrimaryCauseLabel, type CauseDisplayInfo } from '@/lib/committeeCauseDisplay';
 import { useAuth } from '@/context/AuthContext';
 import { normalizeInvokeError } from '@/components/RecipientAIAnalysisDialog';
+import { useAllCandidateTopicScores } from '@/hooks/useAllCandidateTopicScores';
 
 interface TopicComparison {
   topicName: string;
@@ -83,6 +84,7 @@ export const ShareProfileButton = ({
 }: ShareProfileButtonProps) => {
   const [open, setOpen] = useState(false);
   const { user } = useAuth();
+  const { data: allTopicScores } = useAllCandidateTopicScores(candidateId, open);
 
   // Try the provided URL first; fall back to Bioguide for federal IDs (e.g. M001184).
   const candidateImages = useMemo(() => {
@@ -373,6 +375,7 @@ export const ShareProfileButton = ({
           aiGoals: !hasFinanceCardInfo ? aiAnalysis?.goals : undefined,
           aiCauses: !hasFinanceCardInfo ? aiAnalysis?.causes : undefined,
           aiAnalysisLoading: useAIAnalysisForCard && aiAnalysisLoading,
+          allTopicScores: allTopicScores ?? undefined,
         }}
         caption={{
           surface: 'candidate_profile',

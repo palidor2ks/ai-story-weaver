@@ -12,6 +12,7 @@ import { DataCard } from './templates/DataCard';
 import { EditorialCard } from './templates/EditorialCard';
 import { DonorStatsCard } from './templates/DonorStatsCard';
 import { AIAnalysisCard } from './templates/AIAnalysisCard';
+import { AllTopicsCard } from './templates/AllTopicsCard';
 import { CardData, CARD_SIZE } from './templates/types';
 import { copyNodeToClipboard, downloadNode, nodeToBlob, nodeToFile, renderNodeWithQA } from '@/lib/shareImage';
 import { SharePreviewDialog } from './SharePreviewDialog';
@@ -37,6 +38,7 @@ import { logBadgeEvent } from '@/lib/badges';
 const TEMPLATES_BY_KIND = {
   'candidate-alignment': [
     { id: 'stat', label: 'Stat Card', Component: (props: { data: CardData }) => <CandidateStatCard {...props} variant='classic' /> },
+    { id: 'positions', label: 'Policy Positions', Component: (props: { data: CardData }) => <AllTopicsCard {...props} /> },
   ],
   'ai-analysis': [
     { id: 'stat', label: 'Analysis Card', Component: (props: { data: CardData }) => <AIAnalysisCard {...props} /> },
@@ -59,7 +61,7 @@ const TEMPLATES_BY_KIND = {
 } as const;
 
 
-type TemplateId = 'classic' | 'holo' | 'night' | 'stat';
+type TemplateId = 'classic' | 'holo' | 'night' | 'stat' | 'positions';
 
 interface ShareCardModalProps {
   open: boolean;
@@ -144,6 +146,7 @@ export const ShareCardModal = ({
     holo: null,
     night: null,
     stat: null,
+    positions: null,
   });
 
   const defaultBody = useMemo(
