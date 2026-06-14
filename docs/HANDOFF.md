@@ -27,6 +27,51 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-14 (Deborah Ross duplicate candidate merge) — claude/zealous-fermi-d374jk
+
+**What happened & why**
+User noticed two Deborah Ross cards in "All Politicians" search results. Root cause: the FEC
+ETL (around 2026-06-10) auto-created a new candidate row `H0NC02125` from her active House
+committee (C00729277 / "DEBORAH ROSS FOR CONGRESS"), not recognizing she already existed as
+`R000305` (a Bioguide-keyed record tied to her 2016 Senate FEC ID S6NC00266). Result: 208
+donors + 399 contributions lived on the ghost, zero on the canonical.
+
+Fix: used the existing `merge_candidate()` DB function to merge `H0NC02125` into `R000305`.
+Hit a `candidates_person_id_unique` constraint (both rows had distinct person_ids; the
+function tried to repoint H0NC02125's person onto R000305's before deleting it). Workaround:
+NULL'd H0NC02125.person_id first so the person-merge branch was skipped, then re-ran.
+Cleaned up the orphaned person record (028de203...) afterward.
+
+Post-merge state on R000305:
+- 208 donors + 399 contributions moved over
+- 5 committees (House principal + Senate 2016 principal + 3 joint fundraising)
+- H0NC02125 registered in candidate_fec_ids (match_method=merge) so ETL won't recreate it
+- candidate_merge_map entry: H0NC02125 → R000305, status=merged
+
+**State** (verified)
+- Queried prod (ornnzinjrcyigazecctf): H0NC02125 row is gone, R000305 has 208 donors/399
+  contributions/5 committees, candidate_fec_ids and candidate_merge_map entries confirmed.
+- No code or migration files changed — all work was direct DB via MCP.
+- No lint/build/test run (no code changed).
+
+**Next**
+Check if the same bioguide-vs-FEC-ETL duplicate pattern affected other members who ran for
+a different chamber (Senate → House or vice versa) — they'd have the same mismatch where the
+ETL creates a new House row for a Bioguide record keyed to a Senate FEC ID.
+
+**Deferred**
+- The merge_candidate() function has a latent bug: when both candidate rows have distinct
+  non-null person_ids and one is being deleted anyway, the function still tries to UPDATE
+  candidates SET person_id = canonical's person_id WHERE person_id = dup's person_id — which
+  hits the unique constraint. Worth patching: skip the UPDATE for the dup row itself (it's
+  about to be deleted) or SET person_id = NULL on the dup before the repoint.
+- Audit other earmark-program orgs (ACEC PAC, MORPAC, etc.) for spelling variants — carried
+  from prior session.
+- useCandidateShareCardData.ts earmark cause badge fix — carried from prior session.
+- Candidate self-contributions (Line 11D) as self-funding — carried from prior session.
+
+---
+
 ## 2026-06-13 (SignupTeaserCard full redesign — no amber, grid donors, prominent raised) — claude/social-signup-post-design-gzuvjm
 
 **What happened & why**
