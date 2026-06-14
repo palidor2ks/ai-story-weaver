@@ -27,6 +27,41 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-14 (AIPAC duplicate card fix) — claude/aipac-duplicate-display-j0sbyc
+
+**What happened & why**
+User screenshot showed AIPAC appearing twice on Aaron Bean's donor list — one card for 2026
+($40K) and one for 2024 ($21K). Root cause: the earmark rollup RPC returns one row per
+(org, cycle), and the `allSources` rendering loop in `CandidateProfile.tsx` pushed each row
+as a separate card with cycle baked into the `id` and `subLabel`. The stat card (top donors)
+already merged across cycles correctly via a shared agg key, but the full donor list did not.
+
+Fix: added an `earmarkByOrg` grouping step before pushing to `allSources` — rollups with the
+same `normalizeOrgKey(org_label)` are merged (amounts + counts summed). The `subLabel` shows
+a range like `2024–2026 · by or through` when multiple cycles are present. Donor deduplication
+(`rollupDonorMatch`) still uses per-cycle keys and is unaffected. Also added `normalizeOrgKey`
+to the import from `@/lib/earmarkRollups`.
+
+**State** (verified)
+- `bunx tsc --noEmit` passed with no errors.
+- PR #405 opened as draft, CI ran, PR merged to main by user shortly after creation.
+- Manual UI verification not done in this session (no dev server run); the logic change is
+  contained and the TypeScript check is clean.
+
+**Next**
+Check if the same duplicate-card pattern affects any other earmark-program orgs besides AIPAC
+(e.g. MORPAC, ACEC PAC) that have contributions in multiple cycles on the same candidate.
+
+**Deferred**
+- Audit other earmark-program orgs (ACEC PAC, MORPAC, etc.) for spelling variants — carried
+  from prior session.
+- useCandidateShareCardData.ts earmark cause badge fix — carried from prior session.
+- Candidate self-contributions (Line 11D) as self-funding — carried from prior session.
+- The merge_candidate() latent bug (person_id unique constraint) — carried from prior session.
+- Bioguide-vs-FEC-ETL duplicate audit for other chamber-switchers — carried from prior session.
+
+---
+
 ## 2026-06-14 (Deborah Ross duplicate candidate merge) — claude/zealous-fermi-d374jk
 
 **What happened & why**
