@@ -27,6 +27,42 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-14 — claude/serene-albattani-py0xvb
+
+**What happened & why**
+User noticed that the "Attempts" column on the cron health admin panel appeared frozen
+while the "Last run" column kept updating. Investigated and confirmed root cause: the
+`get_cron_job_health()` RPC counted runs using a 7-day sliding window JOIN filter. For
+high-frequency jobs (e.g. `*/3 min`), the count hits a mathematical ceiling (3,360 =
+7×24×60÷3) in steady state — every new run adds one, an equally-old run drops off,
+and the number never moves. `last_run = max(start_time)` kept advancing regardless.
+
+Fix: rewrote the RPC to move the date filter from the JOIN onto per-column FILTER
+clauses. Now returns both `total_runs` (7-day window, still used by the bar chart) and
+`total_runs_alltime` (all-time count, used for the Attempts column). Added
+`total_runs_alltime` to the generated Supabase types and the `CronJobHealth` interface,
+and updated the panel to display `totalRunsAlltime`. Migration applied directly to
+Pulse Dev via MCP. PR #371 merged with all real CI checks green.
+
+**State** (verified)
+Migration applied to Pulse Dev and confirmed returning correct all-time counts via SQL
+(e.g. `fec-candidate-drain` shows 4,453 all-time vs 3,360 7-day). TypeScript clean
+(`tsc --noEmit` no errors on changed files). CI: Typecheck ✅, Build ✅, Lint ✅,
+Test ✅, GitGuardian ✅. Supabase Preview check showed a pre-existing policy conflict
+unrelated to this change. PR #371 merged.
+
+**Next**
+Reload the admin cron health panel to confirm Attempts now shows incrementing all-time
+totals.
+
+**Deferred**
+The pre-existing Supabase Preview branch failure (`CREATE POLICY "Admins can view all
+profiles" already exists`) will block any PR from getting a green preview check until
+fixed — worth a standalone fix. (All prior deferred items from the 2026-06-12 entry
+remain unchanged.)
+
+---
+
 ## 2026-06-12 (quota discipline: why a week of usage died in one night, and the new defaults) — claude/funny-shannon-tfvsg4
 
 **What happened & why**
