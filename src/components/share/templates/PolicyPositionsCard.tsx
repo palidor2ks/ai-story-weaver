@@ -341,12 +341,15 @@ export const PolicyPositionsCard = forwardRef<HTMLDivElement, Props>(({ data }, 
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {positions.map((pos, i) => {
-                  const hasTopicScore = pos.score != null && Number.isFinite(pos.score);
-                  const topicPct = hasTopicScore ? scoreToPercent(pos.score) : 50;
-                  const scoreCode = hasTopicScore ? formatScore(pos.score) : null;
+                  // pos.score is never set by the AI edge function — fall back to the
+                  // i-th allTopicScore (both lists are ordered by strongest opinion first).
+                  const resolvedScore = pos.score ?? data.allTopicScores?.[i]?.score;
+                  const hasTopicScore = resolvedScore != null && Number.isFinite(resolvedScore);
+                  const topicPct = hasTopicScore ? scoreToPercent(resolvedScore) : 50;
+                  const scoreCode = hasTopicScore ? formatScore(resolvedScore) : null;
                   const labelLeft = Math.max(8, Math.min(88, topicPct));
                   const dotColor = hasTopicScore
-                    ? (pos.score! < -0.5 ? 'hsl(214 89% 52%)' : pos.score! > 0.5 ? 'hsl(0 76% 52%)' : 'hsl(270 72% 60%)')
+                    ? (resolvedScore! < -0.5 ? 'hsl(214 89% 52%)' : resolvedScore! > 0.5 ? 'hsl(0 76% 52%)' : 'hsl(270 72% 60%)')
                     : MUTED;
                   return (
                     <div key={i}>
@@ -383,7 +386,7 @@ export const PolicyPositionsCard = forwardRef<HTMLDivElement, Props>(({ data }, 
                             left: `${labelLeft}%`,
                             transform: 'translateX(-50%)',
                             fontSize: 11, fontWeight: 900,
-                            color: pos.score! < 0 ? 'hsl(214 89% 75%)' : 'hsl(0 76% 75%)',
+                            color: (resolvedScore ?? 0) < 0 ? 'hsl(214 89% 75%)' : 'hsl(0 76% 75%)',
                             letterSpacing: 0.3, whiteSpace: 'nowrap' as const,
                           }}>
                             {scoreCode}
