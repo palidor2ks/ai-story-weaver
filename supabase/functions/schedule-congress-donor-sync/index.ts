@@ -113,14 +113,18 @@ serve(async (req) => {
 
     console.log(`[SCHEDULE-CONGRESS-DONOR-SYNC] Found ${candidates.length} candidates to sync for scope=${scope}`);
 
-    // Call sync-all-donors to backfill/refresh these candidates
+    // Call sync-all-donors to backfill/refresh these candidates.
+    // Authenticate as an internal service via x-internal-service-token (the contract
+    // sync-all-donors documents for this caller). Do NOT also send an Authorization
+    // bearer: the gateway rejects an apikey (sb_publishable) + a service-role bearer as
+    // "conflicting API keys". apikey carries the publishable key for gateway routing only.
     const syncUrl = `${supabaseUrl}/functions/v1/sync-all-donors`;
     const resp = await fetch(syncUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${supabaseServiceKey}`,
         'apikey': publishableKey,
+        'x-internal-service-token': supabaseServiceKey,
       },
       body: JSON.stringify({
         cycle,
