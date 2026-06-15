@@ -93,6 +93,17 @@ X/TikTok posting, Remotion social cards, AI-generated analysis. Deferred until t
   *(parked 2026-06-09)*
 
 ## Changelog
+- **2026-06-15 (congress backfill 3rd-layer fix deployed → waiting for verification)** — the
+  `schedule-congress-donor-sync` edge function (created in PR #409) was calling `sync-all-donors`,
+  which **ignores the candidate list and selects tier_2 candidates by oldest `last_donor_sync`**.
+  Result: 115 tier_1 (sitting Congress) stalled committees never got synced; tier_2 drained
+  instead. Root cause: the earlier fixes (#411, #414) resolved conflicting-keys 401s at the
+  protocol level, but didn't catch that the downstream function was re-selecting candidates.
+  **Fix (PR #421, merged)**: `schedule-congress-donor-sync` now calls `fetch-fec-donors` directly
+  for each stalled tier_1 candidate, bypassing `sync-all-donors`. Edge function v31 live on prod.
+  Status: deployed and active; awaiting verification that the next cron tick (every 10 min) drains
+  at least one tier_1 committee. *(Status marker will flip to ✅ once verification confirms the
+  count is dropping.)*
 - **2026-06-15 (cron health audit → two new action items)** — reviewed all 23 cron jobs over
   the last 14 days (2,826+ runs, 1 failure). Found: (1) `refresh-donor-consolidated-daily`
   hit a disk-full error on 2026-06-13 (DB is at 15 GB, `contributions` alone 8.4 GB and
