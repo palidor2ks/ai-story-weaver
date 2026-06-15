@@ -27,6 +27,30 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-15 — Claude agent council expansion
+
+**What happened & why**
+Added the repo-specific Claude agent prompts discussed with the user so future sessions can route
+risky work to narrower reviewers instead of overloading the existing council. The new agents cover
+data validation, ETL/pipeline safety, content provenance, alignment scoring, cron observability,
+and frontend performance/bundle review. `CLAUDE.md` now acts as the routing table and keeps the
+quota rule explicit: use one matching reviewer, not the whole council.
+
+**State** (verified)
+Docs-only/config-only change. Verified the new agent files and routing section by inspection. No
+runtime behavior changed. Full app lint/build/test not run because this change only updates Claude
+instructions.
+
+**Next**
+Use the new `data-validation-agent` on the next import/ETL/data-shape change and tighten its prompt
+after the first real review if any checklist items are noisy.
+
+**Deferred**
+Consider updating `docs/PROJECT-FACTS.md` later: it still says no automated test script exists,
+but `package.json` now includes `bun run test`.
+
+---
+
 ## 2026-06-15 (preflight + congress backfill fix + FEC spot-check) — claude/preflight-h3uo3u
 
 **What happened & why**

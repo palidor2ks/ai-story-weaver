@@ -96,14 +96,45 @@ A local symbol index speeds up "where is this / what calls this / what breaks if
 - `codegraph serve` exposes it to agents as an MCP server; `codegraph sync` after big changes.
 - The `.codegraph/` index is **local + gitignored** — rebuilt per machine (`codegraph init`).
 
-## Review council (delegate risky diffs)
+## Review council: route risky diffs to one matching reviewer
 
-Subagents in `.claude/agents/` — hand the diff to the **one matching** reviewer before merging
-(not the whole council; reviewers are pinned to sonnet and bounded — see Quota discipline):
-- **data-accuracy-verifier** — finance/voting data vs. source (priority #1 gate).
+Subagents in `.claude/agents/` — hand the diff to the **one matching** reviewer before merging.
+Do **not** run the whole council unless the change is unusually risky. Keep each review scoped to
+the diff; reviewers are pinned to bounded prompts/models — see Quota discipline.
+
+### Data and trust
+
+- **data-validation-agent** — imports, CSVs, API payloads, ETL outputs, schema drift,
+  null/type/format checks, duplicates, impossible values.
+- **data-accuracy-verifier** — finance/voting/bill/state-finance/candidate-position data vs.
+  authoritative sources (priority #1 gate).
+- **content-provenance-reviewer** — candidate answers, AI summaries, citations, quotes, official
+  statements, and any political claim that needs evidence.
+- **alignment-quiz-reviewer** — quiz scoring, candidate/party match logic, topic weighting,
+  missing-data behavior, and match explanations.
+
+### Backend and operations
+
 - **migration-safety-reviewer** — SQL migrations vs. the four guardrails.
-- **frontend-reviewer** — React/TS reuse + one-front-door data access.
-- **security-reviewer** — RLS, authz, secret hygiene.
+- **security-reviewer** — RLS, authz, edge functions, admin access, secrets, and user/quiz PII.
+- **etl-pipeline-reviewer** — FEC ETL, donor syncs, bill/vote syncs, state-finance imports,
+  candidate-answer enrichment, pagination, idempotency, and resume cursors.
+- **observability-cron-reviewer** — cron jobs, sync health, backfill progress, stale-data checks,
+  and whether failures are visible/actionable.
+
+### Frontend and quality
+
+- **frontend-reviewer** — React/TS UI changes, hook reuse, one-front-door data access, Zod
+  validation, query hygiene, and accessibility.
+- **performance-bundle-reviewer** — dashboards, charts, candidate/donor/committee pages,
+  query-heavy screens, bundle-size risk, and render/refetch regressions.
+
+### Implementation agents
+
+- **quick-fix** — tiny low-risk edits.
+- **build** — normal feature work and bug fixes.
+- **architect** — complex cross-cutting design, refactors, data-model changes, or performance
+  investigations.
 
 ## Quota discipline (the week is a budget)
 
