@@ -27,6 +27,57 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-15 (congress backfill 3rd-layer fix + preview-pipeline unblock) — claude/preflight-h3uo3u continuation
+
+**What happened & why**
+Continuation of the morning's session. Two fixes merged in **PR #421**:
+
+1. **Congress backfill had a 3rd-layer bug** — The earlier fixes (#411, #414) resolved
+   conflicting-keys 401s between schedule-congress-donor-sync and sync-all-donors, but
+   `sync-all-donors` **ignores the candidate list it receives** and runs its own
+   `ORDER BY last_donor_sync` query. This meant the congress backfill cron was syncing
+   **tier_2** candidates (lowest last_sync timestamp) instead of the **tier_1**
+   (sitting Congress) stalled committees it identified. Result: 115 tier_1 committees
+   were left stalled indefinitely while tier_2 drained.
+   
+   **Fix**: `schedule-congress-donor-sync` now calls `fetch-fec-donors` directly for
+   each stalled tier_1 candidate, completely bypassing `sync-all-donors`. Auth: service-role
+   key for both `apikey` and `Authorization` bearer (prevents conflicting-keys 401).
+   Deployed as edge function version 31.
+
+2. **Migration replay idempotency** — The branch had the un-guarded version of migration
+   `20260615154613` (bare `ALTER TABLE` on _enrich_* tables). Supabase Preview failed
+   with 42P01 on fresh replay. Applied the `to_regclass` guard pattern merged to main
+   via #415, making the preview pipeline green.
+
+**State** (verified)
+- **PR #421: MERGED** with all 7 CI checks green (Supabase Preview ✅, Build ✅, Lint ✅,
+  Typecheck ✅, Test ✅, Lockfile ✅, GitGuardian ✅).
+- Edge function v31 live on prod. Congress-donor-backfill-10m cron is active and will
+  call the fixed function on next tick (~19:20 UTC).
+- Database query at 19:13 UTC shows **115 tier_1 committees still stalled** (has_more=true,
+  last_sync_completed_at IS NULL). No new syncs yet — PR merged too recently for cron
+  to have fired. Most recent tier_1 sync: 2026-06-13 12:36:08 UTC (2 days stale).
+- **NOT verified yet**: that the backfill is actually progressing post-merge. The 19:20
+  cron tick should pick up one tier_1 candidate and call fetch-fec-donors. On success,
+  that candidate's has_more should flip false and last_sync_completed_at should update.
+
+**Next**
+Wait ~5 min for the next congress-donor-backfill-10m cron tick (~19:20 UTC), then verify:
+- Query `candidate_committees` for stalled tier_1 count (should be ≤114 if one synced)
+- Check `net._http_response` for a 200 with `"candidatesProcessed": 1` and a tier_1 name
+
+**Deferred**
+- Congress backfill speed: limit is 1 candidate/10 min. 115 at this rate = ~19 hours to clear.
+  If drain is too slow by 2026-06-16, bump limit in migration `20260603200000` from 1 to 5–10.
+- FEC recon Finding B (double-count) and A (status gates) — ranked ROADMAP #1.
+- merge_candidate() latent person_id-unique bug.
+- Earmark-org spelling variants.
+- useCandidateShareCardData.ts earmark cause badge.
+- Candidate self-contributions on Line 11AI.
+
+---
+
 ## 2026-06-15 (preflight + congress backfill fix + FEC spot-check) — claude/preflight-h3uo3u
 
 **What happened & why**
