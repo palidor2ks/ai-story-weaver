@@ -27,6 +27,66 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-15 (congress backfill 2-layer auth fix + preview-pipeline unblock) — late session
+
+**What happened & why**
+Continuation of the same 2026-06-15 session (entries below). Verifying the morning's congress
+backfill fix exposed that it had been a **silent no-op**, and chasing it down uncovered a broader
+auth bug plus a migration-replay problem. Net: four PRs merged (#412, #413, #414, #415).
+
+1. **Congress backfill was silently failing — fixed across two auth layers.**
+   - The morning `schedule-congress-donor-sync` (PR #409) deployed "green" but every cron run was
+     HTTP 500 `Conflicting API keys`: it sent `apikey: sb_publishable` + `Authorization: Bearer
+     <service-role>`, which the Supabase gateway rejects. **PR #411** fixed it to use
+     `x-internal-service-token` (the contract `sync-all-donors` documents). Cron→function then 200.
+   - But the backfill STILL imported 0 donors — the *same* conflicting-keys bug one hop deeper:
+     `sync-all-donors → fetch-fec-donors` sent `apikey: SUPABASE_ANON_KEY` (which on this project
+     **is** the `sb_publishable` key) + a service-role bearer. **PR #414** set `apikey` to the
+     service key so it matches the bearer. **Verified working:** the 16:50 cron tick synced
+     `COWEN, CALVIN (S6SC04379)` — `has_more` flipped true→false, sync completed (0 donors, which
+     is legitimate for that minor candidate). The chain drains now.
+   - Checked the 2 sibling suspects (`fetch-civic-officials`, `fetch-mayor`): **both already
+     correct** (apikey = service key). `sync-all-donors` was the lone outlier. No further fix.
+   - Key lesson: a pg_net cron "succeeded" only means the request was *queued*; the real result is
+     in `net._http_response`. Always check there, not `cron.job_run_details`.
+
+2. **Migration history wasn't replayable from scratch — unblocked the preview pipeline.**
+   Supabase Preview reds out on every PR because the from-scratch replay hits non-idempotent /
+   unguarded migrations. Fixed two: **PR #412** added `DROP POLICY IF EXISTS` to the `profiles`
+   SELECT policy (`20251222015052`); **PR #415** wrapped the 5 `_enrich_*` RLS-enable statements
+   (`20260615154613`) in a `to_regclass` guard — those tables are created ad-hoc by enrichment
+   scripts, not migrations, so they don't exist on a fresh replay. #415's own preview replay went
+   **Migrations ✅**, confirming the pipeline is unblocked.
+
+3. **Codex reviewer-agent council (PR #413)** reviewed + incorporated: verified every referenced
+   file path exists (no hallucinations), added the missing `## Stay bounded` section to 4 of the 6
+   new agents to match the quota-discipline convention, merged.
+
+**State** (verified)
+- Congress backfill chain verified end-to-end on prod via MCP (COWEN synced, has_more cleared).
+- #411/#412/#413/#414/#415 all merged to main. Supabase Preview is non-blocking but now also green
+  on migration replay (#415 Migrations ✅).
+- Edge-function changes (#411/#414) live in the merged diffs; not separately lint/built locally
+  (Deno edge fns aren't in the app tsconfig). App lint/test were green at morning preflight; no
+  app `src/` code changed since.
+- `never_synced` count still ~122 because the FEC discovery crons add new stalled committees
+  continuously and the backfill runs at `limit:1`/10min — the mechanism works; the backlog clears
+  gradually, not instantly.
+
+**Next**
+Confirm the backfill backlog trends DOWN over ~a day now that the chain works; if too slow, bump
+the `congress-donor-backfill-10m` cron body `limit` from 1 to ~5–10 (one-line migration).
+
+**Deferred**
+- FEC recon **Finding A** (status gates only on itemized, not total receipts) + **Finding B**
+  (local_other_receipts double-counts JFC transfers) — DATA-ACCURACY §1; fix B before A.
+- `merge_candidate()` latent person_id-unique bug — carried.
+- Earmark-org spelling variants audit; `useCandidateShareCardData.ts` badge fix; Line 11AI
+  self-contributions — all carried.
+- `docs/PROJECT-FACTS.md` still says no test script exists, but `bun run test` exists now (from #413).
+
+---
+
 ## 2026-06-15 — Claude agent council expansion
 
 **What happened & why**
