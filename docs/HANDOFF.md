@@ -49,8 +49,11 @@ byte-for-byte identical to the live functions.
   −$1.83M FEC discrepancy the double-count had masked). Transfers separate cleanly post-fix.
 - Migration is **written but NOT applied** (guardrail #1 — applies via pipeline/deliberately).
   Recon rows recompute only as `drain-fec-finance` reprocesses each candidate.
-- A `data-accuracy-verifier` subagent review of the diff was **in flight** at handoff time — fold
-  its go/no-go in before merge. Draft PR opened pending that.
+- `data-accuracy-verifier` returned **GO**. Its one residual flag (Line 17/17A "Other Federal
+  receipts" dropped by `IN ('14','15')`) was checked and **closed**: within P/A committees it's
+  ~$5.4M on 2 candidates, and including it OVERshoots FEC (Tim Scott 2024 would jump to $5.89M vs
+  FEC $0.40M) — FEC doesn't book candidate-committee Line 17 into other_receipts, so the current
+  definition is correct. Supabase Preview replayed the migration green. PR #418 ready for review.
 - Only files changed: the migration + `docs/DATA-ACCURACY.md` §1 (Finding B UPDATE) + this entry.
   No `src/`/edge-function code changed; `index.ts` already reads `other_total` correctly.
 

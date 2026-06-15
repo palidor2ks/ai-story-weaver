@@ -82,6 +82,17 @@
     was masking — now surfaced, not hidden. Recon rows correct themselves as the drain reprocesses each
     candidate. The `Math.max(localOther, fecOther)` gap-fill now operates on correct inputs; **Finding A**
     (gating on total receipts) is unblocked once a full re-drain confirms the new `total_receipts_delta`.
+    - **Line-17 residual checked & closed (data-accuracy-verifier GO):** the reviewer flagged that
+      Lines 17/17A/17C/18 ("Other Federal receipts", Form-3X) are dropped by `IN ('14','15')`. Within
+      P/A candidate committees these total only ~$5.4M, concentrated in **2 candidates** — and including
+      them makes accuracy *worse*: for every candidate that actually has Line-17 money, FEC's
+      `other_receipts + offsets` is at or below the 14+15 figure (Tim Scott 2024: 14+15 $596,823 vs FEC
+      $395,823, but +Line17 = **$5,892,295**; Trump 2024 +Line17 $29,134 vs FEC $0; Blake +Line17 $5,000
+      vs FEC $0). FEC does not book candidate-committee Line-17 into `other_receipts`, so adding it would
+      reintroduce an over-count. `IN ('14','15')` is the correct, FEC-matching definition. Verifier also
+      confirmed: signature identical to the live function (no CREATE OR REPLACE drift), no `ok` row
+      changes status (the gate is comparable-itemized, not total). Supabase Preview replayed the
+      migration green.
 - **Donor-row aggregation rule (2026-06-12):** a Schedule A line counts toward
   `donors.amount`/`transaction_count` **iff** it is not a memo line (`memo_code='X'`,
   including the importer-forced Line-12-attribution and conduit-aggregate cases), not a
