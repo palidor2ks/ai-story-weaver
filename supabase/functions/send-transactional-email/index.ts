@@ -29,6 +29,12 @@ function generateToken(): string {
     .join('')
 }
 
+function maskEmail(email: string | null | undefined): string {
+  if (!email || typeof email !== 'string' || !email.includes('@')) return '<redacted>'
+  const [local, domain] = email.split('@')
+  return `${local.slice(0, 1)}***@${domain}`
+}
+
 // Auth note: this function uses verify_jwt = true in config.toml, so Supabase's
 // gateway validates the caller's JWT (anon or service_role) before the request
 // reaches this code. No in-function auth check is needed.
