@@ -331,7 +331,8 @@ Deno.serve(async (req) => {
           multi_committee: !!multiCommittee,
           detected_cycle: dominantCycle,
           started_by: user?.id ?? null,
-          status: 'running'
+          status: 'running',
+          last_progress_at: new Date().toISOString()
         }, { onConflict: 'id' });
       if (sessErr) console.error('[CSV-IMPORT] session insert error:', sessErr.message);
     }
@@ -782,6 +783,7 @@ Deno.serve(async (req) => {
             row_count: (cur?.row_count || 0) + rows.length,
             inserted_contributions: (cur?.inserted_contributions || 0) + actualInserts,
             inserted_donors: (cur?.inserted_donors || 0) + insertedDonors,
+            last_progress_at: new Date().toISOString(),
           })
           .eq('id', sessionId);
       } catch (e) {

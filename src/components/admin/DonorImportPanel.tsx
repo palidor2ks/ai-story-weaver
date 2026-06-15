@@ -71,16 +71,32 @@ export function DonorImportPanel() {
   const DELAY_MS = 150;  // Slightly more delay for stability
   const MAX_RETRIES = 5;
 
+  // Mark a session terminated in the DB so it doesn't masquerade as 'running' forever.
+  // Best-effort: the import is browser-driven, so a deliberate stop must write the
+  // terminal status itself (nothing on the backend does).
+  const markSessionCancelled = useCallback(async (sessionId: string) => {
+    try {
+      await supabase
+        .from('donor_import_sessions')
+        .update({ status: 'cancelled', completed_at: new Date().toISOString() })
+        .eq('id', sessionId)
+        .eq('status', 'running');
+    } catch (e) { /* non-fatal */ }
+  }, []);
+
   // Cancel the current import session
   const cancelImport = useCallback(() => {
-    if (currentSessionRef.current) {
-      console.log(`[DonorImport] Cancelling session ${currentSessionRef.current}`);
+    const sessionId = currentSessionRef.current;
+    if (sessionId) {
+      console.log(`[DonorImport] Cancelling session ${sessionId}`);
       currentSessionRef.current = null;
       setActiveSessionId(null);
       setIsImporting(false);
+      void markSessionCancelled(sessionId);
+      setHistoryKey(k => k + 1);
       toast.info('Import cancelled');
     }
-  }, []);
+  }, [markSessionCancelled]);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -553,8 +569,12 @@ export function DonorImportPanel() {
   const resetForm = () => {
     // Cancel any active import first
     if (currentSessionRef.current) {
+      const sessionId = currentSessionRef.current;
       currentSessionRef.current = null;
       setActiveSessionId(null);
+      setIsImporting(false);
+      void markSessionCancelled(sessionId);
+      setHistoryKey(k => k + 1);
     }
     setFile(null);
     setStats(null);

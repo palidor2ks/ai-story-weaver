@@ -66,6 +66,45 @@ In a fresh session, invoke one new reviewer (e.g. `brand-voice-reviewer` on
 
 ---
 
+## 2026-06-15 (Donor import "stuck on running" — honest status) — branch claude/affectionate-curie-wbcase
+
+**What happened & why**
+Admin reported donor imports freezing at round counts (500/7,500/10,000) yet badged
+`running` forever. Root cause: the import is **entirely browser-driven** —
+`DonorImportPanel.tsx` slices the CSV into 500-row batches and calls
+`import-fec-receipts-csv` per batch; the edge function increments `row_count`/
+`inserted_contributions` per batch (so "Rows" is *processed-so-far*, hence the round
+multiples) but writes the terminal status **only from the browser** at loop end. Any
+interruption (Cancel, Clear, tab close/nav, network drop) orphans the row at `running`
+— there is no server-side completion or heartbeat. Fix makes the status *honest*
+without re-architecting: deliberate stops now write `status='cancelled'`, and a new
+`last_progress_at` heartbeat lets the history view show a `running` row with no
+progress in >10 min as **stalled** (Undo stays enabled). Undo already worked on these
+rows, so the existing three can be rolled back with no code.
+
+**State** (verified)
+- `bun run lint` → 0 errors (pre-existing warnings only, none in changed files);
+  `bunx vite build` compiles clean; `bun test src` → 28/28 pass incl. new
+  `donorImportStatus.test.ts` (6 cases). `bun run build` itself fails only at the
+  `prebuild` sitemap step (HTTP 403 — no Supabase network in this sandbox), unrelated.
+- Migration `20260615180000_donor_import_last_progress.sql` adds `last_progress_at` —
+  **written, NOT applied** (guardrail #1). `status` is free-form text (no CHECK), so
+  the new `'cancelled'` value needs no constraint change (verified vs the create-table
+  migration).
+- Not verified: live end-to-end behavior (cancel→`cancelled`, stall→`stalled`) — needs
+  the migration applied + a real import in the browser.
+
+**Next**
+Apply migration `20260615180000` via the normal pipeline, then manually confirm a
+cancelled import shows `cancelled` and an abandoned one flips to `stalled` after 10 min.
+
+**Deferred**
+- Larger robust fix (backend stale-sweep cron + server-driven background import with a
+  resume cursor) — offered, declined for now.
+- All prior deferred items from the entry below still stand.
+
+---
+
 ## 2026-06-15 (FEC recon Finding B fix — other_total double-count) — evening
 
 **What happened & why**
