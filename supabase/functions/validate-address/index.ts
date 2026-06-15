@@ -184,7 +184,7 @@ serve(async (req) => {
       validationSource: 'google-address-validation',
     };
 
-    console.log('Address validated:', addressDetails.formattedAddress, '- Valid:', isValid);
+    console.log('Address validated:', { valid: isValid, validationGranularity, geocodeGranularity });
 
     return jsonResponse(addressDetails);
 

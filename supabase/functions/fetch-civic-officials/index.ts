@@ -620,7 +620,7 @@ async function geocodeAddress(address: string): Promise<{ lat: number, lng: numb
     const encodedAddress = encodeURIComponent(address);
     const url = `https://geocoding.geo.census.gov/geocoder/geographies/onelineaddress?address=${encodedAddress}&benchmark=Public_AR_Current&vintage=Current_Current&layers=all&format=json`;
     
-    console.log(`[Geocode] Census geocoding for: "${address}"`);
+    console.log(`[Geocode] Census geocoding (address length=${address.length})`);
     const response = await fetch(url);
     if (!response.ok) {
       console.error(`[Geocode] Census API HTTP error: ${response.status}`);
@@ -637,7 +637,7 @@ async function geocodeAddress(address: string): Promise<{ lat: number, lng: numb
 
     const coords = addressMatch.coordinates;
     if (coords?.x && coords?.y) {
-      console.log(`[Geocode] Found coordinates: ${coords.y}, ${coords.x} (${addressMatch.matchedAddress})`);
+      console.log(`[Geocode] Found coordinates (match found)`);
       return { lat: coords.y, lng: coords.x };
     }
 

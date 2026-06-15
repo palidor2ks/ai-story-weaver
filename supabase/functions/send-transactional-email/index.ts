@@ -29,6 +29,12 @@ function generateToken(): string {
     .join('')
 }
 
+function maskEmail(email: string | null | undefined): string {
+  if (!email || typeof email !== 'string' || !email.includes('@')) return '<redacted>'
+  const [local, domain] = email.split('@')
+  return `${local.slice(0, 1)}***@${domain}`
+}
+
 // Auth note: this function uses verify_jwt = true in config.toml, so Supabase's
 // gateway validates the caller's JWT (anon or service_role) before the request
 // reaches this code. No in-function auth check is needed.
@@ -199,7 +205,7 @@ Deno.serve(async (req) => {
       status: 'suppressed',
     })
 
-    console.log('Email suppressed', { effectiveRecipient, templateName })
+    console.log('Email suppressed', { recipient: maskEmail(effectiveRecipient), templateName })
     return new Response(
       JSON.stringify({ success: false, reason: 'email_suppressed' }),
       {
@@ -391,7 +397,7 @@ Deno.serve(async (req) => {
     })
   }
 
-  console.log('Transactional email enqueued', { templateName, effectiveRecipient })
+  console.log('Transactional email enqueued', { templateName, recipient: maskEmail(effectiveRecipient) })
 
   return new Response(
     JSON.stringify({ success: true, queued: true }),
