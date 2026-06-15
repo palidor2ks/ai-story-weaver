@@ -27,6 +27,47 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-15 (preflight + answers URL-sourcing bucket audit) — evening
+
+**What happened & why**
+Ran `/preflight`. Lint (0 err / 156 warn), tests (72/0), and the real `vite build` are green;
+the only non-environment ❌ is the **data-accuracy scoreboard's answers category at 5.4%
+URL-sourced** (recovered via Supabase MCP — `check:accuracy`/`check:dupes` skip with no
+`SUPABASE_DB_URL`; `check:data` + sitemap prebuild are all HTTP 403 = sandbox egress, not real).
+Dug into *why* answers is so low and broke it down by `source_type` (numbers now in
+`docs/DATA-ACCURACY.md` §Answers, 2026-06-15 entry):
+- `voting_record` (64k) is the only well-sourced route at 43.5% — the existing
+  `scripts/answers-enrichment/` vote-citation pipeline.
+- `public_statement` (218k @ 0.7%) and `other`/inferred (218k @ 0.9%) are the drag. Crucially
+  **41% (88,473) of the URL-less `public_statement` rows explicitly admit no source exists** in
+  their own description — they're inferences mislabeled as `public_statement`, extending integrity
+  finding #3. Only 380 of 218k have an inline URL; there's no structured anchor to derive one.
+- ~36% of all answers are `inferred` guesses that can never carry a URL → they cap the metric near
+  ~64% structurally.
+
+**Maintainer decision (this session):** the `public_statement` gap is a known artifact of the
+Lovable-AI generation pass (no source resolution) vs. the Perplexity-grounded route. **Deprioritize
+within #1** — do NOT hand-triage/reclassify the 88k now; fix by **re-running grounded generation
+via Perplexity once its quota frees up**. Category stays RED on purpose meanwhile.
+
+**State** (verified)
+- Preflight gates that CI re-runs (lint/test/vite build) all pass locally. No `src/` code changed.
+- Only doc changes this session: `docs/DATA-ACCURACY.md` §Answers (new 2026-06-15 standing entry)
+  + this HANDOFF entry. All scoreboard numbers read live from `admin_stats_cache` /
+  `candidate_answers` via Supabase MCP (project `ornnzinjrcyigazecctf`).
+- NOT verified: `check:data`/`check:dupes`/sitemap (egress-blocked — re-run from CI/local).
+
+**Next**
+When Perplexity quota frees up, re-run grounded answer generation for the `public_statement`
+pool; until then keep the `voting_record` citation route as the only active enrichment.
+
+**Deferred**
+- All prior deferred items below still stand (FEC recon Findings A/B, `merge_candidate()` bug,
+  earmark spelling audit, share-card badge fix, Line 11AI, PROJECT-FACTS test-script note).
+- `public_statement` reclassification/citation — parked behind Perplexity quota per above.
+
+---
+
 ## 2026-06-15 (congress backfill 2-layer auth fix + preview-pipeline unblock) — late session
 
 **What happened & why**
