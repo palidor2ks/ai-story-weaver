@@ -67,6 +67,32 @@
     instead. **Findings A and B are linked: fix B (Line 14/15 classification + the `Math.max`
     double-count) before A (gating on total receipts) can be trusted.** The itemized gate remains the
     sound primary signal.
+  - **UPDATE (2026-06-15, Finding B fixed — migration `20260615170000`, pending apply + re-drain):**
+    root cause found in the `other_total` column of `get_contribution_totals` /
+    `get_contribution_totals_by_committee`. It was defined as the catch-all
+    `line_number NOT IN ('11AI','11B','11C') AND is_contribution=true`, which (a) swept in **Line-12
+    transfers** — the only non-contribution line stored `is_contribution=true` — so `local_other_receipts`
+    equalled `local_transfers` and the total formula counted that money twice; and (b) the
+    `is_contribution=true` filter *excluded* the genuine Line-14/15 receipts (stored `is_contribution=false`).
+    Redefined `other_total = Line 14 + Line 15` (= `offset_total + other_receipts_total`, matching FEC's
+    `fecOtherReceipts + fecOffsets` comparison basis). Validated vs FEC on 6 candidates: corrected local
+    other lands within a few % of FEC (Graham 826,693 vs 798,798 · Krishnamoorthi 588,968 vs 604,264 ·
+    Collins 89,574 vs 92,451 · Trone 599,642 vs 603,811 · Emmer 0 vs 7,733), and transfers separate
+    cleanly. Thanedar (local +3.39M vs FEC **−1.83M** net other) is a real discrepancy the double-count
+    was masking — now surfaced, not hidden. Recon rows correct themselves as the drain reprocesses each
+    candidate. The `Math.max(localOther, fecOther)` gap-fill now operates on correct inputs; **Finding A**
+    (gating on total receipts) is unblocked once a full re-drain confirms the new `total_receipts_delta`.
+    - **Line-17 residual checked & closed (data-accuracy-verifier GO):** the reviewer flagged that
+      Lines 17/17A/17C/18 ("Other Federal receipts", Form-3X) are dropped by `IN ('14','15')`. Within
+      P/A candidate committees these total only ~$5.4M, concentrated in **2 candidates** — and including
+      them makes accuracy *worse*: for every candidate that actually has Line-17 money, FEC's
+      `other_receipts + offsets` is at or below the 14+15 figure (Tim Scott 2024: 14+15 $596,823 vs FEC
+      $395,823, but +Line17 = **$5,892,295**; Trump 2024 +Line17 $29,134 vs FEC $0; Blake +Line17 $5,000
+      vs FEC $0). FEC does not book candidate-committee Line-17 into `other_receipts`, so adding it would
+      reintroduce an over-count. `IN ('14','15')` is the correct, FEC-matching definition. Verifier also
+      confirmed: signature identical to the live function (no CREATE OR REPLACE drift), no `ok` row
+      changes status (the gate is comparable-itemized, not total). Supabase Preview replayed the
+      migration green.
 - **Donor-row aggregation rule (2026-06-12):** a Schedule A line counts toward
   `donors.amount`/`transaction_count` **iff** it is not a memo line (`memo_code='X'`,
   including the importer-forced Line-12-attribution and conduit-aggregate cases), not a

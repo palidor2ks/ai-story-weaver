@@ -27,6 +27,49 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-15 (FEC recon Finding B fix — other_total double-count) — evening
+
+**What happened & why**
+Picked up roadmap #1 / FEC recon **Finding B** (the deferred "fix B before A"). Traced the
+inflated `total_receipts_delta` to the `other_total` column in both `get_contribution_totals`
+and `get_contribution_totals_by_committee`. It used a catch-all
+`line_number NOT IN ('11AI','11B','11C') AND is_contribution=true`, which was doubly wrong:
+(a) the only non-contribution line stored `is_contribution=true` is **Line 12 (transfers)**, so
+`local_other_receipts` silently equalled `local_transfers` and `nightly-finance-reconciliation`'s
+total formula (`localItemized + effectiveTransfers + effectiveLoans + effectiveOther`) counted
+that money twice; (b) the `is_contribution=true` filter *excluded* the genuine Line-14/15 other
+receipts (those rows are stored `is_contribution=false`). Migration `20260615170000` redefines
+`other_total = Line 14 + Line 15` (= `offset_total + other_receipts_total`, matching FEC's
+`fecOtherReceipts + fecOffsets` comparison basis). One-line change in each RPC; everything else
+byte-for-byte identical to the live functions.
+
+**State** (verified)
+- Validated the corrected definition vs FEC's own `fec_other_receipts + fec_offsets` columns on 6
+  candidates (Graham/Krishnamoorthi/Collins/Trone/Emmer within a few %; Thanedar surfaced a real
+  −$1.83M FEC discrepancy the double-count had masked). Transfers separate cleanly post-fix.
+- Migration is **written but NOT applied** (guardrail #1 — applies via pipeline/deliberately).
+  Recon rows recompute only as `drain-fec-finance` reprocesses each candidate.
+- `data-accuracy-verifier` returned **GO**. Its one residual flag (Line 17/17A "Other Federal
+  receipts" dropped by `IN ('14','15')`) was checked and **closed**: within P/A committees it's
+  ~$5.4M on 2 candidates, and including it OVERshoots FEC (Tim Scott 2024 would jump to $5.89M vs
+  FEC $0.40M) — FEC doesn't book candidate-committee Line 17 into other_receipts, so the current
+  definition is correct. Supabase Preview replayed the migration green. PR #418 ready for review.
+- Only files changed: the migration + `docs/DATA-ACCURACY.md` §1 (Finding B UPDATE) + this entry.
+  No `src/`/edge-function code changed; `index.ts` already reads `other_total` correctly.
+
+**Next**
+After the verifier signs off and the migration applies, trigger/await a full re-drain and confirm
+`total_receipts_delta` distribution tightens (was: 358/1,746 `ok` rows >10% off). Then Finding A
+(adding a total-receipts gate) is unblocked.
+
+**Deferred**
+- Finding A (status doesn't gate on total receipts) — unblocked by this fix, do after re-drain.
+- Thanedar 2026 negative-net-other discrepancy — investigate separately (real, now visible).
+- All prior deferred items still stand (merge_candidate person_id bug, answers/Perplexity,
+  earmark spelling audit, share-card badge, Line 11AI, Supabase disk pressure).
+
+---
+
 ## 2026-06-15 (preflight + answers URL-sourcing bucket audit) — evening
 
 **What happened & why**
