@@ -41,6 +41,13 @@ Pay special attention to:
 - cron migrations
 - materialized-view refreshes
 
+## Stay bounded
+
+Review the pipeline the diff changes, not every ETL path. Read the changed function plus its direct
+callers and cursor/state handling; don't trace the whole sync graph. Prefer a script's summary
+counts over pulling rows into context. Reach a verdict within ~20 tool calls and name what you left
+unchecked.
+
 ## Report format
 
 Open with **SAFE / RISKY / BLOCKING**.

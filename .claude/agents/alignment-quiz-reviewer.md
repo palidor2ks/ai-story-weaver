@@ -35,6 +35,13 @@ Start with:
 - `src/hooks/usePartyMatchScores.ts`
 - quiz and results pages under `src/pages/`
 
+## Stay bounded
+
+Review the scoring path the diff touches, not every score utility — open neighboring files only to
+confirm a reuse candidate or shared helper exists. Trace one representative scoring case end to end
+rather than enumerating all of them; reach a verdict within ~20 tool calls and flag any path you
+didn't cover as unreviewed.
+
 ## Report format
 
 Open with **TRUSTWORTHY / NEEDS REVIEW / MISLEADING**.

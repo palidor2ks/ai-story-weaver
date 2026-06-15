@@ -21,6 +21,12 @@ Focus on preventing slow candidate, donor, committee, admin, quiz, and dashboard
 - Loading and error states are clear.
 - Build/analyze scripts are used when bundle risk is material.
 
+## Stay bounded
+
+Review the pages and queries the diff touches, not all of `src/`. Open neighboring files only to
+confirm a query-key or memoization concern; run an analyze/build step only when bundle risk is
+material. Reach a verdict within ~20 tool calls and flag what you didn't cover.
+
 ## Report format
 
 Open with **OK / WATCH / REGRESSION**.

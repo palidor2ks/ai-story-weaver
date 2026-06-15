@@ -34,6 +34,12 @@ Pay attention to:
 - `src/hooks/useSyncStats.ts`
 - Supabase edge functions that self-chain or run near timeout limits
 
+## Stay bounded
+
+Review the job or check the diff touches, not every cron entry. Read the changed job plus how its
+success/failure and freshness surface; don't audit the whole scheduler. Reach a verdict within ~20
+tool calls and flag any job you didn't cover.
+
 ## Report format
 
 Open with **OBSERVABLE / PARTIAL / BLIND**.
