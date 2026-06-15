@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Undo2, Loader2, RefreshCw } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { isStalledImport } from './donorImportStatus';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,6 +33,7 @@ interface ImportSession {
   started_at: string;
   completed_at: string | null;
   undone_at: string | null;
+  last_progress_at: string | null;
 }
 
 interface Props {
@@ -115,6 +117,7 @@ export function DonorImportHistory({ refreshKey, onUndo }: Props) {
                   const tooOld = ageHours(s.started_at) > 72;
                   const canUndo = s.status !== 'undone' && !tooOld;
                   const cycleMismatch = s.detected_cycle && s.detected_cycle !== s.cycle;
+                  const stalled = isStalledImport(s.status, s.last_progress_at, s.started_at);
                   return (
                     <tr key={s.id} className="border-t">
                       <td className="p-2 whitespace-nowrap">{new Date(s.started_at).toLocaleString()}</td>
@@ -133,9 +136,15 @@ export function DonorImportHistory({ refreshKey, onUndo }: Props) {
                       <td className="p-2 text-right">{s.row_count.toLocaleString()}</td>
                       <td className="p-2 text-right">{s.inserted_contributions.toLocaleString()}</td>
                       <td className="p-2 text-center">
-                        <Badge variant={s.status === 'undone' ? 'secondary' : s.status === 'running' ? 'default' : 'outline'}>
-                          {s.status}
-                        </Badge>
+                        {stalled ? (
+                          <Badge variant="outline" className="text-amber-600 border-amber-500/50" title="No progress in over 10 minutes — the browser-driven import was interrupted. Safe to Undo.">
+                            stalled
+                          </Badge>
+                        ) : (
+                          <Badge variant={s.status === 'undone' ? 'secondary' : s.status === 'running' ? 'default' : 'outline'}>
+                            {s.status}
+                          </Badge>
+                        )}
                       </td>
                       <td className="p-2 text-right">
                         {canUndo ? (
