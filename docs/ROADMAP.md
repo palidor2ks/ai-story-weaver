@@ -36,7 +36,16 @@ thresholds, and current standing: **`docs/DATA-ACCURACY.md`** (checked every pre
   filtered out by the `congress_visible` scope in `schedule-congress-donor-sync`. Confirm
   which committees are stalled (`has_more=true AND last_sync_completed_at IS NULL`), whether
   they belong to visible candidates, and either widen the scope or trigger a manual sync pass.
-  *(found 2026-06-15)*
+  *(found 2026-06-15; the missing `schedule-congress-donor-sync` edge fn was added in PR #409 —
+  re-check whether backfill is now progressing.)*
+- ☐ **FEC recon: Line 14/15 "other receipts" double-count (Finding B)** — `local_other_receipts`
+  can double-count JFC money already booked as `local_transfers` (e.g. Cassidy 2026: $2.55M local
+  other vs $0.27M FEC, ~his $2.27M transfers), inflating `total_receipts_delta`. Audit the Line
+  14/15 classification in the FEC importer. *(found 2026-06-15; details DATA-ACCURACY §1)*
+- ☐ **FEC recon: `status` doesn't gate on total receipts (Finding A)** — `ok` checks only
+  comparable-itemized `delta_pct`; 358/1,746 `ok` rows are >10% off on total receipts. Blocked on
+  Finding B (the total metric is too noisy to gate on until the double-count is fixed).
+  *(found 2026-06-15; details DATA-ACCURACY §1)*
 - **Done =** the data on a given profile/page is confirmed accurate against source.
 
 ### 2. 🟡 Migration / DB stability
