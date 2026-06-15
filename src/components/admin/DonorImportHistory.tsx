@@ -33,7 +33,10 @@ interface ImportSession {
   started_at: string;
   completed_at: string | null;
   undone_at: string | null;
-  last_progress_at: string | null;
+  // Optional: the column is absent until migration 20260615180000 applies and the
+  // generated Supabase types are regenerated. Keep it optional so the select('*')
+  // Row type still casts cleanly in the meantime.
+  last_progress_at?: string | null;
 }
 
 interface Props {

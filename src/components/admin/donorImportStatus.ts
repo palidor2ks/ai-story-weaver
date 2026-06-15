@@ -21,7 +21,7 @@ export const STALE_IMPORT_MS = 10 * 60 * 1000;
  */
 export function isStalledImport(
   status: string,
-  lastProgressAt: string | null,
+  lastProgressAt: string | null | undefined,
   startedAt: string,
   now: number = Date.now(),
 ): boolean {
