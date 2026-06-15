@@ -87,7 +87,6 @@ serve(async (req) => {
     };
 
     const fetchFecDonorsUrl = `${supabaseUrl}/functions/v1/fetch-fec-donors`;
-    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
 
     // Process each candidate
     for (const candidate of candidates) {
@@ -96,12 +95,16 @@ serve(async (req) => {
 
         // Call fetch-fec-donors via direct fetch with the service-role bearer token.
         // fetch-fec-donors recognizes the service-role key and skips its admin/user check.
+        // apikey must be the SAME service-role key as the bearer: this project's
+        // SUPABASE_ANON_KEY is the new sb_publishable key, and apikey=publishable +
+        // Authorization=service-role is rejected by the gateway as "conflicting API keys"
+        // (HTTP 401) before the function runs — which silently broke every donor sync.
         const resp = await fetch(fetchFecDonorsUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${supabaseServiceKey}`,
-            'apikey': anonKey,
+            'apikey': supabaseServiceKey,
           },
           body: JSON.stringify({
             candidateId: candidate.id,
