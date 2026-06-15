@@ -113,39 +113,39 @@ serve(async (req) => {
 
     console.log(`[SCHEDULE-CONGRESS-DONOR-SYNC] Found ${candidates.length} candidates to sync for scope=${scope}`);
 
-    // Call sync-all-donors to backfill/refresh these candidates.
-    // Authenticate as an internal service via x-internal-service-token (the contract
-    // sync-all-donors documents for this caller). Do NOT also send an Authorization
-    // bearer: the gateway rejects an apikey (sb_publishable) + a service-role bearer as
-    // "conflicting API keys". apikey carries the publishable key for gateway routing only.
-    const syncUrl = `${supabaseUrl}/functions/v1/sync-all-donors`;
-    const resp = await fetch(syncUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': publishableKey,
-        'x-internal-service-token': supabaseServiceKey,
-      },
-      body: JSON.stringify({
-        cycle,
-        limit: candidates.length, // Sync all filtered candidates in this batch
-      }),
-    });
+    // Call fetch-fec-donors directly for each stalled candidate.
+    // DO NOT route through sync-all-donors: that function ignores the candidate list and
+    // runs its own ORDER BY last_donor_sync query, which selects tier_2 candidates instead
+    // of the tier_1 ones we identified here.
+    // Auth: service-role key for both apikey and Authorization bearer so the gateway
+    // accepts the request (conflicting keys = 401).
+    const fetchFecDonorsUrl = `${supabaseUrl}/functions/v1/fetch-fec-donors`;
+    const perCandidateResults: Array<{ name: string; status: number; ok: boolean }> = [];
 
-    const syncResult = await resp.json().catch(() => ({}));
-
-    console.log(`[SCHEDULE-CONGRESS-DONOR-SYNC] Sync result:`, syncResult);
-
-    if (!resp.ok) {
-      console.error(`[SCHEDULE-CONGRESS-DONOR-SYNC] Sync failed with HTTP ${resp.status}:`, syncResult);
-      return new Response(
-        JSON.stringify({
-          success: false,
-          message: `Sync failed: HTTP ${resp.status}`,
-          syncResult,
+    for (const candidate of candidates) {
+      console.log(`[SCHEDULE-CONGRESS-DONOR-SYNC] Calling fetch-fec-donors for ${candidate.name} (${candidate.fec_candidate_id})`);
+      const resp = await fetch(fetchFecDonorsUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${supabaseServiceKey}`,
+          'apikey': supabaseServiceKey,
+        },
+        body: JSON.stringify({
+          candidateId: candidate.id,
+          fecCandidateId: candidate.fec_candidate_id,
+          cycle,
         }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      });
+
+      const result = await resp.json().catch(() => ({}));
+      perCandidateResults.push({ name: candidate.name, status: resp.status, ok: resp.ok });
+
+      if (!resp.ok) {
+        console.error(`[SCHEDULE-CONGRESS-DONOR-SYNC] fetch-fec-donors HTTP ${resp.status} for ${candidate.name}:`, result);
+      } else {
+        console.log(`[SCHEDULE-CONGRESS-DONOR-SYNC] fetch-fec-donors done for ${candidate.name}: imported=${result?.imported ?? 'n/a'}`);
+      }
     }
 
     return new Response(
@@ -153,9 +153,10 @@ serve(async (req) => {
         success: true,
         scope,
         mode,
+        cycle,
         candidatesProcessed: candidates.length,
-        syncResult,
-        message: `${mode} sync complete for ${candidates.length} candidates in scope=${scope}`,
+        results: perCandidateResults,
+        message: `${mode} sync dispatched for ${candidates.length} candidates in scope=${scope}`,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
