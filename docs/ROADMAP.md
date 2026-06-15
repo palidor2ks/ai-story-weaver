@@ -31,12 +31,23 @@ thresholds, and current standing: **`docs/DATA-ACCURACY.md`** (checked every pre
 - **Candidate answers/positions** (added 2026-06-10): the alignment quiz's own input —
   VISION's riskiest assumption includes positions, so "sourced with a URL, not just a
   description" is tracked as its own category (`docs/DATA-ACCURACY.md` §Answers).
+- ☐ **Congress donor backfill stall** — 159 `candidate_committees` rows with `has_more=true`
+  are not progressing (observed 3/day actual vs 144/day theoretical at `limit:1`). Likely
+  filtered out by the `congress_visible` scope in `schedule-congress-donor-sync`. Confirm
+  which committees are stalled (`has_more=true AND last_sync_completed_at IS NULL`), whether
+  they belong to visible candidates, and either widen the scope or trigger a manual sync pass.
+  *(found 2026-06-15)*
 - **Done =** the data on a given profile/page is confirmed accurate against source.
 
 ### 2. 🟡 Migration / DB stability
 Verified work can't land cleanly while Dev and `main` schemas drift.
 - Keep Dev in sync via `scripts/apply-missing-migrations.sh` (dry-run first — guardrail #1).
 - Resync playbook: `docs/dev-migration-resync.md`.
+- ☐ **Supabase disk pressure** — `refresh-donor-consolidated-daily` hit "No space left on device"
+  on 2026-06-13 (REFRESH MATERIALIZED VIEW spilled temp files). DB is at 15 GB; `contributions`
+  alone is 8.4 GB and growing as FEC finance keeps loading. Check quota in Supabase dashboard
+  and either (a) expand storage add-on or (b) archive/expire old contribution records. Will
+  recur — the materialized view refresh needs 2× temp space. *(found 2026-06-15)*
 - **Done =** Dev matches `main` and the app runs clean against a fresh DB.
 
 ### 3. ☐ User-facing features
@@ -64,6 +75,8 @@ X/TikTok posting, Remotion social cards, AI-generated analysis. Deferred until t
 1. **Data accuracy/quality** — the gate on shipping.
 2. **Migration drift (Dev vs main)** — slows landing any verified change.
 3. **No automated tests/CI** — "verified" = lint + build + manual; Phase H starts fixing this.
+4. **Disk pressure** — June 13 OOM on materialized view refresh; 15 GB DB growing; needs
+   quota check + plan before the next disk-full failure. *(added 2026-06-15)*
 
 ## Out of scope / parked
 - **Social auto-posting (X/TikTok) + Remotion video cards** — parked for v1 per `docs/VISION.md`
@@ -71,6 +84,13 @@ X/TikTok posting, Remotion social cards, AI-generated analysis. Deferred until t
   *(parked 2026-06-09)*
 
 ## Changelog
+- **2026-06-15 (cron health audit → two new action items)** — reviewed all 23 cron jobs over
+  the last 14 days (2,826+ runs, 1 failure). Found: (1) `refresh-donor-consolidated-daily`
+  hit a disk-full error on 2026-06-13 (DB is at 15 GB, `contributions` alone 8.4 GB and
+  growing); added disk-pressure item to Priority #2 + Blockers. (2) `congress-donor-backfill`
+  stalled at 3 completions/day vs 144/day theoretical max — 159 committees with `has_more=true`
+  not progressing, likely `congress_visible` scope filter; added investigation item to
+  Priority #1. Discover crons (fl/nj/ny) confirmed active and fire today (Mon 6–7 AM UTC).
 - **2026-06-12 (evidence index LIVE + self-maintaining)** — the statement corpus shipped end to
   end: `member_statements` holds **5,460 official statements across all 541 sitting members**
   (86% via RSS, bodies held locally, provenance by construction), refreshed by the
