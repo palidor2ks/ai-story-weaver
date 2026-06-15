@@ -36,6 +36,37 @@
   presidential IE slice is verified (ROADMAP changelog 2026-06-10); donors/committees remain
   the open front.
 - **Threshold:** error count must not exceed **900** (regression guard; ratchet down).
+- **Spot-check (2026-06-15, 13 candidate-cycles across AK/AL/FL/LA/CA/MS/AR/NV/TX/MS, House+Senate,
+  $0.34M–$8.4M, high-dollar + grassroots):** itemized donor data reconciles to the cached FEC
+  category totals **to within dollars** on every `ok` row sampled (Britt, Begich, Moody, Sullivan,
+  Vindman, LaMalfa, Crawford, Guest, Brownley — 11A and 11C match, total Δ $0–$948). Vindman is the
+  clean proof of the unitemized rule: $5.0M of his $8.2M is unitemized small-dollar, yet itemized
+  reconciles to **$1**. The `warning` rows sampled (Lee −9.68%, Sánchez −9.35%, Hunt −8.21%) are
+  genuine sub-threshold itemized gaps, correctly flagged. *Caveat:* this compares local vs the
+  cached `fec_*` columns (populated from the FEC API at each recon run), i.e. **source-as-of-last-sync**,
+  not a fresh FEC.gov pull (sandbox egress blocks the FEC API at 403 — re-run live from CI/local).
+- **Two findings from that spot-check (open, not yet fixed):**
+  1. **`status` gates only on comparable-itemized `delta_pct`, never on `total_receipts_delta_pct`**
+     (`nightly-finance-reconciliation/index.ts` lines 408-411). So a row can be `ok` while total
+     receipts are far off — e.g. **Bill Cassidy 2026 is `ok` with a +$2.09M / +31% total-receipts
+     delta** because his itemized `delta_pct` is only −4.3%. "ok" means *donors reconcile*, not
+     *total receipts reconcile* — the label is narrower than it reads. Decide whether to add a
+     secondary total-receipts gate (would reclassify an unknown count of `ok` rows) or rename/scope
+     the metric.
+  2. **`local_other_receipts` can be inflated and inflate the total.** Cassidy's `local_other_receipts`
+     is $2.55M vs FEC's $0.27M — ~the size of his $2.27M JFC transfers, which are *also* in
+     `local_transfers`. The total formula's `Math.max(localOther, fecOther)` then adds the inflated
+     figure. Looks like Line 14/15 "other" double-counting joint-fundraising money already counted as
+     a transfer. Does **not** affect donor-facing itemized data. Audit the Line 14/15 classification
+     in the FEC importer before trusting `total_receipts_delta` as a gate.
+  - **Scale (2026-06-15):** of 1,746 `ok` rows, **358 (20.5%) have |total_receipts_delta| > 10%**
+    and 298 > 25%; the average `ok` row is **17.7% off on total receipts**. The over/under split is
+    roughly balanced (25 rows > +$500K, 21 < −$500K), which says `total_receipts_delta` is a **noisy
+    two-sided metric** (over-count from the `Math.max` heuristic à la Cassidy; under-count from
+    missing parent-aggregate records) — likely *why* the original author gated on comparable-itemized
+    instead. **Findings A and B are linked: fix B (Line 14/15 classification + the `Math.max`
+    double-count) before A (gating on total receipts) can be trusted.** The itemized gate remains the
+    sound primary signal.
 - **Donor-row aggregation rule (2026-06-12):** a Schedule A line counts toward
   `donors.amount`/`transaction_count` **iff** it is not a memo line (`memo_code='X'`,
   including the importer-forced Line-12-attribution and conduit-aggregate cases), not a
