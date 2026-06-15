@@ -14,20 +14,21 @@ END $$;
 
 -- 2. Enable RLS on internal enrichment staging tables. No policies = deny-all to
 --    anon/authenticated. Service role bypasses RLS so background jobs continue.
-ALTER TABLE public._enrich_bill_kw       ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public._enrich_member_bills  ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public._enrich_t2_hits       ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public._enrich_vc_keywords   ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public._enrich_vc_tier2      ENABLE ROW LEVEL SECURITY;
-
-REVOKE ALL ON public._enrich_bill_kw      FROM anon, authenticated;
-REVOKE ALL ON public._enrich_member_bills FROM anon, authenticated;
-REVOKE ALL ON public._enrich_t2_hits      FROM anon, authenticated;
-REVOKE ALL ON public._enrich_vc_keywords  FROM anon, authenticated;
-REVOKE ALL ON public._enrich_vc_tier2     FROM anon, authenticated;
-
-GRANT ALL ON public._enrich_bill_kw      TO service_role;
-GRANT ALL ON public._enrich_member_bills TO service_role;
-GRANT ALL ON public._enrich_t2_hits      TO service_role;
-GRANT ALL ON public._enrich_vc_keywords  TO service_role;
-GRANT ALL ON public._enrich_vc_tier2     TO service_role;
+--    These tables are created ad-hoc by enrichment scripts (not by a migration), so guard
+--    each with to_regclass — same pattern as statement 1 — so a from-scratch replay (Supabase
+--    preview branches) skips the missing tables instead of failing with 42P01. On prod, where
+--    the tables exist, the end state is identical.
+DO $$
+DECLARE t text;
+BEGIN
+  FOREACH t IN ARRAY ARRAY[
+    '_enrich_bill_kw', '_enrich_member_bills', '_enrich_t2_hits',
+    '_enrich_vc_keywords', '_enrich_vc_tier2'
+  ] LOOP
+    IF to_regclass('public.' || t) IS NOT NULL THEN
+      EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t);
+      EXECUTE format('REVOKE ALL ON public.%I FROM anon, authenticated', t);
+      EXECUTE format('GRANT ALL ON public.%I TO service_role', t);
+    END IF;
+  END LOOP;
+END $$;
