@@ -27,6 +27,46 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-15 (PROD HOTFIX — donor-import regression: edge fn shipped ahead of migration) — night
+
+**What happened & why**
+After PR #419 ("honest donor-import status") merged, an admin's new donor import showed
+**0 rows / 0 inserted / running** and froze. Root cause was a **deploy-ordering regression**, not
+the original bug: on merge, both the frontend and the `import-fec-receipts-csv` edge function
+auto-deploy to prod, but **migrations do not auto-apply** (guardrail #1). So prod ran the new
+function (v311, redeployed 18:33Z) — which writes the new `last_progress_at` column in the
+first-batch session upsert *and* the per-batch counter update — against a DB that still lacked the
+column. Effect: the per-batch `UPDATE` failed (caught) so `row_count`/`inserted_contributions`
+froze (the in-flight import stuck at 2,000 while contributions kept inserting to 2,118), and worse,
+the first-batch upsert failed so **any brand-new import created no session row** (invisible in
+history, not undoable).
+
+**State** (verified)
+- Diagnosed via Supabase MCP: `information_schema` showed no `last_progress_at` in prod
+  `donor_import_sessions`; `get_edge_function` v311 contained the `last_progress_at` writes;
+  the stuck session's 2,118 contributions are present and tagged with `import_session_id` (data
+  safe, Undo works).
+- **Fix applied to prod**: ran `apply_migration` for
+  `20260615180000_donor_import_last_progress.sql` (`ADD COLUMN IF NOT EXISTS last_progress_at
+  timestamptz`; additive, reversible, no RLS change). Confirmed the column exists and that a
+  simulated first-batch upsert + counter `UPDATE` (both writing `last_progress_at`) now succeed,
+  then deleted the throwaway test row. Prod frontend + edge fn + schema are now consistent.
+- Not changed in this entry's branch: only `docs/HANDOFF.md`. No code/migration files changed
+  (the migration already exists in the repo from #419; this was a prod *apply*).
+
+**Next**
+Re-run the failed donor import (S001150 / schedule_a 2026-06-15) — it will now track and complete
+correctly; Undo the pre-fix stuck `running`/`stalled` rows to clean up the history.
+
+**Deferred / lesson**
+- **Process gap to close:** a PR that couples code to a new column is only *half*-deployed on
+  merge until the migration is applied. On any such merge, apply the migration immediately (or
+  make the code tolerate the column's absence). Consider a deploy step that applies pending
+  migrations, or a guard in the edge fn.
+- Larger robust fix (backend stale-sweep cron + server-driven background import) still deferred.
+
+---
+
 ## 2026-06-15 (review council — add 4 growth/communication reviewers) — late evening
 
 **What happened & why**
