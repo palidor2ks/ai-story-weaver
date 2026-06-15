@@ -27,6 +27,56 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-15 (preflight + congress backfill fix + FEC spot-check) — claude/preflight-h3uo3u
+
+**What happened & why**
+Multi-task session off a morning preflight. Four threads:
+1. **Cross-chamber duplicate sweep** (the "Next" from 2026-06-14). Queried for the same
+   bioguide-vs-FEC-ETL pattern that hit Deborah Ross. Found exactly ONE untriaged case:
+   Alan Grayson — ghost House row `H6FL08213` (0 donors) vs canonical Senate `S2FL00581`
+   (1,139 donors, committee C00424713). Merged via `merge_candidate()` using the same
+   NULL-the-dup-person_id workaround, repointed the orphaned election_candidates row, deleted
+   the orphan person. 47 merged pairs total now. **0 untriaged cross-chamber dupes remain.**
+2. **Congress donor backfill stall** (ROADMAP #1, found 2026-06-15). Root cause: the
+   `schedule-congress-donor-sync` edge fn the crons call **did not exist in the repo**. Wrote it
+   (scope filter tier_1=congress_visible, backfill/refresh modes, finds `has_more=true` stalled
+   committees, calls sync-all-donors). 160 stalled committees (122 never-synced) should now drain.
+3. **Migration version collision** — surfaced by Supabase preview CI on the PR: two migrations
+   shared version `20260613050000`. Renamed earmark one to `20260613051000` (self-contributions
+   applies first). Preview went green after.
+4. **FEC finance verification** (ROADMAP #1). Spot-checked 13 candidate-cycles across
+   states/chambers/donor-sizes. Itemized donor data (11A/11C) reconciles to cached FEC totals
+   within dollars — the data users SEE is sound. Surfaced two linked recon findings (A: `status`
+   ignores total_receipts_delta — 358/1746 ok rows >10% off on total; B: local_other_receipts
+   double-counts JFC transfers, the root of A's noise). Recorded in DATA-ACCURACY §1 + ROADMAP.
+   Also: confirmed disk pressure is a non-issue — the plan is 27GB with ~10.7GB free, not 8GB.
+
+**State** (verified)
+- Threads 1–3 shipped in **PR #409 (MERGED)**. Verified on prod via MCP: Grayson H6FL08213 gone,
+  S2FL00581 has 1,139 contributions, merge_map entry present, 0 untriaged cross-chamber dupes.
+- Preflight earlier this session: lint ✅ (0 err/156 warn), test ✅ (72 pass), build ❌ and
+  check:data ❌ are **sandbox egress 403s only** (re-run on CI/local). Accuracy scoreboard
+  recovered via MCP: FEC 761 err (≤900 ✅), votes 244 (≤350 ✅), bills 1d stale ✅, state finance
+  0 err ✅, answers 5.43% URL-sourced (deliberately RED).
+- Thread 4 is **docs-only**, on this branch in **draft PR #410** (open). No code/data changed by it.
+- The `schedule-congress-donor-sync` fn is deployed (PR #409 merged) but **I have NOT verified the
+  backfill is actually progressing** — needs a follow-up check of `has_more=true` counts over a day.
+
+**Next**
+Re-check the congress donor backfill is draining: query `candidate_committees` for
+`has_more=true AND last_sync_completed_at IS NULL` count and confirm it's dropping from 122 day-over-day.
+
+**Deferred**
+- **FEC recon Finding B** (Line 14/15 "other" double-counts JFC transfers) — fix before Finding A
+  (gating on total receipts) can be trusted. Ranked in ROADMAP #1.
+- **FEC recon Finding A** (status gates only on itemized, not total receipts). Blocked on B.
+- merge_candidate() latent person_id-unique bug — carried from 2026-06-14.
+- Earmark-org spelling variants audit (ACEC PAC, MORPAC) — carried.
+- useCandidateShareCardData.ts earmark cause badge fix — carried.
+- Candidate self-contributions on Line 11AI (~22 cases show as own top donor) — carried.
+
+---
+
 ## 2026-06-14 (Deborah Ross duplicate candidate merge) — claude/zealous-fermi-d374jk
 
 **What happened & why**
