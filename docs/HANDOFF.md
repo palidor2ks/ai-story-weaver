@@ -27,6 +27,45 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-15 (review council — add 4 growth/communication reviewers) — late evening
+
+**What happened & why**
+The review council in `.claude/agents/` covered data/trust, backend/ops, and frontend/quality but
+nothing for the "SEO → marketing" half of the advisory board. For a political app where **trust
+and neutrality are the product** (`docs/VISION.md`), the copy/positioning/discoverability layer is
+exactly where credibility can quietly erode and had no reviewer. Added four **read-only** reviewers
+(`Read, Grep, Glob`, `model: sonnet`, matching the existing reviewer template byte-for-byte):
+`seo-reviewer` (metadata/indexability/canonical/schema.org/sitemap/OG, anchored on
+`src/components/Seo.tsx`, `index.html`, `scripts/generate-sitemap.ts`, `public/robots.txt`,
+`src/lib/brand.ts`), `marketing-growth-reviewer` (positioning/funnel/retention, anchored on
+`PoliticalCompassTest.tsx`/`Onboarding.tsx`/`QuizResults.tsx`), `conversion-copy-reviewer`
+(tactical first-screen clarity/CTA/friction/trust signals), and `brand-voice-reviewer`
+(naming/neutrality/no-endorsement-verbs/honest-uncertainty). All four bake in the VISION
+guardrails: non-partisan, never "endorse/vote for" (prefer align/match/compare/stand), and
+share-cards/Remotion treated as **parked out of v1**. Registered all four under a new
+"Growth and communication" subsection in `CLAUDE.md`'s Review council.
+
+**State** (verified)
+- 4 new files in `.claude/agents/` + the CLAUDE.md council edit. Frontmatter confirmed well-formed
+  (name==filename, `tools: Read, Grep, Glob`, `model: sonnet`) for all four.
+- **Not** smoke-tested live: the agent registry loads at session start, so the new agents aren't
+  selectable until a fresh session — the planned `brand-voice-reviewer` invocation returned
+  "agent not found" this session. Next session can confirm they're listed and return a verdict.
+- No `src/`, edge-function, SQL, or other app code changed — docs/agent config only, so
+  lint/build/test are unaffected.
+
+**Next**
+In a fresh session, invoke one new reviewer (e.g. `brand-voice-reviewer` on
+`src/lib/shareCaptions.ts`) to confirm it loads and returns its verdict triad
+(`ON-VOICE / INCONSISTENT / OFF-BRAND`).
+
+**Deferred**
+- All prior deferred items still stand (FEC recon Finding A after re-drain, Thanedar 2026
+  negative-net-other, merge_candidate person_id bug, answers/Perplexity, earmark spelling audit,
+  share-card badge, Line 11AI, Supabase disk pressure).
+
+---
+
 ## 2026-06-15 (FEC recon Finding B fix — other_total double-count) — evening
 
 **What happened & why**

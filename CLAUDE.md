@@ -129,6 +129,17 @@ the diff; reviewers are pinned to bounded prompts/models — see Quota disciplin
 - **performance-bundle-reviewer** — dashboards, charts, candidate/donor/committee pages,
   query-heavy screens, bundle-size risk, and render/refetch regressions.
 
+### Growth and communication
+
+- **seo-reviewer** — metadata, indexability, canonical URLs, schema.org structured data, sitemap
+  behavior, page titles, social-preview tags, and search landing pages.
+- **marketing-growth-reviewer** — positioning, calls to action, landing-page narrative,
+  onboarding flow, shareability, retention loops, and audience-specific messaging.
+- **conversion-copy-reviewer** — tactical landing copy: headlines, CTA clarity, friction, trust
+  signals, and whether pages explain the value proposition fast.
+- **brand-voice-reviewer** — product-language consistency, tone, neutrality, trust, and
+  credibility (tone is trust for a political app).
+
 ### Implementation agents
 
 - **quick-fix** — tiny low-risk edits.
