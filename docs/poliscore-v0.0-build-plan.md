@@ -36,6 +36,26 @@ Score the **final-passage roll call only** = **max `vote_number` per bill** (nev
    on the migration before apply.
 5. **Ship v0.0.**
 
+## Status (2026-06-16)
+
+- **Applied to prod:** `poliscore_key_votes` (28 rows; 6 left / 22 right; all resolve to roll calls)
+  and the compute RPC **`get_poliscore_record(p_candidate_id text)`** → returns per key vote:
+  `key_vote_id, topic_id, lean, title, neutral_description, source_url, congress, bill_type,
+  bill_number, vote_position`. Security advisor: clean (no `poliscore` findings).
+- **Validated:** Alma Adams (D, NC-12) = 28/28 on record, **28 left-aligned / 0 right-aligned**
+  (face-valid for a progressive). The RPC computes alignment correctly.
+- **Known gap (deferred):** the rubric is **House bills only**, so it scores the **~26 House members,
+  not the 4 Senators** (Tillis/Budd + NJ's two) — Senate floor roll calls differ. Add Senate key votes
+  in a later pass.
+
+## Frontend contract (for the build)
+
+Hook `usePoliScoreRecord(candidateId)` → `supabase.rpc('get_poliscore_record', { p_candidate_id })`,
+group by `topic_id`, compute participation (`vote_position IN ('Yea','Nay')`) and per-topic
+"N of M cast". Render per-topic record with each vote's `neutral_description` + Yea/Nay/Not Voting +
+`source_url` link, the methodology link, the "free & un-buyable" wall, and the Left/Right disclaimer.
+Empty record (e.g., Senators) → show "Not yet scored — House votes only in v0."
+
 ## RLS
 
 `poliscore_key_votes` is public reference data (no PII): `SELECT USING (true)`; writes via
