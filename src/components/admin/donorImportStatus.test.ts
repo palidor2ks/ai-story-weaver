@@ -13,7 +13,12 @@ describe('isStalledImport', () => {
     expect(isStalledImport('running', iso(5000), iso(60_000), NOW)).toBe(false);
   });
 
-  it('never flags terminal statuses, even if old', () => {
+  it('flags status="stalled" immediately regardless of timestamps', () => {
+    expect(isStalledImport('stalled', iso(1000), iso(1000), NOW)).toBe(true);
+    expect(isStalledImport('stalled', null, iso(1000), NOW)).toBe(true);
+  });
+
+  it('never flags other terminal statuses, even if old', () => {
     for (const status of ['completed', 'completed_with_errors', 'cancelled', 'undone']) {
       expect(isStalledImport(status, iso(STALE_IMPORT_MS * 10), iso(STALE_IMPORT_MS * 10), NOW)).toBe(false);
     }
