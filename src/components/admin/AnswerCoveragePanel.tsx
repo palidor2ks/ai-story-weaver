@@ -1368,8 +1368,9 @@ export function AnswerCoveragePanel() {
         {/* Pipeline & Cron health — attempts, failures, and per-rep drill-down */}
         <CronHealthPanel />
 
-        {/* Data Accuracy Scoreboard — bills, state finance, reconciliation, identity */}
-        <DataAccuracyScoreboard />
+        {/* Data Accuracy Scoreboard — bills, state finance, reconciliation, identity.
+            Candidate-scoped cards follow the visible-states scope; bills/state-finance stay global. */}
+        <DataAccuracyScoreboard visible={visibleStats} />
         {/* Voting Records Stats */}
         <div className="space-y-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

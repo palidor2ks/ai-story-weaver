@@ -9,6 +9,7 @@ import {
   useIdentityStatsCache,
   useRefreshAdminStats,
 } from "@/hooks/useAdminStatsCache";
+import type { CoverageDashboardStats } from "@/hooks/useCoverageDashboardStats";
 
 // The categories roadmap priority #1 cares about that the dashboard didn't cover:
 // bills freshness, state campaign finance, finance reconciliation, candidate identity.
@@ -52,7 +53,7 @@ function Tile({
   );
 }
 
-export function DataAccuracyScoreboard() {
+export function DataAccuracyScoreboard({ visible }: { visible?: CoverageDashboardStats }) {
   const bills = useBillsStatsCache();
   const states = useStateFinanceStatsCache();
   const recon = useFinanceReconStatsCache();
@@ -62,16 +63,33 @@ export function DataAccuracyScoreboard() {
 
   const billsData = bills.data?.data;
   const statesData = states.data?.data;
-  const reconData = recon.data?.data;
   const identityData = identity.data?.data;
   const answersData = answers.data?.data;
+
+  // Candidate-scoped cards (FEC reconciliation, identity, URL-sourced answers) follow the
+  // dashboard's visible-states scope when the RPC has loaded; otherwise fall back to the global
+  // admin_stats_cache. Bills (national) and State finance (per-state NJ/FL/NY) stay global.
+  const reconData = visible
+    ? {
+        ok: visible.reconOk,
+        warning: visible.reconWarning,
+        partial: visible.reconPartial,
+        error: visible.reconError,
+        errorGapUsd: visible.reconErrorGapUsd,
+        latestCheck: visible.reconLatestCheck,
+      }
+    : recon.data?.data;
+
+  const identityCandidates = visible ? visible.totalCandidates : identityData?.candidates;
+  const identityMerges = visible ? visible.auditedMerges : identityData?.auditedMerges;
+
+  const urlTotal = visible ? visible.totalAnswers : answersData?.totalAnswers;
+  const urlSourced = visible ? visible.sourcedWithUrl : answersData?.sourcedWithUrl;
 
   // URL-sourcing bands set by the maintainer 2026-06-10:
   // target 100%, >=75% success (green), <35% poor (red), between = amber.
   const urlSourcedPct =
-    answersData && answersData.totalAnswers > 0
-      ? Math.round(((answersData.sourcedWithUrl ?? 0) / answersData.totalAnswers) * 100)
-      : null;
+    urlTotal && urlTotal > 0 ? Math.round(((urlSourced ?? 0) / urlTotal) * 100) : null;
   const answersTone =
     urlSourcedPct === null ? "muted" : urlSourcedPct < 35 ? "red" : urlSourcedPct < 75 ? "amber" : "green";
 
@@ -158,13 +176,13 @@ export function DataAccuracyScoreboard() {
           }
         />
         <Tile
-          tone={identityData ? "green" : "muted"}
+          tone={identityCandidates !== undefined ? "green" : "muted"}
           icon={Users}
           label="Candidate identity"
-          value={identityData ? `${identityData.candidates.toLocaleString()} candidates` : "—"}
+          value={identityCandidates !== undefined ? `${identityCandidates.toLocaleString()} candidates` : "—"}
           detail={
-            identityData
-              ? `${identityData.auditedMerges} audited merges · dupes gated by check:dupes`
+            identityCandidates !== undefined
+              ? `${identityMerges ?? 0} audited merges · dupes gated by check:dupes`
               : "loading…"
           }
         />
@@ -174,15 +192,17 @@ export function DataAccuracyScoreboard() {
           label="Answers URL-sourced"
           value={urlSourcedPct !== null ? `${urlSourcedPct}%` : "—"}
           detail={
-            answersData
-              ? `${(answersData.sourcedWithUrl ?? 0).toLocaleString()} of ${answersData.totalAnswers.toLocaleString()} · target 100% · success ≥75% · poor <35%`
+            urlTotal !== undefined
+              ? `${(urlSourced ?? 0).toLocaleString()} of ${urlTotal.toLocaleString()} · target 100% · success ≥75% · poor <35%`
               : "loading…"
           }
         />
       </div>
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <Clock className="h-3 w-3" />
-        Auto-refreshes server-side every 15 minutes (pg_cron → refresh_admin_stats_cache). Preflight reads the same numbers.
+        {visible
+          ? "FEC reconciliation, candidate identity & URL-sourced answers show visible states only. Bills (national) and state finance (NJ/FL/NY) are whole-database and match the preflight check:accuracy gate."
+          : "Auto-refreshes server-side every 15 minutes (pg_cron → refresh_admin_stats_cache). Preflight reads the same numbers."}
       </div>
     </div>
   );

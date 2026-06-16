@@ -33,6 +33,15 @@ export interface CoverageDashboardStats {
   membersWithFloorVotes: number;
   federalMembers: number;
   coveragePercentage: number;
+  // Data Accuracy Scoreboard (visible-states slice; bills + state-finance stay global/per-state)
+  reconOk: number;
+  reconWarning: number;
+  reconPartial: number;
+  reconError: number;
+  reconErrorGapUsd: number;
+  reconLatestCheck: string | null;
+  auditedMerges: number;
+  sourcedWithUrl: number;
 }
 
 interface RawRow {
@@ -54,6 +63,14 @@ interface RawRow {
   members_with_floor_votes: number;
   federal_members: number;
   coverage_percentage: number | string;
+  recon_ok: number;
+  recon_warning: number;
+  recon_partial: number;
+  recon_error: number;
+  recon_error_gap_usd: number | string;
+  recon_latest_check: string | null;
+  audited_merges: number;
+  sourced_with_url: number | string;
 }
 
 export function useCoverageDashboardStats() {
@@ -85,6 +102,14 @@ export function useCoverageDashboardStats() {
         membersWithFloorVotes: Number(r.members_with_floor_votes) || 0,
         federalMembers: Number(r.federal_members) || 0,
         coveragePercentage: Number(r.coverage_percentage) || 0,
+        reconOk: Number(r.recon_ok) || 0,
+        reconWarning: Number(r.recon_warning) || 0,
+        reconPartial: Number(r.recon_partial) || 0,
+        reconError: Number(r.recon_error) || 0,
+        reconErrorGapUsd: Number(r.recon_error_gap_usd) || 0,
+        reconLatestCheck: r.recon_latest_check ?? null,
+        auditedMerges: Number(r.audited_merges) || 0,
+        sourcedWithUrl: Number(r.sourced_with_url) || 0,
       };
     },
   });
