@@ -6302,6 +6302,7 @@ export type Database = {
       get_coverage_dashboard_stats: {
         Args: never
         Returns: {
+          audited_merges: number
           complete_sync: number
           coverage_percentage: number
           federal_members: number
@@ -6314,6 +6315,13 @@ export type Database = {
           never_synced: number
           no_answers: number
           partial_sync: number
+          recon_error: number
+          recon_error_gap_usd: number
+          recon_latest_check: string | null
+          recon_ok: number
+          recon_partial: number
+          recon_warning: number
+          sourced_with_url: number
           total_answers: number
           total_candidates: number
           total_questions: number
