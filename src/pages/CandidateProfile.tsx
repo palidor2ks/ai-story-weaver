@@ -44,6 +44,7 @@ import { CandidateScoreCard } from '@/components/CandidateScoreCard';
 import { CoverageTierBadge, ConfidenceBadge, IncumbentBadge } from '@/components/CoverageTierBadge';
 import { AIExplanation } from '@/components/AIExplanation';
 
+import { PoliScoreCard } from '@/components/PoliScoreCard';
 import { AIFeedback, ReportIssueButton } from '@/components/AIFeedback';
 import { ContactInfoCard } from '@/components/ContactInfoCard';
 import { RelevantNewsFeed } from '@/components/RelevantNewsFeed';
@@ -640,11 +641,19 @@ export const CandidateProfile = () => {
           />
         </div>
 
+        {/* PoliScore — Voting Record Section */}
+        <div className="mb-8">
+          <PoliScoreCard
+            candidateId={candidate.id}
+            candidateName={candidate.name}
+          />
+        </div>
+
         {/* Positions & Sources Section */}
         <div className="mb-8">
-          <CandidatePositions 
-            candidateId={candidate.id} 
-            candidateName={candidate.name} 
+          <CandidatePositions
+            candidateId={candidate.id}
+            candidateName={candidate.name}
           />
         </div>
 
