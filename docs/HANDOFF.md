@@ -27,6 +27,54 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-16 — Two-state focus, Phase 1: public visibility via RLS — day
+
+**What happened & why**
+New direction: commit fully to the visible-states focus — gate all future work to visible states,
+keep existing data, and ensure PUBLIC users only see visible-state data. Confirmed scope with the
+maintainer: (decision 1) gate everything incl. federal syncs + rescope the accuracy gate; (decision
+2) enforce the public front end via RLS + fix leaky surfaces. This is a 3-phase effort; **this entry
+= Phase 1 (public visibility)**.
+
+Investigation (two Explore agents) found the public app already filtered hidden states in the
+Candidates list + Feed, but leaked them via: candidate profile (`/candidate/:id`), share cards
+(`/r/card/:id`), the anon-key sitemap, and Quiz results — and RLS on `candidates` was `USING(true)`
+(no server-side enforcement).
+
+Phase 1 shipped:
+- **RLS on `candidates`** (migration `20260616200000`): public/anon see visible states only; admins
+  (`has_role`) still see everything. Mirrors client `isHidden()` (null/'' visible; 'US' is in
+  hidden_states so national candidates are hidden from public exactly as the client already hides
+  them). Hidden set read via `get_hidden_state_codes()` (SECURITY DEFINER, anon-safe, evaluated
+  once). This single policy closes the profile/share-card/sitemap leaks (all read `candidates` by id
+  and already handle null gracefully). Edge functions use service_role (BYPASSRLS) → ingestion
+  unaffected.
+- **QuizResults.tsx**: Civic-API officials, representatives, AND the "Candidates on Your Ballot"
+  (upcoming-elections, service_role → bypasses RLS) lists filtered by `!isHidden(state)`.
+
+**State** (verified)
+- Migration **applied to Pulse Dev** + verified live by role: anon → **172** visible (NC+NJ, US
+  excluded), admin → **2392** all. `security-reviewer` → GO after 2 fixes I applied: (1) wrap
+  `auth.uid()` as `(select auth.uid())` for InitPlan; (2) filter the upcoming-elections ballot list.
+  Supabase security advisors: **no** `auth_rls_initplan` / no candidates-policy flags introduced.
+- Child tables (candidate_answers/votes/committees, donors, finance_reconciliation, bill_sponsors)
+  already have **no anon SELECT** policy → no residual public leak there (reviewer-confirmed).
+- `bun run lint` 0 errors · `tsc` clean · `vite build` ok · 79/79 tests.
+
+**Next**
+Phase 2 — ingestion gating: early-return FL/NY finance crons when hidden; gate fec-candidate-drain,
+congress-donor-sync, drain-fec-finance, batch-populate-answers, sync-legislator-votes,
+fetch-member-statements to visible-state candidates/members via the shared `loadHiddenStates()`
+helper (`_shared/onboard-candidate.ts`). Keep existing data.
+
+**Deferred**
+- Phase 3 — rescope `refresh_admin_stats_cache` + `check-data-accuracy.sh` + DATA-ACCURACY.md to
+  visible states (re-converges the gate with the dashboard) once ingestion is visible-only.
+- Possible hardening: child-table reads via SECURITY DEFINER RPCs (e.g. donors) aren't gated by the
+  candidates RLS — low risk (hidden ids aren't discoverable via the filtered list), worth a look.
+
+---
+
 ## 2026-06-16 — Drop the `(supabase as any)` cast + confirm no separate prod — day
 
 **What happened & why**
