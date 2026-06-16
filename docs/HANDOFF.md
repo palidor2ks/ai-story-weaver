@@ -27,6 +27,41 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-16 — Coverage dashboard RPC was timing out (8s) — perf fix — day
+
+**What happened & why**
+After PRs #428/#429 merged and both migrations were applied to Pulse Dev, the dashboard STILL showed
+all-state numbers. Root cause (not a deploy/cache issue): `get_coverage_dashboard_stats()` **timed
+out** under the `authenticated` role's `statement_timeout = 8s`. It passed when I tested via the
+service connection (no cap), which masked it. EXPLAIN ANALYZE showed the `... not in
+(get_hidden_state_codes())` filter made the planner estimate ~1196 visible candidates (really 172),
+so it seq-scanned ~1.9M `candidate_votes` and force-aggregated the 601k-row
+`candidate_answer_coverage_stats` VIEW before filtering. The browser RPC threw → the UI fell back to
+the global `admin_stats_cache` (hence the all-state numbers). A per-function `statement_timeout`
+does NOT help — the outer `select … from func()` timer is armed at 8s before the function's SET runs.
+
+Fix (migration `20260616190000`): resolve the ~172 visible candidate ids into a `text[]` ONCE, then
+filter every aggregate with `candidate_id = any(v_ids)`. The constant array drives index scans
+(idx_candidate_votes_candidate, idx_candidate_answers_candidate_id, finance_reconciliation_candidate_id_idx)
+and pushes the predicate through the coverage view's GROUP BY.
+
+**State** (verified)
+- Applied to Pulse Dev + schema reloaded. **Verified as the `authenticated` role under `set local
+  statement_timeout='8s'`**: returns in-budget with correct values (Total Reps 172, With FEC ID 151,
+  recon 53 error / 4 partial, audited merges 8, URL-sourced 1,819 / 41,688).
+- No frontend changes this round (hook/types/components already shipped in #428/#429). Lint/build/test
+  were green at #429; this is migration-only.
+
+**Next**
+Commit `20260616190000`, push, open a PR. Hard-refresh the dashboard — tiles + scoreboard now show
+the NC+NJ slice.
+
+**Deferred**
+- Prod: apply all three migrations (`…120000`, `…180000`, `…190000`) wherever prod reads from.
+- Regenerate `src/integrations/supabase/types.ts` to drop the `(supabase as any)` cast.
+
+---
+
 ## 2026-06-16 — Coverage & Finance dashboard: apply RPC + scope the scoreboard too — day
 
 **What happened & why**
