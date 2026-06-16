@@ -13,8 +13,10 @@
 export const STALE_IMPORT_MS = 10 * 60 * 1000;
 
 /**
- * True when a session claims to be 'running' but hasn't made progress recently,
- * meaning the browser-driven loop was almost certainly abandoned.
+ * True when a session is stalled — either the DB has already persisted
+ * status='stalled' (written by the sweep_stalled_import_sessions() cron), or
+ * the session claims 'running' but hasn't made progress recently (the sweep
+ * hasn't fired yet for sessions that just died).
  *
  * `lastProgressAt` falls back to `startedAt` for sessions imported before the
  * heartbeat column existed.
@@ -25,6 +27,7 @@ export function isStalledImport(
   startedAt: string,
   now: number = Date.now(),
 ): boolean {
+  if (status === 'stalled') return true;
   if (status !== 'running') return false;
   const last = new Date(lastProgressAt ?? startedAt).getTime();
   if (Number.isNaN(last)) return false;
