@@ -44,72 +44,41 @@ export interface CoverageDashboardStats {
   sourcedWithUrl: number;
 }
 
-interface RawRow {
-  total_candidates: number;
-  total_questions: number;
-  no_answers: number;
-  low_coverage: number;
-  full_coverage: number;
-  total_answers: number | string;
-  total_sourced: number | string;
-  with_fec_id: number;
-  never_synced: number;
-  partial_sync: number;
-  complete_sync: number;
-  legislative_actions: number | string;
-  floor_votes: number | string;
-  total_records: number | string;
-  members_synced: number;
-  members_with_floor_votes: number;
-  federal_members: number;
-  coverage_percentage: number | string;
-  recon_ok: number;
-  recon_warning: number;
-  recon_partial: number;
-  recon_error: number;
-  recon_error_gap_usd: number | string;
-  recon_latest_check: string | null;
-  audited_merges: number;
-  sourced_with_url: number | string;
-}
-
 export function useCoverageDashboardStats() {
   return useQuery({
     queryKey: ["coverage-dashboard-stats"],
     staleTime: 5 * 60 * 1000,
     queryFn: async (): Promise<CoverageDashboardStats> => {
-      // RPC isn't in the generated types until the migration is applied; cast mirrors the
-      // established pattern for new admin RPCs (e.g. get_donors_paginated).
-      const { data, error } = await (supabase as any).rpc("get_coverage_dashboard_stats");
+      const { data, error } = await supabase.rpc("get_coverage_dashboard_stats");
       if (error) throw error;
-      const r = (data?.[0] ?? {}) as RawRow;
+      const r = data?.[0];
       return {
-        totalCandidates: Number(r.total_candidates) || 0,
-        totalQuestions: Number(r.total_questions) || 0,
-        noAnswers: Number(r.no_answers) || 0,
-        lowCoverage: Number(r.low_coverage) || 0,
-        fullCoverage: Number(r.full_coverage) || 0,
-        totalAnswers: Number(r.total_answers) || 0,
-        totalSourced: Number(r.total_sourced) || 0,
-        withFecId: Number(r.with_fec_id) || 0,
-        neverSynced: Number(r.never_synced) || 0,
-        partialSync: Number(r.partial_sync) || 0,
-        complete: Number(r.complete_sync) || 0,
-        legislativeActions: Number(r.legislative_actions) || 0,
-        floorVotes: Number(r.floor_votes) || 0,
-        totalRecords: Number(r.total_records) || 0,
-        membersSynced: Number(r.members_synced) || 0,
-        membersWithFloorVotes: Number(r.members_with_floor_votes) || 0,
-        federalMembers: Number(r.federal_members) || 0,
-        coveragePercentage: Number(r.coverage_percentage) || 0,
-        reconOk: Number(r.recon_ok) || 0,
-        reconWarning: Number(r.recon_warning) || 0,
-        reconPartial: Number(r.recon_partial) || 0,
-        reconError: Number(r.recon_error) || 0,
-        reconErrorGapUsd: Number(r.recon_error_gap_usd) || 0,
-        reconLatestCheck: r.recon_latest_check ?? null,
-        auditedMerges: Number(r.audited_merges) || 0,
-        sourcedWithUrl: Number(r.sourced_with_url) || 0,
+        totalCandidates: Number(r?.total_candidates) || 0,
+        totalQuestions: Number(r?.total_questions) || 0,
+        noAnswers: Number(r?.no_answers) || 0,
+        lowCoverage: Number(r?.low_coverage) || 0,
+        fullCoverage: Number(r?.full_coverage) || 0,
+        totalAnswers: Number(r?.total_answers) || 0,
+        totalSourced: Number(r?.total_sourced) || 0,
+        withFecId: Number(r?.with_fec_id) || 0,
+        neverSynced: Number(r?.never_synced) || 0,
+        partialSync: Number(r?.partial_sync) || 0,
+        complete: Number(r?.complete_sync) || 0,
+        legislativeActions: Number(r?.legislative_actions) || 0,
+        floorVotes: Number(r?.floor_votes) || 0,
+        totalRecords: Number(r?.total_records) || 0,
+        membersSynced: Number(r?.members_synced) || 0,
+        membersWithFloorVotes: Number(r?.members_with_floor_votes) || 0,
+        federalMembers: Number(r?.federal_members) || 0,
+        coveragePercentage: Number(r?.coverage_percentage) || 0,
+        reconOk: Number(r?.recon_ok) || 0,
+        reconWarning: Number(r?.recon_warning) || 0,
+        reconPartial: Number(r?.recon_partial) || 0,
+        reconError: Number(r?.recon_error) || 0,
+        reconErrorGapUsd: Number(r?.recon_error_gap_usd) || 0,
+        reconLatestCheck: r?.recon_latest_check ?? null,
+        auditedMerges: Number(r?.audited_merges) || 0,
+        sourcedWithUrl: Number(r?.sourced_with_url) || 0,
       };
     },
   });

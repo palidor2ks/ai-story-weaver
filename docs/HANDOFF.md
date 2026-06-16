@@ -27,6 +27,37 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-16 — Drop the `(supabase as any)` cast + confirm no separate prod — day
+
+**What happened & why**
+Cleanup after the visible-states dashboard shipped (#428–#431). Two asks:
+1. **Prod migrations** — investigated and there is **no separate prod project**. `list_projects`
+   returns only **Pulse Dev** (`ornnzinjrcyigazecctf`), which is what the app's `VITE_SUPABASE_URL`
+   points at AND the project the Supabase GitHub integration is connected to. All four coverage
+   migrations are applied + tracked there (this project records migrations by NAME with apply-time
+   versions — e.g. `coverage_dashboard_visible_stats_rpc` → `20260616173732` — so the repo's
+   `…120000`/`…180000`/… filename versions won't match `schema_migrations`, which is expected here,
+   not drift). Nothing to apply.
+2. **Type cleanup** — `get_coverage_dashboard_stats` is now in `types.ts`, but the generated block
+   had only the original 18 columns (missing the 8 scoreboard fields from `…180000`). Added the 8
+   fields to that Returns block, then dropped the `(supabase as any)` cast in
+   `useCoverageDashboardStats` (now `supabase.rpc("get_coverage_dashboard_stats")`, typed) and
+   removed the hook from the eslint no-explicit-any warn-allowlist.
+
+**State** (verified)
+- `bun run lint` 0 errors (warnings 157→156 — the removed cast) · `tsc -b --noEmit` clean ·
+  `vite build` ok · 79/79 tests.
+- No DB/behavior change; types-only + hook refactor. The hook is now gated at lint "error" level and
+  passes.
+
+**Next**
+Push + open PR. After this the visible-states dashboard work is fully wrapped (no known follow-ups).
+
+**Deferred**
+- None outstanding. (If a separate prod project is ever added, apply the four coverage migrations there.)
+
+---
+
 ## 2026-06-16 — Scope State finance scoreboard card to visible states — day
 
 **What happened & why**
