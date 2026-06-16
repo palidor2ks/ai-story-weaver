@@ -27,6 +27,50 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-16 — NC+NJ finance verification → donor under-coverage + a live 401 incident — day
+
+**What happened & why**
+Started verifying NC+NJ data vs source (the ship gate, ROADMAP #1). Finance pass findings:
+- **Donor data is materially incomplete for marquee candidates.** Of 37 visible recon `error` rows,
+  29 are genuine itemized gaps (avg **−47%** vs FEC) — NOT the total-receipts metric noise I first
+  hypothesized (0 pure-noise error rows; verified live via SQL). Root cause = donor-sync drops
+  committees / imports nothing yet stamps "complete": **Roy Cooper (NC Sen) has 0 imported donors
+  despite $6.6M FEC itemized** (his committee `C00913566` was synced for cycle **2024**, when he was
+  Governor — wrong cycle; his money is 2026). Booker synced **1 of 7** committees; Pallone 4 of 5.
+- A SECOND pattern (Foxx/Tillis/Rouzer 2024: local itemized ≥ FEC yet −45% `individual_delta_pct`)
+  is a likely reconciliation-metric artifact, not missing data — separate audit.
+
+**Actions taken**
+- **Re-queued 23 visible 2026 error candidates** (set `last_donor_sync = null` via SQL) so the drain
+  re-syncs them for 2026. *(Data nudge to Pulse Dev; reversible — drain re-stamps.)*
+- **Wrote a durable guard** in `fec-candidate-drain` (PR draft): when a sync completes with 0 imported
+  donors but `finance_reconciliation.fec_itemized > 0` for the cycle, set `last_donor_sync` to ~1 day
+  ago instead of stamping done-for-14-days (re-due daily, not every 3 min → no batch starvation;
+  overwrites so fetch-fec-donors' own stamp can't win). Adds a `held` counter. NOTE: `fec_itemized_total`
+  on candidate_committees is dead (never written) — guard reads `finance_reconciliation.fec_itemized`.
+
+**State** (verified / NOT)
+- **LIVE 401 INCIDENT (unresolved):** edge logs show `fetch-fec-donors` + `fetch-fec-committees`
+  (and intermittently fl/nj/ny finance) returning **401 at the gateway** (`deployment_id: null`, 0ms),
+  while `fec-candidate-drain` returns 200. So donor ingestion is currently FAILING — the re-queue
+  populated nothing (Cooper still 0). 200s on old `version 606` flipped to 401s on `null` deployment
+  → looks like in-flight redeploy/auth-propagation (recent merge churn) or a service-key/verify_jwt
+  issue. **Could be transient** — re-check shortly.
+- The guard is **frontend-untestable** (supabase/functions excluded from lint/build/test); needs the
+  etl-pipeline-reviewer + a live run once the 401 clears.
+- **Did NOT merge the guard** — refusing to trigger more function redeploys during a 401 incident.
+
+**Next**
+Re-check the 401 (and Cooper) in a few min. If 401s persist, investigate function auth/secrets/deploy
+config (service-role key / verify_jwt) — that's now the top finance blocker. Then etl-review + merge
+the guard, and let the re-queue backfill the 23.
+
+**Deferred**
+- Audit `individual_delta_pct` for the local≥FEC 2024 rows (metric artifact).
+- Multi-committee completeness (Booker 1/7) — ensure all committees sync before "complete".
+
+---
+
 ## 2026-06-16 — Two-state focus, Phase 3: rescope the accuracy gate to visible — day
 
 **What happened & why**

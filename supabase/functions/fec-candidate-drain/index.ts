@@ -82,6 +82,7 @@ Deno.serve(async (req) => {
   let linked = 0;
   let synced = 0;
   let processed = 0;
+  let held = 0;
   const errors: string[] = [];
 
   for (const c of due ?? []) {
@@ -136,7 +137,29 @@ Deno.serve(async (req) => {
     // queue for stale_days — never finishing. This mirrors fetch-fec-donors, which itself
     // only stamps last_donor_sync when !hasMore. Failed syncs (syncOk=false) also stay due.
     if ((syncOk && !syncHasMore) || !doSync) {
-      await supabase.from("candidates").update({ last_donor_sync: new Date().toISOString() }).eq("id", c.id);
+      // Guard: don't stamp a candidate "done for stale_days" when the sync imported ZERO donors
+      // while FEC reports itemized contributions for this cycle. That's the trap that left e.g.
+      // Roy Cooper at 0 donors despite $6.6M FEC itemized (synced before FEC posted his data /
+      // wrong cycle), then sitting stale for 14 days. Instead, set last_donor_sync to ~1 day ago
+      // so it re-tries tomorrow (not every 3 min — that would starve the batch) until the data
+      // lands. We OVERWRITE rather than skip so fetch-fec-donors' own "now" stamp can't win.
+      let stampValue = new Date().toISOString();
+      if (doSync) {
+        const { count: donorCount } = await supabase
+          .from("donors").select("id", { count: "exact", head: true }).eq("candidate_id", c.id);
+        if ((donorCount ?? 0) === 0) {
+          const { data: recon } = await supabase
+            .from("finance_reconciliation").select("fec_itemized")
+            .eq("candidate_id", c.id).eq("cycle", cycle).maybeSingle();
+          const fecItemized = Number(recon?.fec_itemized) || 0;
+          if (fecItemized > 0) {
+            stampValue = new Date(Date.now() - Math.max(staleDays - 1, 0) * 86400000).toISOString();
+            held++;
+            console.warn(`[fec-candidate-drain] hold ${c.name}: 0 donors imported but FEC reports $${Math.round(fecItemized).toLocaleString()} itemized (cycle ${cycle}) — re-due ~1 day`);
+          }
+        }
+      }
+      await supabase.from("candidates").update({ last_donor_sync: stampValue }).eq("id", c.id);
     }
 
     await sleep(500);
@@ -153,6 +176,6 @@ Deno.serve(async (req) => {
   const { count: remaining } = await remainingQuery;
 
   return new Response(JSON.stringify({
-    ok: true, cycle, processed, linked, synced, remaining: remaining ?? null, errors: errors.slice(0, 20),
+    ok: true, cycle, processed, linked, synced, held, remaining: remaining ?? null, errors: errors.slice(0, 20),
   }, null, 2), { headers: { ...cors, "Content-Type": "application/json" } });
 });
