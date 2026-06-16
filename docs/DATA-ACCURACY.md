@@ -2,9 +2,18 @@
 
 > Roadmap priority #1 says "ship data you can trust" — this doc makes that **checkable**: one
 > goal per data category, the exact definition being measured, where the number lives, and the
-> failure threshold `bun run check:accuracy` enforces. The Coverage & Finance dashboard
-> (admin), the preflight scoreboard, and the 15-minute `refresh_admin_stats_cache()` cron all
-> read/write the SAME `admin_stats_cache` rows — one set of numbers, three surfaces.
+> failure threshold `bun run check:accuracy` enforces. The preflight scoreboard and the 15-minute
+> `refresh_admin_stats_cache()` cron read/write the SAME `admin_stats_cache` rows — these are
+> **whole-database** numbers on purpose (they track the full backlog, including states not yet
+> launched).
+>
+> **Note (2026-06-16):** the Coverage & Finance dashboard's *headline tiles* no longer read those
+> cache rows directly — they read `get_coverage_dashboard_stats()` (migration `20260616120000`),
+> which applies the same definitions but filtered to **visible states only** (hidden states
+> excluded via `get_hidden_state_codes()`, matching `get_finance_cycle_summary`). This is
+> display-only: `admin_stats_cache` and these thresholds are unchanged and remain the whole-DB
+> source of truth. So a dashboard tile (visible-states slice) will read LOWER than the cache /
+> scoreboard number (all states) — that's expected, not drift.
 >
 > Standing numbers below were measured **2026-06-10** (live DB). Update them when a category
 > materially moves, and ratchet thresholds DOWN as backlogs are fixed — never up without a

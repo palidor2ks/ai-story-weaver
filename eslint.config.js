@@ -49,6 +49,9 @@ export default tseslint.config(
       // PollResults consumes a Supabase join (question_options) that the generated
       // types resolve to a SelectQueryError, so its rows can't be cleanly typed yet.
       "src/components/poll/PollResults.tsx",
+      // get_coverage_dashboard_stats is a new admin RPC not yet in the generated types
+      // (added by migration 20260616120000); the result row is cast until types regenerate.
+      "src/hooks/useCoverageDashboardStats.ts",
       "src/hooks/useCommitteeTopics.ts",
       "src/hooks/useDonorAliases.ts",
       "src/hooks/useDonorsPaginated.ts",

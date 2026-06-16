@@ -15,6 +15,7 @@ import {
 const PAGE_SIZE = 20;
 import { useCandidatesAnswerCoverageProgressive, useUniqueStates, useUniqueDistricts, useRecalculateCoverageTiers, CandidateAnswerCoverage } from "@/hooks/useCandidatesAnswerCoverage";
 import { useFinanceCycles } from "@/hooks/useFinanceCycles";
+import { useCoverageDashboardStats } from "@/hooks/useCoverageDashboardStats";
 import { usePopulateCandidateAnswers } from "@/hooks/usePopulateCandidateAnswers";
 import { useEnrichCandidateSources } from "@/hooks/useCandidateAnswers";
 import { useFECIntegration } from "@/hooks/useFECIntegration";
@@ -148,6 +149,12 @@ export function AnswerCoveragePanel() {
     [states, isStateHidden]
   );
   
+  // Visible-states-only headline numbers (NC/NJ today). Read SEPARATELY from the global
+  // admin_stats_cache below so the accuracy scoreboard keeps its whole-database source of
+  // truth; the dashboard just displays the visible slice. Falls back to the cache when this
+  // hasn't loaded (or the RPC migration isn't applied yet) so nothing goes blank.
+  const { data: visibleStats } = useCoverageDashboardStats();
+
   // Use cached stats instead of direct queries
   const { data: candidateStatsCache, isLoading: statsLoading } = useCandidateAnswerStatsCache();
   const { data: votingStatsCache, isLoading: votingStatsLoading } = useVotingRecordsStatsCache();
@@ -351,11 +358,15 @@ export function AnswerCoveragePanel() {
     setHighVolumeMode
   } = useFECIntegration();
   
+  // The dashboard is scoped to visible states only. The candidate query isn't always
+  // state-filtered (e.g. a party-only filter returns every state), so drop hidden-state
+  // rows here — this keeps the per-rep table AND every count derived from it (needs-sync,
+  // missing-FEC-id, etc.) consistent with the visible-states headline tiles.
   const baseFilteredCandidates = useMemo(() => (
     candidates?.filter(c =>
-      c.name.toLowerCase().includes(searchQuery.toLowerCase())
+      c.name.toLowerCase().includes(searchQuery.toLowerCase()) && !isStateHidden(c.state)
     ) || []
-  ), [candidates, searchQuery]);
+  ), [candidates, searchQuery, isStateHidden]);
 
   // Finance status now uses the standardized formula: Total = Itemized + Unitemized + Other
   const calculateFinanceStatus = useCallback((candidate: CandidateAnswerCoverage) => {
@@ -765,8 +776,49 @@ export function AnswerCoveragePanel() {
   const votingStats = votingStatsCache?.data;
   const fecStats = fecStatsCache?.data ?? { withFecId: 0, neverSynced: 0, partialSync: 0, complete: 0 };
 
-  const noAnswersCount = candidateStats?.noAnswers || 0;
-  const lowCoverageCount = candidateStats?.lowCoverage || 0;
+  // Headline numbers shown in the tiles, voting section, and source-quality bar. Prefer the
+  // visible-states-only RPC (NC/NJ today); fall back to the global admin_stats_cache values
+  // when the RPC hasn't loaded or the migration isn't applied yet, so the dashboard degrades
+  // to "all states" rather than going blank. `*Display` = what the UI renders.
+  const totalRepsDisplay = visibleStats?.totalCandidates ?? candidateStats?.totalCandidates ?? 0;
+  const totalQuestionsDisplay = visibleStats?.totalQuestions ?? candidateStats?.totalQuestions ?? 0;
+  const noAnswersDisplay = visibleStats?.noAnswers ?? candidateStats?.noAnswers ?? 0;
+  const fullCoverageDisplay = visibleStats?.fullCoverage ?? candidateStats?.fullCoverage ?? 0;
+  const totalAnswersDisplay = visibleStats?.totalAnswers ?? sourceStats.totalAnswers;
+  const totalSourcedDisplay = visibleStats?.totalSourced ?? sourceStats.totalSourced;
+  const sourcePercentageDisplay = totalAnswersDisplay > 0
+    ? Math.round((totalSourcedDisplay / totalAnswersDisplay) * 100)
+    : 0;
+
+  // FEC tiles (visible-states-only with global fallback).
+  const fecWithIdDisplay = visibleStats?.withFecId ?? fecStats.withFecId;
+  const fecNeverSyncedDisplay = visibleStats?.neverSynced ?? fecStats.neverSynced;
+  const fecPartialDisplay = visibleStats?.partialSync ?? fecStats.partialSync;
+  const fecCompleteDisplay = visibleStats?.complete ?? fecStats.complete;
+
+  // Congressional voting tiles (visible-states-only with global fallback).
+  const votLegislativeDisplay = visibleStats?.legislativeActions ?? votingStats?.legislativeActions ?? 0;
+  const votFloorDisplay = visibleStats?.floorVotes ?? votingStats?.floorVotes ?? 0;
+  const votTotalRecordsDisplay = visibleStats?.totalRecords ?? votingStats?.totalRecords ?? 0;
+  const votMembersSyncedDisplay = visibleStats?.membersSynced ?? votingStats?.membersSynced ?? 0;
+  const votMembersFloorDisplay = visibleStats?.membersWithFloorVotes ?? votingStats?.membersWithFloorVotes ?? 0;
+  const votCoverageDisplay = visibleStats?.coveragePercentage ?? votingStats?.coveragePercentage ?? 0;
+  // Denominator for "Members Synced": visible federal members when known, else the full chamber.
+  const votMembersDenom = visibleStats?.federalMembers ?? 540;
+
+  // Overall coverage bar — recomputed from the visible-states numbers (answers ÷ reps×questions),
+  // falling back to the global federal-scope syncStats. lastSyncTime stays from syncStats.
+  const overallActualDisplay = visibleStats ? totalAnswersDisplay : (syncStats?.totalActualAnswers ?? 0);
+  const overallPotentialDisplay = visibleStats
+    ? totalRepsDisplay * totalQuestionsDisplay
+    : (syncStats?.totalPotentialAnswers ?? 0);
+  const overallPercentDisplay = overallPotentialDisplay > 0
+    ? Math.round((overallActualDisplay / overallPotentialDisplay) * 1000) / 10
+    : (visibleStats ? 0 : (syncStats?.overallCoveragePercent ?? 0));
+
+  // AI-action counts (Generate for Empty / Refresh Incomplete) follow the visible scope too.
+  const noAnswersCount = visibleStats?.noAnswers ?? candidateStats?.noAnswers ?? 0;
+  const lowCoverageCount = visibleStats?.lowCoverage ?? candidateStats?.lowCoverage ?? 0;
   const visibleUnansweredCount = filteredCandidates.filter(c => c.percentage < 100).length;
 
   // Only show full loading spinner on initial load (when no cached data exists)
@@ -810,9 +862,15 @@ export function AnswerCoveragePanel() {
               <Badge variant="outline" className="text-xs font-normal">
                 Cycle {financeCycle} ({getCycleDateRange(financeCycle)})
               </Badge>
+              <Badge variant="secondary" className="text-xs font-normal">
+                {visibleStates.length > 0
+                  ? `Visible states: ${visibleStates.join(', ')}`
+                  : 'Visible states only'}
+              </Badge>
             </CardTitle>
             <CardDescription>
-              Unified view of AI position answers, FEC donors, and finance reconciliation
+              Unified view of AI position answers, FEC donors, and finance reconciliation —
+              numbers are scoped to visible states (hidden states are managed in the Visible States panel)
             </CardDescription>
           </div>
 
@@ -1216,10 +1274,10 @@ export function AnswerCoveragePanel() {
             </div>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
-            <StatTile icon={Users} label="Total Reps" value={candidateStats?.totalCandidates?.toLocaleString() || 0} />
-            <StatTile icon={HelpCircle} label="Total Questions" value={candidateStats?.totalQuestions?.toLocaleString() || 0} />
-            <StatTile icon={FileText} label="No Answers" tone="amber" value={candidateStats?.noAnswers || 0} />
-            <StatTile icon={CheckCircle2} label="Full Coverage" tone="green" value={candidateStats?.fullCoverage || 0} />
+            <StatTile icon={Users} label="Total Reps" value={totalRepsDisplay.toLocaleString()} />
+            <StatTile icon={HelpCircle} label="Total Questions" value={totalQuestionsDisplay.toLocaleString()} />
+            <StatTile icon={FileText} label="No Answers" tone="amber" value={noAnswersDisplay} />
+            <StatTile icon={CheckCircle2} label="Full Coverage" tone="green" value={fullCoverageDisplay} />
           </div>
         </div>
 
@@ -1246,10 +1304,10 @@ export function AnswerCoveragePanel() {
             </div>
             <div className="flex items-center gap-3">
               <span className="text-sm text-muted-foreground">
-                {sourceStats.totalSourced.toLocaleString()} / {sourceStats.totalAnswers.toLocaleString()} answers with sources
+                {totalSourcedDisplay.toLocaleString()} / {totalAnswersDisplay.toLocaleString()} answers with sources
               </span>
-              <Badge className={getSourceBadgeColor(sourceStats.sourcePercentage)}>
-                {sourceStats.sourcePercentage}% sourced
+              <Badge className={getSourceBadgeColor(sourcePercentageDisplay)}>
+                {sourcePercentageDisplay}% sourced
               </Badge>
             </div>
           </div>
@@ -1297,10 +1355,10 @@ export function AnswerCoveragePanel() {
             </div>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
-            <StatTile icon={Link2} label="With FEC ID" value={fecStats.withFecId} />
-            <StatTile icon={DollarSign} label="Never Synced" tone="muted" value={fecStats.neverSynced} />
-            <StatTile icon={RotateCcw} label="Partial Sync" tone="amber" value={fecStats.partialSync} />
-            <StatTile icon={CheckCircle2} label="Complete" tone="green" value={fecStats.complete} />
+            <StatTile icon={Link2} label="With FEC ID" value={fecWithIdDisplay} />
+            <StatTile icon={DollarSign} label="Never Synced" tone="muted" value={fecNeverSyncedDisplay} />
+            <StatTile icon={RotateCcw} label="Partial Sync" tone="amber" value={fecPartialDisplay} />
+            <StatTile icon={CheckCircle2} label="Complete" tone="green" value={fecCompleteDisplay} />
           </div>
         </div>
 
@@ -1482,7 +1540,7 @@ export function AnswerCoveragePanel() {
                 <Badge variant="outline" className="text-[10px] h-5">Sponsored / Cosponsored</Badge>
               </div>
               <div className="mt-1 text-2xl font-bold text-blue-600 leading-none">
-                {votingStats?.legislativeActions?.toLocaleString() || 0}
+                {votLegislativeDisplay.toLocaleString()}
               </div>
               <div className="mt-1 text-[11px] text-muted-foreground">
                 Bills and resolutions (co)sponsored by members
@@ -1499,7 +1557,7 @@ export function AnswerCoveragePanel() {
                 <Badge variant="outline" className="text-[10px] h-5">Yea / Nay / Present</Badge>
               </div>
               <div className="mt-1 text-2xl font-bold text-green-600 leading-none">
-                {votingStats?.floorVotes?.toLocaleString() || 0}
+                {votFloorDisplay.toLocaleString()}
               </div>
               <div className="mt-1 text-[11px] text-muted-foreground">
                 Actual roll call votes cast on the floor
@@ -1509,10 +1567,10 @@ export function AnswerCoveragePanel() {
 
           {/* Coverage Stats Row */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
-            <StatTile icon={FileText} label="Total Records" value={votingStats?.totalRecords?.toLocaleString() || 0} />
-            <StatTile icon={Users} label="Members Synced" value={votingStats?.membersSynced || 0} suffix="/ 540" />
-            <StatTile icon={Vote} label="With Floor Votes" tone="purple" value={votingStats?.membersWithFloorVotes || 0} />
-            <StatTile icon={CheckCircle2} label="Coverage" tone="green" value={`${votingStats?.coveragePercentage || 0}%`} />
+            <StatTile icon={FileText} label="Total Records" value={votTotalRecordsDisplay.toLocaleString()} />
+            <StatTile icon={Users} label="Members Synced" value={votMembersSyncedDisplay} suffix={`/ ${votMembersDenom}`} />
+            <StatTile icon={Vote} label="With Floor Votes" tone="purple" value={votMembersFloorDisplay} />
+            <StatTile icon={CheckCircle2} label="Coverage" tone="green" value={`${votCoverageDisplay}%`} />
           </div>
 
           {/* Voting Sync Progress - Legislation */}
@@ -1565,20 +1623,20 @@ export function AnswerCoveragePanel() {
         </div>
 
         {/* Overall Progress */}
-        {syncStats && (
+        {(syncStats || visibleStats) && (
           <div className="space-y-2">
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Overall Coverage</span>
               <span className="font-medium">
-                {syncStats.totalActualAnswers.toLocaleString()} / {syncStats.totalPotentialAnswers.toLocaleString()} answers
+                {overallActualDisplay.toLocaleString()} / {overallPotentialDisplay.toLocaleString()} answers
               </span>
             </div>
-            <Progress value={syncStats.overallCoveragePercent} className="h-3" />
+            <Progress value={overallPercentDisplay} className="h-3" />
             <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span className={getCoverageColor(syncStats.overallCoveragePercent)}>
-                {syncStats.overallCoveragePercent}% complete
+              <span className={getCoverageColor(overallPercentDisplay)}>
+                {overallPercentDisplay}% complete
               </span>
-              {syncStats.lastSyncTime && (
+              {syncStats?.lastSyncTime && (
                 <span>
                   Last sync: {formatDistanceToNow(new Date(syncStats.lastSyncTime), { addSuffix: true })}
                 </span>
