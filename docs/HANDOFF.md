@@ -27,6 +27,31 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-16 — PoliScore v0.0 data-accuracy gate + fixes
+
+**What happened & why**
+Ran the `data-accuracy-verifier` gate against Congress.gov before shipping v0.0. It caught **two
+ship-blockers**: (1) `candidate_votes` reuses bill_id `'H R 26'` for BOTH the 118th Born-Alive Act
+and the 119th Energy Act, so `get_poliscore_record` attributed the 2025 Energy vote to the Born-Alive
+key vote — reporting ~11 Democrats as Yea on Born-Alive when they voted Nay (defamation risk);
+(2) HR288's `source_url` pointed at the 119th Congress (wrong bill). Fixed via migration
+`20260616163000_poliscore_fixes.sql`: scope the vote join to the key vote's Congress by a **date
+window** (`year BETWEEN 1789+(congress-1)*2 AND +1`), and correct the HR288 URL. Applied to prod.
+
+**State** (verified)
+- Fix verified live: 12 sampled affected members (Bishop, Costa, Fletcher, Golden…) now return the
+  correct Born-Alive vote (**FIXED ✓**); HR288 URL = 118th; Adams still 28/28 left-aligned.
+- The MTR-then-passage `max(vote_number)` heuristic holds for 27/28 (HR26 was the lone exception, now
+  fixed). Lean coding + descriptions passed the gate.
+- **Side finding:** `candidate_votes` actually contains **full-chamber** votes (GA/CA/TX/… present),
+  which de-risks the v0.1 full-chamber path.
+
+**Next**
+v0.0 is accuracy-gated and ready. Merge PR #427 (migrations already applied to prod; merge deploys
+the frontend). Then v0.1: full-chamber scoring + Senate key votes + Environment/Rights left-coded.
+
+---
+
 ## 2026-06-16 — PoliScore v0.0 frontend shipped
 
 **What happened & why**
