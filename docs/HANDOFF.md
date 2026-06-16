@@ -27,6 +27,44 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-16 — Two-state focus, Phase 2: gate ingestion to visible states — day
+
+**What happened & why**
+Phase 2 of the two-state focus: stop spending ingestion resources on hidden states going forward
+(existing data kept — no deletes/mutations beyond sync metadata). Added two exported helpers to
+`_shared/onboard-candidate.ts`: `isStateVisible(state, hiddenSet, office)` (in-code; national/
+President always kept) and `ingestionHiddenList(hiddenSet)` (hidden codes minus 'US', for the
+PostgREST `.or('state.is.null,state.not.in.(LIST)')` query-level exclusion). Gated 8 functions:
+- **fetch-fl-finance / fetch-ny-finance** — early-return when FL/NY is hidden (before the sync-run
+  insert, so no orphaned 'running' row).
+- **fec-candidate-drain, populate-candidate-answers, schedule-congress-donor-sync,
+  sync-legislator-votes** — query-level `.or` exclusion on the candidates select (so the many
+  never-synced hidden rows can't starve the oldest-first batch). Federal vote sync gated per your
+  "gate federal too" call.
+- **drain-fec-finance** — Phase A filters the candidates lookup; Phase B cross-references visible
+  ids in-code (finance_reconciliation has no state column).
+- **fetch-member-statements** — post-claim in-code filter; skipped hidden members are stamped
+  `last_sync_completed_at=now` so the claim RPC doesn't re-queue them hourly (bounded by claim limit).
+
+**State** (verified)
+- `build` agent implemented to spec; I reviewed every diff. `etl-pipeline-reviewer` → **SAFE, no
+  required fixes** (confirmed `.or().or()` ANDs correctly, NULL/national handling, empty-list guards,
+  no orphaned sync-runs, safe stamping). Added `visible-states-gate.test.ts` → 6/6 pass; full suite
+  85/85. Edge functions aren't covered by eslint/vite, so no lint/build delta.
+- No migration; deploys on merge via the Supabase GitHub integration (single project = Pulse Dev).
+
+**Next**
+Phase 3 — rescope `refresh_admin_stats_cache` + `check-data-accuracy.sh` + DATA-ACCURACY.md to
+visible states (now that ingestion is visible-only, the whole-DB backlog metrics no longer reflect
+work we do; this re-converges the gate with the dashboard).
+
+**Deferred** (etl review, non-blocking)
+- drain-fec-finance Phase A: the `candidate_committees` queue head isn't state-filtered, so visible
+  partial-syncs could starve if hidden partials dominate; add an inner-join/state filter if observed.
+- Minor: populate-candidate-answers doesn't log the excluded count.
+
+---
+
 ## 2026-06-16 — Two-state focus, Phase 1: public visibility via RLS — day
 
 **What happened & why**
