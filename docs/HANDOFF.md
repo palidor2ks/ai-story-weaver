@@ -27,6 +27,37 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-16 — PoliScore Task 1: party-split direction + roll-call data fix — day
+
+**What happened & why**
+Adopted the **party-split method** (direction read from how the delegation's Dems vs Reps voted, not
+hand-assigned) and, validating it, caught a **data-integrity bug**: `candidate_votes` stores multiple
+roll calls per `bill_id` (procedural + final passage), so aggregating by bill produced impossible
+~even party splits (HR28 looked D 12-11 / R 13-13). Fix locked: **score the final-passage roll call
+only (max `vote_number` per bill)**. Re-derived all 28 curated directions on final-passage roll calls
+— they **matched the hand-assignments exactly** (HR2483 dropped as genuinely bipartisan). Also added
+**NJ federal** to scope (home-turf dogfooding; NJ state legislature parked for 2027).
+
+**State** (verified)
+- **Docs only — no code/schema/migration changes.** Updated `poliscore-methodology.md` (roll-call
+  disambiguation rule; party-split as canonical direction method; status/next) and
+  `poliscore-key-votes-draft.md` (validated directions; HR2483 dropped; per-topic balance status).
+- **Live finding:** with final-passage roll calls, directions are clean and party-line. Per-topic
+  left/right balance: **Economy 3R/3L ✓**, NatSec 3R/1L, Health 5R/1L, Gov 4R/1L, **Environment 4R/0L,
+  Rights 3R/0L** — only Economy meets the ≥2-left gate (119th R-House controls the floor agenda).
+- Prior PoliScore docs (methodology, key-votes, gate fixes) merged via PR #426.
+
+**Next**
+**Build v0.0** (objective record scorecard — unblocked; needs only the final-passage roll-call rule +
+participation). Separately, decide the **v0.1 balance** path: ingest full-chamber roll calls (best;
+also unlocks NOMINATE-style scoring) vs. relax the gate to overall-rubric balance.
+
+**Deferred**
+Full-chamber vote ingestion (would fix both the small-sample party split and the left-coded scarcity).
+Environment/Rights left-coded votes remain unmet for v0.1.
+
+---
+
 ## 2026-06-16 — PoliScore Task 1: data spike + v0 methodology — day
 
 **What happened & why**
