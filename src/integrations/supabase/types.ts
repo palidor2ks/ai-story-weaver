@@ -1921,6 +1921,7 @@ export type Database = {
           id: string
           inserted_contributions: number
           inserted_donors: number
+          last_progress_at: string | null
           multi_committee: boolean
           row_count: number
           started_at: string
@@ -1939,6 +1940,7 @@ export type Database = {
           id: string
           inserted_contributions?: number
           inserted_donors?: number
+          last_progress_at?: string | null
           multi_committee?: boolean
           row_count?: number
           started_at?: string
@@ -1957,6 +1959,7 @@ export type Database = {
           id?: string
           inserted_contributions?: number
           inserted_donors?: number
+          last_progress_at?: string | null
           multi_committee?: boolean
           row_count?: number
           started_at?: string
@@ -4245,6 +4248,56 @@ export type Database = {
         }
         Relationships: []
       }
+      poliscore_key_votes: {
+        Row: {
+          bill_number: number
+          bill_type: string
+          congress: number
+          created_at: string
+          id: string
+          lean: string
+          neutral_description: string
+          score_version: string
+          source_url: string
+          title: string | null
+          topic_id: string
+        }
+        Insert: {
+          bill_number: number
+          bill_type: string
+          congress: number
+          created_at?: string
+          id?: string
+          lean: string
+          neutral_description: string
+          score_version?: string
+          source_url: string
+          title?: string | null
+          topic_id: string
+        }
+        Update: {
+          bill_number?: number
+          bill_type?: string
+          congress?: number
+          created_at?: string
+          id?: string
+          lean?: string
+          neutral_description?: string
+          score_version?: string
+          source_url?: string
+          title?: string | null
+          topic_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "poliscore_key_votes_topic_id_fkey"
+            columns: ["topic_id"]
+            isOneToOne: false
+            referencedRelation: "topics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       poll_questions: {
         Row: {
           created_at: string
@@ -6246,6 +6299,29 @@ export type Database = {
           transfer_total: number
         }[]
       }
+      get_coverage_dashboard_stats: {
+        Args: never
+        Returns: {
+          complete_sync: number
+          coverage_percentage: number
+          federal_members: number
+          floor_votes: number
+          full_coverage: number
+          legislative_actions: number
+          low_coverage: number
+          members_synced: number
+          members_with_floor_votes: number
+          never_synced: number
+          no_answers: number
+          partial_sync: number
+          total_answers: number
+          total_candidates: number
+          total_questions: number
+          total_records: number
+          total_sourced: number
+          with_fec_id: number
+        }[]
+      }
       get_cron_job_failures: {
         Args: { p_jobname: string; p_limit?: number }
         Returns: {
@@ -6378,6 +6454,21 @@ export type Database = {
           rep_id: string
           rep_name: string
           state: string
+        }[]
+      }
+      get_poliscore_record: {
+        Args: { p_candidate_id: string }
+        Returns: {
+          bill_number: number
+          bill_type: string
+          congress: number
+          key_vote_id: string
+          lean: string
+          neutral_description: string
+          source_url: string
+          title: string
+          topic_id: string
+          vote_position: string
         }[]
       }
       get_poll_tally: {
@@ -6647,6 +6738,7 @@ export type Database = {
         }
         Returns: string
       }
+      sweep_stalled_import_sessions: { Args: never; Returns: number }
       undo_donor_import: { Args: { p_session_id: string }; Returns: Json }
       undo_ie_import: { Args: { p_session_id: string }; Returns: Json }
     }
