@@ -52,13 +52,34 @@ Deno.serve(async (req) => {
     const { statKey } = await req.json() as { statKey: StatKey };
     console.log(`[refresh-admin-stats] Refreshing: ${statKey}`);
 
-    const { data: results, error: rpcError } = await supabase.rpc("refresh_admin_stats_cache", {
-      p_keys: statKey === "all" ? null : [statKey],
-    });
+    // Run each key individually so one slow stat (e.g. candidate_answer_stats
+    // scanning the full coverage view) can't trip the 60s statement timeout for
+    // the whole batch. Errors are collected per-key instead of failing the call.
+    const ALL_KEYS: Exclude<StatKey, "all">[] = [
+      "voting_records_stats",
+      "candidate_answer_stats",
+      "fec_stats",
+      "bills_stats",
+      "state_finance_stats",
+      "finance_recon_stats",
+      "identity_stats",
+    ];
+    const keys = statKey === "all" ? ALL_KEYS : [statKey as Exclude<StatKey, "all">];
 
-    if (rpcError) {
-      console.error("[refresh-admin-stats] RPC error:", rpcError);
-      return new Response(JSON.stringify({ error: rpcError.message }), {
+    const results: Record<string, unknown> = {};
+    const errors: Record<string, string> = {};
+    for (const key of keys) {
+      const { data, error } = await supabase.rpc("refresh_admin_stats_cache", { p_keys: [key] });
+      if (error) {
+        console.error(`[refresh-admin-stats] ${key} failed:`, error.message);
+        errors[key] = error.message;
+      } else {
+        Object.assign(results, (data as Record<string, unknown>) ?? {});
+      }
+    }
+
+    if (Object.keys(results).length === 0 && Object.keys(errors).length > 0) {
+      return new Response(JSON.stringify({ error: "all keys failed", errors }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
