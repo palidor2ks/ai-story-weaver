@@ -105,10 +105,20 @@ Congress.gov link**, plus an explicit *"what we could not score and why."*
 4. `brand-voice-reviewer`: neutrality of key-vote descriptions and direction labels.
 5. Manual face-validity eyeball of 3–5 well-known members.
 
-## Open decisions for review
+## Decisions locked (2026-06-16)
 
-- **Key-vote selection + directions** — drafted in `poliscore-key-votes-draft.md`; needs your eyes.
-- **Does v0.0 ship before v0.1 is ready,** or do we hold for the directional score? (Recommend: ship
-  v0.0 participation + reviewed-record once gates 1–3 pass; layer v0.1 after neutrality review.)
-- **Should `Not Voting` feed a small participation penalty in the overall,** or stay a separate
-  displayed metric? (Recommend: separate metric, not blended — keeps the alignment score clean.)
+- **Ship sequencing:** **v0.0 ships first** (objective record scorecard) once gates 1–3 pass; v0.1
+  (directional) layers on after the neutrality gate.
+- **`Not Voting`:** stays a **separate displayed participation metric**, not blended into the
+  alignment score.
+- **Appropriations / omnibus votes:** **excluded** from the directional score (ambiguous single-axis
+  direction); they may still appear in the raw record.
+- **Topic assignment:** the auto `bills.topic` tag is **not trusted** — topic is **hand-assigned per
+  key vote** during curation (see `poliscore-key-votes-draft.md`).
+
+## Still open
+
+- **Key-vote selection + directions** — v2 shortlist in `poliscore-key-votes-draft.md`; needs your
+  eyes. Directions are DRAFT until verified against Congress.gov summaries.
+- **Summary source:** `bills.summary` is empty in the DB, so official summaries must be fetched from
+  Congress.gov to finalize neutral direction labels (confirm approach).
