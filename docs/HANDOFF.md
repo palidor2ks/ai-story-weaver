@@ -27,6 +27,50 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-16 — Coverage & Finance dashboard: visible-states-only numbers — day
+
+**What happened & why**
+The Coverage & Finance admin dashboard reported headline numbers (candidate answers, source
+quality, FEC sync, congressional voting) counted across **all** states, while the product only
+serves **visible** states. Live check: only **NC + NJ** are visible (55 hidden codes), so the
+tiles were ~14x inflated (172 of 2,392 candidates are visible). The Finance Coverage chart already
+excluded hidden states (`get_finance_cycle_summary`); this brings the rest of the dashboard in line.
+
+Design choice that matters: I did **not** touch `admin_stats_cache` / `refresh_admin_stats_cache()`,
+because those rows are the whole-DB source of truth for the preflight accuracy scoreboard
+(`check:accuracy`) and `docs/DATA-ACCURACY.md` (baselines/thresholds measured against the full
+backlog on purpose). Instead, added a **separate, additive, display-only** path:
+- New admin RPC `get_coverage_dashboard_stats()` (migration `20260616120000`) — same metric
+  definitions as the cache but filtered to visible states via `get_hidden_state_codes()`, mirroring
+  the audited `get_finance_cycle_summary` pattern (security definer, `has_role` admin gate,
+  read-only aggregates, revoke public/anon).
+- `useCoverageDashboardStats` hook; `AnswerCoveragePanel` renders the visible numbers in every tile,
+  the voting section, source-quality, and the overall-coverage bar, **falling back to the global
+  cache** if the RPC hasn't loaded / isn't applied yet (graceful, not blank).
+- Per-rep table + its derived FEC/sync action counts now drop hidden-state rows client-side.
+- Header badge shows "Visible states: NC, NJ"; description notes the scope.
+
+**State** (verified)
+- `bun run lint` → 0 errors (157 pre-existing warnings). `bunx tsc -b --noEmit` clean.
+  `bunx vite build` succeeds. `bun run test` → 79 pass / 0 fail.
+- RPC SQL validated **read-only via Supabase MCP** against live Dev: the visible-only aggregates
+  return sane numbers and are a clean subset of the current global cache (logic faithfully
+  reproduces the cache, only the row set differs). `security-reviewer` → **GO** (no regressions).
+- **NOT applied:** the migration is written but NOT run (guardrail #1 + `SUPABASE_DB_URL` unset
+  here). Until it's applied the dashboard shows the global fallback numbers — no breakage.
+
+**Next**
+Apply migration `20260616120000` to Dev/prod (deliberately), then open the dashboard and confirm
+the tiles read the NC+NJ slice (e.g. Total Reps ≈ 172, With FEC ID ≈ 151).
+
+**Deferred**
+- Optional follow-up the security review flagged: retrofit explicit `REVOKE/GRANT` onto
+  `get_finance_cycle_summary` for grant-surface consistency (its `has_role` gate already protects it).
+- Regenerate `src/integrations/supabase/types.ts` after applying the migration to drop the
+  `(supabase as any)` cast (and remove the hook from the eslint warn-allowlist).
+
+---
+
 ## 2026-06-16 — PoliScore v0.0 data-accuracy gate + fixes
 
 **What happened & why**
