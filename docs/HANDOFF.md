@@ -27,6 +27,41 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-16 — PoliScore Task 1: data spike + v0 methodology — day
+
+**What happened & why**
+Started Task 1 of the NC beachhead (build a record-based PoliScore). Did a live-data spike against
+the 16 NC members of Congress and let the data pick the methodology. Two findings drove the design:
+(1) the **roll-call vote record is pristine** — `action_type='floor_vote'` gives 18,560 Yea/Nay
+rows, **100%** joined to a topic-tagged bill, `bills.topic` maps exactly to the 6 national quiz
+topics, all sourced from Congress.gov; (2) **`candidate_answers` is the known landmine** — only 14%
+URL-sourced, 31% `inferred`, 45% low-confidence, `has_discrepancy` never populated, ~1,500 labeled
+`voting_record` with only 52 real summaries. So PoliScore is built **votes-first**, and
+`candidate_answers` is demoted out of the score. Also found the auto-`topic` tags are noisy (a Schiff
+censure tagged *Environment*), so key votes must be **human-reviewed**, not auto-bucketed.
+
+**State** (verified)
+- **Docs only — no code/schema/migration changes.** Added `docs/poliscore-methodology.md` (validated
+  v0 design: v0.0 objective record scorecard → v0.1 curated key-votes directional layer; score math;
+  validation gates) and `docs/poliscore-key-votes-draft.md` (the neutrality-critical key-vote
+  selection, drafted from real contested votes, flagged for review).
+- **Computed proof (live)**: participation rate for all 16 members (90.7%–99.7%; Tillis lowest at
+  91.9% / 188 missed). Go/no-go = **GO**.
+- Open decisions parked for the user in both docs: key-vote approval + directions, whether v0.0 ships
+  before v0.1, and whether `Not Voting` penalizes the overall.
+
+**Next**
+Get user sign-off on the key-vote selection in `poliscore-key-votes-draft.md`, then pull
+`bills.summary` for the approved shortlist to draft neutral direction one-liners and run the
+neutrality gate (`alignment-quiz-reviewer` + `brand-voice-reviewer`).
+
+**Deferred**
+Party-relative/NOMINATE-style scoring stays parked until full-chamber votes exist (only NC delegation
+is synced). `candidate_answers` may later seed candidate-*claimed* positions for say-vs-do, never the
+score.
+
+---
+
 ## 2026-06-16 — competitive-landscape-analysis (NC beachhead strategy) — day
 
 **What happened & why**
