@@ -15,6 +15,7 @@
 //   { "batch": 8, "scope": "both"|"floor"|"member", "congressList": [119,118,...] }
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { ingestionHiddenList, loadHiddenStates } from '../_shared/onboard-candidate.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -81,12 +82,21 @@ serve(async (req) => {
     // and vote_sync_status, so we can't embed/order across them in one query —
     // fetch both (the roster is ~540 rows) and merge: never-synced first (no
     // status row), then oldest last_sync_started_at.
-    const { data: legislators, error: legErr } = await admin
+    //
+    // Hidden-state legislators are excluded at the query level (visible-states gate)
+    // so they never occupy batch slots and starve visible-state members.
+    const hiddenSet = await loadHiddenStates(admin);
+    const hiddenList = ingestionHiddenList(hiddenSet);
+    let legQuery = admin
       .from('candidates')
-      .select('id, name, office')
+      .select('id, name, office, state')
       .gte('id', BIOGUIDE_LO)
       .lte('id', BIOGUIDE_HI)
       .like('id', BIOGUIDE_SHAPE);
+    if (hiddenList.length > 0) {
+      legQuery = legQuery.or(`state.is.null,state.not.in.(${hiddenList.join(',')})`);
+    }
+    const { data: legislators, error: legErr } = await legQuery;
     if (legErr) throw legErr;
     if (!legislators || legislators.length === 0) {
       return new Response(JSON.stringify({ status: 'idle', message: 'no federal legislators found' }), {

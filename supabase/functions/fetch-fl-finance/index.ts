@@ -28,6 +28,7 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { loadHiddenStates } from "../_shared/onboard-candidate.ts";
 
 const BASE = "https://dos.elections.myflorida.com";
 const ENDPOINT = "/cgi-bin/contrib.exe";
@@ -247,6 +248,14 @@ Deno.serve(async (req) => {
   const maxUnits = p.max_units ?? num(qp.get("max_units"));
   const onlyUnit = p.only_unit ?? qp.get("only_unit");
   const startedMs = Date.now();
+
+  const hiddenSet = await loadHiddenStates(supabase);
+  if (hiddenSet.has("FL")) {
+    console.log("[fetch-fl-finance] FL is a hidden state — skipping ingestion (visible-states gate)");
+    return new Response(JSON.stringify({ ok: true, skipped: "FL is a hidden state" }, null, 2), {
+      headers: { ...cors, "Content-Type": "application/json" },
+    });
+  }
 
   const { data: runRow } = await supabase.from("fl_sync_runs").insert({ status: "running", mode }).select("id").single();
   const runId = runRow?.id;

@@ -18,6 +18,7 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { loadHiddenStates } from "../_shared/onboard-candidate.ts";
 
 const BASE = "https://data.ny.gov/resource";
 const FILERS_DS = "7x2g-h32p";
@@ -199,6 +200,14 @@ Deno.serve(async (req) => {
   const maxFilers = p.max_filers ?? num(qp.get("max_filers"));
   const onlyFiler = p.only_filer ?? qp.get("only_filer");
   const startedMs = Date.now();
+
+  const hiddenSet = await loadHiddenStates(supabase);
+  if (hiddenSet.has("NY")) {
+    console.log("[fetch-ny-finance] NY is a hidden state — skipping ingestion (visible-states gate)");
+    return new Response(JSON.stringify({ ok: true, skipped: "NY is a hidden state" }, null, 2), {
+      headers: { ...cors, "Content-Type": "application/json" },
+    });
+  }
 
   const { data: runRow } = await supabase.from("ny_sync_runs").insert({ status: "running", mode }).select("id").single();
   const runId = runRow?.id;

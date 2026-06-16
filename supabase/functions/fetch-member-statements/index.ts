@@ -21,6 +21,7 @@
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { getCronSecret, requireCronAuth } from '../_shared/cron-auth.ts';
+import { isStateVisible, loadHiddenStates } from '../_shared/onboard-candidate.ts';
 import {
   candidateFeedPaths,
   extractPressLinks,
@@ -225,9 +226,47 @@ async function runBatch(limit: number, maxChain: number): Promise<void> {
     console.error('[statements] claim failed', error);
     return;
   }
-  const ids: string[] = (claimed ?? []) as string[];
+  let ids: string[] = (claimed ?? []) as string[];
   console.log(`[statements] claimed ${ids.length} member(s); chain budget ${maxChain}`);
   if (ids.length === 0) return;
+
+  // Visible-states gate: fetch state+office for claimed candidates, then skip
+  // hidden-state members. Skipped members have their sync row stamped so the
+  // claim RPC sees them as completed and won't re-queue them each hour.
+  const hiddenSet = await loadHiddenStates(supabase);
+  if (hiddenSet.size > 0) {
+    const { data: candMeta } = await supabase
+      .from('candidates')
+      .select('id, state, office')
+      .in('id', ids);
+    const metaMap = new Map((candMeta ?? []).map((c) => [c.id, c]));
+    const skippedIds: string[] = [];
+    const visibleIds: string[] = [];
+    for (const id of ids) {
+      const meta = metaMap.get(id);
+      if (!isStateVisible(meta?.state, hiddenSet, meta?.office ?? '')) {
+        skippedIds.push(id);
+      } else {
+        visibleIds.push(id);
+      }
+    }
+    if (skippedIds.length > 0) {
+      console.log(`[statements] ${skippedIds.length} hidden-state rows skipped (visible-states gate)`);
+      // Stamp skipped members as completed so they leave the claim queue.
+      const now = new Date().toISOString();
+      for (const skippedId of skippedIds) {
+        await supabase.from('member_statement_sync').upsert(
+          { candidate_id: skippedId, last_sync_completed_at: now, updated_at: now, sync_error: null },
+          { onConflict: 'candidate_id' },
+        );
+      }
+    }
+    ids = visibleIds;
+    if (ids.length === 0) {
+      console.log('[statements] all claimed members are in hidden states — batch done');
+      return;
+    }
+  }
 
   const sites = await loadOfficialSites();
 

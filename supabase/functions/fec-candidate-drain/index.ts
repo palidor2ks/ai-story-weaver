@@ -17,6 +17,7 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { ingestionHiddenList, loadHiddenStates } from "../_shared/onboard-candidate.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -54,14 +55,23 @@ Deno.serve(async (req) => {
     "apikey": ANON_KEY,
   };
 
+  const hiddenSet = await loadHiddenStates(supabase);
+  const hiddenList = ingestionHiddenList(hiddenSet);
+
   // Candidates with a FEC candidate ID that are never-synced OR stale (oldest first).
-  const { data: due, error: dueErr } = await supabase
+  // Hidden-state candidates are excluded at the query level so they can't occupy
+  // every batch slot and starve visible-state candidates (visible-states gate).
+  let dueQuery = supabase
     .from("candidates")
     .select("id, name, fec_candidate_id, fec_committee_id, last_donor_sync")
     .not("fec_candidate_id", "is", null)
     .or(`last_donor_sync.is.null,last_donor_sync.lt.${staleCutoff}`)
     .order("last_donor_sync", { ascending: true, nullsFirst: true })
     .limit(batch);
+  if (hiddenList.length > 0) {
+    dueQuery = dueQuery.or(`state.is.null,state.not.in.(${hiddenList.join(",")})`);
+  }
+  const { data: due, error: dueErr } = await dueQuery;
 
   if (dueErr) {
     return new Response(JSON.stringify({ ok: false, error: dueErr.message }), {
@@ -132,11 +142,15 @@ Deno.serve(async (req) => {
     await sleep(500);
   }
 
-  const { count: remaining } = await supabase
+  let remainingQuery = supabase
     .from("candidates")
     .select("id", { count: "exact", head: true })
     .not("fec_candidate_id", "is", null)
     .or(`last_donor_sync.is.null,last_donor_sync.lt.${staleCutoff}`);
+  if (hiddenList.length > 0) {
+    remainingQuery = remainingQuery.or(`state.is.null,state.not.in.(${hiddenList.join(",")})`);
+  }
+  const { count: remaining } = await remainingQuery;
 
   return new Response(JSON.stringify({
     ok: true, cycle, processed, linked, synced, remaining: remaining ?? null, errors: errors.slice(0, 20),
