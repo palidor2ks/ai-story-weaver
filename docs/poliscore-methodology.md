@@ -105,6 +105,28 @@ overall(m) = avg of populated topic_scores   (suppress topics with < floor key v
 Output per official: overall + per-topic breakdown, **every contributing vote rendered with its
 Congress.gov link**, plus an explicit *"what we could not score and why."*
 
+### Hardening locked from the scoring gate (`alignment-quiz-reviewer`)
+
+1. **Per-member participation floor (not rubric size).** Suppress a topic to *"insufficient record"*
+   unless the **member actually cast** ≥ the floor of Yea/Nay votes in it: **≥2 for a 3-vote topic,
+   ≥3 for a 4–5-vote topic.** This prevents a maximally-confident ±10 from a single observation when
+   a member missed most key votes. The floor constant is **3** rubric votes minimum per topic; below
+   that the topic is not scored at all.
+2. **`Not Voting` is excluded from the average AND surfaced per topic** as *"N of M key votes cast,"*
+   not just the page-level participation rate — closes the "skip the divisive votes" gaming path.
+3. **Dedicated storage — never overwrite `candidates.overall_score`.** Write to a new
+   `poliscore_overall` (+ per-topic) column. The existing `useCandidateScoreMap` guard discards a
+   value of `0`, which would silently drop a genuine centrist PoliScore of 0.0 and fall back to the
+   low-quality `candidate_answers` score. Separate column avoids the collision.
+4. **Two scores never mix.** The record-based PoliScore and the `candidate_answers` quiz-based score
+   coexist only as **distinctly labeled** numbers ("record-based" vs "quiz-based"); they are never
+   averaged, and the same surface never shows both unlabeled. `candidate_answers` is demoted to the
+   quiz-based path only.
+5. **Low-sample honesty:** a topic scored on ≤3 votes carries a "low sample" badge. Reuse
+   `calculateAverageScore` from `src/lib/scoring.ts` — do not write a parallel averaging function.
+6. **Label hygiene (impl):** `src/lib/scoreFormat.ts` has three conflicting label vocabularies; pick
+   one for the public score and soften "Far Left/Far Right" before launch.
+
 ## Validation gates (must pass before any public surface — v0.0 or v0.1)
 
 1. Compute for the 16 NC members with records.
@@ -124,9 +146,12 @@ Congress.gov link**, plus an explicit *"what we could not score and why."*
 - **Topic assignment:** the auto `bills.topic` tag is **not trusted** — topic is **hand-assigned per
   key vote** during curation (see `poliscore-key-votes-draft.md`).
 
-## Still open
+## Still open (blocks v0.1 launch)
 
-- **Key-vote selection + directions** — v2 shortlist in `poliscore-key-votes-draft.md`; needs your
-  eyes. Directions are DRAFT until verified against Congress.gov summaries.
-- **Summary source:** `bills.summary` is empty in the DB, so official summaries must be fetched from
-  Congress.gov to finalize neutral direction labels (confirm approach).
+- **Left/right balance HARD GATE** — rubric is ~22:1 right-coded; need **≥2 left-coded votes per
+  topic** before v0.1 scores anyone (see `poliscore-key-votes-draft.md`). *In progress.*
+- **Implement the scoring hardening** above (per-member floor; `poliscore_*` storage; "N of M cast").
+- **Re-run both gate reviewers** on the balanced rubric, then build v0.1.
+
+*Done this pass:* directions verified against Congress.gov; neutrality + scoring gates run and their
+fixes applied; NJ federal added to scope.
