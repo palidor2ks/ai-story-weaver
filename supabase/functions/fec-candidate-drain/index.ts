@@ -94,7 +94,10 @@ Deno.serve(async (req) => {
     }
 
     // 2) Sync donors for the cycle (fetch-fec-donors honors the service-role key).
+    // fetch-fec-donors only does ~25s of work per call: it syncs one committee page-window,
+    // saves a resume cursor, and returns hasMore=true when the candidate isn't fully drained.
     let syncOk = false;
+    let syncHasMore = false;
     if (doSync) {
       try {
         const r = await fetch(`${SUPABASE_URL}/functions/v1/fetch-fec-donors`, {
@@ -102,17 +105,27 @@ Deno.serve(async (req) => {
           headers: callHeaders,
           body: JSON.stringify({ candidateId: c.id, fecCandidateId: c.fec_candidate_id, cycle }),
         });
-        if (r.ok) { synced++; syncOk = true; }
+        if (r.ok) {
+          synced++; syncOk = true;
+          // Read hasMore so we don't mark a huge candidate "done" after one slice.
+          try {
+            const sd = await r.json();
+            syncHasMore = sd?.hasMore === true;
+          } catch { /* unparseable body: treat as complete so a flaky response can't re-queue forever */ }
+        }
         else errors.push(`sync ${c.name}: HTTP ${r.status}`);
       } catch (e) {
         errors.push(`sync ${c.name}: ${String(e).slice(0, 120)}`);
       }
     }
 
-    // Stamp last_donor_sync so the candidate leaves the queue (only on a successful
-    // sync; failures stay null and get retried next run). If we didn't sync, mark it
-    // anyway so link-only runs don't loop.
-    if (syncOk || !doSync) {
+    // Stamp last_donor_sync so the candidate leaves the queue — but ONLY when the sync is
+    // COMPLETE (hasMore=false). A partial sync must stay due so the next run resumes its
+    // cursor; otherwise candidates with hundreds of pages (e.g. Schiff: ~$2.4M itemized
+    // across many pages) get one 25s visit, are stamped "done", and drop to the back of the
+    // queue for stale_days — never finishing. This mirrors fetch-fec-donors, which itself
+    // only stamps last_donor_sync when !hasMore. Failed syncs (syncOk=false) also stay due.
+    if ((syncOk && !syncHasMore) || !doSync) {
       await supabase.from("candidates").update({ last_donor_sync: new Date().toISOString() }).eq("id", c.id);
     }
 
