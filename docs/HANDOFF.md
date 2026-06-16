@@ -27,6 +27,46 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-16 — Two-state focus, Phase 3: rescope the accuracy gate to visible — day
+
+**What happened & why**
+Final phase. After Phases 1–2 (public RLS + ingestion gating, both merged), the whole-DB preflight
+gate (`check:accuracy`) was measuring a large frozen hidden-state backlog we no longer maintain, so
+its thresholds were meaningless. Rescoped the gate to visible states.
+
+Chosen approach (lower-risk): **rescope the gate script, NOT the cron function.** `check-data-accuracy.sh`'s
+candidate-scoped categories (§1 finance recon, §2 voting, §5 answers) now compute the visible slice
+directly (CTE: `candidates` ∉ `hidden_states`), with re-baselined regression thresholds. Left
+`refresh_admin_stats_cache()` / `admin_stats_cache` **whole-DB** — the §0 freshness check still uses
+them to confirm the cron is alive, and they're a whole-DB audit reference. Rewriting that 240-line
+cron-critical function was unnecessary (the dashboard already reads visible via
+`get_coverage_dashboard_stats`; no visible-facing surface reads the cache's candidate values anymore)
+and risked silently breaking all stats freshness. Net: dashboard + gate now agree on the visible slice.
+
+Re-baselined thresholds (measured live 2026-06-16, visible states):
+- FEC recon: error must not exceed **100** (was 900 whole-DB); visible standing **39 err / 1 partial / 145 ok**.
+- Voting: syncErrors+floorSyncErrors must not exceed **60** (was 350); visible standing **18 / 12 incomplete**.
+- Answers URL-sourced: bands unchanged (target/75/35); visible **1,819 / 41,688 ≈ 4%** (still RED — real, not a hidden artifact).
+- Bills (national) and state-finance (NJ/FL/NY) categories unchanged; FL/NY errors7d naturally go to 0 (crons early-return).
+
+**State** (verified)
+- `bash -n` clean. All three rewritten category queries validated live via Supabase MCP (exactly as
+  the script's psql runs them): recon 39<100 PASS, voting 18<60 PASS, answers 4% (flags poor, honest).
+- Script + docs only — no migration, no app code, no cron change. (`check:accuracy` SKIPs in this
+  env — no SUPABASE_DB_URL — so validation was via MCP.)
+- DATA-ACCURACY.md updated: intro note + §1/§2/§5 dated visible re-baselines.
+
+**Next**
+Two-state focus is COMPLETE (Phases 1–3). Open follow-ups only: drain-fec-finance Phase A
+`candidate_committees` queue-head starvation (deferred from Phase 2); optional cache rescope if a
+single visible source is later preferred over the script/cache split.
+
+**Deferred**
+- If desired later: rescope `refresh_admin_stats_cache` itself to visible (then dashboard could drop
+  the separate RPC) — intentionally not done now to avoid cron risk.
+
+---
+
 ## 2026-06-16 — Two-state focus, Phase 2: gate ingestion to visible states — day
 
 **What happened & why**
