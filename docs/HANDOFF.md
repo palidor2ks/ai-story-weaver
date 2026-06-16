@@ -50,11 +50,14 @@ record (`expected_total>0 OR expected_floor_votes>0`), excluding challengers. Re
 **State** (verified / NOT)
 - Live SQL confirmed: real-member voting errors = 0, incomplete = 7; the 18 "errors" were challengers.
 - `bash -n` clean. Script+docs only.
-- Congress.gov spot-check (is the data ACCURATE vs source, not just present) — running via
-  data-accuracy-verifier; result to be appended before merge (egress may be blocked, as with FEC).
+- Congress.gov spot-check DONE (data-accuracy-verifier): Congress.gov egress 403-blocked (live diff
+  deferred to CI), but internal verification of visible NC/NJ is **GO** — every vote row joins to
+  canonical `bills`, **0 legacy/orphan rows** (the ~25k legacy bill_ids + cross-congress collision
+  class are entirely hidden-state, 0 in NC/NJ), counts plausible, positions verified for 12 members
+  in the PoliScore gate. Disclosure: floor coverage is the 113–119 window (~2013–present), not career.
 
 **Next**
-Append spot-check result; merge. Optional durable fix: recompute `vote_sync_status` from
+Merge #438. Optional durable fix: recompute `vote_sync_status` from
 `candidate_votes` (or base the per-member completeness signal on candidate_votes) so the health
 signal stops diverging from reality.
 

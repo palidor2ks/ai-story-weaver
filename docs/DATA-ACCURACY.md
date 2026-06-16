@@ -194,8 +194,21 @@
   vote_sync_status. Recompute vote_sync_status from candidate_votes (or base completeness on
   candidate_votes) to make the per-member health signal honest. The 7 "incomplete" are tiny
   persisted<expected gaps (e.g. 1834/1836) — within rounding, not material.
-- **Spot-verification vs Congress.gov:** in progress via the `data-accuracy-verifier` agent
-  (egress-permitting); record the result here.
+- **Spot-verification (2026-06-16, data-accuracy-verifier):** Congress.gov egress is **403-blocked**
+  from the agent sandbox (as with the FEC API) — live source diff must run from CI/local. Internal
+  verification of the **visible NC/NJ** members is clean and the verdict is **GO for NC/NJ**:
+  every vote row joins to a canonical `bills` row (`{congress}-TYPE.NUMBER`), **0 legacy-format
+  action-type rows, 0 orphaned bill joins** (96,505 rows: 60,275 legislative + floor). Counts are
+  plausible for tenure; the `(bill_id, candidate_id, action_type, vote_number)` unique constraint
+  rules out duplicate inflation; and roll-call **positions** were verified for 12 members in the
+  2026-06-16 PoliScore gate. **Disclosure:** floor-vote coverage is the **113th–119th Congress
+  window** (~2013–present), NOT full career — a long-serving member's floor count isn't lifetime;
+  frame UI accordingly (PoliScore uses curated key votes, so unaffected).
+- **Caveats that DON'T affect NC/NJ (global / hidden-state):** ~25,135 legacy-format `bill_id`s
+  (un-joinable to `bills`, lost topic enrichment) and the cross-congress `bill_id` collision class
+  (the HR 26 Born-Alive vs Energy misattribution, fixed in `get_poliscore_record` via a date window,
+  20260616163000) both live in **hidden-state** rows — the visible NC/NJ set has 0 of either. Clean
+  these up before un-hiding more states.
 
 ### 3. Bills — `bills_stats`
 - **Goal:** the bills corpus tracks Congress.gov continuously (nightly), so positions/votes
