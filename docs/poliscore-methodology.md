@@ -23,9 +23,17 @@ underlying facts be true, shown, and the methodology disclosed.
 4. **Missing-data honesty.** A thin record yields *"insufficient record to score,"* never a
    fabricated or default score.
 
+## Scope
+
+**Federal delegations of NC + NJ** (~30 members: 16 NC + 14 NJ, all with floor-vote records). The
+federal key-votes rubric scores both at no extra curation. **NC** is the public/marketing beachhead
+and the state-legislature build; **NJ federal** is included for home-turf dogfooding and its 2026
+House races; **NJ state legislature is parked for the 2027 cycle.**
+
 ## Verified data foundation (2026-06-16, project `ornnzinjrcyigazecctf`)
 
-For the 16 NC members of Congress (Tillis, Budd + 14 House incumbents):
+For the 16 NC members of Congress (Tillis, Budd + 14 House incumbents); NJ's 14 federal members carry
+an equivalent record (16,784 floor-vote rows):
 
 - **Roll-call votes are the clean substrate.** `candidate_votes.action_type='floor_vote'` →
   **18,560 Yea/Nay** rows; **100%** join to a bill and **100%** of those bills carry a `topic`.

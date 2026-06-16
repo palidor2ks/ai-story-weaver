@@ -1,87 +1,93 @@
-# PoliScore Key Votes — DRAFT v2 for review
+# PoliScore Key Votes — v3 (verified)
 
-> **The neutrality-critical artifact.** Selects which roll-call votes define each topic's directional
-> score and which way each leans. Per [`poliscore-methodology.md`](./poliscore-methodology.md), every
-> entry ships with source + rationale and is open to challenge. **Nothing here scores a real person
-> until** each direction is verified against the Congress.gov summary and the neutrality gate passes.
-> Built from NC-delegation contested votes (Yea/Nay split), sampled 2026-06-16.
+> The neutrality-critical artifact: which roll-call votes define each topic's directional score and
+> which way each leans. Per [`poliscore-methodology.md`](./poliscore-methodology.md), every entry
+> ships with source + rationale and is open to challenge. Directions below were **verified against
+> Congress.gov** (2026-06-16). Remaining gate before anything scores a real person: neutrality review
+> (`alignment-quiz-reviewer` + `brand-voice-reviewer`).
 
-## Decisions locked (from review)
+## Scope (who these score)
 
-- Ship **v0.0 first**; `Not Voting` is a **separate** metric; **appropriations/omnibus excluded**.
-- **v1 dispositions:** keep **HR4758, HR30 (→ Nat. Security), HR28, HR6359**; cut **HR2670, HR4016,
-  HR6945, HR1329, HRES863**; deeper pull for **Government & Democracy**.
+These are **federal** key votes, so they score **both NC and NJ congressional delegations** with no
+extra curation — 16 NC + 14 NJ = ~30 members. (NC is the public/marketing beachhead + the
+state-legislature build; NJ federal is included for home-turf dogfooding and its 2026 House races.
+NJ state legislature is parked for the 2027 cycle.)
 
-## Two findings that shape curation
+## Decisions locked
 
-1. **`bills.summary` is empty in the DB** for the entire candidate pool → official summaries must be
-   pulled from Congress.gov to finalize neutral direction labels. Directions below are drafted from
-   bill **titles** and marked `[verify]`.
-2. **`bills.topic` is unreliable** → topic is **hand-assigned** here. (The auto "Government &
-   Democracy" bucket returned a maternal-health act, "Born-Alive Abortion Survivors," a
-   Strategic-Petroleum-Reserve/China bill, and "On Motion to Adjourn.")
+Ship **v0.0 first**; `Not Voting` is a **separate** metric; **appropriations/omnibus excluded**;
+**topic hand-assigned** (auto-tag unreliable). Lean maps to the quiz axis (**− left ↔ + right**).
 
-## Curated v2 shortlist (by reviewed topic)
+## The rubric (verified)
 
-Lean maps to the quiz axis (**− left ↔ + right**). All directions `[verify against Congress.gov]`.
-Target ≥3 (ideally 5) clean votes per topic.
-
-### Environment & Energy — well covered
-| Bill (Cong) | Yea expresses (draft, neutral) | Lean |
+### Economy & Work
+| Bill (Cong) | A **Yea** does (verified, neutral) | Lean |
 |---|---|---|
-| HR4758 Homeowner Energy Freedom Act (119) | Limit federal energy-efficiency mandates on home appliances | + `[v]` |
-| HR1366 Mining Regulatory Clarity Act (119) | Ease federal permitting for mining on public land | + `[v]` |
-| HR4468 Choice in Automobile Retail Sales Act (118) | Block the EPA tailpipe rule that accelerates EV adoption | + `[v]` |
-| HR1346 Nationwide Consumer and Fuel Retailer Choice Act (119) | Permit year-round E15 (higher-ethanol) fuel sales | `[v topic+dir]` |
-| CRA disapprovals: SJRES11 / HJRES30 / HJRES39 (118) | Repeal a specific named federal regulation (identify each) | + `[v per-rule]` |
+| HR23 Family and Small Business Taxpayer Protection Act (118) | Rescind certain unobligated IRA funds for IRS enforcement/operations/direct-file | + |
+| HR2965 Small Business Regulatory Reduction Act (119) | Cap the SBA small-business regulatory cost budget at ≤ zero; report compliance costs | + |
+| HR1163 Protecting Taxpayers and Victims of Unemployment Fraud Act (118) | Let states retain a share of recovered UI overpayments; extend fraud statute to 10 yrs | + |
+| **HR5408 Faster Labor Contracts Act (119)** | Impose first-contract bargaining deadlines, then mediation/binding arbitration | **−** |
 
-### National Security & Borders — well covered
-| Bill (Cong) | Yea expresses (draft, neutral) | Lean |
+### Environment & Energy
+| Bill (Cong) | A **Yea** does | Lean |
 |---|---|---|
-| HR2 Secure the Border Act (118) | Tighten border enforcement and asylum/parole limits | + `[v]` |
-| HR30 Preventing Violence Against Women by Illegal Aliens Act (119) | Add immigration-enforcement consequences for certain offenses | + `[v]` |
-| HR2056 DC Federal Immigration Compliance Act (119) | Require DC to cooperate with federal immigration enforcement | + `[v]` |
-| HR5525 Spending Reduction and Border Security Act (118) | Pair border-security measures with spending reductions | + `[v]` |
+| HR4758 Homeowner Energy Freedom Act (119) | Repeal DOE IRA home-electrification rebate/code programs; rescind unobligated funds | + |
+| HR1366 Mining Regulatory Clarity Act (119) | Allow hardrock mining ancillary use of federal land regardless of mineral presence | + |
+| HR4468 Choice in Automobile Retail Sales Act (118) | Bar EPA from enforcing certain MY2027+ vehicle-emissions rules limiting gas cars | + |
+| HR1346 Nationwide Consumer & Fuel Retailer Choice Act (119) *(weak signal — farm-state valence)* | Allow year-round E15 gasoline sales | + |
 
-### Rights & Justice — well covered
-| Bill (Cong) | Yea expresses (draft, neutral) | Lean |
+### National Security & Borders
+| Bill (Cong) | A **Yea** does | Lean |
 |---|---|---|
-| HR28 Protection of Women and Girls in Sports Act (119) | Define sex-based eligibility for women's/girls' scholastic sports | + `[v]` |
-| HR1041 Veterans 2nd Amendment Protection Act (119) | Restrict reporting certain veterans to the gun-background-check system | + `[v]` |
-| HJRES24 Disapprove DC Council criminal-code revision (118) | Block DC's revised criminal code | + `[v]` |
-| HR26 Born-Alive Abortion Survivors Protection Act (118) | Add care requirements re: infants born during attempted abortion | + `[v]` |
-| *(HR734, 118 = prior-Congress twin of HR28 — use as consistency check, not a 2nd vote)* | | |
+| HR2 Secure the Border Act (118) | Resume border-wall construction; raise asylum bar; expand detention/expedited removal | + |
+| HR30 Preventing Violence Against Women by Illegal Aliens Act (119) | Make noncitizens who committed sex/DV/stalking offenses inadmissible & deportable | + |
+| HR2056 DC Federal Immigration Compliance Act (119) | Bar DC sanctuary policies limiting cooperation with federal immigration enforcement | + |
 
-### Economy & Work — thin, needs a targeted pull
-| Bill (Cong) | Yea expresses (draft, neutral) | Lean |
+### Rights & Justice
+| Bill (Cong) | A **Yea** does | Lean |
 |---|---|---|
-| HR23 Family and Small Business Taxpayer Protection Act (118) | Rescind expanded IRS funding/enforcement | + `[v]` |
-| HR4690 Reliable Federal Infrastructure Act (119) | Streamline NEPA/permitting reviews for projects | `[v topic+dir]` |
-| HR1163 Protecting Taxpayers and Victims of Unemployment Fraud Act (118) | Recover pandemic UI fraud (possible valence) | `[v — may drop]` |
-> Gap: need clean **tax / labor / wage / trade** final-passage votes. Targeted pull required.
+| HR28 Protection of Women and Girls in Sports Act (119) | Define Title IX sex by birth biology; bar trans women/girls from female school sports | + |
+| HR1041 Veterans 2nd Amendment Protection Act (119) | Require a judicial danger finding before VA reports a beneficiary to NICS | + |
+| HR26 Born-Alive Abortion Survivors Protection Act (118) | Require newborn-equivalent care for an infant who survives an abortion; criminal penalties | + |
 
-### Health, Education & Welfare — thin, needs a targeted pull
-| Bill (Cong) | Yea expresses (draft, neutral) | Lean |
+### Health, Education & Welfare
+| Bill (Cong) | A **Yea** does | Lean |
 |---|---|---|
-| HR6359 Pregnant Students' Rights Act (119) | Require schools to inform pregnant students of rights/resources | `[v]` |
-| HR6703 Lower Health Care Premiums for All Americans Act (119) | Change ACA subsidy/premium rules (identify direction) | `[v dir]` |
-| HR2262 Flexibility for Workers Education Act (119) | Adjust workforce/education program rules | `[v — may drop]` |
-> Gap: need clean **ACA / Medicaid / drug-pricing / education-funding** votes. Targeted pull required.
+| HR6359 Pregnant Students' Rights Act (119) | Require colleges to inform students of rights/resources for carrying a pregnancy to term | + |
+| HR498 Do No Harm in Medicaid Act (119) | Bar federal Medicaid payment for specified gender-transition procedures for minors | + |
+| HR485 Protecting Health Care for All Patients Act (118) | Bar federal health programs from using QALYs in coverage/payment decisions | + |
+| HR6703 Lower Health Care Premiums for All Americans Act (119) | Establish association-health-plan rules + PBM standards (party-line; right-coded) | + |
+| HR497 Freedom for Health Care Workers Act (118) | Repeal and block the HHS COVID-19 vaccination mandate for Medicare/Medicaid providers | + |
 
-### Government & Democracy — still the gap (auto-tag unusable)
-No clean key votes surfaced; the topic bucket is noise. Requires a **search by policy identity**, not
-the tag — candidate areas: **elections/voter eligibility (e.g., SAVE Act), ethics, the Rescissions
-Act (HR4, 119 — executive vs. congressional spending power), Congressional Review Act usage, term
-limits.** To be filled before launch; until then this topic shows *"insufficient record."*
+### Government & Democracy
+| Bill (Cong) | A **Yea** does | Lean |
+|---|---|---|
+| HR4 Rescissions Act of 2025 (119) | Cancel ~$6.9B unobligated budget authority (mostly foreign aid) per the rescission request | + |
+| HR884 Prohibit noncitizen voting in DC (119) | Bar noncitizens from voting in DC local elections; repeal DC's 2022 law | + |
+| HR5125 DC Judicial Nominations Reform Act (119) | End the DC Judicial Nomination Commission; give the President sole DC-judge appointment | + |
+| HR288 Separation of Powers Restoration Act (118) *(structural — courts review agency law de novo / ends Chevron)* | Require de novo judicial review of agency legal interpretations | + |
 
-## What I need from you next
+## ⚠️ Open neutrality issue (for the gate)
 
-1. **Sanity-check the hand-assigned topics** above (esp. HR1346 Economy-vs-Environment; HR1041 in
-   Rights).
-2. **Confirm the summary source:** I'll fetch official summaries from **Congress.gov** for the
-   shortlist to finalize neutral one-liners + lean. OK to proceed?
-3. **Green-light the targeted pulls** for Economy, Health, and Government & Democracy (search by
-   policy area to reach ≥3–5 clean votes each).
+**The rubric leans heavily on Republican-sponsored bills** (only HR5408 is left-coded). That's a real
+artifact of the **119th R-majority House setting the floor agenda** — contested floor votes are
+mostly GOP bills. This does **not** bias the *score mechanics* (a Nay correctly maps left, a Yea
+right, symmetrically), but it does shape the *axis framing* and is a perception risk for a neutrality
+brand. **Mitigation to pursue before launch:** actively add more left-coded contested votes
+(e.g., Democratic-led suspension/discharge votes, 118th-Congress items, Senate-originated bills) so
+each topic has both poles represented. Flagged explicitly for `brand-voice-reviewer` +
+`alignment-quiz-reviewer`.
 
-Once you confirm, I verify each direction against the official summary, then run the neutrality gate
-(`alignment-quiz-reviewer` + `brand-voice-reviewer`) before anything scores a real person.
+## Applied corrections / drops (from verification)
+
+- **HJRES24** — dropped: my draft title ("criminal-code revision") was wrong (it's DC noncitizen
+  voting = HJRES26), and it **duplicates HR884**. Rights & Justice still meets floor (3).
+- **HR288** — moved Environment → **Government & Democracy** (Chevron/structural).
+- **HR5525** — dropped (it's a continuing resolution; excluded under the appropriations rule).
+- **HR2670 (NDAA), HR4016, HR6945, HR1329, HRES863** — previously cut (omnibus / valence / non-policy).
+
+## Remaining steps
+
+1. Run the **neutrality gate** (`alignment-quiz-reviewer` + `brand-voice-reviewer`) on this rubric.
+2. Pursue the **left-coded-vote balancing** above.
+3. Implement v0.1 scoring per `poliscore-methodology.md` once the gate passes.
