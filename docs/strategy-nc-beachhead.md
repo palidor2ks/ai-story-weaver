@@ -39,6 +39,13 @@ Project `Pulse Dev` (`ornnzinjrcyigazecctf`).
 - **179 statements with source URLs** across those 16 — provenance exists where the record exists.
 - **Proven state-data ETL pattern** (NJ/FL/NY isolated schemas: discover → drain → cron).
 
+**Scope addendum — NJ federal included (2026-06-16):** NJ's 14 federal members (12 House + 2 Senate,
+16,784 floor-vote rows) are already scoreable on the same pipeline, so PoliScore's **federal scope =
+NC + NJ delegations**. This adds a home-turf dogfooding instance (the founder is NJ-based) and covers
+NJ's 2026 House races at ~zero marginal cost. **NJ remains a *federal-only* inclusion for now — the
+NJ state-legislature build is parked for the 2027 odd-year cycle** to avoid splitting the
+single-beachhead focus.
+
 **Missing (the gaps that matter):**
 
 1. **NC state legislature = 0 rows.** Need ~**170** (120 House + 50 Senate). Both the biggest gap
