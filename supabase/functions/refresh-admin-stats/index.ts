@@ -85,7 +85,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    return new Response(JSON.stringify({ success: true, results }), {
+    return new Response(JSON.stringify({ success: true, results, errors }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
