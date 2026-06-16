@@ -27,6 +27,52 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-16 — donor-import stale-sweep + session cleanup (PR #423, merged)
+
+**What happened & why**
+All donor import sessions for S001150 were stuck at `status='running'` forever — the terminal
+`status='completed'` is only written by the browser at the end of the batch loop, so any tab
+close or refresh orphans the session permanently. The admin history panel showed 6 stuck
+sessions (and 29 orphaned sessions existed across the whole DB). The user thought the import
+wasn't working; the data was actually already in the DB from earlier sessions (22,257
+contributions for S001150 2026, fully imported via sessions 1–4 + the API drain).
+
+Root-cause investigation also found: sessions 5 and 6 inserted 0 net new contributions (all
+already existed) but the session counter incorrectly showed non-zero inserts — a known
+limitation of the pre-check-vs-actual-insert counting approach in the edge function.
+
+**Fix shipped (PR #423):**
+- Migration `20260616004000_donor_import_stale_sweep.sql`: adds `sweep_stalled_import_sessions()`
+  (SECURITY DEFINER fn) that flips `running` sessions with no progress in 30+ min to
+  `status='stalled'`. Scheduled via pg_cron every 30 min. Applied to prod immediately; swept
+  29 orphaned sessions, including all 6 S001150 attempts.
+- `donorImportStatus.ts`: `isStalledImport()` now returns `true` for DB-persisted
+  `status='stalled'` directly, in addition to the existing computed check (covers the window
+  before the next cron fires).
+- `donorImportStatus.test.ts`: added 2 assertions for the new `status='stalled'` path; 7/7 pass.
+
+**State** (verified)
+- All 6 S001150 sessions now show `status='stalled'` in the DB (confirmed via SQL).
+- 22,257 contributions exist for S001150 2026 cycle — data is complete and safe.
+- PR #423 merged, all 7 CI checks green (lint/typecheck/test/build/Supabase Preview/GitGuardian/lockfile).
+- pg_cron job `sweep-stalled-import-sessions` is live in prod, runs every 30 min.
+
+**Next**
+Verify S001150's donor profile in the app shows the expected contribution data. If the CSV had
+more rows than what's imported (unlikely — sessions 5+6 found 0 net new rows), a fresh import
+attempt with the tab kept open would pick up the remainder.
+
+**Deferred**
+- Counter bug: the session's `inserted_contributions` overcounts when the pre-check hash query
+  silently fails (returns empty set), making it look like rows were inserted when they weren't.
+  Low severity (data itself is correct; only the display counter is wrong).
+- Backend-driven import (server-side, not browser-driven) — still the right long-term fix;
+  the stale-sweep closes the cosmetic problem but the import still dies if the tab closes.
+- Migration `20260615170000` (Finding B fix: Line 14/15 double-count in `get_contribution_totals`)
+  still needs to be applied + FEC finance re-drain triggered. (Not done this session.)
+
+---
+
 ## 2026-06-15 (PROD HOTFIX — donor-import regression: edge fn shipped ahead of migration) — night
 
 **What happened & why**
