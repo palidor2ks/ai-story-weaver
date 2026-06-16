@@ -179,13 +179,23 @@
   (94% cleared) and **251,775 stranded legacy duplicates deleted**, so `legislativeActions`
   (1.02M, previously an inflated 1.26M) is now trustworthy. 24+233 sync errors · 188 incomplete.
 - **Threshold:** syncErrors + floorSyncErrors must not exceed **350** (whole-DB historical).
-- **Visible re-baseline (2026-06-16 — what the gate now enforces):** standing **18 sync errors
-  (0 + 18 floor) · 13 incomplete** across visible-state members; threshold **visible
-  syncErrors + floorSyncErrors must not exceed 60**. (`sync-legislator-votes` is now gated to
-  visible members, so the whole-DB counts above freeze.)
-- **Spot-verification** (counts ≠ correctness): use the `data-accuracy-verifier` agent to
-  diff sample members against Congress.gov — not yet done systematically. TODO: pick 10
-  members/chamber and record the result here.
+- **Visible re-baseline (2026-06-16 — what the gate now enforces):** standing **0 sync errors /
+  7 incomplete** across visible-state SITTING MEMBERS; threshold **must not exceed 10**. The gate
+  now excludes rows with no expected record (`expected_total>0 OR expected_floor_votes>0`): the
+  earlier "18 floor errors" were all **non-incumbent CANDIDATES** (challengers) carrying a
+  vote_sync_status row with a spurious `floor_vote_sync_error` and 0 expected — noise, not a defect.
+- **Verification finding (2026-06-16):** the underlying **`candidate_votes` data is present and rich**
+  for NC/NJ sitting members (e.g. Foxx 322 sponsored / 1,868 cosponsored / 1,447 floor; Pallone
+  822 / 7,184 / 1,337). But **`vote_sync_status` per-member counts are STALE/inconsistent** with
+  `candidate_votes` — it shows `0/0` legislative for members who actually have thousands, and
+  undercounts floor votes (Foxx vss 625 vs candidate_votes 1,447). So vote_sync_status is a
+  sync-cursor/health table, NOT a source of truth for "how many votes a member has" — the dashboard
+  totals correctly count `candidate_votes` directly; only the per-member completeness signal reads
+  vote_sync_status. Recompute vote_sync_status from candidate_votes (or base completeness on
+  candidate_votes) to make the per-member health signal honest. The 7 "incomplete" are tiny
+  persisted<expected gaps (e.g. 1834/1836) — within rounding, not material.
+- **Spot-verification vs Congress.gov:** in progress via the `data-accuracy-verifier` agent
+  (egress-permitting); record the result here.
 
 ### 3. Bills — `bills_stats`
 - **Goal:** the bills corpus tracks Congress.gov continuously (nightly), so positions/votes

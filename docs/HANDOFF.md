@@ -27,6 +27,43 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-16 — Verify NC+NJ voting records → data is fine; the gate was counting challengers — day
+
+**What happened & why**
+Pass 2 of the ship-gate verification (voting records, 36 visible federal members). Findings:
+- **Floor votes are complete** for every sitting member (persisted==expected). ✅
+- **The underlying `candidate_votes` data is present & rich** even for members the tracking table
+  showed as `0/0` — e.g. Virginia Foxx has 322 sponsored / 1,868 cosponsored / 1,447 floor in
+  `candidate_votes`, but `vote_sync_status` reported leg 0/0 and floor 625. So **`vote_sync_status`
+  is a stale sync-cursor/health table, NOT a vote-count source of truth.** The dashboard *totals*
+  correctly count `candidate_votes` directly; only the per-member completeness signal reads vss.
+- The gate's "18 floor sync errors" were **entirely non-incumbent CANDIDATES** (challengers:
+  Murphy/Misseri/Rivera/Tabor/Akhtar/Herzig) with a spurious `floor_vote_sync_error` and 0 expected
+  record — noise, not a defect. Real sitting members: **0 errors / 7 tiny incomplete gaps** (e.g.
+  1834/1836).
+
+**Fix (this PR — script + docs only, no migration/deploy)**
+`check-data-accuracy.sh` §2 now counts voting errors/incompleteness only for rows WITH an expected
+record (`expected_total>0 OR expected_floor_votes>0`), excluding challengers. Re-baselined threshold
+60 → **10** (baseline 0 errors / 7 incomplete). DATA-ACCURACY.md §2 updated with the finding.
+
+**State** (verified / NOT)
+- Live SQL confirmed: real-member voting errors = 0, incomplete = 7; the 18 "errors" were challengers.
+- `bash -n` clean. Script+docs only.
+- Congress.gov spot-check (is the data ACCURATE vs source, not just present) — running via
+  data-accuracy-verifier; result to be appended before merge (egress may be blocked, as with FEC).
+
+**Next**
+Append spot-check result; merge. Optional durable fix: recompute `vote_sync_status` from
+`candidate_votes` (or base the per-member completeness signal on candidate_votes) so the health
+signal stops diverging from reality.
+
+**Deferred**
+- Recompute/realign `vote_sync_status` with `candidate_votes`.
+- (finance) cycle-scope the #436 donor guard; `individual_delta_pct` 2024 metric audit.
+
+---
+
 ## 2026-06-16 — ROOT-CAUSED the 401 incident: new API keys → UNAUTHORIZED_API_KEY_CONFLICTS — day
 
 **What happened & why**

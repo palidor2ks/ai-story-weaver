@@ -56,18 +56,22 @@ else
   ok "fec-reconciliation (visible): $RECON_OK ok / $RECON_PART partial / $RECON_ERR error (gap \$$GAP) — backlog tracked in docs/DATA-ACCURACY.md"
 fi
 
-# --- 2. Voting records, VISIBLE states only (threshold: sync errors must not grow past 60;
-#        visible baseline 18 errors / 12 incomplete on 2026-06-16) ---
+# --- 2. Voting records, VISIBLE states only. Only count rows that actually have an expected
+#        record to sync (expected_total>0 OR expected_floor_votes>0): non-incumbent CANDIDATES
+#        (challengers) carry a vote_sync_status row with a spurious floor_vote_sync_error and 0
+#        expected — they have no congressional record, so counting them is noise, not a sync defect.
+#        (threshold: real-member sync errors must not grow past 10; baseline 0 errors / 7 incomplete.) ---
 read -r VERR VFERR VINC <<<"$(q "$VIS
   select count(*) filter (where vs.sync_error is not null),
          count(*) filter (where vs.floor_vote_sync_error is not null),
          count(*) filter (where coalesce(vs.persisted_count,0) < coalesce(vs.expected_total,0))
-  from vote_sync_status vs join vis on vis.id = vs.candidate_id" | tr '|' ' ')"
+  from vote_sync_status vs join vis on vis.id = vs.candidate_id
+  where coalesce(vs.expected_total,0) > 0 or coalesce(vs.expected_floor_votes,0) > 0" | tr '|' ' ')"
 TOTAL_VERR=$(( ${VERR:-0} + ${VFERR:-0} ))
-if [ "$TOTAL_VERR" -gt 60 ]; then
-  err "voting-records (visible): $TOTAL_VERR member sync errors (regression past 60); $VINC members incomplete"
+if [ "$TOTAL_VERR" -gt 10 ]; then
+  err "voting-records (visible): $TOTAL_VERR real-member sync errors (regression past 10); $VINC members incomplete"
 else
-  ok "voting-records (visible): $TOTAL_VERR member sync errors / $VINC incomplete (baseline 18/12 on 2026-06-16)"
+  ok "voting-records (visible): $TOTAL_VERR real-member sync errors / $VINC incomplete (baseline 0 errors / 7 incomplete on 2026-06-16, after excluding non-incumbent challengers)"
 fi
 
 # --- 3. Bills (FAIL if the nightly sync is dead: > 7 days since last completion) ---
