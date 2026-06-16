@@ -7,13 +7,17 @@
 > **whole-database** numbers on purpose (they track the full backlog, including states not yet
 > launched).
 >
-> **Note (2026-06-16):** the Coverage & Finance dashboard's *headline tiles* no longer read those
-> cache rows directly — they read `get_coverage_dashboard_stats()` (migration `20260616120000`),
-> which applies the same definitions but filtered to **visible states only** (hidden states
-> excluded via `get_hidden_state_codes()`, matching `get_finance_cycle_summary`). This is
-> display-only: `admin_stats_cache` and these thresholds are unchanged and remain the whole-DB
-> source of truth. So a dashboard tile (visible-states slice) will read LOWER than the cache /
-> scoreboard number (all states) — that's expected, not drift.
+> **Note (2026-06-16):** the Coverage & Finance dashboard no longer reads these cache rows
+> directly for its *headline tiles* (answers, FEC, voting) **or** its candidate-scoped Data
+> Accuracy Scoreboard cards (FEC reconciliation, candidate identity, URL-sourced answers). All of
+> those now read `get_coverage_dashboard_stats()` (migrations `20260616120000` + `20260616180000`),
+> which applies the same definitions but filtered to **visible states only** (hidden states excluded
+> via `get_hidden_state_codes()`, matching `get_finance_cycle_summary`). The scoreboard's **Bills**
+> (national) and **State finance** (NJ/FL/NY) cards still read the global cache. This is display-only:
+> `admin_stats_cache` and these thresholds are unchanged and remain the whole-DB source of truth, so
+> the **preflight `check:accuracy` numbers stay whole-database**. A dashboard number (visible slice)
+> will therefore read LOWER than the cache / preflight number (all states) — that's expected, not
+> drift.
 >
 > Standing numbers below were measured **2026-06-10** (live DB). Update them when a category
 > materially moves, and ratchet thresholds DOWN as backlogs are fixed — never up without a

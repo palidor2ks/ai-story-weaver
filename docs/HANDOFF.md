@@ -27,6 +27,45 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-16 — Coverage & Finance dashboard: apply RPC + scope the scoreboard too — day
+
+**What happened & why**
+Follow-up to the visible-states dashboard (PR #428, merged). Two things:
+1. **Applied the migrations live.** PR #428 shipped the code but not the migration (guardrail #1).
+   The maintainer reported the dashboard still showed all-state numbers. Root causes, both fixed:
+   `get_coverage_dashboard_stats` didn't exist yet (applied `20260616120000` via Supabase MCP), and
+   after applying, the browser still 404'd it because **PostgREST's schema cache** hadn't reloaded
+   (`notify pgrst, 'reload schema'`). Confirmed live (admin-simulated): Total Reps 172, With FEC ID
+   151, etc. — the visible slice now returns.
+2. **Scoped the Data Accuracy Scoreboard too** (maintainer chose this). The scoreboard's
+   candidate-based cards — FEC reconciliation, candidate identity (audited merges), URL-sourced
+   answers — now follow the visible-states scope; **Bills** (national) and **State finance**
+   (NJ/FL/NY) stay global. Implemented by extending `get_coverage_dashboard_stats()` with
+   recon/merge/URL fields (new migration `20260616180000`: drop+recreate, since the return signature
+   changed) and wiring `DataAccuracyScoreboard` to a new `visible` prop (falls back to the global
+   cache when absent). Live values: recon 127 ok / 1 warn / 4 partial / **53 error** (gap $30.2M —
+   matches the Finance Coverage card), 8 audited merges, 1,819/41,688 URL-sourced (~4%).
+
+**State** (verified)
+- Both migrations **applied to Pulse Dev** (`ornnzinjrcyigazecctf`, the project the app's
+  `VITE_SUPABASE_URL` points at) and schema reloaded; admin-simulated RPC returns the new fields.
+- `bun run lint` 0 errors (157 warnings) · `tsc -b --noEmit` clean · `vite build` ok · 79/79 tests.
+- **Not yet committed/pushed when this entry was written** — see Next.
+- `admin_stats_cache` / `refresh_admin_stats_cache()` still untouched: preflight `check:accuracy`
+  stays whole-database (documented in DATA-ACCURACY.md). The scoreboard's candidate cards now
+  intentionally diverge from the gate (visible slice); bills/state-finance still match it.
+
+**Next**
+Push the branch and open a new PR for migration `20260616180000` + the scoreboard wiring. Then
+regenerate `src/integrations/supabase/types.ts` to drop the `(supabase as any)` cast.
+
+**Deferred**
+- Prod: if a separate prod Supabase project exists, both migrations (`20260616120000`,
+  `20260616180000`) must be applied there too — only Pulse Dev is visible from this session.
+- Optional: explicit REVOKE/GRANT retrofit on `get_finance_cycle_summary` (from PR #428's review).
+
+---
+
 ## 2026-06-16 — Coverage & Finance dashboard: visible-states-only numbers — day
 
 **What happened & why**
