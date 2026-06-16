@@ -89,10 +89,14 @@ of math. **Per the brand-voice gate, this is now a hard launch gate, not a goal:
 | HJRES72 Terminate national emergency (119) | 12-0 | 0-12 | Government & Democracy | Disapprove a presidential emergency declaration | − |
 | HR2483 SUPPORT for Patients & Communities Reauth. (119) | 16-4 | 11-15 | Health, Ed & Welfare | Reauthorize opioid-response programs (more bipartisan) | − |
 
-This clears the gate for **Economy, National Security, Health, Government**; **Environment & Energy**
-and **Rights & Justice** still need left-coded votes (a deeper 117th/Senate pull, in progress).
+**Final-passage validation (party split, adopted):** all 28 directions were re-derived objectively
+from the final-passage roll call and **matched the hand-assignments**; **HR2483 dropped** (genuinely
+bipartisan: D 6-4 / R 10-3). **Per-topic balance now:** Economy **3R/3L ✓**; National Security 3R/1L;
+Health 5R/1L; Government 4R/1L; **Environment 4R/0L** and **Rights 3R/0L**. Only Economy meets the
+≥2-left gate — see methodology "Status & what's next" for the v0.1 balance decision (full-chamber
+ingestion vs. relaxed-to-overall gate). **v0.0 is unaffected and ready to build.**
 
-### Recommended method upgrade — derive direction from the party split (not hand-assignment)
+### ADOPTED method — derive direction from the party split (not hand-assignment)
 
 The candidates above were found **objectively**: a vote where the delegation's Democrats vote Yea and
 Republicans vote Nay is left-coded; the reverse is right-coded. **Proposal: make this the canonical
@@ -101,8 +105,8 @@ direction-assignment method** — we still *curate which votes* are substantive 
 removes nearly all the neutrality must-fixes (we describe what the parties did, not whether the bill
 is good), is reproducible, and auto-surfaces both poles. **Caveat:** it measures issue-alignment
 *relative to current party coalitions* (DW-NOMINATE-style); valence/bipartisan votes (no clean split)
-are excluded as low-signal, which we want anyway. **Needs your sign-off** (see methodology "Still
-open").
+are excluded as low-signal, which we want anyway. **Adopted (2026-06-16),** applied on
+**final-passage roll calls only** per the methodology's critical data rule.
 
 ## Neutrality fixes applied (from the gate)
 

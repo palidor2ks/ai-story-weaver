@@ -27,6 +27,99 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-16 — PoliScore v0.0 data-accuracy gate + fixes
+
+**What happened & why**
+Ran the `data-accuracy-verifier` gate against Congress.gov before shipping v0.0. It caught **two
+ship-blockers**: (1) `candidate_votes` reuses bill_id `'H R 26'` for BOTH the 118th Born-Alive Act
+and the 119th Energy Act, so `get_poliscore_record` attributed the 2025 Energy vote to the Born-Alive
+key vote — reporting ~11 Democrats as Yea on Born-Alive when they voted Nay (defamation risk);
+(2) HR288's `source_url` pointed at the 119th Congress (wrong bill). Fixed via migration
+`20260616163000_poliscore_fixes.sql`: scope the vote join to the key vote's Congress by a **date
+window** (`year BETWEEN 1789+(congress-1)*2 AND +1`), and correct the HR288 URL. Applied to prod.
+
+**State** (verified)
+- Fix verified live: 12 sampled affected members (Bishop, Costa, Fletcher, Golden…) now return the
+  correct Born-Alive vote (**FIXED ✓**); HR288 URL = 118th; Adams still 28/28 left-aligned.
+- The MTR-then-passage `max(vote_number)` heuristic holds for 27/28 (HR26 was the lone exception, now
+  fixed). Lean coding + descriptions passed the gate.
+- **Side finding:** `candidate_votes` actually contains **full-chamber** votes (GA/CA/TX/… present),
+  which de-risks the v0.1 full-chamber path.
+
+**Next**
+v0.0 is accuracy-gated and ready. Merge PR #427 (migrations already applied to prod; merge deploys
+the frontend). Then v0.1: full-chamber scoring + Senate key votes + Environment/Rights left-coded.
+
+---
+
+## 2026-06-16 — PoliScore v0.0 frontend shipped
+
+**What happened & why**
+Built the PoliScore v0.0 frontend against the already-applied prod RPC `get_poliscore_record`. The
+data layer was complete; this session added the React surface so the record card is visible on
+every CandidateProfile page. The goal is public accountability: a free, sourced voting-record card
+that can never be bought, every vote linked to Congress.gov.
+
+**State** (verified)
+- `src/hooks/usePoliScoreRecord.ts` — calls `supabase.rpc('get_poliscore_record', ...)` via
+  TanStack Query, groups rows by topic, computes cast/onRecord/leftAligned/rightAligned per topic.
+  Uses the untyped RPC escape hatch (same pattern as `useNjLegislatorFinance`) because the RPC
+  isn't in the generated types yet.
+- `src/components/PoliScoreCard.tsx` — renders per-topic vote list with neutral_description as
+  primary text, sponsor title as labeled secondary, Yea/Nay/Not Voting badges, Congress.gov links,
+  "N of M key votes cast" participation line, trust wall, and neutrality disclaimer. Empty record
+  renders "Not yet scored — v0 covers House votes only."
+- Wired into `src/pages/CandidateProfile.tsx` as a new section between AI Explanation and Positions.
+- Preflight: lint 0 errors / 156 pre-existing warnings; Vite build succeeds; 79/79 tests pass.
+- NOT verified: live browser render (no Supabase creds in this environment). Type-check has
+  1390 pre-existing errors (missing React/lucide module declarations in TSC env — Vite/esbuild
+  resolves them fine at build time). No new TSC errors introduced by the new files.
+
+**Next**
+Wire `PoliScoreCard` into a `RepresentativeProfile` page if one exists separately, or confirm
+CandidateProfile covers all NC/NJ federal reps (it does via `candidate.id` = bioguide ID).
+
+**Deferred**
+- v0.1 directional score (blocked by left/right balance gate — see methodology doc).
+- Senate key votes (Senate roll calls differ; v0 is House-only by design).
+- `get_poliscore_record` should be added to the generated Supabase types to remove the escape hatch.
+
+---
+
+## 2026-06-16 — PoliScore Task 1: party-split direction + roll-call data fix — day
+
+**What happened & why**
+Adopted the **party-split method** (direction read from how the delegation's Dems vs Reps voted, not
+hand-assigned) and, validating it, caught a **data-integrity bug**: `candidate_votes` stores multiple
+roll calls per `bill_id` (procedural + final passage), so aggregating by bill produced impossible
+~even party splits (HR28 looked D 12-11 / R 13-13). Fix locked: **score the final-passage roll call
+only (max `vote_number` per bill)**. Re-derived all 28 curated directions on final-passage roll calls
+— they **matched the hand-assignments exactly** (HR2483 dropped as genuinely bipartisan). Also added
+**NJ federal** to scope (home-turf dogfooding; NJ state legislature parked for 2027).
+
+**State** (verified)
+- **Docs only — no code/schema/migration changes.** Updated `poliscore-methodology.md` (roll-call
+  disambiguation rule; party-split as canonical direction method; status/next) and
+  `poliscore-key-votes-draft.md` (validated directions; HR2483 dropped; per-topic balance status).
+- **Live finding:** with final-passage roll calls, directions are clean and party-line. Per-topic
+  left/right balance: **Economy 3R/3L ✓**, NatSec 3R/1L, Health 5R/1L, Gov 4R/1L, **Environment 4R/0L,
+  Rights 3R/0L** — only Economy meets the ≥2-left gate (119th R-House controls the floor agenda).
+- Prior PoliScore docs (methodology, key-votes, gate fixes) merged via PR #426.
+
+**Next**
+**v0.0 build started:** added `docs/poliscore-v0.0-build-plan.md` + migration
+`20260616160000_poliscore_key_votes.sql` (curated rubric table + 28 seeded key votes;
+`migration-safety-reviewer` = **GO**; **NOT applied** — apply deliberately per guardrail #1). Next:
+apply the migration, build the compute hook (`usePoliScoreRecord`) + public page, then
+`data-accuracy-verifier` gate. Separately, decide the **v0.1 balance** path: ingest full-chamber roll
+calls (best; also unlocks NOMINATE-style scoring) vs. relax the gate to overall-rubric balance.
+
+**Deferred**
+Full-chamber vote ingestion (would fix both the small-sample party split and the left-coded scarcity).
+Environment/Rights left-coded votes remain unmet for v0.1.
+
+---
+
 ## 2026-06-16 — PoliScore Task 1: data spike + v0 methodology — day
 
 **What happened & why**

@@ -91,6 +91,27 @@ Target **5–8 key votes per topic** per Congress. Fewer than a floor (e.g. <3) 
   a Yea favors; (c) the full key-vote list is versioned in-repo and open to public challenge; (d) a
   neutrality review (`alignment-quiz-reviewer` + `brand-voice-reviewer`) gates each release.
 
+### Scoring unit: ONE roll call per bill — final passage (critical data rule)
+
+`candidate_votes` stores **multiple roll calls per `bill_id`** (e.g., a motion to recommit / previous
+question *and* final passage), and the parties often vote opposite on the procedural one. **Never
+aggregate votes by `bill_id`** — doing so makes a member look like both Yea and Nay and produces
+impossible ~even party splits (this was caught in verification: HR28 aggregated to D 12-11 / R 13-13,
+but its *final-passage* roll call is cleanly D 0-11 / R 13-0). **Rule:** score the **final-passage
+roll call only**, identified as the **max `vote_number` per bill** and validated against
+`bills.passed_house`/`passed_senate`.
+
+### Direction is read from the party split (canonical method)
+
+A key vote's direction is **not hand-assigned** — it is read from how the delegation's parties voted
+on the final-passage roll call: **Democrats Yea + Republicans Nay → Yea is left (−)**; the reverse →
+right (+); no clean split → **bipartisan/valence, dropped as low-signal**. This is objective,
+reproducible, and removes editorial neutrality risk (we describe what the parties did, not whether the
+bill is good). All 28 curated directions were validated this way (they matched the hand-assignments;
+HR2483 dropped as bipartisan). *Caveat:* this measures alignment relative to current party coalitions
+(DW-NOMINATE-style); with only the NC+NJ delegation it's a small but usually-clean sample on
+party-line passage votes.
+
 ### Score math
 
 For member *m*, topic *t* with key votes *K*:
@@ -146,12 +167,20 @@ Congress.gov link**, plus an explicit *"what we could not score and why."*
 - **Topic assignment:** the auto `bills.topic` tag is **not trusted** — topic is **hand-assigned per
   key vote** during curation (see `poliscore-key-votes-draft.md`).
 
-## Still open (blocks v0.1 launch)
+## Status & what's next
 
-- **Left/right balance HARD GATE** — rubric is ~22:1 right-coded; need **≥2 left-coded votes per
-  topic** before v0.1 scores anyone (see `poliscore-key-votes-draft.md`). *In progress.*
-- **Implement the scoring hardening** above (per-member floor; `poliscore_*` storage; "N of M cast").
-- **Re-run both gate reviewers** on the balanced rubric, then build v0.1.
+**Done this pass:** directions verified against Congress.gov AND independently re-derived from the
+party split on final-passage roll calls (all matched); the roll-call disambiguation rule above was
+discovered and locked; HR2483 dropped (bipartisan); neutrality + scoring gates applied; NJ federal
+added to scope.
 
-*Done this pass:* directions verified against Congress.gov; neutrality + scoring gates run and their
-fixes applied; NJ federal added to scope.
+**v0.0 (objective record scorecard) is unblocked** — it needs no left/right balance, only the
+final-passage roll-call rule + participation. **Recommended: build v0.0 next.**
+
+**v0.1 (directional) still blocked by the balance gate, which is structurally hard:** using
+final-passage roll calls, only Economy is balanced (3R/3L); **Environment & Rights have 0 clean
+left-coded delegation votes** and NatSec/Health/Government have 1 each — because the 119th R-House
+controls the floor agenda. **Decision needed before v0.1:** either (a) ingest **full-chamber** roll
+calls (unlocks the parked party-relative/NOMINATE scoring and far more left-coded passages), or
+(b) relax the gate to **overall-rubric balance** (not per-topic) with a transparency note, or
+(c) pull more 117th-Congress left-coded votes (sparse in current data). Then re-run both gates.
