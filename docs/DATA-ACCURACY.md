@@ -12,8 +12,11 @@
 > Accuracy Scoreboard cards (FEC reconciliation, candidate identity, URL-sourced answers). All of
 > those now read `get_coverage_dashboard_stats()` (migrations `20260616120000` + `20260616180000`),
 > which applies the same definitions but filtered to **visible states only** (hidden states excluded
-> via `get_hidden_state_codes()`, matching `get_finance_cycle_summary`). The scoreboard's **Bills**
-> (national) and **State finance** (NJ/FL/NY) cards still read the global cache. This is display-only:
+> via `get_hidden_state_codes()`, matching `get_finance_cycle_summary`). The scoreboard's **State
+> finance** card is also visible-scoped — it shows only the tracked states that are visible (NJ
+> today; FL/NY are hidden), filtered client-side from the per-state cache breakdown. Only the
+> **Bills** card stays whole-database (bills are national legislation and the card is a sync-health
+> monitor). This is display-only:
 > `admin_stats_cache` and these thresholds are unchanged and remain the whole-DB source of truth, so
 > the **preflight `check:accuracy` numbers stay whole-database**. A dashboard number (visible slice)
 > will therefore read LOWER than the cache / preflight number (all states) — that's expected, not

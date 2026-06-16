@@ -27,6 +27,35 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-16 — Scope State finance scoreboard card to visible states — day
+
+**What happened & why**
+Last visible-states gap on the dashboard. The maintainer confirmed Candidate Answers / FEC / voting
+/ the candidate scoreboard cards were correctly visible-scoped, but asked for the two remaining
+whole-DB scoreboard cards (Bills, State finance) to be scoped too. Decision (asked, since "bills" is
+ambiguous — they're national legislation, not state-tied): **Bills stays whole-database** (it's a
+sync-health monitor; the only state-meaningful count would be "bills (co)sponsored by a visible rep"
+= 1,330, which the maintainer declined). **State finance → visible only.**
+
+**State** (verified)
+- **Frontend-only, NO migration.** The `state_finance_stats` cache already breaks NJ/FL/NY out
+  separately, so `DataAccuracyScoreboard` now filters those three trackers by `useHiddenStates()`
+  client-side: today NJ is visible, FL/NY hidden → the card shows NJ alone, relabels to "State
+  finance (NJ)", and sums rows/errors/latest-run over visible states only (empty → "no visible
+  states"). Footer note updated; DATA-ACCURACY.md updated.
+- `bun run lint` 0 errors (157 warnings) · `tsc -b --noEmit` clean · `vite build` ok · 79/79 tests.
+- Nothing server-side changed; preflight `check:accuracy` still whole-DB. Bills card unchanged.
+
+**Next**
+Push + open PR. The whole dashboard is now visible-scoped except the deliberately-national Bills card.
+
+**Deferred**
+- Prod: apply the three RPC migrations (`…120000`, `…180000`, `…190000`) wherever prod reads from
+  (this State-finance change needs no migration).
+- Optional cleanup: drop the `(supabase as any)` cast now that types.ts includes the RPC.
+
+---
+
 ## 2026-06-16 — Coverage dashboard RPC was timing out (8s) — perf fix — day
 
 **What happened & why**
