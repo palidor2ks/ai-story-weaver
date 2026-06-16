@@ -27,6 +27,44 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-16 — competitive-landscape-analysis (NC beachhead strategy) — day
+
+**What happened & why**
+A strategy arc, not a code change. Refined PoliPulse's model (verified-constituent network: free
+KYC'd voters, candidate-side SaaS, record-only **PoliScore**, PoliScore-first cold-start), then ran
+a 5-angle deep-research pass to pressure-test it. Key reversals from the research: the biggest
+buyer-overlap threat is **Granicus-Indigov** (not FiscalNote, which is in visible distress), the
+"FICO for politicians" concept is **already taken** (OppScore, Your Rep's Record) so the open lane
+is *neutral + sourced + at scale*, and the pay-to-play risk is real and existential for a
+neutrality brand (credit-rating-agency precedent: S&P $1.5B). Picked a **beachhead: North
+Carolina** (marquee 2026 Senate race + all 170 legislative seats up + open voter data + unscored
+state legislature), and assessed our data readiness against the live DB.
+
+**State** (verified)
+- **Docs only — no code, schema, or migration changes.** Added `docs/competitive-landscape.md`
+  (verified research + confirmed/contradicted scorecard) and `docs/strategy-nc-beachhead.md`
+  (NC rationale + data assessment + 5 ordered tasks + "do-not-build-yet" list + Task-1 rubric
+  skeleton). Appended this HANDOFF entry.
+- **Live DB facts (project `ornnzinjrcyigazecctf`)**: 75 NC candidates, **all federal**; 16 have
+  voting records (39,268 `candidate_votes` rows); all 75 have `candidate_answers`; 16 have
+  `member_statements` (179 with source URLs). **NC state legislators = 0** (need ~170) — the single
+  biggest data gap. Federal office labels are inconsistent and need normalizing.
+- Research caveat: `WebFetch` was 403-blocked on many primaries this session; figures marked
+  *(verify)* in the docs need a direct re-read before external use.
+
+**Next**
+Start **Task 1**: flesh out the PoliScore rubric skeleton in `strategy-nc-beachhead.md` and compute
+v0 for the ~16 NC members of Congress who already have records, every input source-linked, then gate
+it through `data-accuracy-verifier`.
+
+**Deferred**
+KYC, voter-file matching, candidate-side SaaS/billing, and NC campaign-finance ingestion are all
+intentionally off the critical path (see the "Do NOT build yet" section). Two follow-up research
+dives parked: **Your Rep's Record** (traction) and **Granicus** (is verified constituent sentiment
+on its roadmap?).
+
+---
+
 ## 2026-06-15 (PROD HOTFIX — donor-import regression: edge fn shipped ahead of migration) — night
 
 **What happened & why**
