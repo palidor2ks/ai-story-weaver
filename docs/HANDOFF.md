@@ -27,6 +27,49 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-16 — fec-drain hasMore bug fix + Schiff backfill (PR #424, merged)
+
+**What happened & why**
+Adam Schiff's 2026 donor data was stuck at $3,486 local vs $2,359,692 at the FEC — a 99.9%
+gap. The root cause was a bug in `fec-candidate-drain`: it called `fetch-fec-donors` (which
+processes one 25s page-window and returns `hasMore: true` when not done), but the drain
+**ignored `hasMore`** — it stamped `last_donor_sync = now()` on any HTTP 200. So large
+candidates like Schiff got one 25s slice then were benched for 14 days, never finishing.
+`fetch-fec-donors` itself already handles resumable pagination with a cursor (stored in
+`candidate_committees.last_index / last_contribution_date / has_more`), so the fix was
+purely in the drain's bookkeeping.
+
+**Fix (PR #424, merged 2026-06-16):**
+- `supabase/functions/fec-candidate-drain/index.ts`: now reads `hasMore` from the
+  `fetch-fec-donors` response body. Only stamps `last_donor_sync` when `!syncHasMore`
+  (complete) or when `!doSync`. Partial syncs stay in the queue; the 3-min cron advances
+  the cursor on each visit until `hasMore=false`.
+
+**State** (verified)
+- PR #424 merged; edge function auto-deployed.
+- Schiff's `last_donor_sync` nulled manually (was 2026-05-29; stale, but NULL puts him
+  first in the NULL-first ORDER BY). He'll start draining on the next 3-min cron cycle.
+- `fetch-fec-donors` cursor for C00343871 (Schiff's committee) was intact from prior runs;
+  the drain will pick up from where it left off.
+- ETL reviewer gave GO before merge; all 7 CI checks were green.
+
+**Next**
+Check Schiff's contribution count in ~15–30 min: `SELECT COUNT(*) FROM contributions WHERE
+candidate_id = 'S001150' AND cycle = '2026'` — should climb well above the prior 22,257
+ceiling as the drain works through the itemized pages.
+
+**Deferred**
+- Migration `20260615170000` (Finding B: Line 14/15 double-count in `get_contribution_totals`)
+  still needs to be applied + FEC finance re-drain triggered to recompute reconciliation rows.
+- Disk pressure: drop redundant `contributions` indexes (~1 GB reclaim), vacuum `donors`
+  table (165k dead rows), confirm/drop `_enrich_member_bills` staging table (504 MB).
+- Congress donor backfill stall: 159 committees with `has_more=true` may still not be
+  progressing — worth a spot-check after the Schiff drain stabilises.
+- Counter bug in `import-fec-receipts-csv`: `inserted_contributions` overcounts when the
+  pre-check hash query silently fails. Low severity; data is correct, only display is wrong.
+
+---
+
 ## 2026-06-16 — donor-import stale-sweep + session cleanup (PR #423, merged)
 
 **What happened & why**
