@@ -27,6 +27,46 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-16 — ROOT-CAUSED the 401 incident: new API keys → UNAUTHORIZED_API_KEY_CONFLICTS — day
+
+**What happened & why**
+Diagnosed the live 401 incident (donor ingestion down; Cooper et al. frozen). The 401 error body was
+**`UNAUTHORIZED_API_KEY_CONFLICTS`**, with the internal request sending `apikey: sb_publishable_…` +
+`Authorization: Bearer sb_secret_…`. The project migrated to the **new API keys**, which **remapped the
+injected env vars**: `SUPABASE_ANON_KEY` now yields the *publishable* key and `SUPABASE_SERVICE_ROLE_KEY`
+the *secret* key (both legacy vars are labeled DEPRECATED; legacy keys themselves are still enabled, so
+that wasn't it). The long-standing internal-call pattern `apikey: ANON + Authorization: Bearer SERVICE`
+therefore sends **two different keys**, which the new gateway rejects as conflicting (401, before the
+function runs). `sync-all-donors` was already fixed for this (apikey = same service key); the other
+finance callers weren't.
+
+**Fix (PR)**
+Set `apikey` = the service-role key (same as the bearer) in the internal-call headers of:
+- `fec-candidate-drain` (→ fetch-fec-committees, fetch-fec-donors — the donor backfill path, incl. Cooper)
+- `drain-fec-finance` (→ fetch-fec-donors / refresh-fec-totals — reconciliation path)
+`fetch-member-statements` / `sync-legislator-votes` send a single key + cron/sync-secret (no conflict —
+left alone). The fl/ny **cron-command** 401s are a separate, cron-SQL-level issue (the cron sends
+conflicting keys) — follow-up.
+
+**State** (verified / NOT)
+- Root cause CONFIRMED from the 401 error body (`UNAUTHORIZED_API_KEY_CONFLICTS` + the publishable/secret
+  prefixes). Fix is the exact pattern `sync-all-donors` already uses.
+- supabase/functions are lint/build/test-excluded → fix is by inspection; **needs the live run after merge**
+  (deploy → drain's internal calls should 200 → the 23 re-queued candidates, incl. Cooper, backfill).
+- ANON_KEY var may now be unused in those two files (harmless; Deno doesn't fail on it).
+
+**Next**
+Merge the fix → confirm `fetch-fec-donors`/`fetch-fec-committees` stop 401'ing and Cooper's donor count
+goes 0 → thousands. Then: fix the fl/ny cron-command keys (SQL); apply the etl-reviewer's cycle-scope
+follow-up to the donor-count guard.
+
+**Deferred**
+- fl/ny (+ any other) **cron commands** that send conflicting keys — update the cron SQL to a single key.
+- Cycle-scope the donor-count in the #436 guard (`.eq('cycle', cycle)`).
+- `individual_delta_pct` metric audit (2024 local≥FEC rows); multi-committee completeness (Booker 1/7).
+
+---
+
 ## 2026-06-16 — NC+NJ finance verification → donor under-coverage + a live 401 incident — day
 
 **What happened & why**
