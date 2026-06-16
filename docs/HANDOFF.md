@@ -48,9 +48,12 @@ only (max `vote_number` per bill)**. Re-derived all 28 curated directions on fin
 - Prior PoliScore docs (methodology, key-votes, gate fixes) merged via PR #426.
 
 **Next**
-**Build v0.0** (objective record scorecard — unblocked; needs only the final-passage roll-call rule +
-participation). Separately, decide the **v0.1 balance** path: ingest full-chamber roll calls (best;
-also unlocks NOMINATE-style scoring) vs. relax the gate to overall-rubric balance.
+**v0.0 build started:** added `docs/poliscore-v0.0-build-plan.md` + migration
+`20260616160000_poliscore_key_votes.sql` (curated rubric table + 28 seeded key votes;
+`migration-safety-reviewer` = **GO**; **NOT applied** — apply deliberately per guardrail #1). Next:
+apply the migration, build the compute hook (`usePoliScoreRecord`) + public page, then
+`data-accuracy-verifier` gate. Separately, decide the **v0.1 balance** path: ingest full-chamber roll
+calls (best; also unlocks NOMINATE-style scoring) vs. relax the gate to overall-rubric balance.
 
 **Deferred**
 Full-chamber vote ingestion (would fix both the small-sample party split and the left-coded scarcity).
