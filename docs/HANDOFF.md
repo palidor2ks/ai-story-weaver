@@ -27,6 +27,40 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-16 — PoliScore v0.0 frontend shipped
+
+**What happened & why**
+Built the PoliScore v0.0 frontend against the already-applied prod RPC `get_poliscore_record`. The
+data layer was complete; this session added the React surface so the record card is visible on
+every CandidateProfile page. The goal is public accountability: a free, sourced voting-record card
+that can never be bought, every vote linked to Congress.gov.
+
+**State** (verified)
+- `src/hooks/usePoliScoreRecord.ts` — calls `supabase.rpc('get_poliscore_record', ...)` via
+  TanStack Query, groups rows by topic, computes cast/onRecord/leftAligned/rightAligned per topic.
+  Uses the untyped RPC escape hatch (same pattern as `useNjLegislatorFinance`) because the RPC
+  isn't in the generated types yet.
+- `src/components/PoliScoreCard.tsx` — renders per-topic vote list with neutral_description as
+  primary text, sponsor title as labeled secondary, Yea/Nay/Not Voting badges, Congress.gov links,
+  "N of M key votes cast" participation line, trust wall, and neutrality disclaimer. Empty record
+  renders "Not yet scored — v0 covers House votes only."
+- Wired into `src/pages/CandidateProfile.tsx` as a new section between AI Explanation and Positions.
+- Preflight: lint 0 errors / 156 pre-existing warnings; Vite build succeeds; 79/79 tests pass.
+- NOT verified: live browser render (no Supabase creds in this environment). Type-check has
+  1390 pre-existing errors (missing React/lucide module declarations in TSC env — Vite/esbuild
+  resolves them fine at build time). No new TSC errors introduced by the new files.
+
+**Next**
+Wire `PoliScoreCard` into a `RepresentativeProfile` page if one exists separately, or confirm
+CandidateProfile covers all NC/NJ federal reps (it does via `candidate.id` = bioguide ID).
+
+**Deferred**
+- v0.1 directional score (blocked by left/right balance gate — see methodology doc).
+- Senate key votes (Senate roll calls differ; v0 is House-only by design).
+- `get_poliscore_record` should be added to the generated Supabase types to remove the escape hatch.
+
+---
+
 ## 2026-06-16 — PoliScore Task 1: party-split direction + roll-call data fix — day
 
 **What happened & why**
