@@ -78,9 +78,31 @@ of math. **Per the brand-voice gate, this is now a hard launch gate, not a goal:
 
 > **Requirement: ≥ 2 left-coded key votes per topic (≈12 total) before v0.1 scores anyone publicly.**
 
-Sources to mine for left-coded contested votes: 118th-Congress Democratic-majority passages,
-Senate-originated bills, House suspension/discharge votes Democrats led, and motions where the
-delegation split with Democrats on the Yea side. **Status: in progress (next data pull).**
+**Left-coded candidates found (via the party-split method below):**
+
+| Bill (Cong) | Dem Y-N | Rep Y-N | Topic | A **Yea** does | Lean |
+|---|---|---|---|---|---|
+| HR2312 Tipped Employee Protection Act (119) | 12-0 | 0-12 | Economy & Work | Protect tipped-worker wage rules | − |
+| HR2550 Protect America's Workforce Act (119) | 12-0 | 3-10 | Economy & Work | Pro-union labor protections | − |
+| HR2270 Empowering Employer Child & Elder Care Solutions Act (119) | 12-0 | 0-12 | Health, Ed & Welfare | Support employer child/elder-care benefits | − |
+| HR2913 Ukraine Support Act (119) | 12-0 | 1-11 | National Security & Borders | Continue U.S. support for Ukraine | − |
+| HJRES72 Terminate national emergency (119) | 12-0 | 0-12 | Government & Democracy | Disapprove a presidential emergency declaration | − |
+| HR2483 SUPPORT for Patients & Communities Reauth. (119) | 16-4 | 11-15 | Health, Ed & Welfare | Reauthorize opioid-response programs (more bipartisan) | − |
+
+This clears the gate for **Economy, National Security, Health, Government**; **Environment & Energy**
+and **Rights & Justice** still need left-coded votes (a deeper 117th/Senate pull, in progress).
+
+### Recommended method upgrade — derive direction from the party split (not hand-assignment)
+
+The candidates above were found **objectively**: a vote where the delegation's Democrats vote Yea and
+Republicans vote Nay is left-coded; the reverse is right-coded. **Proposal: make this the canonical
+direction-assignment method** — we still *curate which votes* are substantive and topic-relevant, but
+**direction is read from observed party behavior**, not from anyone characterizing the bill. This
+removes nearly all the neutrality must-fixes (we describe what the parties did, not whether the bill
+is good), is reproducible, and auto-surfaces both poles. **Caveat:** it measures issue-alignment
+*relative to current party coalitions* (DW-NOMINATE-style); valence/bipartisan votes (no clean split)
+are excluded as low-signal, which we want anyway. **Needs your sign-off** (see methodology "Still
+open").
 
 ## Neutrality fixes applied (from the gate)
 
