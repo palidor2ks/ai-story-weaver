@@ -52,7 +52,11 @@ Deno.serve(async (req) => {
   const callHeaders = {
     "Content-Type": "application/json",
     "Authorization": `Bearer ${SERVICE_KEY}`,
-    "apikey": ANON_KEY,
+    // apikey MUST be the SAME service-role key as the bearer. Under the new API keys this
+    // project's SUPABASE_ANON_KEY is the publishable key, and apikey=publishable +
+    // Authorization=secret is rejected by the gateway as UNAUTHORIZED_API_KEY_CONFLICTS (401)
+    // before the function runs — which silently broke every donor/committee sync. (Matches sync-all-donors.)
+    "apikey": SERVICE_KEY,
   };
 
   const hiddenSet = await loadHiddenStates(supabase);
