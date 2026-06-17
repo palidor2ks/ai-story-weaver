@@ -1065,13 +1065,27 @@ async function saveAnswersBatch(
 async function updateCandidateScore(supabase: any, candidateId: string, candidateName: string): Promise<void> {
   const { data: allAnswers } = await supabase
     .from('candidate_answers')
-    .select('answer_value')
+    .select('answer_value, evidence_type, source_type, source_url, source_urls')
     .eq('candidate_id', candidateId);
 
   if (!allAnswers || allAnswers.length === 0) return;
 
-  const totalScore = allAnswers.reduce((sum: number, a: any) => sum + a.answer_value, 0);
-  const overallScore = Math.round((totalScore / allAnswers.length) * 100) / 100;
+  // Score the stored overall_score on TRUSTED answers only (vote-derived or carrying a real source
+  // URL), so it matches the live alignment match (src/lib/scoring.ts isTrustedForScoring) instead of
+  // diverging. Inferred/fabricated-provenance answers are excluded. If a candidate has no trusted
+  // answers yet, leave the stored score untouched rather than overwrite it with a fabricated average.
+  const isTrusted = (a: any): boolean =>
+    a.evidence_type === 'voting_record' || a.source_type === 'voting_record' ||
+    (typeof a.source_url === 'string' && a.source_url.trim().length > 0) ||
+    (Array.isArray(a.source_urls) && a.source_urls.some((u: any) => typeof u === 'string' && u.trim().length > 0));
+  const trusted = allAnswers.filter(isTrusted);
+  if (trusted.length === 0) {
+    console.log(`No trusted answers for ${candidateName}; leaving overall_score unchanged`);
+    return;
+  }
+
+  const totalScore = trusted.reduce((sum: number, a: any) => sum + a.answer_value, 0);
+  const overallScore = Math.round((totalScore / trusted.length) * 100) / 100;
 
   const { data: existingCandidate } = await supabase
     .from('candidates')

@@ -149,8 +149,12 @@ Deno.serve(async (req) => {
       // lands. We OVERWRITE rather than skip so fetch-fec-donors' own "now" stamp can't win.
       let stampValue = new Date().toISOString();
       if (doSync) {
+        // Count donors FOR THIS CYCLE: a candidate can have prior-cycle donors yet 0 for the
+        // cycle being synced (the Roy Cooper case — 2024 donors, 0 for 2026), which an
+        // all-cycles count would mask.
         const { count: donorCount } = await supabase
-          .from("donors").select("id", { count: "exact", head: true }).eq("candidate_id", c.id);
+          .from("donors").select("id", { count: "exact", head: true })
+          .eq("candidate_id", c.id).eq("cycle", cycle);
         if ((donorCount ?? 0) === 0) {
           const { data: recon } = await supabase
             .from("finance_reconciliation").select("fec_itemized")

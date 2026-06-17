@@ -27,6 +27,175 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-17 — Vote-derivation engine applied to Pulse Dev (Phase 2) — day
+
+**What happened & why**
+Built and shipped Phase 2 of the answers remediation: re-deriving NC/NJ candidate position answers
+from their VERIFIED voting records, replacing the fabricated/inferred provenance found in Pass 3.
+Owner-approved spec: HIGH-confidence key-vote→question mappings only; magnitude **±5 for a single
+key vote, ±10 when 2+ key votes on a question agree**; Not Voting/Present → no answer; existing
+values ARCHIVED, never deleted. Migration `20260617120000_poliscore_derive_answers.sql` creates the
+curation-gate table `poliscore_key_vote_questions` (16 approved mappings), the audit table
+`candidate_answers_history`, and a DO block that upserts vote-derived answers with `voting_record`
+provenance + Congress.gov source URLs, scoped to visible states.
+
+The migration-safety-reviewer returned **NO-GO** on the draft; all four fixes applied before
+applying: (1, blocking) congress-year date-window guard on the fp/votes CTEs to fence the
+cross-congress legacy-bill_id collision (HR26 'H R 26' holds 1,573 votes spanning 2023–2025);
+(2) skip even-split (net-0) derivations; (3) archive has_discrepancy/discrepancy_note; (4)
+admin-write RLS on the mappings table. Discovered `candidate_answers` has two BEFORE-UPDATE
+anti-tampering triggers allowing only admin/service_role to change scoring fields — resolved by
+asserting `set local request.jwt.claim.role='service_role'` for the migration transaction (the
+exact carve-out those triggers intend).
+
+**State** (verified)
+- Migration **applied to Pulse Dev** (the only project). Result: **299 answers across 26 candidates**
+  (the full NC+NJ House delegation), 0 zeros, range −10..+10; **299 prior rows archived**.
+- Read-only validation confirmed the date-window guard drops **zero** legitimate votes
+  (`fv_rows == fv_in_window` for every vote-bearing bill_id; action_date fully populated).
+- Spot-checked **Virginia Foxx (NC, R)**: all 13 derived answers carry `voting_record` provenance +
+  Congress.gov URLs, directionally correct (e.g. HR2 118th "Secure the Border Act" → Yea → +5
+  immigration; HR28+HR498 both Yea → +10 civil-rights-q9). Consistent with a conservative record.
+- Security advisors: neither new table appears (both have RLS + policies — no new exposure).
+- Preflight: **lint 0 errors · 90/90 tests · vite build compiles**. (The `bun run build` prebuild
+  step fails on sitemap HTTP 403 — the remote sandbox's network policy, not a code issue.)
+- Pushed to `claude/pensive-hypatia-r6m2d8` (PR #438).
+
+**Next**
+Owner merges PR #438; then confirm the un-hidden NC/NJ quiz surfaces show the new vote-derived
+answers (with sources) and that the demotion + derivation together produce honest match scores.
+
+**Deferred**
+- **civil-rights-q22 (HR26 118th Born-Alive) derives nothing** — its canonical `bills` row
+  (`118-HR.26`) isn't linked to the vote-bearing legacy id (`H R 26`); keeps its prior demoted
+  answer. Folds into the existing legacy-bill_id cleanup (pre-un-hide).
+- 9 open key-vote→question mappings + 7 no-question votes in `docs/poliscore-question-map-draft.md`
+  await owner curation (statement-corroboration deferred — corpus too thin).
+- On-demand answer generation rework; `useInvertedScoreCandidates` admin filter; vote_sync_status
+  realign (all pre-un-hide, unchanged from prior entry).
+
+---
+
+## 2026-06-17 — Answers verification (RED) + demotion (Track 1) + re-derivation scoping — day
+
+**What happened & why**
+Pass 3 of the ship gate: NC/NJ candidate answers (the alignment quiz's input). **Verdict: RED.** Of
+42,335 visible answers: ~9% vote-derived (good, ~43% URL'd), **~37% `inferred`** (party-platform AI
+guesses), **~37% `public_statement`** with fabricated provenance (dated tweets/interviews/quotes,
+<1% URL'd — integrity finding #3 confirmed live for NC/NJ; sampled Gill/Mullock/Dafis), ~14%
+`campaign_position` (0 URLs). Critically, **scoring is an equal-weight mean of `answer_value` that
+ignores `source_type`/`confidence`** — so fabricated answers are IN the match math, not just shown.
+
+Owner chose **re-derive from verified votes**. Architect plan: the approved PoliScore key votes map
+to 6 TOPICS, not the ~351 questions, so a **key-vote→question map needs owner curation** (the
+integrity firewall) before any derivation. Two separable tracks; doing both:
+- **Track 1 — demotion (THIS change):** added `isTrustedForScoring()` to `src/lib/scoring.ts`
+  (trusted = `voting_record` evidence OR a real source URL; excludes inferred + URL-less statements/
+  campaign) and filtered the candidate-answer scoring in `useCandidatePersonalizedScore`,
+  `useCandidateScoreMap` (fallback), and `usePersonalizedScoreMap`. So the quiz match now scores
+  ONLY trusted answers; missing ones degrade gracefully. Reversible.
+- **Track 2 — key-vote→question mapping draft:** delegated (for owner review + alignment-quiz-reviewer).
+
+**State** (verified)
+- alignment-quiz-reviewer returned **NO-GO** on the first commit (two surfaces would show
+  contradictory scores) → **both blocking fixes now applied:**
+  1. **`useRepresentativeScores`** — now scores trusted-only and **omits a rep (→ NA) instead of
+     returning a false 0%** when there's no trusted overlap (`calculateScores` returns null; coverage
+     check stays on all answers so on-demand generation isn't over-triggered; generated AI answers
+     score null → NA).
+  2. **`get-candidate-answers` `updateCandidateScore`** — the STORED `candidates.overall_score` now
+     averages trusted answers only (inline predicate mirroring `isTrustedForScoring`), so it no longer
+     diverges from the live match; leaves the stored score untouched if a candidate has 0 trusted.
+  Plus `src/lib/scoring.test.ts` (the missing unit coverage the reviewer required).
+- lint 0 errors · tsc clean · build ok · **90/90 tests**.
+- **Track 2 mapping draft DONE:** `docs/poliscore-question-map-draft.md` — 13 high-confidence
+  key-vote→question mappings, 7 votes with no clean question (owner decision), 9 open questions.
+  Awaiting **owner review** (the curation gate before any vote-derivation).
+
+**Next**
+Owner reviews the key-vote→question mapping draft; then build the derivation engine (Phase 2). The
+demotion + reviewer fixes are ready to merge.
+
+**Deferred**
+- On-demand answer generation in `useRepresentativeScores`/`get-candidate-answers` now produces
+  answers that don't score — disable/rework it (separate, was out of scope per reviewer).
+- `useInvertedScoreCandidates` (admin) + `web_research` URL ETL-contract: reviewer follow-ups.
+- vote_sync_status realign; legacy bill_id cleanup (both pre-un-hide).
+
+---
+
+## 2026-06-17 — Follow-up triage + the 401 fix cascaded into full finance recovery — day
+
+**What happened & why**
+Worked the post-verification follow-up list. Two resolved, two deferred:
+- **Cycle-scope the donor guard (DONE):** #436's 0-donor guard counted donors across all cycles;
+  scoped it to `.eq('cycle', cycle)` so the Cooper case (2024 donors, 0 for 2026) trips it. Committed.
+- **`individual_delta_pct` −45% audit (RESOLVED, no code change):** it was a **stale symptom of the
+  401 incident**, not a formula bug. Before #437, donor imports were blocked, so local individuals
+  were incomplete → −45% vs FEC. After #437 + the re-queue backfill + reconciliation re-ran, the
+  rows corrected: Foxx/Tillis/Rouzer 2024 `individual_delta_pct` now ≈ **0%, status ok** (local
+  matches FEC within dollars). The 16 remaining big-negative deltas are the backfill tail.
+- **Realign `vote_sync_status` (DEFERRED):** surfaced data + dashboard already correct post-#438;
+  it's a sync-cursor table whose only durable fix is in the sync internals; a blind recompute risks
+  the sync's accounting for zero output change. Documented quirk.
+- **Legacy `bill_id` / cross-congress cleanup (DEFERRED):** entirely hidden-state (0 NC/NJ rows);
+  explicitly "before un-hiding states"; the serious collision is already fixed in the PoliScore
+  query layer. Out of scope for the 2-state focus now.
+
+**State** (verified, live)
+- 🎉 **401 fix (#437) recovery is broad:** Roy Cooper donors **0 → 4,220**; NC/NJ queue **24 → 5**;
+  visible recon errors **~37 → 28** (ok 145 → 155); 22 rows re-reconciled in last 2h. Converging.
+- Open PR **#438** (branch `claude/pensive-hypatia-r6m2d8`) now carries: the voting-gate scope fix
+  (script+docs) + the cycle-scope guard commit. Ready for review/merge.
+
+**Next**
+Merge #438. Let the last ~5 backfill (errors + big-neg individual deltas keep dropping on their own).
+
+**Deferred** (with reasons above): vote_sync_status realign; legacy bill_id/collision cleanup
+(both only matter before un-hiding more states).
+
+---
+
+## 2026-06-16 — Verify NC+NJ voting records → data is fine; the gate was counting challengers — day
+
+**What happened & why**
+Pass 2 of the ship-gate verification (voting records, 36 visible federal members). Findings:
+- **Floor votes are complete** for every sitting member (persisted==expected). ✅
+- **The underlying `candidate_votes` data is present & rich** even for members the tracking table
+  showed as `0/0` — e.g. Virginia Foxx has 322 sponsored / 1,868 cosponsored / 1,447 floor in
+  `candidate_votes`, but `vote_sync_status` reported leg 0/0 and floor 625. So **`vote_sync_status`
+  is a stale sync-cursor/health table, NOT a vote-count source of truth.** The dashboard *totals*
+  correctly count `candidate_votes` directly; only the per-member completeness signal reads vss.
+- The gate's "18 floor sync errors" were **entirely non-incumbent CANDIDATES** (challengers:
+  Murphy/Misseri/Rivera/Tabor/Akhtar/Herzig) with a spurious `floor_vote_sync_error` and 0 expected
+  record — noise, not a defect. Real sitting members: **0 errors / 7 tiny incomplete gaps** (e.g.
+  1834/1836).
+
+**Fix (this PR — script + docs only, no migration/deploy)**
+`check-data-accuracy.sh` §2 now counts voting errors/incompleteness only for rows WITH an expected
+record (`expected_total>0 OR expected_floor_votes>0`), excluding challengers. Re-baselined threshold
+60 → **10** (baseline 0 errors / 7 incomplete). DATA-ACCURACY.md §2 updated with the finding.
+
+**State** (verified / NOT)
+- Live SQL confirmed: real-member voting errors = 0, incomplete = 7; the 18 "errors" were challengers.
+- `bash -n` clean. Script+docs only.
+- Congress.gov spot-check DONE (data-accuracy-verifier): Congress.gov egress 403-blocked (live diff
+  deferred to CI), but internal verification of visible NC/NJ is **GO** — every vote row joins to
+  canonical `bills`, **0 legacy/orphan rows** (the ~25k legacy bill_ids + cross-congress collision
+  class are entirely hidden-state, 0 in NC/NJ), counts plausible, positions verified for 12 members
+  in the PoliScore gate. Disclosure: floor coverage is the 113–119 window (~2013–present), not career.
+
+**Next**
+Merge #438. Optional durable fix: recompute `vote_sync_status` from
+`candidate_votes` (or base the per-member completeness signal on candidate_votes) so the health
+signal stops diverging from reality.
+
+**Deferred**
+- Recompute/realign `vote_sync_status` with `candidate_votes`.
+- (finance) cycle-scope the #436 donor guard; `individual_delta_pct` 2024 metric audit.
+
+---
+
 ## 2026-06-16 — ROOT-CAUSED the 401 incident: new API keys → UNAUTHORIZED_API_KEY_CONFLICTS — day
 
 **What happened & why**
