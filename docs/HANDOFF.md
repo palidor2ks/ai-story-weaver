@@ -27,6 +27,42 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-17 — PR #438 merged + post-merge scoring-honesty verification — day
+
+**What happened & why**
+Merged **PR #438** (`05b89f81`) — the answer **demotion** + **vote-derivation** bundle (Pass 2/3 of
+the NC/NJ ship gate). Note: it had been sitting as an open *draft*; what had merged earlier was #437
+(the 401 fix). Before merging I rewrote #438's title/description to reflect everything it bundled
+(it was mis-titled as just the accuracy-gate rescope). Then verified the demotion + derivation
+together produce honest match scores, at the data layer (the migration is already live on Pulse Dev,
+which is what the scoring hooks read).
+
+**State** (verified, read-only against Pulse Dev)
+- **26 vote-derived candidates** (the full NC+NJ House delegation): each now has ~121 trusted answers
+  feeding the match — **299 vote-derived** (±5/±10, Congress.gov-sourced) + **2,843 URL-sourced** —
+  with **3,384 fabricated/inferred answers correctly excluded** from scoring.
+- **All 172 visible candidates:** 117 score on real evidence (avg ~35 trusted answers each); **55 have
+  answers but all are demoted → they show NA, not a fabricated score** (intended "honest > present").
+- **The 55 cannot be vote-derived** — every one has **0 floor votes**. Breakdown: ~43 federal
+  *challengers* (no congressional record exists) + ~12 local candidates (council/mayor/commissioner/
+  surrogate; the ~9 incumbents among them hold *local* office, no federal votes). **No sitting member
+  of Congress is among the 55** — those are all already in the derived 26. So curating the 9 open
+  key-vote mappings would only deepen coverage for the already-derived incumbents, NOT reach the 55.
+
+**Next**
+The 55 all-demoted candidates' only honest path to a score is **real-sourced statements/campaign
+positions** (URL-bearing) — i.e. the deferred provenance/`web_research` URL work — or a deliberate
+UI treatment for NA candidates. Decide which; until then they correctly show NA.
+
+**Deferred** (unchanged + sharpened)
+- Provenance/`web_research` URL ETL so challenger/local answers can carry real sources (would lift
+  the 55 out of NA honestly). Statement-corroboration still deferred (corpus too thin).
+- 9 open key-vote→question mappings in `docs/poliscore-question-map-draft.md` (deepen the 26 only).
+- civil-rights-q22 (HR26 118th) legacy-bill_id linkage; on-demand answer-gen rework;
+  `useInvertedScoreCandidates` admin filter; vote_sync_status realign (all pre-un-hide).
+
+---
+
 ## 2026-06-17 — Vote-derivation engine applied to Pulse Dev (Phase 2) — day
 
 **What happened & why**
