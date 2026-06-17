@@ -361,7 +361,7 @@ export const PolicyPositionsCard = forwardRef<HTMLDivElement, Props>(({ data }, 
                           {pos.detail}
                         </div>
                       )}
-                      <div style={{ position: 'relative', height: 24 }}>
+                      <div style={{ position: 'relative', height: scoreCode ? 38 : 24 }}>
                         <div style={{
                           position: 'absolute', left: 0, right: 0, top: 6, height: 12, borderRadius: 999,
                           background: 'linear-gradient(90deg, hsl(214 89% 56%) 0%, hsl(270 72% 66%) 50%, hsl(0 76% 52%) 100%)',
@@ -382,7 +382,7 @@ export const PolicyPositionsCard = forwardRef<HTMLDivElement, Props>(({ data }, 
                         }} />
                         {scoreCode && (
                           <div style={{
-                            position: 'absolute', top: -14,
+                            position: 'absolute', top: 26,
                             left: `${labelLeft}%`,
                             transform: 'translateX(-50%)',
                             fontSize: 11, fontWeight: 900,
