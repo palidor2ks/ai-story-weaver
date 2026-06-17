@@ -18,7 +18,6 @@ import { useAuth } from '@/context/AuthContext';
 import { cn, formatCompactCurrency, formatFullCurrency } from '@/lib/utils';
 import { normalizeOfficeName } from '@/lib/officeLabel';
 import {
-  ArrowLeft,
   Building2,
   Calendar,
   DollarSign,
@@ -637,9 +636,6 @@ const DonorProfile = () => {
         <Header />
         <main className="container py-8 px-4 text-center">
           <p className="text-muted-foreground mb-4">Donor not found.</p>
-          <Link to="/donors" className="text-primary hover:underline">
-            Back to Donors
-          </Link>
         </main>
       </div>
     );
@@ -662,15 +658,6 @@ const DonorProfile = () => {
       <Header />
 
       <main className="container py-8 px-4 space-y-8">
-        {/* Back link */}
-        <Link
-          to="/donors"
-          className="inline-flex items-center text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to Donors
-        </Link>
-
         {/* Conduit explainer — only claim "$0" once the zeroing backfill has run */}
         {isConduitDonor(donor) && (
           <div className="p-4 rounded-lg bg-muted/50 border border-border text-sm text-muted-foreground flex items-start gap-2">
