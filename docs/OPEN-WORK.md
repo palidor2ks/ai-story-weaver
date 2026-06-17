@@ -36,13 +36,16 @@ specific candidate's displayed stances are flagged wrong.
 Line 14+15); 800 recon rows recomputed. Double-count signature rows **138 → 0**; Cassidy delta
 31.1% → −2.6%. Details in `docs/DATA-ACCURACY.md §1`.
 
-### 4. ☐ FEC recon — `status` doesn't gate on total receipts (Finding A) — UNBLOCKED
-**What:** `ok` status only checks comparable-itemized `delta_pct`; ~363 `ok` rows are >10% off on
-total receipts (some are real under-counts the Finding-B double-count was masking, now surfaced).
-**History:** Found 2026-06-15; was blocked on #3.
-**State:** **Now actionable** — #3 fixed, so `total_receipts_delta` is trustworthy. Decide: add a
-secondary total-receipts gate to `status`, or rename/scope the metric. Run a full nightly drain
-(fresh FEC fetch) first to reconfirm the recomputed deltas.
+### 4. 🟡 FEC recon — total-receipts completeness signal (Finding A) — implemented, needs edge-fn deploy
+**What:** `status` answers itemized accuracy only; ~363 `ok` rows were materially off on TOTAL
+receipts (mostly coverage gaps). **Done (2026-06-17):** chose "separate completeness metric" —
+added `finance_reconciliation.total_receipts_status` (ok/under/over), computed at all 3 write sites
+(nightly-finance-reconciliation + 2 in refresh-fec-totals), backfilled (1,655 ok / 865 under /
+212 over / 148 n/a), surfaced on `FinanceReconciliationCard`. `status` semantics unchanged.
+**State:** code committed + migration applied + backfilled. **Remaining:** deploy the two edge
+functions so future runs populate the column on new rows (existing rows already backfilled; the
+old deployed fns leave the column untouched on upsert, so no data loss meanwhile). A full nightly
+drain (fresh FEC fetch) will also refresh deltas.
 
 ### 5. ☐ Congress donor backfill stall
 **What:** 159 `candidate_committees` rows with `has_more=true` not progressing (3/day actual vs 144/day
@@ -94,6 +97,8 @@ and the large/fragile edge fns `fetch-fec-donors`, `get-candidate-answers`.
 ---
 
 ## ✅ Recently done (prune after ~2 weeks)
+- ✅ **2026-06-17** FEC Finding A: added `total_receipts_status` completeness metric (separate from
+  itemized `status`); computed at 3 write sites, backfilled, surfaced on the card. (#4 — needs edge-fn deploy.)
 - ✅ **2026-06-17** FEC Finding B applied: `other_total` = Line 14+15; 800 recon rows recomputed,
   double-count 138→0 rows. Unblocked Finding A (#4).
 - ✅ **2026-06-17** Relabeled 3,615 PS "insufficient" rows → `inferred` (no verifiable source found).

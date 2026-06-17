@@ -392,7 +392,12 @@ serve(async (req) => {
         const totalReceiptsDeltaPct = fecTotalReceipts > 0
           ? ((localTotalReceipts - fecTotalReceipts) / fecTotalReceipts) * 100
           : null;
-        
+        // Finding A: completeness signal, kept SEPARATE from the itemized-accuracy `status`.
+        // 'under' = local < FEC by >10% (missing receipts / coverage gap); 'over' = local > FEC by >10%.
+        const totalReceiptsStatus = totalReceiptsDeltaPct === null ? null
+          : Math.abs(totalReceiptsDeltaPct) <= 10 ? 'ok'
+          : totalReceiptsDeltaPct < 0 ? 'under' : 'over';
+
         // Compare local vs FEC at the comparable itemized level
         // Use (gross individual + organization) for Line 11A, matching FEC individual_itemized
         const fecComparableItemized = fecItemized + fecPacContributions + fecPartyContributions;
@@ -455,6 +460,7 @@ serve(async (req) => {
             delta_pct: deltaPct,
             total_receipts_delta_amount: totalReceiptsDeltaAmount,
             total_receipts_delta_pct: totalReceiptsDeltaPct,
+            total_receipts_status: totalReceiptsStatus,
             status,
             checked_at: new Date().toISOString()
           }, { onConflict: 'candidate_id,cycle' });

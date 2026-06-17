@@ -427,9 +427,13 @@ serve(async (req) => {
             const totalReceiptsDeltaAmount = totalFecReceipts > 0 
               ? Math.round(localTotalReceipts - totalFecReceipts) 
               : null;
-            const totalReceiptsDeltaPct = totalFecReceipts > 0 
-              ? ((localTotalReceipts - totalFecReceipts) / totalFecReceipts) * 100 
+            const totalReceiptsDeltaPct = totalFecReceipts > 0
+              ? ((localTotalReceipts - totalFecReceipts) / totalFecReceipts) * 100
               : null;
+            // Finding A: completeness signal, separate from itemized-accuracy `status`.
+            const totalReceiptsStatus = totalReceiptsDeltaPct === null ? null
+              : Math.abs(totalReceiptsDeltaPct) <= 10 ? 'ok'
+              : totalReceiptsDeltaPct < 0 ? 'under' : 'over';
 
             // Update finance_reconciliation with ALL fields
             await supabase
@@ -469,6 +473,7 @@ serve(async (req) => {
                 pac_delta_pct: pacDeltaPct,
                 total_receipts_delta_amount: totalReceiptsDeltaAmount,
                 total_receipts_delta_pct: totalReceiptsDeltaPct,
+                total_receipts_status: totalReceiptsStatus,
                 status,
                 checked_at: new Date().toISOString(),
                 updated_at: new Date().toISOString()
@@ -732,9 +737,13 @@ serve(async (req) => {
     const totalReceiptsDeltaAmount = totalFecReceipts > 0 
       ? Math.round(localTotalReceipts - totalFecReceipts) 
       : null;
-    const totalReceiptsDeltaPct = totalFecReceipts > 0 
-      ? ((localTotalReceipts - totalFecReceipts) / totalFecReceipts) * 100 
+    const totalReceiptsDeltaPct = totalFecReceipts > 0
+      ? ((localTotalReceipts - totalFecReceipts) / totalFecReceipts) * 100
       : null;
+    // Finding A: completeness signal, separate from itemized-accuracy `status`.
+    const totalReceiptsStatus = totalReceiptsDeltaPct === null ? null
+      : Math.abs(totalReceiptsDeltaPct) <= 10 ? 'ok'
+      : totalReceiptsDeltaPct < 0 ? 'under' : 'over';
 
     console.log(`[REFRESH-FEC-TOTALS] ${candidateId}: localGrossInd=$${localGrossIndividual}, localPac=$${localPac}, localParty=$${localParty}, fecInd=$${totalFecItemized}, fecPac=$${totalFecPac}, fecParty=$${totalFecParty}`);
 
@@ -773,6 +782,7 @@ serve(async (req) => {
         pac_delta_pct: pacDeltaPct,
         total_receipts_delta_amount: totalReceiptsDeltaAmount,
         total_receipts_delta_pct: totalReceiptsDeltaPct,
+        total_receipts_status: totalReceiptsStatus,
         status,
         checked_at: new Date().toISOString(),
         updated_at: new Date().toISOString()

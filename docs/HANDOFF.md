@@ -27,6 +27,43 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-17 — FEC Finding A: total-receipts completeness metric (separate from accuracy `status`) — night
+
+**What happened & why**
+Backlog #4, unblocked by the Finding-B fix. ~363 recon rows were `status='ok'` yet materially off on
+TOTAL receipts. Analysis showed those rows have ACCURATE itemized data (avg itemized delta ≈ 0) — the
+divergence is **completeness** (mostly coverage gaps: local < FEC), a different axis from the
+itemized **accuracy** `status` measures. Also found a loophole: rows with no FEC itemized baseline
+default `delta_pct=0 → 'ok'` (only 19 have local data, so minor). Owner chose "separate completeness
+metric" (don't conflate accuracy with completeness / flood the error list).
+
+**What we did**
+- Migration `20260617240000` adds `finance_reconciliation.total_receipts_status` (ok / under / over /
+  null) + backfills from the trustworthy `total_receipts_delta_pct`. Applied (MCP version
+  `20260617<ts>`; idempotent column add). Backfill: **1,655 ok / 865 under / 212 over / 148 n/a**;
+  262 of the 'under' are itemized-`ok` — the coverage gaps the accuracy gate can't see.
+- Computed `totalReceiptsStatus` at all **3 write sites** (nightly-finance-reconciliation + 2 in
+  refresh-fec-totals); threshold ±10% (under = local<FEC, over = local>FEC).
+- Surfaced on `FinanceReconciliationCard` (Complete / Under-counted / Over-counted badge + note on
+  the Total Receipts panel). `status` semantics unchanged.
+
+**State** (verified 2026-06-17 night)
+- lint 0 errors (154 pre-existing `any` warnings) · 94 tests pass · `bunx vite build` ✓ (the
+  `bun run build` prebuild sitemap step 403s on all 4 tables = sandbox egress block, not a code issue;
+  kept last-good sitemap). types.ts updated (Row/Insert/Update).
+- **Remaining: deploy the two edge fns** (`nightly-finance-reconciliation`, `refresh-fec-totals`) so
+  future runs populate the column on new rows. Existing rows are backfilled; old deployed fns leave
+  the column untouched on upsert (ON CONFLICT updates only listed columns), so no data loss meanwhile.
+
+**Next**
+Deploy the two edge fns (or let CD), then a full nightly drain refreshes deltas + completeness. After
+that, #4 is fully closed.
+
+**Deferred**
+- See `docs/OPEN-WORK.md`.
+
+---
+
 ## 2026-06-17 — FEC Finding B applied + recon corrected (Line 14/15 double-count) — night
 
 **What happened & why**

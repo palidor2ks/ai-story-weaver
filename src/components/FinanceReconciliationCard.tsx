@@ -37,7 +37,8 @@ export function FinanceReconciliationCard({
     fec_pac_contributions, fec_party_contributions,
     fec_loans, fec_transfers, fec_candidate_contribution, fec_other_receipts,
     local_loans, local_transfers,
-    individual_delta_pct, pac_delta_pct, delta_pct
+    individual_delta_pct, pac_delta_pct, delta_pct,
+    total_receipts_status, total_receipts_delta_pct
   } = reconciliation;
   
   const formatCurrency = (value: number | null) => {
@@ -69,6 +70,23 @@ export function FinanceReconciliationCard({
         return <XCircle className="w-4 h-4 text-destructive" />;
       default:
         return <Info className="w-4 h-4 text-muted-foreground" />;
+    }
+  };
+
+  // Completeness vs FEC total receipts — a SEPARATE axis from itemized accuracy (`status`).
+  // 'under' = we hold fewer receipts than FEC reports (coverage gap); 'over' = we hold more.
+  const getCompletenessBadge = () => {
+    const pct = total_receipts_delta_pct;
+    const pctLabel = pct === null ? '' : ` (${pct > 0 ? '+' : ''}${pct.toFixed(0)}%)`;
+    switch (total_receipts_status) {
+      case 'ok':
+        return <Badge variant="outline" className="bg-agree/10 text-agree border-agree/30">Complete{pctLabel}</Badge>;
+      case 'under':
+        return <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/30">Under-counted{pctLabel}</Badge>;
+      case 'over':
+        return <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/30">Over-counted{pctLabel}</Badge>;
+      default:
+        return null;
     }
   };
 
@@ -285,8 +303,18 @@ export function FinanceReconciliationCard({
 
           {/* Total Receipts */}
           <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
-            <p className="text-xs text-muted-foreground">FEC Total Receipts</p>
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">FEC Total Receipts</p>
+              {getCompletenessBadge()}
+            </div>
             <p className="font-bold text-xl">{formatCurrency(fec_total_receipts)}</p>
+            {total_receipts_status && total_receipts_status !== 'ok' && (
+              <p className="text-xs text-muted-foreground mt-1">
+                {total_receipts_status === 'under'
+                  ? 'We hold fewer receipts than FEC reports — itemized figures above are accurate, but total coverage is incomplete.'
+                  : 'We hold more receipts than FEC reports — possible over-import or FEC cycle-window lag.'}
+              </p>
+            )}
           </div>
 
           {/* Committee breakdown */}
