@@ -47,20 +47,30 @@ integrity firewall) before any derivation. Two separable tracks; doing both:
   ONLY trusted answers; missing ones degrade gracefully. Reversible.
 - **Track 2 — key-vote→question mapping draft:** delegated (for owner review + alignment-quiz-reviewer).
 
-**State** (verified / NOT)
-- lint 0 errors · tsc clean · build ok · 85/85 tests.
-- **`useRepresentativeScores` deliberately NOT filtered** — it generates inferred answers on-demand
-  (filtering could over-trigger) and returns 0% (not NA) when no shared answers; needs the
-  alignment-quiz-reviewer's design call. Flagged.
-- The STORED `candidates.overall_score` (computed by a separate job) is still all-answers; recompute
-  with the same filter is a follow-up (the live match is what users see and it's now demoted).
+**State** (verified)
+- alignment-quiz-reviewer returned **NO-GO** on the first commit (two surfaces would show
+  contradictory scores) → **both blocking fixes now applied:**
+  1. **`useRepresentativeScores`** — now scores trusted-only and **omits a rep (→ NA) instead of
+     returning a false 0%** when there's no trusted overlap (`calculateScores` returns null; coverage
+     check stays on all answers so on-demand generation isn't over-triggered; generated AI answers
+     score null → NA).
+  2. **`get-candidate-answers` `updateCandidateScore`** — the STORED `candidates.overall_score` now
+     averages trusted answers only (inline predicate mirroring `isTrustedForScoring`), so it no longer
+     diverges from the live match; leaves the stored score untouched if a candidate has 0 trusted.
+  Plus `src/lib/scoring.test.ts` (the missing unit coverage the reviewer required).
+- lint 0 errors · tsc clean · build ok · **90/90 tests**.
+- **Track 2 mapping draft DONE:** `docs/poliscore-question-map-draft.md` — 13 high-confidence
+  key-vote→question mappings, 7 votes with no clean question (owner decision), 9 open questions.
+  Awaiting **owner review** (the curation gate before any vote-derivation).
 
 **Next**
-alignment-quiz-reviewer on the demotion (+ advise on useRepresentativeScores + the stored-score
-recompute); owner-review the key-vote→question mapping draft; then build the derivation engine.
+Owner reviews the key-vote→question mapping draft; then build the derivation engine (Phase 2). The
+demotion + reviewer fixes are ready to merge.
 
 **Deferred**
-- Recompute stored `candidates.overall_score` with the trusted filter (DB job/RPC).
+- On-demand answer generation in `useRepresentativeScores`/`get-candidate-answers` now produces
+  answers that don't score — disable/rework it (separate, was out of scope per reviewer).
+- `useInvertedScoreCandidates` (admin) + `web_research` URL ETL-contract: reviewer follow-ups.
 - vote_sync_status realign; legacy bill_id cleanup (both pre-un-hide).
 
 ---

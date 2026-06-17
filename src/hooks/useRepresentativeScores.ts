@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
 import { useRef } from 'react';
-import { calculateMatchPercentage, calculateEntityScore } from '@/lib/scoring';
+import { calculateMatchPercentage, calculateEntityScore, isTrustedForScoring } from '@/lib/scoring';
 import { isLocalOfficial } from '@/lib/localOfficeUtils';
 
 interface QuizAnswer {
@@ -14,6 +14,10 @@ interface CandidateAnswerWithScore {
   candidate_id: string;
   question_id: string;
   answer_value: number;
+  evidence_type?: string | null;
+  source_type?: string | null;
+  source_url?: string | null;
+  source_urls?: string[] | null;
 }
 
 /**
@@ -90,7 +94,7 @@ export const useRepresentativeAnswersAndScores = (
       // First, check what answers already exist in the database for ALL reps at once
       const { data: existingAnswers, error: fetchError } = await supabase
         .from('candidate_answers')
-        .select('candidate_id, question_id, answer_value')
+        .select('candidate_id, question_id, answer_value, evidence_type, source_type, source_url, source_urls')
         .in('candidate_id', eligibleReps.map(r => r.id))
         .in('question_id', userAnswers.map(a => a.question_id));
 
@@ -114,27 +118,34 @@ export const useRepresentativeAnswersAndScores = (
       for (const rep of eligibleReps) {
         const repAnswers = answersByCandidate[rep.id] || [];
         
-        // If we have enough answers, calculate score immediately
+        // If we have enough answers, calculate score immediately. Coverage check stays on ALL
+        // answers (so we don't over-trigger generation), but we SCORE only on trusted answers
+        // (vote-derived/URL-sourced) — omitting the rep entirely (→ NA) if none overlap, rather
+        // than scoring on inferred/fabricated values. (isTrustedForScoring)
         if (repAnswers.length >= neededQuestions.length * 0.3) {
-          const { matchScore, overallScore } = calculateScores(userAnswers, repAnswers);
-          scores[rep.id] = { 
-            score: matchScore, 
-            overallScore,
-            answerCount: repAnswers.length,
-            generated: false 
-          };
+          const trusted = repAnswers.filter(isTrustedForScoring);
+          const res = calculateScores(userAnswers, trusted);
+          if (res) {
+            scores[rep.id] = {
+              score: res.matchScore,
+              overallScore: res.overallScore,
+              answerCount: trusted.length,
+              generated: false,
+            };
+          }
         } else if (!hasGeneratedRef.current.has(rep.id)) {
           // Only queue for generation if we haven't tried this session
           repsNeedingGeneration.push(rep);
         } else {
-          // Already tried generating, use whatever we have
-          if (repAnswers.length > 0) {
-            const { matchScore, overallScore } = calculateScores(userAnswers, repAnswers);
-            scores[rep.id] = { 
-              score: matchScore, 
-              overallScore,
-              answerCount: repAnswers.length,
-              generated: false 
+          // Already tried generating, use whatever TRUSTED answers we have (omit → NA if none).
+          const trusted = repAnswers.filter(isTrustedForScoring);
+          const res = calculateScores(userAnswers, trusted);
+          if (res) {
+            scores[rep.id] = {
+              score: res.matchScore,
+              overallScore: res.overallScore,
+              answerCount: trusted.length,
+              generated: false,
             };
           }
         }
@@ -182,13 +193,18 @@ export const useRepresentativeAnswersAndScores = (
             totalGenerated += generatedCount;
             
             const allAnswers = data?.answers || [];
-            if (allAnswers.length > 0) {
-              const { matchScore, overallScore } = calculateScores(userAnswers, allAnswers);
-              scores[rep.id] = { 
-                score: matchScore, 
-                overallScore,
-                answerCount: allAnswers.length,
-                generated: generatedCount > 0 
+            // Score only on trusted answers. Freshly-generated answers are AI-inferred (no vote
+            // evidence, no real URL), so they're filtered out here → the rep shows NA rather than
+            // a fabricated match. (On-demand generation itself is a separate cleanup — it now
+            // produces answers that don't score; tracked in DATA-ACCURACY §Answers.)
+            const trusted = (allAnswers as CandidateAnswerWithScore[]).filter(isTrustedForScoring);
+            const res = calculateScores(userAnswers, trusted);
+            if (res) {
+              scores[rep.id] = {
+                score: res.matchScore,
+                overallScore: res.overallScore,
+                answerCount: trusted.length,
+                generated: generatedCount > 0,
               };
             }
           }
@@ -213,7 +229,7 @@ export const useRepresentativeAnswersAndScores = (
 function calculateScores(
   userAnswers: QuizAnswer[],
   candidateAnswers: { question_id: string; answer_value: number }[]
-): { matchScore: number; overallScore: number } {
+): { matchScore: number; overallScore: number } | null {
   const candidateMap = new Map(
     candidateAnswers.map(a => [a.question_id, a.answer_value])
   );
@@ -232,8 +248,10 @@ function calculateScores(
     }
   }
 
+  // No overlapping (trusted) answers ⇒ NA, NOT a 0% match. Returning 0 here would render as
+  // "0% — opposite on everything", which is a lie when we simply have no comparable data.
   if (sharedCount === 0) {
-    return { matchScore: 0, overallScore: 0 };
+    return null;
   }
 
   // Calculate scores using unified utilities
