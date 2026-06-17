@@ -27,6 +27,36 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-17 — #3 backfill: gated apply COMPLETE — 130 corroborated rows written to candidate_answers — evening (late)
+
+**What happened & why**
+Owner greenlighted the gated apply of the 130 corroborated rows staged in the previous session.
+Ran a single transaction with `SET LOCAL request.jwt.claim.role = 'service_role'` (required by
+anti-tampering triggers):
+1. Archived 130 existing `candidate_answers` rows → `candidate_answers_history` (superseded_reason: `web_research_corroboration rollout-2026-06-17`)
+2. Updated those 130 rows: `source_url`, `source_urls`, `source_titles`, `source_description` from staging; `source_type='web_research'`; `evidence_type='mixed'`
+3. Marked 130 staging rows `applied=true`
+
+Post-apply: **40 candidates now have at least one trusted web_research answer** (flipped from all-demoted to trusted via isTrustedForScoring's source_url check).
+
+**State** (verified 2026-06-17 evening)
+- `archived=130, marked_applied=130, updated_in_candidate_answers=130` — confirmed via row counts
+- `_answer_corroboration WHERE run_label='rollout-2026-06-17' AND applied=true`: 130 rows ✓
+- **Data quality finding (NOT a rollout bug):** LEPAGE, PAUL shows 53 `source_type='web_research'` rows — only 3 from this rollout; the other 50 are pre-existing URL-less web_research rows that the `20260617130000_web_research_provenance_contract.sql` migration missed (no real source_url → NOT trusted by isTrustedForScoring). Verified: `with_real_url=3, without_url=50`.
+- Rollout is complete and clean. Main arc (#3 backfill) is done.
+
+**Next**
+Clean up the pre-existing URL-less `source_type='web_research'` rows that the provenance contract migration missed. These rows have no real source_url and are not trusted by isTrustedForScoring, but they're misleadingly labeled `web_research`. Fix: `UPDATE candidate_answers SET source_type='other', evidence_type='inferred' WHERE source_type='web_research' AND (source_url IS NULL OR source_url='' OR source_url ~ '^\s*$') AND (source_urls IS NULL OR source_urls='{}' OR NOT EXISTS (SELECT 1 FROM unnest(source_urls) u WHERE u IS NOT NULL AND u !~ '^\s*$'))`. Scope first (count + spot-check) before applying.
+
+**Deferred**
+- ⚠️ Owner: delete the inert **`enrich-batch-experiment`** edge fn in the dashboard (no delete MCP).
+- 35 contradicts in `_answer_corroboration` (rollout-2026-06-17): several candidates (LePage, Goldman, Williams OH-09) have `answer_value` signs that appear wrong — worth a correction pass.
+- Two attribution errors in staging (correctly NOT applied — verdict=contradicts): Olszewski (MT-01) sourced from wrong Olszewski; Jacobs (NY-01) sourced from Tenney's website — data quality signal.
+- min-wage-style misses (real source, dead URL): could retry alternates from `data.citations`.
+- `public_statement` uncited backlog; civil-rights-q22 legacy bill_id; on-demand answer-gen rework.
+
+---
+
 ## 2026-06-17 — #3 backfill: full 55-candidate corroboration rollout COMPLETE (staged, not applied) — evening
 
 **What happened & why**
