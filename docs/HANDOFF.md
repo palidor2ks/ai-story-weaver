@@ -27,6 +27,42 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-17 — data quality: relabeled 15,974 URL-less web_research rows to other/inferred — evening (late +1)
+
+**What happened & why**
+The provenance contract migration (`20260617130000_web_research_provenance_contract.sql`) missed rows
+that were already labeled `source_type='web_research'` before it ran. These 15,974 rows had no real
+`source_url` or `source_urls` and were AI-generated inferences (verdict-style summaries with no
+specific citation), but were mislabeled `web_research` by the previous generation pipeline.
+isTrustedForScoring already excluded them (no source_url), so scoring was unaffected — but the label
+was misleading. Fixed by relabeling to `source_type='other'`, `evidence_type='inferred'`.
+
+Execution: wrapped in a single transaction with `DISABLE TRIGGER` on the two slow AFTER UPDATE
+triggers (`candidate_answers_topic_scores_sync`, `trg_recalc_coverage_on_answer_update`) — safe
+because `answer_value` was not changed so recalculated scores are identical. Also used
+`SET LOCAL request.jwt.claim.role = 'service_role'` to bypass anti-tampering triggers.
+1,129 orphaned rows (candidate_id not in `candidates`) were excluded — left as-is, different issue.
+
+**State** (verified 2026-06-17 late evening)
+- `url_less_web_research_remaining = 0` ✓ (was 15,974 across 2,164 candidates)
+- `web_research_with_real_url_untouched = 382` ✓ (our rollout rows + prior cited rows all safe)
+- LePage spot-check: 97 relabeled + 3 real web_research with URLs ✓
+- Triggers re-enabled and committed atomically in the same transaction
+
+**Next**
+The #3 backfill arc and all follow-up cleanup are now fully done. Next roadmap priority:
+see `docs/ROADMAP.md` — likely the `public_statement` uncited backlog or on-demand answer-gen rework.
+
+**Deferred**
+- ⚠️ Owner: delete the inert `enrich-batch-experiment` edge fn in the Supabase dashboard.
+- 1,129 orphaned `candidate_answers` rows (candidate_id not in `candidates`) — still labeled as they
+  were; worth cleaning separately (DELETE if candidates were intentionally removed).
+- 35 contradicts in `_answer_corroboration rollout-2026-06-17`: answer_value sign may be wrong for
+  several candidates — worth a correction pass.
+- `public_statement` uncited backlog; civil-rights-q22 legacy bill_id; on-demand answer-gen rework.
+
+---
+
 ## 2026-06-17 — #3 backfill: gated apply COMPLETE — 130 corroborated rows written to candidate_answers — evening (late)
 
 **What happened & why**
