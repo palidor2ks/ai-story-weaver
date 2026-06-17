@@ -27,6 +27,60 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-17 — Provenance #1/#2 shipped + batching experiment (don't batch) + #3 plan — day
+
+**What happened & why**
+Continued the answers-provenance arc (the 55 visible candidates that show NA because every answer
+is demoted). Confirmed the 55 are unfixable by vote-derivation (0 floor votes each — federal
+challengers or local-office holders), so their only honest path to a score is real-sourced
+statements/positions. Shipped the integrity foundation for that, then ran a cost experiment.
+
+- **Provenance #1/#2 — MERGED (PR #440, `05b89f81`'s successor on main).** The generator labeled
+  uncited research `web_research` with a null `source_url` (a badge with nothing behind it). #1: new
+  `demoteUncitedWebResearch()` in `_shared/answer-label-guard.ts` (+ tightened `hasUrl` to ignore
+  whitespace), wired into `get-candidate-answers` `saveAnswersBatch`; demotes URL-less web_research
+  to inferred/other at write time. #2: migration `20260617130000` adds `CHECK chk_web_research_has_url`
+  (NOT VALID, so it enforces future writes without touching the frozen hidden backlog) and relabeled
+  the **1,238 visible** uncited web_research rows. 94/94 tests.
+- **Batching experiment (THROWAWAY, now removed).** Tested whether enriching N=8 questions per
+  Perplexity `sonar` call (vs one-call-per-question) cuts cost. **Verdict: do NOT batch.** Live A/B
+  on Roy Cooper / 8 env questions: **unbatched 63% recovery (5/8), every URL HEAD/GET-valid; batched
+  0%.** `sonar` returns citations as a flat *per-call* list (`data.citations`), not per-question, so
+  per-question attribution — required by the `chk_web_research_has_url` contract — isn't recoverable
+  from a batched call. Also learned **PERPLEXITY_API_KEY was unset on Pulse Dev** (owner has now set
+  it) — so production answer-gen had been falling back off Perplexity, explaining much of the
+  fabricated-provenance backlog. Experiment fn + `_enrich_batch_experiment` table deleted.
+
+**State** (verified)
+- Provenance #1/#2 merged to main; constraint live on Pulse Dev (1,238 relabeled, 0 visible uncited
+  web_research remain, 17 cited kept). ~17.1k hidden-state uncited rows intentionally left (gated).
+- `lib`/guard tests green (94/94); vite build compiles (the `bun run build` prebuild 403 is sandbox
+  network policy, not code).
+- ⚠️ Manual cleanup left for owner: delete the now-inert `enrich-batch-experiment` edge function in
+  the Supabase dashboard (no delete-function MCP tool; it's gated by the cron secret, no schedule).
+
+**Next — the real #3 backfill (build when ready), with the cost-optimized recipe:**
+One Perplexity `sonar` call per question (NOT batched), via `enrich-candidate-sources`, with:
+1. `web_search_options: { search_context_size: 'low' }` — the per-request **search fee** ($5–$12/1k,
+   tiered by retrieved-content size) is the dominant cost (~25–60× the ~$0.0002 token cost); 'low'
+   pushes it toward the ~$5/1k floor and is plenty for "find one authoritative URL for a known stance".
+2. Keep the `.gov` `search_domain_filter` (narrower search → lower context tier + better URLs).
+3. Pre-filter candidates by web footprint — you pay the fee per *attempt*, so skip thin-footprint
+   locals to avoid burning fees on 0%-recovery lookups.
+4. Stay on base `sonar` (not pro/deep-research); decide per-question whether the Gemini fallback's
+   extra retrieval cost is worth a second attempt.
+Estimated cost for the 55 (~13,087 URL-less answers): **~$40–$80** with low context (vs ~$65–$160
+default), ~60% recovery on well-covered candidates like Cooper. Quick low-vs-default recovery check
+recommended before the full run.
+
+**Deferred** (unchanged)
+- `public_statement` has the same uncited-provenance problem (larger share than web_research) — a
+  parallel guard/contract could follow once #1/#2's pattern is proven.
+- civil-rights-q22 (HR26 118th) legacy-bill_id linkage; on-demand answer-gen rework;
+  `useInvertedScoreCandidates` admin filter; vote_sync_status realign (all pre-un-hide).
+
+---
+
 ## 2026-06-17 — PR #438 merged + post-merge scoring-honesty verification — day
 
 **What happened & why**
