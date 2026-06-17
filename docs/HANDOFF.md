@@ -27,6 +27,45 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-17 — FEC Finding B applied + recon corrected (Line 14/15 double-count) — night
+
+**What happened & why**
+Backlog #3. A prior session (2026-06-15) had authored the fix for the FEC "other receipts"
+double-count — migration `20260615170000` redefines `other_total` from a catch-all (which swept in
+Line-12 transfers, double-counting JFC money) to `Line 14 + 15` — but it was never applied or drained.
+Verified it was still unapplied (deployed fn = old; not in `schema_migrations`), reproduced the bug
+(Cassidy old `other_total` $2,270,864 = his Line-12 transfers exactly; fixed $274,592 = FEC), ran the
+migration-safety-reviewer (**GO** — pure read-path, return signature exact-matches `types.ts`, all 3
+callers read `other_total` by name and handle the smaller value). Owner approved apply + re-drain.
+
+**What we did**
+1. Applied the migration via MCP `apply_migration` (recorded under MCP-assigned version
+   `20260617232826`, NOT the repo's `20260615170000` — harmless, the repo file is idempotent
+   `CREATE OR REPLACE` so the resync script re-running it is a no-op; did NOT hand-edit the ledger).
+2. Couldn't invoke `nightly-finance-reconciliation` (admin-JWT-only + hits FEC API; no auth/egress
+   from MCP), so recomputed the affected columns **set-based, network-free**: new `local_other_receipts`
+   = Line 14+15 over active P/A committees (validated == canonical `get_contribution_totals` for
+   Cassidy), then `total_receipts_delta_amount/pct` via the edge fn's exact formula (`effectiveOther =
+   max(localOther, fecOther+fecOffsets)`, etc.) using already-stored FEC values. Only those 3 columns
+   touched; `status` + itemized deltas untouched (status doesn't depend on `other_total`).
+
+**State** (verified 2026-06-17 night)
+- Fix live (`get_contribution_totals` now `IN ('14','15')`); Cassidy `other` $2.55M → $274,592,
+  total-receipts delta **31.1% → −2.6%**. Double-count signature (`local_other == local_transfers`):
+  **138 → 0 rows**. Excess "other" $89.7M → $3.4M (residual = real local>FEC diffs, e.g. Thanedar,
+  the double-count was masking them — surfaced, not introduced). 800 candidates had recon rows touched.
+- NOT run through `bun run check:accuracy` (no SUPABASE_DB_URL here) and the authoritative nightly
+  drain (fresh FEC fetch) hasn't run — it will reconfirm the recomputed deltas.
+
+**Next**
+Backlog #4 (Finding A) is now **unblocked**: `total_receipts_delta` is trustworthy, so decide whether
+to add a secondary total-receipts gate to recon `status`. Run a full nightly drain first to reconfirm.
+
+**Deferred**
+- See `docs/OPEN-WORK.md` for the full live backlog.
+
+---
+
 ## 2026-06-17 — relabel 3,615 PS "insufficient" → inferred + OPEN-WORK backlog wired into /preflight — night
 
 **What happened & why**

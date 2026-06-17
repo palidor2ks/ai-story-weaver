@@ -30,17 +30,19 @@ bulk-flipping corrupts correct values. Only the 31 hand-reviewed marquee correct
 **State:** Deferred — per-row human review only. Most are unscored `inferred` (low impact). Revisit if a
 specific candidate's displayed stances are flagged wrong.
 
-### 3. ☐ FEC recon — Line 14/15 "other receipts" double-count (Finding B)
-**What:** `local_other_receipts` can double-count JFC money already booked as `local_transfers`,
-inflating `total_receipts_delta`. Audit the Line 14/15 classification in the FEC importer.
-**History:** Found 2026-06-15. Example: Cassidy 2026 = $2.55M local-other vs $0.27M FEC (~his $2.27M transfers).
-**State:** Not started. Details in `docs/DATA-ACCURACY.md §1`.
+### 3. ✅ FEC recon — Line 14/15 "other receipts" double-count (Finding B) — done 2026-06-17
+**What:** `local_other_receipts` double-counted JFC money already in `local_transfers`, inflating
+`total_receipts_delta`. **Fixed:** migration `20260615170000` applied (redefines `other_total` =
+Line 14+15); 800 recon rows recomputed. Double-count signature rows **138 → 0**; Cassidy delta
+31.1% → −2.6%. Details in `docs/DATA-ACCURACY.md §1`.
 
-### 4. ⛔ FEC recon — `status` doesn't gate on total receipts (Finding A)
-**What:** `ok` status only checks comparable-itemized `delta_pct`; 358/1,746 `ok` rows are >10% off on
-total receipts.
-**History:** Found 2026-06-15.
-**State:** **Blocked on #3** (the total metric is too noisy to gate on until the double-count is fixed).
+### 4. ☐ FEC recon — `status` doesn't gate on total receipts (Finding A) — UNBLOCKED
+**What:** `ok` status only checks comparable-itemized `delta_pct`; ~363 `ok` rows are >10% off on
+total receipts (some are real under-counts the Finding-B double-count was masking, now surfaced).
+**History:** Found 2026-06-15; was blocked on #3.
+**State:** **Now actionable** — #3 fixed, so `total_receipts_delta` is trustworthy. Decide: add a
+secondary total-receipts gate to `status`, or rename/scope the metric. Run a full nightly drain
+(fresh FEC fetch) first to reconfirm the recomputed deltas.
 
 ### 5. ☐ Congress donor backfill stall
 **What:** 159 `candidate_committees` rows with `has_more=true` not progressing (3/day actual vs 144/day
@@ -92,6 +94,8 @@ and the large/fragile edge fns `fetch-fec-donors`, `get-candidate-answers`.
 ---
 
 ## ✅ Recently done (prune after ~2 weeks)
+- ✅ **2026-06-17** FEC Finding B applied: `other_total` = Line 14+15; 800 recon rows recomputed,
+  double-count 138→0 rows. Unblocked Finding A (#4).
 - ✅ **2026-06-17** Relabeled 3,615 PS "insufficient" rows → `inferred` (no verifiable source found).
 - ✅ **2026-06-17** Corroborated 4,638 high-signal PS rows; applied 535 sourced (`rollout-ps-2026-06-17`).
 - ✅ **2026-06-17** 31 marquee contradict corrections hand-applied; bulk-flip ruled unsafe (~50% noise).

@@ -92,7 +92,17 @@
     instead. **Findings A and B are linked: fix B (Line 14/15 classification + the `Math.max`
     double-count) before A (gating on total receipts) can be trusted.** The itemized gate remains the
     sound primary signal.
-  - **UPDATE (2026-06-15, Finding B fixed — migration `20260615170000`, pending apply + re-drain):**
+  - **UPDATE (2026-06-17, Finding B APPLIED + recon corrected):** migration `20260615170000` was
+    applied to Dev (recorded under MCP-assigned version `20260617232826`; the repo file is idempotent
+    `CREATE OR REPLACE`, so the resync script re-running it is a no-op). The 800 candidates' recon rows
+    were recomputed set-based via the now-fixed `other_total` + already-stored FEC values (couldn't
+    invoke the admin-only edge function from MCP; same formula, network-free). Results: **Cassidy
+    total-receipts delta 31.1% → −2.6%**, `local_other_receipts` $2.55M → $274,592 (= FEC). Rows with
+    the double-count signature (`local_other == local_transfers`): **138 → 0**. Excess "other":
+    **$89.7M → $3.4M**, and that residual is genuine local>FEC diffs (e.g. Thanedar T000250) the
+    double-count was masking — not transfers. **Finding A is now unblocked** (`total_receipts_delta`
+    is trustworthy); a full nightly drain (fresh FEC fetch) will reconfirm. Original fix notes below.
+  - **(2026-06-15, Finding B fix authored — migration `20260615170000`):**
     root cause found in the `other_total` column of `get_contribution_totals` /
     `get_contribution_totals_by_committee`. It was defined as the catch-all
     `line_number NOT IN ('11AI','11B','11C') AND is_contribution=true`, which (a) swept in **Line-12
