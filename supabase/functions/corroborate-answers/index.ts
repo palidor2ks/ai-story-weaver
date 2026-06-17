@@ -23,7 +23,8 @@ const PERPLEXITY_API_KEY = Deno.env.get('PERPLEXITY_API_KEY');
 // No federal-legislative domain allowlist: most #3 targets are non-incumbents / state & local
 // officials with no congress.gov footprint, so we search the open web and lean on the prompt
 // (prefer official/reputable), the blocked-domain list, the in-citations check, and URL validation.
-const SEARCH_RECENCY = 'year';
+// No recency filter: a candidate's documented record spans their whole career, not the last year
+// (a 2023 veto / 2021 bill is still valid corroboration), so restricting recency throttled recall.
 const DEFAULT_LIMIT = 25;            // answers per invocation (bounds wall-clock + spend)
 
 const BLOCKED_DOMAINS = [
@@ -86,7 +87,6 @@ async function sonar(messages: unknown[]): Promise<{ content: string; citations:
     body: JSON.stringify({
       model: 'sonar',
       messages,
-      search_recency_filter: SEARCH_RECENCY,
       web_search_options: { search_context_size: 'medium' }, // 'low' under-retrieved; medium balances cost/recall
     }),
   });
