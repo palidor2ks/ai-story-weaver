@@ -38,6 +38,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 type Supabase = ReturnType<typeof createClient>;
 import { requireCronAuth } from "../_shared/cron-auth.ts";
+import { ingestionHiddenList, loadHiddenStates } from "../_shared/onboard-candidate.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -117,8 +118,16 @@ Deno.serve(async (req) => {
   const callHeaders = {
     "Content-Type": "application/json",
     "Authorization": `Bearer ${SERVICE_KEY}`,
-    "apikey": ANON_KEY,
+    // apikey MUST be the SAME service-role key as the bearer. Under the new API keys this
+    // project's SUPABASE_ANON_KEY is the publishable key, and apikey=publishable +
+    // Authorization=secret is rejected by the gateway as UNAUTHORIZED_API_KEY_CONFLICTS (401)
+    // before the function runs — which silently broke finance reconciliation. (Matches sync-all-donors.)
+    "apikey": SERVICE_KEY,
   };
+
+  // Load hidden states once per request for visible-states gating.
+  const hiddenSet = await loadHiddenStates(supabase);
+  const hiddenList = ingestionHiddenList(hiddenSet);
 
   type CycleResult = {
     cycle: string;
@@ -170,10 +179,19 @@ Deno.serve(async (req) => {
 
     const fecIdByCandidate = new Map<string, string>();
     if (partialCandidateIds.length) {
-      const { data: cands } = await supabase
+      // Apply visible-states gate: skip hidden-state candidates so their partial
+      // syncs don't consume Phase A slots (visible-states gate).
+      let candsQuery = supabase
         .from("candidates")
         .select("id, fec_candidate_id")
         .in("id", partialCandidateIds);
+      if (hiddenList.length > 0) {
+        candsQuery = candsQuery.or(`state.is.null,state.not.in.(${hiddenList.join(",")})`);
+      }
+      const { data: cands } = await candsQuery;
+      if (hiddenList.length > 0 && (cands ?? []).length < partialCandidateIds.length) {
+        console.log(`[drain-fec-finance] Phase A: ${partialCandidateIds.length - (cands ?? []).length} hidden-state rows skipped (visible-states gate)`);
+      }
       for (const c of cands ?? []) if (c.fec_candidate_id) fecIdByCandidate.set(c.id, c.fec_candidate_id);
     }
 
@@ -218,10 +236,28 @@ Deno.serve(async (req) => {
       .limit(totalsBatch);
     if (dueErr) { result.errors.push(`totals query [${cycle}]: ${dueErr.message}`); continue; }
 
-    const totalsIds = (due ?? [])
+    let totalsIds = (due ?? [])
       .map((m) => m.candidate_id)
       .filter((x): x is string => !!x);
     if (!totalsIds.length) continue;
+
+    // Apply visible-states gate: exclude hidden-state candidates from the totals
+    // refresh batch (visible-states gate). finance_reconciliation has no state
+    // column, so we cross-reference against candidates in-code.
+    if (hiddenList.length > 0) {
+      const { data: visibleCands } = await supabase
+        .from("candidates")
+        .select("id")
+        .in("id", totalsIds)
+        .or(`state.is.null,state.not.in.(${hiddenList.join(",")})`);
+      const visibleSet = new Set((visibleCands ?? []).map((c) => c.id));
+      const before = totalsIds.length;
+      totalsIds = totalsIds.filter((id) => visibleSet.has(id));
+      if (totalsIds.length < before) {
+        console.log(`[drain-fec-finance] Phase B [${cycle}]: ${before - totalsIds.length} hidden-state rows skipped (visible-states gate)`);
+      }
+      if (!totalsIds.length) continue;
+    }
 
     try {
       const r = await fetch(`${SUPABASE_URL}/functions/v1/refresh-fec-totals`, {

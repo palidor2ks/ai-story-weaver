@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { ingestionHiddenList, loadHiddenStates } from "../_shared/onboard-candidate.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -85,15 +86,23 @@ serve(async (req) => {
       );
     }
 
-    // Dedupe candidate_ids and filter by coverage_tier
+    // Dedupe candidate_ids and filter by coverage_tier.
+    // Hidden-state candidates are excluded at the query level (visible-states gate)
+    // so they don't consume sync slots that belong to visible-state sitting members.
     const candidateIds = Array.from(new Set(stalledRows.map(row => row.candidate_id)));
 
-    const { data: candidates, error: candError } = await supabase
+    const hiddenSet = await loadHiddenStates(supabase);
+    const hiddenList = ingestionHiddenList(hiddenSet);
+    let candidatesQuery = supabase
       .from('candidates')
       .select('id, name, fec_candidate_id, coverage_tier')
       .in('id', candidateIds)
-      .in('coverage_tier', coverageTiers)
-      .limit(limit);
+      .in('coverage_tier', coverageTiers);
+    if (hiddenList.length > 0) {
+      candidatesQuery = candidatesQuery.or(`state.is.null,state.not.in.(${hiddenList.join(',')})`);
+      console.log(`[SCHEDULE-CONGRESS-DONOR-SYNC] visible-states gate active; ${hiddenList.length} hidden state(s) excluded`);
+    }
+    const { data: candidates, error: candError } = await candidatesQuery.limit(limit);
 
     if (candError) {
       console.error('[SCHEDULE-CONGRESS-DONOR-SYNC] Error fetching candidates:', candError);

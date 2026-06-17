@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # Preflight data-ACCURACY scoreboard: reports where each data category stands against
-# roadmap priority #1, reading the same admin_stats_cache rows the Coverage & Finance
-# dashboard shows (recomputed every 15 min by refresh_admin_stats_cache(), migration
-# 20260610170000). Read-only. Goals & thresholds: docs/DATA-ACCURACY.md.
+# roadmap priority #1. The §0 freshness check reads admin_stats_cache (still recomputed every
+# 15 min, whole-DB, by refresh_admin_stats_cache(), migration 20260610170000) to confirm the cron
+# is alive. The candidate-scoped categories (§1 finance recon, §2 voting, §5 answers) compute the
+# VISIBLE-states slice directly — the two-state focus means the gate measures only the states we
+# maintain (matches the Coverage & Finance dashboard). Read-only. Goals & thresholds: docs/DATA-ACCURACY.md.
 #
 # Exit codes:
 #   0 = all categories within thresholds
@@ -20,6 +22,13 @@ fi
 
 q() { timeout 10 psql "$SUPABASE_DB_URL" -X -tA -c "$1" 2>/dev/null; }
 
+# Two-state focus (2026-06-16): the candidate-scoped categories below measure ONLY visible states
+# (the states we still maintain — ingestion is gated to them). `admin_stats_cache` itself stays
+# whole-database (the freshness check in §0 still validates the cron, and the cache is a whole-DB
+# audit reference), so these checks compute the visible slice directly. Bills (national) and state
+# finance (NJ/FL/NY) are not candidate-state-scoped and keep reading the cache.
+VIS="with vis as (select id from candidates c where c.state is null or upper(c.state) not in (select upper(state_code) from hidden_states))"
+
 ERRORS=0
 err()  { echo "[data-accuracy] ERROR $1"; ERRORS=$((ERRORS + 1)); }
 ok()   { echo "[data-accuracy] OK    $1"; }
@@ -34,22 +43,35 @@ else
   ok "stats cache fresh (all 7 keys < 2h old)"
 fi
 
-# --- 1. Federal finance: FEC reconciliation (threshold: errors must not grow past 900;
-#        baseline 777 on 2026-06-10 — ratchet DOWN as they're fixed) ---
-read -r RECON_ERR RECON_PART RECON_OK GAP <<<"$(q "select coalesce(stat_value->>'error','0'), coalesce(stat_value->>'partial','0'), coalesce(stat_value->>'ok','0'), coalesce(stat_value->>'errorGapUsd','0') from admin_stats_cache where stat_key='finance_recon_stats'" | tr '|' ' ')"
-if [ "${RECON_ERR:-0}" -gt 900 ]; then
-  err "fec-reconciliation: $RECON_ERR candidate-cycles in error (regression past 900) — gap \$$GAP"
+# --- 1. Federal finance: FEC reconciliation, VISIBLE states only (threshold: errors must not grow
+#        past 100; visible baseline ~40-55 on 2026-06-16 — ratchet DOWN as they're fixed) ---
+read -r RECON_ERR RECON_PART RECON_OK GAP <<<"$(q "$VIS
+  select count(*) filter (where fr.status='error'), count(*) filter (where fr.status='partial'),
+         count(*) filter (where fr.status='ok'),
+         coalesce(sum(fr.total_receipts_delta_amount) filter (where fr.status='error'),0)::bigint
+  from finance_reconciliation fr join vis on vis.id = fr.candidate_id" | tr '|' ' ')"
+if [ "${RECON_ERR:-0}" -gt 100 ]; then
+  err "fec-reconciliation (visible): $RECON_ERR candidate-cycles in error (regression past 100) — gap \$$GAP"
 else
-  ok "fec-reconciliation: $RECON_OK ok / $RECON_PART partial / $RECON_ERR error (gap \$$GAP) — backlog tracked in docs/DATA-ACCURACY.md"
+  ok "fec-reconciliation (visible): $RECON_OK ok / $RECON_PART partial / $RECON_ERR error (gap \$$GAP) — backlog tracked in docs/DATA-ACCURACY.md"
 fi
 
-# --- 2. Voting records (threshold: sync errors must not grow past 350; baseline 269) ---
-read -r VERR VFERR VINC <<<"$(q "select coalesce(stat_value->>'syncErrors','0'), coalesce(stat_value->>'floorSyncErrors','0'), coalesce(stat_value->>'incompleteMembers','0') from admin_stats_cache where stat_key='voting_records_stats'" | tr '|' ' ')"
+# --- 2. Voting records, VISIBLE states only. Only count rows that actually have an expected
+#        record to sync (expected_total>0 OR expected_floor_votes>0): non-incumbent CANDIDATES
+#        (challengers) carry a vote_sync_status row with a spurious floor_vote_sync_error and 0
+#        expected — they have no congressional record, so counting them is noise, not a sync defect.
+#        (threshold: real-member sync errors must not grow past 10; baseline 0 errors / 7 incomplete.) ---
+read -r VERR VFERR VINC <<<"$(q "$VIS
+  select count(*) filter (where vs.sync_error is not null),
+         count(*) filter (where vs.floor_vote_sync_error is not null),
+         count(*) filter (where coalesce(vs.persisted_count,0) < coalesce(vs.expected_total,0))
+  from vote_sync_status vs join vis on vis.id = vs.candidate_id
+  where coalesce(vs.expected_total,0) > 0 or coalesce(vs.expected_floor_votes,0) > 0" | tr '|' ' ')"
 TOTAL_VERR=$(( ${VERR:-0} + ${VFERR:-0} ))
-if [ "$TOTAL_VERR" -gt 350 ]; then
-  err "voting-records: $TOTAL_VERR member sync errors (regression past 350); $VINC members incomplete"
+if [ "$TOTAL_VERR" -gt 10 ]; then
+  err "voting-records (visible): $TOTAL_VERR real-member sync errors (regression past 10); $VINC members incomplete"
 else
-  ok "voting-records: $TOTAL_VERR member sync errors / $VINC incomplete (baseline 269/270 on 2026-06-10)"
+  ok "voting-records (visible): $TOTAL_VERR real-member sync errors / $VINC incomplete (baseline 0 errors / 7 incomplete on 2026-06-16, after excluding non-incumbent challengers)"
 fi
 
 # --- 3. Bills (FAIL if the nightly sync is dead: > 7 days since last completion) ---
@@ -68,17 +90,20 @@ else
   ok "state-finance: NJ/FL/NY syncing clean (0 errors this week)"
 fi
 
-# --- 5. Candidate answers: URL-sourcing bands set by maintainer 2026-06-10 —
-#        target 100%, >=75% success, <35% poor (FAIL). Both definitions reported. ---
-read -r ATOT ASRC AURL <<<"$(q "select coalesce(stat_value->>'totalAnswers','0'), coalesce(stat_value->>'totalSourced','0'), coalesce(stat_value->>'sourcedWithUrl','0') from admin_stats_cache where stat_key='candidate_answer_stats'" | tr '|' ' ')"
+# --- 5. Candidate answers, VISIBLE states only: URL-sourcing bands (maintainer 2026-06-10) —
+#        target 100%, >=75% success, <35% poor (FAIL). Visible baseline ~4% on 2026-06-16. ---
+read -r ATOT AURL <<<"$(q "$VIS
+  select coalesce((select sum(s.answer_count) from candidate_answer_coverage_stats s join vis on vis.id = s.candidate_id),0),
+         (select count(*) from candidate_answers a join vis on vis.id = a.candidate_id
+            where a.source_url is not null or coalesce(array_length(a.source_urls,1),0) > 0)" | tr '|' ' ')"
 APCT=0
 [ "${ATOT:-0}" -gt 0 ] && APCT=$(( ${AURL:-0} * 100 / ATOT ))
 if [ "$APCT" -lt 35 ]; then
-  err "answers: only ${APCT}% of $ATOT answers are URL-sourced ($AURL) — below the 35% floor (target 100%, success 75%); $ASRC have descriptions only"
+  err "answers (visible): only ${APCT}% of $ATOT answers are URL-sourced ($AURL) — below the 35% floor (target 100%, success 75%)"
 elif [ "$APCT" -lt 75 ]; then
-  note "answers: ${APCT}% URL-sourced ($AURL of $ATOT) — above the 35% floor, below the 75% success bar"
+  note "answers (visible): ${APCT}% URL-sourced ($AURL of $ATOT) — above the 35% floor, below the 75% success bar"
 else
-  ok "answers: ${APCT}% URL-sourced ($AURL of $ATOT) — success bar (75%) met; target 100%"
+  ok "answers (visible): ${APCT}% URL-sourced ($AURL of $ATOT) — success bar (75%) met; target 100%"
 fi
 
 if [ "$ERRORS" -eq 0 ]; then

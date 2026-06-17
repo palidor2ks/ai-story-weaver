@@ -156,6 +156,30 @@ function isNationalRace(state: string | null | undefined, office: string): boole
   return !st || st === 'US' || officeClass(office) === 'president';
 }
 
+/**
+ * Visible-states gate for INGESTION (mirrors the app-wide convention). Returns true when work for
+ * this candidate/member should run. National/President races (no state, 'US', or president office)
+ * are always kept — matching resolveAndUpsertCandidate's gate. Use this for in-code filtering.
+ */
+export function isStateVisible(
+  state: string | null | undefined,
+  hiddenSet: Set<string>,
+  office = '',
+): boolean {
+  if (isNationalRace(state, office)) return true;
+  return !hiddenSet.has((state || '').toUpperCase());
+}
+
+/**
+ * Hidden state codes for query-level (PostgREST) exclusion, e.g.
+ *   .or(`state.is.null,state.not.in.(${ingestionHiddenList(set).join(',')})`)
+ * Excludes 'US' so national/President rows are kept (they carry state 'US'). Returns [] when nothing
+ * is hidden — callers should skip adding the filter in that case (`.not.in.()` is invalid).
+ */
+export function ingestionHiddenList(hiddenSet: Set<string>): string[] {
+  return [...hiddenSet].filter((s) => s && s !== 'US');
+}
+
 // ----- onboarding ----------------------------------------------------------
 
 export interface OnboardOpts {

@@ -10,6 +10,7 @@ import { ShareCardModal } from '@/components/share/ShareCardModal';
 import { useProfile, useUserTopicScores, useUserTopics } from '@/hooks/useProfile';
 import { useRepresentatives } from '@/hooks/useRepresentatives';
 import { useCivicOfficials, CivicOfficial, OfficeLevelType } from '@/hooks/useCivicOfficials';
+import { useHiddenStates } from '@/hooks/useHiddenStates';
 import { usePersonalizedScoreMap } from '@/hooks/usePersonalizedScoreMap';
 import { useUpcomingElections } from '@/hooks/useUpcomingElections';
 import { RepresentativeComparisonCard } from '@/components/RepresentativeComparisonCard';
@@ -41,14 +42,48 @@ export const QuizResults = () => {
   const { data: userTopicScores = [] } = useUserTopicScores();
   const { data: userTopics = [] } = useUserTopics();
   const { data: repsData, isLoading: repsLoading } = useRepresentatives(profile?.address);
-  const { data: civicData, isLoading: civicLoading } = useCivicOfficials(profile?.address);
-  const { data: upcomingElections, isLoading: upcomingLoading } = useUpcomingElections(profile?.address);
+  const { data: civicDataRaw, isLoading: civicLoading } = useCivicOfficials(profile?.address);
+  const { data: upcomingElectionsRaw, isLoading: upcomingLoading } = useUpcomingElections(profile?.address);
+  const { isHidden } = useHiddenStates();
   const [profileAnalysis, setProfileAnalysis] = useState<ProfileAnalysis | null>(null);
   const [isLoadingAI, setIsLoadingAI] = useState(false);
   const [resultsShareOpen, setResultsShareOpen] = useState(false);
   const [inviteShareOpen, setInviteShareOpen] = useState(false);
 
-  const federalReps = repsData?.representatives ?? [];
+  // The user's own officials come from the Civic API (external), so RLS can't gate them — scope
+  // them to visible states client-side, matching the rest of the app. National / empty-state
+  // offices are kept (isHidden('') and isHidden(null) are false).
+  const federalReps = useMemo(
+    () => (repsData?.representatives ?? []).filter(r => !isHidden(r.state)),
+    [repsData, isHidden],
+  );
+  const civicData = useMemo(() => {
+    if (!civicDataRaw) return civicDataRaw;
+    const keep = (o: CivicOfficial) => !isHidden(o.state);
+    return {
+      ...civicDataRaw,
+      federalExecutive: civicDataRaw.federalExecutive.filter(keep),
+      stateExecutive: civicDataRaw.stateExecutive.filter(keep),
+      stateLegislative: civicDataRaw.stateLegislative.filter(keep),
+      local: civicDataRaw.local.filter(keep),
+    };
+  }, [civicDataRaw, isHidden]);
+  // "Candidates on Your Ballot" comes from the fetch-upcoming-elections edge function (service_role,
+  // bypasses RLS), so it must be filtered here too. Drop hidden-state candidates and any election
+  // left with none.
+  const upcomingElections = useMemo(() => {
+    if (!upcomingElectionsRaw) return upcomingElectionsRaw;
+    const filterGroup = (arr: typeof upcomingElectionsRaw.federal) =>
+      arr
+        .map(e => ({ ...e, candidates: e.candidates.filter(c => !isHidden(c.state)) }))
+        .filter(e => e.candidates.length > 0);
+    return {
+      ...upcomingElectionsRaw,
+      federal: filterGroup(upcomingElectionsRaw.federal),
+      state: filterGroup(upcomingElectionsRaw.state),
+      local: filterGroup(upcomingElectionsRaw.local),
+    };
+  }, [upcomingElectionsRaw, isHidden]);
   const allRepsLoading = repsLoading || civicLoading;
 
   // Build set of name keys already shown in Representatives so we can dedupe

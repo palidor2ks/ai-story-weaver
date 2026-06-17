@@ -8,7 +8,10 @@ import {
   useFinanceReconStatsCache,
   useIdentityStatsCache,
   useRefreshAdminStats,
+  type StateFinanceEntry,
 } from "@/hooks/useAdminStatsCache";
+import { useHiddenStates } from "@/hooks/useHiddenStates";
+import type { CoverageDashboardStats } from "@/hooks/useCoverageDashboardStats";
 
 // The categories roadmap priority #1 cares about that the dashboard didn't cover:
 // bills freshness, state campaign finance, finance reconciliation, candidate identity.
@@ -52,26 +55,44 @@ function Tile({
   );
 }
 
-export function DataAccuracyScoreboard() {
+export function DataAccuracyScoreboard({ visible }: { visible?: CoverageDashboardStats }) {
   const bills = useBillsStatsCache();
   const states = useStateFinanceStatsCache();
   const recon = useFinanceReconStatsCache();
   const identity = useIdentityStatsCache();
   const answers = useCandidateAnswerStatsCache();
   const refresh = useRefreshAdminStats();
+  const { isHidden } = useHiddenStates();
 
   const billsData = bills.data?.data;
   const statesData = states.data?.data;
-  const reconData = recon.data?.data;
   const identityData = identity.data?.data;
   const answersData = answers.data?.data;
+
+  // Candidate-scoped cards (FEC reconciliation, identity, URL-sourced answers) follow the
+  // dashboard's visible-states scope when the RPC has loaded; otherwise fall back to the global
+  // admin_stats_cache. Bills (national) and State finance (per-state NJ/FL/NY) stay global.
+  const reconData = visible
+    ? {
+        ok: visible.reconOk,
+        warning: visible.reconWarning,
+        partial: visible.reconPartial,
+        error: visible.reconError,
+        errorGapUsd: visible.reconErrorGapUsd,
+        latestCheck: visible.reconLatestCheck,
+      }
+    : recon.data?.data;
+
+  const identityCandidates = visible ? visible.totalCandidates : identityData?.candidates;
+  const identityMerges = visible ? visible.auditedMerges : identityData?.auditedMerges;
+
+  const urlTotal = visible ? visible.totalAnswers : answersData?.totalAnswers;
+  const urlSourced = visible ? visible.sourcedWithUrl : answersData?.sourcedWithUrl;
 
   // URL-sourcing bands set by the maintainer 2026-06-10:
   // target 100%, >=75% success (green), <35% poor (red), between = amber.
   const urlSourcedPct =
-    answersData && answersData.totalAnswers > 0
-      ? Math.round(((answersData.sourcedWithUrl ?? 0) / answersData.totalAnswers) * 100)
-      : null;
+    urlTotal && urlTotal > 0 ? Math.round(((urlSourced ?? 0) / urlTotal) * 100) : null;
   const answersTone =
     urlSourcedPct === null ? "muted" : urlSourcedPct < 35 ? "red" : urlSourcedPct < 75 ? "amber" : "green";
 
@@ -83,9 +104,30 @@ export function DataAccuracyScoreboard() {
         : "green"
     : "muted";
 
-  const stateErrors = statesData
-    ? statesData.nj.errors7d + statesData.fl.errors7d + statesData.ny.errors7d
-    : 0;
+  // State finance aggregates three per-state import trackers; scope it to visible states only
+  // (the cache already breaks NJ/FL/NY out separately, so this needs no SQL change). Today NJ is
+  // visible and FL/NY are hidden, so the card shows NJ alone and relabels accordingly.
+  const visibleStateFinance: Array<{ code: string; data: StateFinanceEntry }> = statesData
+    ? (
+        [
+          { code: "NJ", data: statesData.nj },
+          { code: "FL", data: statesData.fl },
+          { code: "NY", data: statesData.ny },
+        ] as Array<{ code: string; data: StateFinanceEntry }>
+      ).filter((e) => !isHidden(e.code))
+    : [];
+  const stateRows = visibleStateFinance.reduce((s, e) => s + e.data.contributions, 0);
+  const stateErrors = visibleStateFinance.reduce((s, e) => s + e.data.errors7d, 0);
+  const stateLabel =
+    visibleStateFinance.length > 0
+      ? `State finance (${visibleStateFinance.map((e) => e.code).join("/")})`
+      : "State finance";
+  const stateLatestRun =
+    visibleStateFinance
+      .map((e) => e.data.lastRun)
+      .filter(Boolean)
+      .sort()
+      .slice(-1)[0] ?? null;
 
   const reconTone = reconData ? (reconData.error > 0 ? "red" : reconData.partial > 0 ? "amber" : "green") : "muted";
 
@@ -128,22 +170,24 @@ export function DataAccuracyScoreboard() {
           }
         />
         <Tile
-          tone={statesData ? (stateErrors > 0 ? "red" : "green") : "muted"}
+          tone={!statesData ? "muted" : visibleStateFinance.length === 0 ? "muted" : stateErrors > 0 ? "red" : "green"}
           icon={Landmark}
-          label="State finance (NJ/FL/NY)"
+          label={stateLabel}
           value={
-            statesData
-              ? `${(statesData.nj.contributions + statesData.fl.contributions + statesData.ny.contributions).toLocaleString()} rows`
-              : "—"
+            !statesData
+              ? "—"
+              : visibleStateFinance.length === 0
+                ? "no visible states"
+                : `${stateRows.toLocaleString()} rows`
           }
           detail={
-            statesData
-              ? stateErrors > 0
-                ? `${stateErrors} sync errors this week`
-                : `all synced, latest ${ago(
-                    [statesData.nj.lastRun, statesData.fl.lastRun, statesData.ny.lastRun].filter(Boolean).sort().slice(-1)[0] ?? null,
-                  )}`
-              : "loading…"
+            !statesData
+              ? "loading…"
+              : visibleStateFinance.length === 0
+                ? "all tracked states are hidden"
+                : stateErrors > 0
+                  ? `${stateErrors} sync errors this week`
+                  : `all synced, latest ${ago(stateLatestRun)}`
           }
         />
         <Tile
@@ -158,13 +202,13 @@ export function DataAccuracyScoreboard() {
           }
         />
         <Tile
-          tone={identityData ? "green" : "muted"}
+          tone={identityCandidates !== undefined ? "green" : "muted"}
           icon={Users}
           label="Candidate identity"
-          value={identityData ? `${identityData.candidates.toLocaleString()} candidates` : "—"}
+          value={identityCandidates !== undefined ? `${identityCandidates.toLocaleString()} candidates` : "—"}
           detail={
-            identityData
-              ? `${identityData.auditedMerges} audited merges · dupes gated by check:dupes`
+            identityCandidates !== undefined
+              ? `${identityMerges ?? 0} audited merges · dupes gated by check:dupes`
               : "loading…"
           }
         />
@@ -174,15 +218,17 @@ export function DataAccuracyScoreboard() {
           label="Answers URL-sourced"
           value={urlSourcedPct !== null ? `${urlSourcedPct}%` : "—"}
           detail={
-            answersData
-              ? `${(answersData.sourcedWithUrl ?? 0).toLocaleString()} of ${answersData.totalAnswers.toLocaleString()} · target 100% · success ≥75% · poor <35%`
+            urlTotal !== undefined
+              ? `${(urlSourced ?? 0).toLocaleString()} of ${urlTotal.toLocaleString()} · target 100% · success ≥75% · poor <35%`
               : "loading…"
           }
         />
       </div>
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <Clock className="h-3 w-3" />
-        Auto-refreshes server-side every 15 minutes (pg_cron → refresh_admin_stats_cache). Preflight reads the same numbers.
+        {visible
+          ? "FEC reconciliation, candidate identity, URL-sourced answers & state finance show visible states only. Bills stay national (sync-health) and match the preflight check:accuracy gate."
+          : "Auto-refreshes server-side every 15 minutes (pg_cron → refresh_admin_stats_cache). Preflight reads the same numbers."}
       </div>
     </div>
   );

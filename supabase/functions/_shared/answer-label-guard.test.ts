@@ -2,7 +2,7 @@
 // relabel (2026-06-11) cleaned 47,066 historical rows; this guard is what keeps the pool
 // from regrowing, so the invariants here are the contract.
 import { expect, test } from 'bun:test';
-import { demoteUnverifiableVoteClaims } from './answer-label-guard.ts';
+import { demoteUnverifiableVoteClaims, demoteUncitedWebResearch } from './answer-label-guard.ts';
 
 const voteClaim = {
   evidence_type: 'voting_record',
@@ -51,4 +51,43 @@ test('demotes when only one of the two label columns claims votes', () => {
   const [out] = demoteUnverifiableVoteClaims([mixedLabels], false);
   expect(out.source_type).toBe('other');
   expect(out.evidence_type).toBe('inferred');
+});
+
+test('treats a whitespace-only source_url as no citation', () => {
+  // blank URL should not rescue an uncited vote claim from demotion
+  const blankUrl = { ...voteClaim, source_url: '   ' };
+  const [out] = demoteUnverifiableVoteClaims([blankUrl], false);
+  expect(out.evidence_type).toBe('inferred');
+});
+
+const webResearch = {
+  evidence_type: 'organization_scorecard',
+  source_type: 'web_research',
+  source_url: null as string | null,
+  source_urls: null as string[] | null,
+};
+
+test('demotes a web_research label with no URL to inferred/other', () => {
+  const [out] = demoteUncitedWebResearch([{ ...webResearch }]);
+  expect(out.source_type).toBe('other');
+  expect(out.evidence_type).toBe('inferred');
+});
+
+test('keeps a web_research label that carries a real URL', () => {
+  const cited = { ...webResearch, source_url: 'https://example.org/scorecard' };
+  const [out] = demoteUncitedWebResearch([cited]);
+  expect(out.source_type).toBe('web_research');
+
+  const citedArray = { ...webResearch, source_urls: ['https://example.org/scorecard'] };
+  const [out2] = demoteUncitedWebResearch([citedArray]);
+  expect(out2.source_type).toBe('web_research');
+});
+
+test('web_research guard leaves other source types and inputs untouched', () => {
+  const statement = { evidence_type: 'public_statement', source_type: 'public_statement', source_url: null, source_urls: null };
+  const input = { ...webResearch };
+  const out = demoteUncitedWebResearch([statement, input]);
+  expect(out[0]).toEqual(statement);
+  expect(input.source_type).toBe('web_research'); // original object unchanged
+  expect(out[1].source_type).toBe('other');
 });

@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { ingestionHiddenList, loadHiddenStates } from '../_shared/onboard-candidate.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -328,17 +329,28 @@ serve(async (req) => {
         candidatesToProcess = [{ id: bioguideId, name: bioguideId }];
       }
     } else if (processAll) {
-      // Get candidates that need sync (never synced or older than 7 days)
+      // Get candidates that need sync (never synced or older than 7 days).
+      // Exclude hidden-state candidates at the query level so they can't occupy
+      // every batch slot and starve visible-state candidates (visible-states gate).
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-      
-      const { data: candidates } = await supabase
+
+      const hiddenSet = await loadHiddenStates(supabase);
+      const hiddenList = ingestionHiddenList(hiddenSet);
+      let candidatesQuery = supabase
         .from('candidates')
         .select('id, name')
         .or(`last_answers_sync.is.null,last_answers_sync.lt.${sevenDaysAgo.toISOString()}`)
         .order('last_answers_sync', { ascending: true, nullsFirst: true })
         .limit(batchSize);
-      
+      if (hiddenList.length > 0) {
+        candidatesQuery = candidatesQuery.or(`state.is.null,state.not.in.(${hiddenList.join(',')})`);
+      }
+      const { data: candidates } = await candidatesQuery;
+      if (hiddenList.length > 0) {
+        console.log('[populate-candidate-answers] visible-states gate active; hidden states excluded from batch');
+      }
+
       candidatesToProcess = candidates || [];
     } else {
       return new Response(

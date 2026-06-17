@@ -27,6 +27,599 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-17 — PR #438 merged + post-merge scoring-honesty verification — day
+
+**What happened & why**
+Merged **PR #438** (`05b89f81`) — the answer **demotion** + **vote-derivation** bundle (Pass 2/3 of
+the NC/NJ ship gate). Note: it had been sitting as an open *draft*; what had merged earlier was #437
+(the 401 fix). Before merging I rewrote #438's title/description to reflect everything it bundled
+(it was mis-titled as just the accuracy-gate rescope). Then verified the demotion + derivation
+together produce honest match scores, at the data layer (the migration is already live on Pulse Dev,
+which is what the scoring hooks read).
+
+**State** (verified, read-only against Pulse Dev)
+- **26 vote-derived candidates** (the full NC+NJ House delegation): each now has ~121 trusted answers
+  feeding the match — **299 vote-derived** (±5/±10, Congress.gov-sourced) + **2,843 URL-sourced** —
+  with **3,384 fabricated/inferred answers correctly excluded** from scoring.
+- **All 172 visible candidates:** 117 score on real evidence (avg ~35 trusted answers each); **55 have
+  answers but all are demoted → they show NA, not a fabricated score** (intended "honest > present").
+- **The 55 cannot be vote-derived** — every one has **0 floor votes**. Breakdown: ~43 federal
+  *challengers* (no congressional record exists) + ~12 local candidates (council/mayor/commissioner/
+  surrogate; the ~9 incumbents among them hold *local* office, no federal votes). **No sitting member
+  of Congress is among the 55** — those are all already in the derived 26. So curating the 9 open
+  key-vote mappings would only deepen coverage for the already-derived incumbents, NOT reach the 55.
+
+**Next**
+The 55 all-demoted candidates' only honest path to a score is **real-sourced statements/campaign
+positions** (URL-bearing) — i.e. the deferred provenance/`web_research` URL work — or a deliberate
+UI treatment for NA candidates. Decide which; until then they correctly show NA.
+
+**Deferred** (unchanged + sharpened)
+- Provenance/`web_research` URL ETL so challenger/local answers can carry real sources (would lift
+  the 55 out of NA honestly). Statement-corroboration still deferred (corpus too thin).
+- 9 open key-vote→question mappings in `docs/poliscore-question-map-draft.md` (deepen the 26 only).
+- civil-rights-q22 (HR26 118th) legacy-bill_id linkage; on-demand answer-gen rework;
+  `useInvertedScoreCandidates` admin filter; vote_sync_status realign (all pre-un-hide).
+
+---
+
+## 2026-06-17 — Vote-derivation engine applied to Pulse Dev (Phase 2) — day
+
+**What happened & why**
+Built and shipped Phase 2 of the answers remediation: re-deriving NC/NJ candidate position answers
+from their VERIFIED voting records, replacing the fabricated/inferred provenance found in Pass 3.
+Owner-approved spec: HIGH-confidence key-vote→question mappings only; magnitude **±5 for a single
+key vote, ±10 when 2+ key votes on a question agree**; Not Voting/Present → no answer; existing
+values ARCHIVED, never deleted. Migration `20260617120000_poliscore_derive_answers.sql` creates the
+curation-gate table `poliscore_key_vote_questions` (16 approved mappings), the audit table
+`candidate_answers_history`, and a DO block that upserts vote-derived answers with `voting_record`
+provenance + Congress.gov source URLs, scoped to visible states.
+
+The migration-safety-reviewer returned **NO-GO** on the draft; all four fixes applied before
+applying: (1, blocking) congress-year date-window guard on the fp/votes CTEs to fence the
+cross-congress legacy-bill_id collision (HR26 'H R 26' holds 1,573 votes spanning 2023–2025);
+(2) skip even-split (net-0) derivations; (3) archive has_discrepancy/discrepancy_note; (4)
+admin-write RLS on the mappings table. Discovered `candidate_answers` has two BEFORE-UPDATE
+anti-tampering triggers allowing only admin/service_role to change scoring fields — resolved by
+asserting `set local request.jwt.claim.role='service_role'` for the migration transaction (the
+exact carve-out those triggers intend).
+
+**State** (verified)
+- Migration **applied to Pulse Dev** (the only project). Result: **299 answers across 26 candidates**
+  (the full NC+NJ House delegation), 0 zeros, range −10..+10; **299 prior rows archived**.
+- Read-only validation confirmed the date-window guard drops **zero** legitimate votes
+  (`fv_rows == fv_in_window` for every vote-bearing bill_id; action_date fully populated).
+- Spot-checked **Virginia Foxx (NC, R)**: all 13 derived answers carry `voting_record` provenance +
+  Congress.gov URLs, directionally correct (e.g. HR2 118th "Secure the Border Act" → Yea → +5
+  immigration; HR28+HR498 both Yea → +10 civil-rights-q9). Consistent with a conservative record.
+- Security advisors: neither new table appears (both have RLS + policies — no new exposure).
+- Preflight: **lint 0 errors · 90/90 tests · vite build compiles**. (The `bun run build` prebuild
+  step fails on sitemap HTTP 403 — the remote sandbox's network policy, not a code issue.)
+- Pushed to `claude/pensive-hypatia-r6m2d8` (PR #438).
+
+**Next**
+Owner merges PR #438; then confirm the un-hidden NC/NJ quiz surfaces show the new vote-derived
+answers (with sources) and that the demotion + derivation together produce honest match scores.
+
+**Deferred**
+- **civil-rights-q22 (HR26 118th Born-Alive) derives nothing** — its canonical `bills` row
+  (`118-HR.26`) isn't linked to the vote-bearing legacy id (`H R 26`); keeps its prior demoted
+  answer. Folds into the existing legacy-bill_id cleanup (pre-un-hide).
+- 9 open key-vote→question mappings + 7 no-question votes in `docs/poliscore-question-map-draft.md`
+  await owner curation (statement-corroboration deferred — corpus too thin).
+- On-demand answer generation rework; `useInvertedScoreCandidates` admin filter; vote_sync_status
+  realign (all pre-un-hide, unchanged from prior entry).
+
+---
+
+## 2026-06-17 — Answers verification (RED) + demotion (Track 1) + re-derivation scoping — day
+
+**What happened & why**
+Pass 3 of the ship gate: NC/NJ candidate answers (the alignment quiz's input). **Verdict: RED.** Of
+42,335 visible answers: ~9% vote-derived (good, ~43% URL'd), **~37% `inferred`** (party-platform AI
+guesses), **~37% `public_statement`** with fabricated provenance (dated tweets/interviews/quotes,
+<1% URL'd — integrity finding #3 confirmed live for NC/NJ; sampled Gill/Mullock/Dafis), ~14%
+`campaign_position` (0 URLs). Critically, **scoring is an equal-weight mean of `answer_value` that
+ignores `source_type`/`confidence`** — so fabricated answers are IN the match math, not just shown.
+
+Owner chose **re-derive from verified votes**. Architect plan: the approved PoliScore key votes map
+to 6 TOPICS, not the ~351 questions, so a **key-vote→question map needs owner curation** (the
+integrity firewall) before any derivation. Two separable tracks; doing both:
+- **Track 1 — demotion (THIS change):** added `isTrustedForScoring()` to `src/lib/scoring.ts`
+  (trusted = `voting_record` evidence OR a real source URL; excludes inferred + URL-less statements/
+  campaign) and filtered the candidate-answer scoring in `useCandidatePersonalizedScore`,
+  `useCandidateScoreMap` (fallback), and `usePersonalizedScoreMap`. So the quiz match now scores
+  ONLY trusted answers; missing ones degrade gracefully. Reversible.
+- **Track 2 — key-vote→question mapping draft:** delegated (for owner review + alignment-quiz-reviewer).
+
+**State** (verified)
+- alignment-quiz-reviewer returned **NO-GO** on the first commit (two surfaces would show
+  contradictory scores) → **both blocking fixes now applied:**
+  1. **`useRepresentativeScores`** — now scores trusted-only and **omits a rep (→ NA) instead of
+     returning a false 0%** when there's no trusted overlap (`calculateScores` returns null; coverage
+     check stays on all answers so on-demand generation isn't over-triggered; generated AI answers
+     score null → NA).
+  2. **`get-candidate-answers` `updateCandidateScore`** — the STORED `candidates.overall_score` now
+     averages trusted answers only (inline predicate mirroring `isTrustedForScoring`), so it no longer
+     diverges from the live match; leaves the stored score untouched if a candidate has 0 trusted.
+  Plus `src/lib/scoring.test.ts` (the missing unit coverage the reviewer required).
+- lint 0 errors · tsc clean · build ok · **90/90 tests**.
+- **Track 2 mapping draft DONE:** `docs/poliscore-question-map-draft.md` — 13 high-confidence
+  key-vote→question mappings, 7 votes with no clean question (owner decision), 9 open questions.
+  Awaiting **owner review** (the curation gate before any vote-derivation).
+
+**Next**
+Owner reviews the key-vote→question mapping draft; then build the derivation engine (Phase 2). The
+demotion + reviewer fixes are ready to merge.
+
+**Deferred**
+- On-demand answer generation in `useRepresentativeScores`/`get-candidate-answers` now produces
+  answers that don't score — disable/rework it (separate, was out of scope per reviewer).
+- `useInvertedScoreCandidates` (admin) + `web_research` URL ETL-contract: reviewer follow-ups.
+- vote_sync_status realign; legacy bill_id cleanup (both pre-un-hide).
+
+---
+
+## 2026-06-17 — Follow-up triage + the 401 fix cascaded into full finance recovery — day
+
+**What happened & why**
+Worked the post-verification follow-up list. Two resolved, two deferred:
+- **Cycle-scope the donor guard (DONE):** #436's 0-donor guard counted donors across all cycles;
+  scoped it to `.eq('cycle', cycle)` so the Cooper case (2024 donors, 0 for 2026) trips it. Committed.
+- **`individual_delta_pct` −45% audit (RESOLVED, no code change):** it was a **stale symptom of the
+  401 incident**, not a formula bug. Before #437, donor imports were blocked, so local individuals
+  were incomplete → −45% vs FEC. After #437 + the re-queue backfill + reconciliation re-ran, the
+  rows corrected: Foxx/Tillis/Rouzer 2024 `individual_delta_pct` now ≈ **0%, status ok** (local
+  matches FEC within dollars). The 16 remaining big-negative deltas are the backfill tail.
+- **Realign `vote_sync_status` (DEFERRED):** surfaced data + dashboard already correct post-#438;
+  it's a sync-cursor table whose only durable fix is in the sync internals; a blind recompute risks
+  the sync's accounting for zero output change. Documented quirk.
+- **Legacy `bill_id` / cross-congress cleanup (DEFERRED):** entirely hidden-state (0 NC/NJ rows);
+  explicitly "before un-hiding states"; the serious collision is already fixed in the PoliScore
+  query layer. Out of scope for the 2-state focus now.
+
+**State** (verified, live)
+- 🎉 **401 fix (#437) recovery is broad:** Roy Cooper donors **0 → 4,220**; NC/NJ queue **24 → 5**;
+  visible recon errors **~37 → 28** (ok 145 → 155); 22 rows re-reconciled in last 2h. Converging.
+- Open PR **#438** (branch `claude/pensive-hypatia-r6m2d8`) now carries: the voting-gate scope fix
+  (script+docs) + the cycle-scope guard commit. Ready for review/merge.
+
+**Next**
+Merge #438. Let the last ~5 backfill (errors + big-neg individual deltas keep dropping on their own).
+
+**Deferred** (with reasons above): vote_sync_status realign; legacy bill_id/collision cleanup
+(both only matter before un-hiding more states).
+
+---
+
+## 2026-06-16 — Verify NC+NJ voting records → data is fine; the gate was counting challengers — day
+
+**What happened & why**
+Pass 2 of the ship-gate verification (voting records, 36 visible federal members). Findings:
+- **Floor votes are complete** for every sitting member (persisted==expected). ✅
+- **The underlying `candidate_votes` data is present & rich** even for members the tracking table
+  showed as `0/0` — e.g. Virginia Foxx has 322 sponsored / 1,868 cosponsored / 1,447 floor in
+  `candidate_votes`, but `vote_sync_status` reported leg 0/0 and floor 625. So **`vote_sync_status`
+  is a stale sync-cursor/health table, NOT a vote-count source of truth.** The dashboard *totals*
+  correctly count `candidate_votes` directly; only the per-member completeness signal reads vss.
+- The gate's "18 floor sync errors" were **entirely non-incumbent CANDIDATES** (challengers:
+  Murphy/Misseri/Rivera/Tabor/Akhtar/Herzig) with a spurious `floor_vote_sync_error` and 0 expected
+  record — noise, not a defect. Real sitting members: **0 errors / 7 tiny incomplete gaps** (e.g.
+  1834/1836).
+
+**Fix (this PR — script + docs only, no migration/deploy)**
+`check-data-accuracy.sh` §2 now counts voting errors/incompleteness only for rows WITH an expected
+record (`expected_total>0 OR expected_floor_votes>0`), excluding challengers. Re-baselined threshold
+60 → **10** (baseline 0 errors / 7 incomplete). DATA-ACCURACY.md §2 updated with the finding.
+
+**State** (verified / NOT)
+- Live SQL confirmed: real-member voting errors = 0, incomplete = 7; the 18 "errors" were challengers.
+- `bash -n` clean. Script+docs only.
+- Congress.gov spot-check DONE (data-accuracy-verifier): Congress.gov egress 403-blocked (live diff
+  deferred to CI), but internal verification of visible NC/NJ is **GO** — every vote row joins to
+  canonical `bills`, **0 legacy/orphan rows** (the ~25k legacy bill_ids + cross-congress collision
+  class are entirely hidden-state, 0 in NC/NJ), counts plausible, positions verified for 12 members
+  in the PoliScore gate. Disclosure: floor coverage is the 113–119 window (~2013–present), not career.
+
+**Next**
+Merge #438. Optional durable fix: recompute `vote_sync_status` from
+`candidate_votes` (or base the per-member completeness signal on candidate_votes) so the health
+signal stops diverging from reality.
+
+**Deferred**
+- Recompute/realign `vote_sync_status` with `candidate_votes`.
+- (finance) cycle-scope the #436 donor guard; `individual_delta_pct` 2024 metric audit.
+
+---
+
+## 2026-06-16 — ROOT-CAUSED the 401 incident: new API keys → UNAUTHORIZED_API_KEY_CONFLICTS — day
+
+**What happened & why**
+Diagnosed the live 401 incident (donor ingestion down; Cooper et al. frozen). The 401 error body was
+**`UNAUTHORIZED_API_KEY_CONFLICTS`**, with the internal request sending `apikey: sb_publishable_…` +
+`Authorization: Bearer sb_secret_…`. The project migrated to the **new API keys**, which **remapped the
+injected env vars**: `SUPABASE_ANON_KEY` now yields the *publishable* key and `SUPABASE_SERVICE_ROLE_KEY`
+the *secret* key (both legacy vars are labeled DEPRECATED; legacy keys themselves are still enabled, so
+that wasn't it). The long-standing internal-call pattern `apikey: ANON + Authorization: Bearer SERVICE`
+therefore sends **two different keys**, which the new gateway rejects as conflicting (401, before the
+function runs). `sync-all-donors` was already fixed for this (apikey = same service key); the other
+finance callers weren't.
+
+**Fix (PR)**
+Set `apikey` = the service-role key (same as the bearer) in the internal-call headers of:
+- `fec-candidate-drain` (→ fetch-fec-committees, fetch-fec-donors — the donor backfill path, incl. Cooper)
+- `drain-fec-finance` (→ fetch-fec-donors / refresh-fec-totals — reconciliation path)
+`fetch-member-statements` / `sync-legislator-votes` send a single key + cron/sync-secret (no conflict —
+left alone). The fl/ny **cron-command** 401s are a separate, cron-SQL-level issue (the cron sends
+conflicting keys) — follow-up.
+
+**State** (verified / NOT)
+- Root cause CONFIRMED from the 401 error body (`UNAUTHORIZED_API_KEY_CONFLICTS` + the publishable/secret
+  prefixes). Fix is the exact pattern `sync-all-donors` already uses.
+- supabase/functions are lint/build/test-excluded → fix is by inspection; **needs the live run after merge**
+  (deploy → drain's internal calls should 200 → the 23 re-queued candidates, incl. Cooper, backfill).
+- ANON_KEY var may now be unused in those two files (harmless; Deno doesn't fail on it).
+
+**Next**
+Merge the fix → confirm `fetch-fec-donors`/`fetch-fec-committees` stop 401'ing and Cooper's donor count
+goes 0 → thousands. Then: fix the fl/ny cron-command keys (SQL); apply the etl-reviewer's cycle-scope
+follow-up to the donor-count guard.
+
+**Deferred**
+- fl/ny (+ any other) **cron commands** that send conflicting keys — update the cron SQL to a single key.
+- Cycle-scope the donor-count in the #436 guard (`.eq('cycle', cycle)`).
+- `individual_delta_pct` metric audit (2024 local≥FEC rows); multi-committee completeness (Booker 1/7).
+
+---
+
+## 2026-06-16 — NC+NJ finance verification → donor under-coverage + a live 401 incident — day
+
+**What happened & why**
+Started verifying NC+NJ data vs source (the ship gate, ROADMAP #1). Finance pass findings:
+- **Donor data is materially incomplete for marquee candidates.** Of 37 visible recon `error` rows,
+  29 are genuine itemized gaps (avg **−47%** vs FEC) — NOT the total-receipts metric noise I first
+  hypothesized (0 pure-noise error rows; verified live via SQL). Root cause = donor-sync drops
+  committees / imports nothing yet stamps "complete": **Roy Cooper (NC Sen) has 0 imported donors
+  despite $6.6M FEC itemized** (his committee `C00913566` was synced for cycle **2024**, when he was
+  Governor — wrong cycle; his money is 2026). Booker synced **1 of 7** committees; Pallone 4 of 5.
+- A SECOND pattern (Foxx/Tillis/Rouzer 2024: local itemized ≥ FEC yet −45% `individual_delta_pct`)
+  is a likely reconciliation-metric artifact, not missing data — separate audit.
+
+**Actions taken**
+- **Re-queued 23 visible 2026 error candidates** (set `last_donor_sync = null` via SQL) so the drain
+  re-syncs them for 2026. *(Data nudge to Pulse Dev; reversible — drain re-stamps.)*
+- **Wrote a durable guard** in `fec-candidate-drain` (PR draft): when a sync completes with 0 imported
+  donors but `finance_reconciliation.fec_itemized > 0` for the cycle, set `last_donor_sync` to ~1 day
+  ago instead of stamping done-for-14-days (re-due daily, not every 3 min → no batch starvation;
+  overwrites so fetch-fec-donors' own stamp can't win). Adds a `held` counter. NOTE: `fec_itemized_total`
+  on candidate_committees is dead (never written) — guard reads `finance_reconciliation.fec_itemized`.
+
+**State** (verified / NOT)
+- **LIVE 401 INCIDENT (unresolved):** edge logs show `fetch-fec-donors` + `fetch-fec-committees`
+  (and intermittently fl/nj/ny finance) returning **401 at the gateway** (`deployment_id: null`, 0ms),
+  while `fec-candidate-drain` returns 200. So donor ingestion is currently FAILING — the re-queue
+  populated nothing (Cooper still 0). 200s on old `version 606` flipped to 401s on `null` deployment
+  → looks like in-flight redeploy/auth-propagation (recent merge churn) or a service-key/verify_jwt
+  issue. **Could be transient** — re-check shortly.
+- The guard is **frontend-untestable** (supabase/functions excluded from lint/build/test); needs the
+  etl-pipeline-reviewer + a live run once the 401 clears.
+- **Did NOT merge the guard** — refusing to trigger more function redeploys during a 401 incident.
+
+**Next**
+Re-check the 401 (and Cooper) in a few min. If 401s persist, investigate function auth/secrets/deploy
+config (service-role key / verify_jwt) — that's now the top finance blocker. Then etl-review + merge
+the guard, and let the re-queue backfill the 23.
+
+**Deferred**
+- Audit `individual_delta_pct` for the local≥FEC 2024 rows (metric artifact).
+- Multi-committee completeness (Booker 1/7) — ensure all committees sync before "complete".
+
+---
+
+## 2026-06-16 — Two-state focus, Phase 3: rescope the accuracy gate to visible — day
+
+**What happened & why**
+Final phase. After Phases 1–2 (public RLS + ingestion gating, both merged), the whole-DB preflight
+gate (`check:accuracy`) was measuring a large frozen hidden-state backlog we no longer maintain, so
+its thresholds were meaningless. Rescoped the gate to visible states.
+
+Chosen approach (lower-risk): **rescope the gate script, NOT the cron function.** `check-data-accuracy.sh`'s
+candidate-scoped categories (§1 finance recon, §2 voting, §5 answers) now compute the visible slice
+directly (CTE: `candidates` ∉ `hidden_states`), with re-baselined regression thresholds. Left
+`refresh_admin_stats_cache()` / `admin_stats_cache` **whole-DB** — the §0 freshness check still uses
+them to confirm the cron is alive, and they're a whole-DB audit reference. Rewriting that 240-line
+cron-critical function was unnecessary (the dashboard already reads visible via
+`get_coverage_dashboard_stats`; no visible-facing surface reads the cache's candidate values anymore)
+and risked silently breaking all stats freshness. Net: dashboard + gate now agree on the visible slice.
+
+Re-baselined thresholds (measured live 2026-06-16, visible states):
+- FEC recon: error must not exceed **100** (was 900 whole-DB); visible standing **39 err / 1 partial / 145 ok**.
+- Voting: syncErrors+floorSyncErrors must not exceed **60** (was 350); visible standing **18 / 12 incomplete**.
+- Answers URL-sourced: bands unchanged (target/75/35); visible **1,819 / 41,688 ≈ 4%** (still RED — real, not a hidden artifact).
+- Bills (national) and state-finance (NJ/FL/NY) categories unchanged; FL/NY errors7d naturally go to 0 (crons early-return).
+
+**State** (verified)
+- `bash -n` clean. All three rewritten category queries validated live via Supabase MCP (exactly as
+  the script's psql runs them): recon 39<100 PASS, voting 18<60 PASS, answers 4% (flags poor, honest).
+- Script + docs only — no migration, no app code, no cron change. (`check:accuracy` SKIPs in this
+  env — no SUPABASE_DB_URL — so validation was via MCP.)
+- DATA-ACCURACY.md updated: intro note + §1/§2/§5 dated visible re-baselines.
+
+**Next**
+Two-state focus is COMPLETE (Phases 1–3). Open follow-ups only: drain-fec-finance Phase A
+`candidate_committees` queue-head starvation (deferred from Phase 2); optional cache rescope if a
+single visible source is later preferred over the script/cache split.
+
+**Deferred**
+- If desired later: rescope `refresh_admin_stats_cache` itself to visible (then dashboard could drop
+  the separate RPC) — intentionally not done now to avoid cron risk.
+
+---
+
+## 2026-06-16 — Two-state focus, Phase 2: gate ingestion to visible states — day
+
+**What happened & why**
+Phase 2 of the two-state focus: stop spending ingestion resources on hidden states going forward
+(existing data kept — no deletes/mutations beyond sync metadata). Added two exported helpers to
+`_shared/onboard-candidate.ts`: `isStateVisible(state, hiddenSet, office)` (in-code; national/
+President always kept) and `ingestionHiddenList(hiddenSet)` (hidden codes minus 'US', for the
+PostgREST `.or('state.is.null,state.not.in.(LIST)')` query-level exclusion). Gated 8 functions:
+- **fetch-fl-finance / fetch-ny-finance** — early-return when FL/NY is hidden (before the sync-run
+  insert, so no orphaned 'running' row).
+- **fec-candidate-drain, populate-candidate-answers, schedule-congress-donor-sync,
+  sync-legislator-votes** — query-level `.or` exclusion on the candidates select (so the many
+  never-synced hidden rows can't starve the oldest-first batch). Federal vote sync gated per your
+  "gate federal too" call.
+- **drain-fec-finance** — Phase A filters the candidates lookup; Phase B cross-references visible
+  ids in-code (finance_reconciliation has no state column).
+- **fetch-member-statements** — post-claim in-code filter; skipped hidden members are stamped
+  `last_sync_completed_at=now` so the claim RPC doesn't re-queue them hourly (bounded by claim limit).
+
+**State** (verified)
+- `build` agent implemented to spec; I reviewed every diff. `etl-pipeline-reviewer` → **SAFE, no
+  required fixes** (confirmed `.or().or()` ANDs correctly, NULL/national handling, empty-list guards,
+  no orphaned sync-runs, safe stamping). Added `visible-states-gate.test.ts` → 6/6 pass; full suite
+  85/85. Edge functions aren't covered by eslint/vite, so no lint/build delta.
+- No migration; deploys on merge via the Supabase GitHub integration (single project = Pulse Dev).
+
+**Next**
+Phase 3 — rescope `refresh_admin_stats_cache` + `check-data-accuracy.sh` + DATA-ACCURACY.md to
+visible states (now that ingestion is visible-only, the whole-DB backlog metrics no longer reflect
+work we do; this re-converges the gate with the dashboard).
+
+**Deferred** (etl review, non-blocking)
+- drain-fec-finance Phase A: the `candidate_committees` queue head isn't state-filtered, so visible
+  partial-syncs could starve if hidden partials dominate; add an inner-join/state filter if observed.
+- Minor: populate-candidate-answers doesn't log the excluded count.
+
+---
+
+## 2026-06-16 — Two-state focus, Phase 1: public visibility via RLS — day
+
+**What happened & why**
+New direction: commit fully to the visible-states focus — gate all future work to visible states,
+keep existing data, and ensure PUBLIC users only see visible-state data. Confirmed scope with the
+maintainer: (decision 1) gate everything incl. federal syncs + rescope the accuracy gate; (decision
+2) enforce the public front end via RLS + fix leaky surfaces. This is a 3-phase effort; **this entry
+= Phase 1 (public visibility)**.
+
+Investigation (two Explore agents) found the public app already filtered hidden states in the
+Candidates list + Feed, but leaked them via: candidate profile (`/candidate/:id`), share cards
+(`/r/card/:id`), the anon-key sitemap, and Quiz results — and RLS on `candidates` was `USING(true)`
+(no server-side enforcement).
+
+Phase 1 shipped:
+- **RLS on `candidates`** (migration `20260616200000`): public/anon see visible states only; admins
+  (`has_role`) still see everything. Mirrors client `isHidden()` (null/'' visible; 'US' is in
+  hidden_states so national candidates are hidden from public exactly as the client already hides
+  them). Hidden set read via `get_hidden_state_codes()` (SECURITY DEFINER, anon-safe, evaluated
+  once). This single policy closes the profile/share-card/sitemap leaks (all read `candidates` by id
+  and already handle null gracefully). Edge functions use service_role (BYPASSRLS) → ingestion
+  unaffected.
+- **QuizResults.tsx**: Civic-API officials, representatives, AND the "Candidates on Your Ballot"
+  (upcoming-elections, service_role → bypasses RLS) lists filtered by `!isHidden(state)`.
+
+**State** (verified)
+- Migration **applied to Pulse Dev** + verified live by role: anon → **172** visible (NC+NJ, US
+  excluded), admin → **2392** all. `security-reviewer` → GO after 2 fixes I applied: (1) wrap
+  `auth.uid()` as `(select auth.uid())` for InitPlan; (2) filter the upcoming-elections ballot list.
+  Supabase security advisors: **no** `auth_rls_initplan` / no candidates-policy flags introduced.
+- Child tables (candidate_answers/votes/committees, donors, finance_reconciliation, bill_sponsors)
+  already have **no anon SELECT** policy → no residual public leak there (reviewer-confirmed).
+- `bun run lint` 0 errors · `tsc` clean · `vite build` ok · 79/79 tests.
+
+**Next**
+Phase 2 — ingestion gating: early-return FL/NY finance crons when hidden; gate fec-candidate-drain,
+congress-donor-sync, drain-fec-finance, batch-populate-answers, sync-legislator-votes,
+fetch-member-statements to visible-state candidates/members via the shared `loadHiddenStates()`
+helper (`_shared/onboard-candidate.ts`). Keep existing data.
+
+**Deferred**
+- Phase 3 — rescope `refresh_admin_stats_cache` + `check-data-accuracy.sh` + DATA-ACCURACY.md to
+  visible states (re-converges the gate with the dashboard) once ingestion is visible-only.
+- Possible hardening: child-table reads via SECURITY DEFINER RPCs (e.g. donors) aren't gated by the
+  candidates RLS — low risk (hidden ids aren't discoverable via the filtered list), worth a look.
+
+---
+
+## 2026-06-16 — Drop the `(supabase as any)` cast + confirm no separate prod — day
+
+**What happened & why**
+Cleanup after the visible-states dashboard shipped (#428–#431). Two asks:
+1. **Prod migrations** — investigated and there is **no separate prod project**. `list_projects`
+   returns only **Pulse Dev** (`ornnzinjrcyigazecctf`), which is what the app's `VITE_SUPABASE_URL`
+   points at AND the project the Supabase GitHub integration is connected to. All four coverage
+   migrations are applied + tracked there (this project records migrations by NAME with apply-time
+   versions — e.g. `coverage_dashboard_visible_stats_rpc` → `20260616173732` — so the repo's
+   `…120000`/`…180000`/… filename versions won't match `schema_migrations`, which is expected here,
+   not drift). Nothing to apply.
+2. **Type cleanup** — `get_coverage_dashboard_stats` is now in `types.ts`, but the generated block
+   had only the original 18 columns (missing the 8 scoreboard fields from `…180000`). Added the 8
+   fields to that Returns block, then dropped the `(supabase as any)` cast in
+   `useCoverageDashboardStats` (now `supabase.rpc("get_coverage_dashboard_stats")`, typed) and
+   removed the hook from the eslint no-explicit-any warn-allowlist.
+
+**State** (verified)
+- `bun run lint` 0 errors (warnings 157→156 — the removed cast) · `tsc -b --noEmit` clean ·
+  `vite build` ok · 79/79 tests.
+- No DB/behavior change; types-only + hook refactor. The hook is now gated at lint "error" level and
+  passes.
+
+**Next**
+Push + open PR. After this the visible-states dashboard work is fully wrapped (no known follow-ups).
+
+**Deferred**
+- None outstanding. (If a separate prod project is ever added, apply the four coverage migrations there.)
+
+---
+
+## 2026-06-16 — Scope State finance scoreboard card to visible states — day
+
+**What happened & why**
+Last visible-states gap on the dashboard. The maintainer confirmed Candidate Answers / FEC / voting
+/ the candidate scoreboard cards were correctly visible-scoped, but asked for the two remaining
+whole-DB scoreboard cards (Bills, State finance) to be scoped too. Decision (asked, since "bills" is
+ambiguous — they're national legislation, not state-tied): **Bills stays whole-database** (it's a
+sync-health monitor; the only state-meaningful count would be "bills (co)sponsored by a visible rep"
+= 1,330, which the maintainer declined). **State finance → visible only.**
+
+**State** (verified)
+- **Frontend-only, NO migration.** The `state_finance_stats` cache already breaks NJ/FL/NY out
+  separately, so `DataAccuracyScoreboard` now filters those three trackers by `useHiddenStates()`
+  client-side: today NJ is visible, FL/NY hidden → the card shows NJ alone, relabels to "State
+  finance (NJ)", and sums rows/errors/latest-run over visible states only (empty → "no visible
+  states"). Footer note updated; DATA-ACCURACY.md updated.
+- `bun run lint` 0 errors (157 warnings) · `tsc -b --noEmit` clean · `vite build` ok · 79/79 tests.
+- Nothing server-side changed; preflight `check:accuracy` still whole-DB. Bills card unchanged.
+
+**Next**
+Push + open PR. The whole dashboard is now visible-scoped except the deliberately-national Bills card.
+
+**Deferred**
+- Prod: apply the three RPC migrations (`…120000`, `…180000`, `…190000`) wherever prod reads from
+  (this State-finance change needs no migration).
+- Optional cleanup: drop the `(supabase as any)` cast now that types.ts includes the RPC.
+
+---
+
+## 2026-06-16 — Coverage dashboard RPC was timing out (8s) — perf fix — day
+
+**What happened & why**
+After PRs #428/#429 merged and both migrations were applied to Pulse Dev, the dashboard STILL showed
+all-state numbers. Root cause (not a deploy/cache issue): `get_coverage_dashboard_stats()` **timed
+out** under the `authenticated` role's `statement_timeout = 8s`. It passed when I tested via the
+service connection (no cap), which masked it. EXPLAIN ANALYZE showed the `... not in
+(get_hidden_state_codes())` filter made the planner estimate ~1196 visible candidates (really 172),
+so it seq-scanned ~1.9M `candidate_votes` and force-aggregated the 601k-row
+`candidate_answer_coverage_stats` VIEW before filtering. The browser RPC threw → the UI fell back to
+the global `admin_stats_cache` (hence the all-state numbers). A per-function `statement_timeout`
+does NOT help — the outer `select … from func()` timer is armed at 8s before the function's SET runs.
+
+Fix (migration `20260616190000`): resolve the ~172 visible candidate ids into a `text[]` ONCE, then
+filter every aggregate with `candidate_id = any(v_ids)`. The constant array drives index scans
+(idx_candidate_votes_candidate, idx_candidate_answers_candidate_id, finance_reconciliation_candidate_id_idx)
+and pushes the predicate through the coverage view's GROUP BY.
+
+**State** (verified)
+- Applied to Pulse Dev + schema reloaded. **Verified as the `authenticated` role under `set local
+  statement_timeout='8s'`**: returns in-budget with correct values (Total Reps 172, With FEC ID 151,
+  recon 53 error / 4 partial, audited merges 8, URL-sourced 1,819 / 41,688).
+- No frontend changes this round (hook/types/components already shipped in #428/#429). Lint/build/test
+  were green at #429; this is migration-only.
+
+**Next**
+Commit `20260616190000`, push, open a PR. Hard-refresh the dashboard — tiles + scoreboard now show
+the NC+NJ slice.
+
+**Deferred**
+- Prod: apply all three migrations (`…120000`, `…180000`, `…190000`) wherever prod reads from.
+- Regenerate `src/integrations/supabase/types.ts` to drop the `(supabase as any)` cast.
+
+---
+
+## 2026-06-16 — Coverage & Finance dashboard: apply RPC + scope the scoreboard too — day
+
+**What happened & why**
+Follow-up to the visible-states dashboard (PR #428, merged). Two things:
+1. **Applied the migrations live.** PR #428 shipped the code but not the migration (guardrail #1).
+   The maintainer reported the dashboard still showed all-state numbers. Root causes, both fixed:
+   `get_coverage_dashboard_stats` didn't exist yet (applied `20260616120000` via Supabase MCP), and
+   after applying, the browser still 404'd it because **PostgREST's schema cache** hadn't reloaded
+   (`notify pgrst, 'reload schema'`). Confirmed live (admin-simulated): Total Reps 172, With FEC ID
+   151, etc. — the visible slice now returns.
+2. **Scoped the Data Accuracy Scoreboard too** (maintainer chose this). The scoreboard's
+   candidate-based cards — FEC reconciliation, candidate identity (audited merges), URL-sourced
+   answers — now follow the visible-states scope; **Bills** (national) and **State finance**
+   (NJ/FL/NY) stay global. Implemented by extending `get_coverage_dashboard_stats()` with
+   recon/merge/URL fields (new migration `20260616180000`: drop+recreate, since the return signature
+   changed) and wiring `DataAccuracyScoreboard` to a new `visible` prop (falls back to the global
+   cache when absent). Live values: recon 127 ok / 1 warn / 4 partial / **53 error** (gap $30.2M —
+   matches the Finance Coverage card), 8 audited merges, 1,819/41,688 URL-sourced (~4%).
+
+**State** (verified)
+- Both migrations **applied to Pulse Dev** (`ornnzinjrcyigazecctf`, the project the app's
+  `VITE_SUPABASE_URL` points at) and schema reloaded; admin-simulated RPC returns the new fields.
+- `bun run lint` 0 errors (157 warnings) · `tsc -b --noEmit` clean · `vite build` ok · 79/79 tests.
+- **Not yet committed/pushed when this entry was written** — see Next.
+- `admin_stats_cache` / `refresh_admin_stats_cache()` still untouched: preflight `check:accuracy`
+  stays whole-database (documented in DATA-ACCURACY.md). The scoreboard's candidate cards now
+  intentionally diverge from the gate (visible slice); bills/state-finance still match it.
+
+**Next**
+Push the branch and open a new PR for migration `20260616180000` + the scoreboard wiring. Then
+regenerate `src/integrations/supabase/types.ts` to drop the `(supabase as any)` cast.
+
+**Deferred**
+- Prod: if a separate prod Supabase project exists, both migrations (`20260616120000`,
+  `20260616180000`) must be applied there too — only Pulse Dev is visible from this session.
+- Optional: explicit REVOKE/GRANT retrofit on `get_finance_cycle_summary` (from PR #428's review).
+
+---
+
+## 2026-06-16 — Coverage & Finance dashboard: visible-states-only numbers — day
+
+**What happened & why**
+The Coverage & Finance admin dashboard reported headline numbers (candidate answers, source
+quality, FEC sync, congressional voting) counted across **all** states, while the product only
+serves **visible** states. Live check: only **NC + NJ** are visible (55 hidden codes), so the
+tiles were ~14x inflated (172 of 2,392 candidates are visible). The Finance Coverage chart already
+excluded hidden states (`get_finance_cycle_summary`); this brings the rest of the dashboard in line.
+
+Design choice that matters: I did **not** touch `admin_stats_cache` / `refresh_admin_stats_cache()`,
+because those rows are the whole-DB source of truth for the preflight accuracy scoreboard
+(`check:accuracy`) and `docs/DATA-ACCURACY.md` (baselines/thresholds measured against the full
+backlog on purpose). Instead, added a **separate, additive, display-only** path:
+- New admin RPC `get_coverage_dashboard_stats()` (migration `20260616120000`) — same metric
+  definitions as the cache but filtered to visible states via `get_hidden_state_codes()`, mirroring
+  the audited `get_finance_cycle_summary` pattern (security definer, `has_role` admin gate,
+  read-only aggregates, revoke public/anon).
+- `useCoverageDashboardStats` hook; `AnswerCoveragePanel` renders the visible numbers in every tile,
+  the voting section, source-quality, and the overall-coverage bar, **falling back to the global
+  cache** if the RPC hasn't loaded / isn't applied yet (graceful, not blank).
+- Per-rep table + its derived FEC/sync action counts now drop hidden-state rows client-side.
+- Header badge shows "Visible states: NC, NJ"; description notes the scope.
+
+**State** (verified)
+- `bun run lint` → 0 errors (157 pre-existing warnings). `bunx tsc -b --noEmit` clean.
+  `bunx vite build` succeeds. `bun run test` → 79 pass / 0 fail.
+- RPC SQL validated **read-only via Supabase MCP** against live Dev: the visible-only aggregates
+  return sane numbers and are a clean subset of the current global cache (logic faithfully
+  reproduces the cache, only the row set differs). `security-reviewer` → **GO** (no regressions).
+- **NOT applied:** the migration is written but NOT run (guardrail #1 + `SUPABASE_DB_URL` unset
+  here). Until it's applied the dashboard shows the global fallback numbers — no breakage.
+
+**Next**
+Apply migration `20260616120000` to Dev/prod (deliberately), then open the dashboard and confirm
+the tiles read the NC+NJ slice (e.g. Total Reps ≈ 172, With FEC ID ≈ 151).
+
+**Deferred**
+- Optional follow-up the security review flagged: retrofit explicit `REVOKE/GRANT` onto
+  `get_finance_cycle_summary` for grant-surface consistency (its `has_role` gate already protects it).
+- Regenerate `src/integrations/supabase/types.ts` after applying the migration to drop the
+  `(supabase as any)` cast (and remove the hook from the eslint warn-allowlist).
+
+---
+
 ## 2026-06-16 — PoliScore v0.0 SHIPPED (PR #427 merged)
 
 **What happened & why**

@@ -2,9 +2,31 @@
 
 > Roadmap priority #1 says "ship data you can trust" — this doc makes that **checkable**: one
 > goal per data category, the exact definition being measured, where the number lives, and the
-> failure threshold `bun run check:accuracy` enforces. The Coverage & Finance dashboard
-> (admin), the preflight scoreboard, and the 15-minute `refresh_admin_stats_cache()` cron all
-> read/write the SAME `admin_stats_cache` rows — one set of numbers, three surfaces.
+> failure threshold `bun run check:accuracy` enforces. The preflight scoreboard and the 15-minute
+> `refresh_admin_stats_cache()` cron read/write the SAME `admin_stats_cache` rows — these are
+> **whole-database** numbers on purpose (they track the full backlog, including states not yet
+> launched).
+>
+> **Note (2026-06-16):** the Coverage & Finance dashboard no longer reads these cache rows
+> directly for its *headline tiles* (answers, FEC, voting) **or** its candidate-scoped Data
+> Accuracy Scoreboard cards (FEC reconciliation, candidate identity, URL-sourced answers). All of
+> those now read `get_coverage_dashboard_stats()` (migrations `20260616120000` + `20260616180000`),
+> which applies the same definitions but filtered to **visible states only** (hidden states excluded
+> via `get_hidden_state_codes()`, matching `get_finance_cycle_summary`). The scoreboard's **State
+> finance** card is also visible-scoped — it shows only the tracked states that are visible (NJ
+> today; FL/NY are hidden), filtered client-side from the per-state cache breakdown. Only the
+> **Bills** card stays whole-database (bills are national legislation and the card is a sync-health
+> monitor).
+>
+> **Update (2026-06-16, two-state focus):** the product is now committed to visible states only —
+> ingestion is gated to them (PRs gating crons/edge functions) and the public app is RLS-scoped to
+> them. So the **preflight gate now measures visible states too**: `check:accuracy`'s candidate-scoped
+> categories (§1 finance recon, §2 voting, §5 answers) compute the visible slice directly (joining
+> `candidates` ∉ `hidden_states`), with re-baselined thresholds (below). `refresh_admin_stats_cache()`
+> / `admin_stats_cache` themselves **stay whole-database** — the §0 freshness check still uses them to
+> confirm the cron is alive, and they remain a whole-DB audit reference — but no visible-facing surface
+> reads their candidate-scoped values anymore (dashboard uses `get_coverage_dashboard_stats`, gate
+> computes directly). Net: dashboard + gate now agree on the visible slice.
 >
 > Standing numbers below were measured **2026-06-10** (live DB). Update them when a category
 > materially moves, and ratchet thresholds DOWN as backlogs are fixed — never up without a
@@ -35,7 +57,10 @@
 - **Standing (2026-06-10):** 1,847 ok · 59 warning · 179 partial · **777 error**. The 2024
   presidential IE slice is verified (ROADMAP changelog 2026-06-10); donors/committees remain
   the open front.
-- **Threshold:** error count must not exceed **900** (regression guard; ratchet down).
+- **Threshold:** error count must not exceed **900** (whole-DB historical; pre-two-state baseline).
+- **Visible re-baseline (2026-06-16 — what the gate now enforces):** standing **39 error · 1 partial
+  · 145 ok** across visible states; threshold **visible error must not exceed 100** (regression guard;
+  ratchet down). The whole-DB spot-check below is retained as the methodology/audit reference.
 - **Spot-check (2026-06-15, 13 candidate-cycles across AK/AL/FL/LA/CA/MS/AR/NV/TX/MS, House+Senate,
   $0.34M–$8.4M, high-dollar + grassroots):** itemized donor data reconciles to the cached FEC
   category totals **to within dollars** on every `ok` row sampled (Britt, Begich, Moody, Sullivan,
@@ -153,10 +178,37 @@
 - **Standing (2026-06-11, post repair re-run):** legacy sponsorship bill-ids 429,886 → 25,135
   (94% cleared) and **251,775 stranded legacy duplicates deleted**, so `legislativeActions`
   (1.02M, previously an inflated 1.26M) is now trustworthy. 24+233 sync errors · 188 incomplete.
-- **Threshold:** syncErrors + floorSyncErrors must not exceed **350**.
-- **Spot-verification** (counts ≠ correctness): use the `data-accuracy-verifier` agent to
-  diff sample members against Congress.gov — not yet done systematically. TODO: pick 10
-  members/chamber and record the result here.
+- **Threshold:** syncErrors + floorSyncErrors must not exceed **350** (whole-DB historical).
+- **Visible re-baseline (2026-06-16 — what the gate now enforces):** standing **0 sync errors /
+  7 incomplete** across visible-state SITTING MEMBERS; threshold **must not exceed 10**. The gate
+  now excludes rows with no expected record (`expected_total>0 OR expected_floor_votes>0`): the
+  earlier "18 floor errors" were all **non-incumbent CANDIDATES** (challengers) carrying a
+  vote_sync_status row with a spurious `floor_vote_sync_error` and 0 expected — noise, not a defect.
+- **Verification finding (2026-06-16):** the underlying **`candidate_votes` data is present and rich**
+  for NC/NJ sitting members (e.g. Foxx 322 sponsored / 1,868 cosponsored / 1,447 floor; Pallone
+  822 / 7,184 / 1,337). But **`vote_sync_status` per-member counts are STALE/inconsistent** with
+  `candidate_votes` — it shows `0/0` legislative for members who actually have thousands, and
+  undercounts floor votes (Foxx vss 625 vs candidate_votes 1,447). So vote_sync_status is a
+  sync-cursor/health table, NOT a source of truth for "how many votes a member has" — the dashboard
+  totals correctly count `candidate_votes` directly; only the per-member completeness signal reads
+  vote_sync_status. Recompute vote_sync_status from candidate_votes (or base completeness on
+  candidate_votes) to make the per-member health signal honest. The 7 "incomplete" are tiny
+  persisted<expected gaps (e.g. 1834/1836) — within rounding, not material.
+- **Spot-verification (2026-06-16, data-accuracy-verifier):** Congress.gov egress is **403-blocked**
+  from the agent sandbox (as with the FEC API) — live source diff must run from CI/local. Internal
+  verification of the **visible NC/NJ** members is clean and the verdict is **GO for NC/NJ**:
+  every vote row joins to a canonical `bills` row (`{congress}-TYPE.NUMBER`), **0 legacy-format
+  action-type rows, 0 orphaned bill joins** (96,505 rows: 60,275 legislative + floor). Counts are
+  plausible for tenure; the `(bill_id, candidate_id, action_type, vote_number)` unique constraint
+  rules out duplicate inflation; and roll-call **positions** were verified for 12 members in the
+  2026-06-16 PoliScore gate. **Disclosure:** floor-vote coverage is the **113th–119th Congress
+  window** (~2013–present), NOT full career — a long-serving member's floor count isn't lifetime;
+  frame UI accordingly (PoliScore uses curated key votes, so unaffected).
+- **Caveats that DON'T affect NC/NJ (global / hidden-state):** ~25,135 legacy-format `bill_id`s
+  (un-joinable to `bills`, lost topic enrichment) and the cross-congress `bill_id` collision class
+  (the HR 26 Born-Alive vs Energy misattribution, fixed in `get_poliscore_record` via a date window,
+  20260616163000) both live in **hidden-state** rows — the visible NC/NJ set has 0 of either. Clean
+  these up before un-hiding more states.
 
 ### 3. Bills — `bills_stats`
 - **Goal:** the bills corpus tracks Congress.gov continuously (nightly), so positions/votes
@@ -229,6 +281,10 @@
   descriptions pool-wide (~8.9k on sitting members); the generic-prose remainder is untested
   but generated by the same model prompts. Pivot options + recommendation: plan doc §"Where
   this goes next" (owner decision pending).
+- **Visible re-baseline (2026-06-16 — what the gate now enforces):** **1,819 (≈4%) of 41,688
+  URL-sourced** across visible-state candidates — still RED, below the 35% floor (same bands:
+  target 100% / success ≥75% / poor <35%). Rescoping to visible doesn't change the verdict (the
+  low URL-sourcing is real, not a hidden-state artifact); the gate now reports the visible slice.
 - **Standing (2026-06-15, preflight bucket audit):** **32,663 (5.4%) of 601,308 URL-sourced**
   — RED, below the 35% floor. Breakdown of where the gap lives, by `source_type`/`evidence_type`:
   `public_statement` 218,834 @ 0.7% URL · `other`/inferred 218,507 @ 0.9% · `campaign_website`

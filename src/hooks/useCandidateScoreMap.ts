@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { calculateEntityScore } from '@/lib/scoring';
+import { calculateEntityScore, isTrustedForScoring } from '@/lib/scoring';
 
 /**
  * Source of truth for political scores across the app.
@@ -65,16 +65,17 @@ export const useCandidateScoreMap = (candidateIds?: string[]) => {
         // Fetch answers from candidate_answers and calculate scores dynamically
         const { data: answers, error: answersError } = await supabase
           .from('candidate_answers')
-          .select('candidate_id, question_id, answer_value')
+          .select('candidate_id, question_id, answer_value, evidence_type, source_type, source_url, source_urls')
           .in('candidate_id', candidatesWithMissingScores);
 
         if (answersError) {
           console.error('Error fetching candidate_answers for score calculation:', answersError);
         } else if (answers && answers.length > 0) {
-          // Group answers by candidate
+          // Group answers by candidate — TRUSTED answers only (vote-derived or URL-sourced), so
+          // inferred/fabricated answers don't pollute the dynamic fallback score (isTrustedForScoring).
           const answersByCandidate = new Map<string, Array<{ question_id: string; answer_value: number }>>();
-          
-          answers.forEach((a) => {
+
+          answers.filter(isTrustedForScoring).forEach((a) => {
             const existing = answersByCandidate.get(a.candidate_id) || [];
             existing.push({ question_id: a.question_id, answer_value: a.answer_value });
             answersByCandidate.set(a.candidate_id, existing);
