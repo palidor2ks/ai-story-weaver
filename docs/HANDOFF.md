@@ -27,6 +27,43 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-17 — visible-states corroboration rollout + gated apply COMPLETE — evening (late +2)
+
+**What happened & why**
+User added US national to visible states (removed 'US' from hidden_states), making visible = NJ + NC + US
+national. Ran corroboration across all 183 visible-state candidates with inferred answers (18,186
+answers, 815 batches), fired in 4 waves of ~46 candidates to stay within proven concurrency envelope.
+Immediately followed by gated apply of all 1,259 corroborated rows.
+
+Run label: `rollout-visible-2026-06-17`
+
+**State** (verified 2026-06-17 late evening)
+- Staged: 18,186 rows, 183 candidates, 0 errors ✓
+- Verdicts: 1,639 supports | 234 contradicts | 16,313 insufficient
+- Anti-fabrication guard filtered 380 supports
+- **Corroborated: 1,259 (6.9%)** — ~3× the prior all-demoted run's 2.3%, as expected for high-profile visible-state candidates
+- Corroborated across 154 of 183 candidates; top: Biden (75), Harris (62), DeSantis (38), Tillis (36), Trump (34), Ted Budd (30), Roy Cooper (26)
+- Gated apply: `archived=1259, marked_applied=1259, ca_updated=1259` ✓
+- Candidates with trusted web_research answers (all-time): **363**
+
+**Next**
+Contradict correction pass — see Deferred below. Separately: next roadmap priority is
+`docs/ROADMAP.md` (likely `public_statement` uncited backlog or on-demand answer-gen rework).
+
+**Deferred**
+- ⚠️ **Contradict correction pass**: 234 contradicts in `rollout-visible-2026-06-17` (plus 35 from
+  `rollout-2026-06-17`) are predominantly wrong `answer_value` signs in `candidate_answers` — not
+  attribution errors. High-priority candidates: Trump (36 contradicts, many clear-cut reversals),
+  DeSantis (17), Tillis (14), JD Vance (12), Biden (10). Fix requires per-row human review since
+  flipping answer_value changes alignment scores for high-traffic candidates. Staging rows are
+  queryable at `_answer_corroboration WHERE verdict='contradicts'` — use those source URLs + quotes
+  as the correction evidence.
+- ⚠️ Owner: delete the inert `enrich-batch-experiment` edge fn in the Supabase dashboard.
+- 1,129 orphaned `candidate_answers` rows (candidate_id not in `candidates`) — worth cleaning.
+- `public_statement` uncited backlog; civil-rights-q22 legacy bill_id; on-demand answer-gen rework.
+
+---
+
 ## 2026-06-17 — data quality: relabeled 15,974 URL-less web_research rows to other/inferred — evening (late +1)
 
 **What happened & why**
