@@ -27,6 +27,40 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-17 — deep-link fix: homepage-only citations rejected + 32 backfilled — night
+
+**What happened & why**
+Owner spotted that some corroboration source links point at a site homepage (e.g.
+`https://www.zeldaforcongress.org`) instead of the exact page with the evidence. Root cause: the
+anti-fabrication guard required the URL to be cited + reachable, but a homepage passes both. Fixed
+on three fronts (all greenlit):
+1. **Tightened guard** (`corroborate-answers` v5): added `hasDeepPath()` — `url_valid` now also
+   requires a path beyond `/` (or a query string). Prompt also updated to demand the specific page.
+2. **Re-corroborated the 33 homepage rows** under the stricter guard (run_label
+   `visible-deeplink-fix-2026-06-17`): 6 found a real deep link, 6 supports-but-still-homepage
+   (rejected), 21 insufficient, 0 contradicts.
+3. **Demoted all 33** to `source_type='other'`/`evidence_type='inferred'` with URL cleared (archived
+   to history first), then re-applied the 6 deep links as trusted `web_research`.
+
+**State** (verified 2026-06-17 night)
+- `bare_web_research_remaining = 0` ✓ (was 33: 32 from our rollouts + 1 older web_research row)
+- 33 archived (`superseded_reason='deeplink_fix demote homepage-only web_research'`), 6 deep links applied
+- Trusted web_research URLs: 1,641 → **1,614** (−33 demoted +6 re-applied)
+- All 6 re-applied URLs confirmed deep (`/platform`, `/issues/finance`, patch.com article, etc.)
+- lint: 0 errors (154 pre-existing `any` warnings) · tests: 94 pass
+- NOTE: `hasDeepPath` has no unit test — it lives in the edge fn's index.ts (not in the test glob);
+  importing it would run top-level `Deno.serve`. Validated by deploy + the live re-corroboration run.
+
+**Next**
+Contradict correction pass (see two entries down) is still the main open data-quality item.
+
+**Deferred**
+- Same as below, plus: the older `public_statement` pipeline also emits homepage-only links (142
+  array entries, 2.4%) and has at least one attribution bug (Charay Smith NC cited `adams.house.gov`
+  / `adamsmith.house.gov` — a different Smith). Worth a similar pass if that pipeline is revived.
+
+---
+
 ## 2026-06-17 — visible-states corroboration rollout + gated apply COMPLETE — evening (late +2)
 
 **What happened & why**
