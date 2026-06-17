@@ -27,6 +27,53 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-17 — #3 backfill: full 55-candidate corroboration rollout COMPLETE (staged, not applied) — evening
+
+**What happened & why**
+Ran the full corroboration rollout across the 55 highest-priority all-demoted tier_1 federal
+candidates (top 55 by answer count, `U.S.%` office, zero trusted answers). Each candidate's
+URL-less answers were batched into groups of 25 and fired as async `net.http_post` calls via
+pg_net — 249 batches total, all hitting the deployed `corroborate-answers` edge function with the
+correct `Authorization: Bearer <anon_key>` + `x-cron-secret` headers (key lesson: Supabase gateway
+v1 requires `Authorization: Bearer` even for `verify_jwt=false` functions; `apikey:` format is
+rejected at the gateway with 401 UNAUTHORIZED_NO_AUTH_HEADER).
+
+Orchestration SQL saved at `scripts/run-corroboration-rollout.sql` for future runs.
+
+**State** (verified on Pulse Dev, 2026-06-17 ~16:05 UTC)
+- `_answer_corroboration` run_label=`rollout-2026-06-17`: **5,534 rows, 55 candidates, complete**
+- Verdicts: **198 supports** | **35 contradicts** | **5,301 insufficient** | **0 errors**
+- Anti-fabrication guard filtered 68 supports (URL not in citations or failed HEAD/GET validation)
+- **130 corroborated** (supports + in_citations + url_valid) = **2.3% corroboration rate**
+- Top candidates by corroborated count:
+  - WILLIAMS, JOSH (OH-09, R): 9 corroborated
+  - OLSZEWSKI, ALBERT (MT-01, R): 8 (from official House press releases at olszewski.house.gov)
+  - BODNAR, SETH (MT Senate, I): 8
+  - CARLIN, JAMES (IA Senate, R): 6 | GOLDMAN, CRAIG (TX-12, R): 6 | GRAYZEL, JEFF (NJ-11, D): 6
+  - CONLEY, CAIT (NY-17, D): 6 | DEATON, JOHN (MA Senate, R): 5
+- Sources quality: campaign websites, official House press releases, Montana Public Radio
+  candidate interviews — all real and reachable. Guard correctly blocked uncited fabrications.
+- **NOT applied to candidate_answers** — still in staging only. Gated apply requires owner sign-off.
+- Total tokens: 1,428,017 (~$44 estimated, consistent with pre-run estimate of $44.27)
+
+**Next — gated apply (owner must greenlight):**
+Run the same gated-apply SQL as the Cooper pilot: for each `corroborated=true` row in
+`_answer_corroboration WHERE run_label='rollout-2026-06-17'`, archive the existing
+`candidate_answers` row to `candidate_answers_history`, then set
+`source_url / source_urls / source_titles / source_description` from the staging row,
+`source_type='web_research'`, `evidence_type='mixed'`, inside a transaction that asserts
+`set local request.jwt.claim.role = 'service_role'` (anti-tampering triggers require it).
+Expected outcome: 130 candidates answers flipped from NA → trusted across ~20-30 candidates.
+
+**Deferred / cleanup**
+- ⚠️ Owner: delete the inert **`enrich-batch-experiment`** edge fn in the dashboard (no delete MCP).
+- 35 contradicts in staging: worth a spot-check before applying — the source says the opposite of
+  the recorded stance. Could be data quality issues (answer_value wrong) or real contradictions.
+- min-wage-style misses (real source, dead URL): could retry alternates from `data.citations`.
+- `public_statement` uncited backlog; civil-rights-q22 legacy bill_id; on-demand answer-gen rework.
+
+---
+
 ## 2026-06-17 — #3 backfill: corroboration engine built + Cooper pilot-applied (paused) — day
 
 **What happened & why**
