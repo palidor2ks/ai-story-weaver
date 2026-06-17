@@ -620,6 +620,30 @@ the tiles read the NC+NJ slice (e.g. Total Reps ≈ 172, With FEC ID ≈ 151).
 
 ---
 
+## 2026-06-16 — PoliScore v0.0 SHIPPED (PR #427 merged)
+
+**What happened & why**
+Closed the v0.0 arc: the record scorecard for NC+NJ federal members is live. Migrations
+(`poliscore_key_votes` + `get_poliscore_record` RPC) applied to prod; `PoliScoreCard` merged to
+main via #427. All three gates passed (migration-safety, neutrality, data-accuracy) — the accuracy
+gate caught and fixed the HR26 cross-congress contamination + HR288 URL before launch.
+
+**State** (verified)
+- PR #427 merged to main (sha 2852941). Working tree clean.
+- Prod: table + RPC live; fixes verified on 12 affected members; preflight green pre-merge.
+- v0.0 scores ~26 House members; 4 Senators show the House-only empty state.
+
+**Next**
+v0.1: full-chamber scoring — `candidate_votes` already holds full-chamber data, so this likely
+closes the Senator gap, supplies Environment/Rights left-coded votes, and enables the −10..+10
+NOMINATE-style alignment score.
+
+**Deferred**
+Senate key votes; Environment/Rights left-coded balancing; the deeper `candidate_votes`/`bills`
+bill_id-collision cleanup (worked around in the RPC, not fixed at the data layer).
+
+---
+
 ## 2026-06-16 — PoliScore v0.0 data-accuracy gate + fixes
 
 **What happened & why**
