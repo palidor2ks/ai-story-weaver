@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { calculateEntityScore } from '@/lib/scoring';
+import { calculateEntityScore, isTrustedForScoring } from '@/lib/scoring';
 
 /**
  * Personalized rep score map: averages each candidate's answer_value across
@@ -42,7 +42,7 @@ export const usePersonalizedScoreMap = (candidateIds?: string[]) => {
       // Fetch candidate answers restricted to those questions
       const { data: candidateAnswers, error: caErr } = await supabase
         .from('candidate_answers')
-        .select('candidate_id, question_id, answer_value')
+        .select('candidate_id, question_id, answer_value, evidence_type, source_type, source_url, source_urls')
         .in('candidate_id', ids)
         .in('question_id', questionIds);
 
@@ -51,9 +51,10 @@ export const usePersonalizedScoreMap = (candidateIds?: string[]) => {
         return map;
       }
 
-      // Group by candidate and average
+      // Group by candidate and average — TRUSTED answers only (vote-derived/URL-sourced) so
+      // inferred/fabricated answers can't pollute the match (isTrustedForScoring).
       const byCandidate = new Map<string, Array<{ question_id: string; answer_value: number }>>();
-      (candidateAnswers ?? []).forEach((a) => {
+      (candidateAnswers ?? []).filter(isTrustedForScoring).forEach((a) => {
         const arr = byCandidate.get(a.candidate_id) ?? [];
         arr.push({ question_id: a.question_id, answer_value: a.answer_value });
         byCandidate.set(a.candidate_id, arr);

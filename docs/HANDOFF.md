@@ -27,6 +27,44 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-17 — Answers verification (RED) + demotion (Track 1) + re-derivation scoping — day
+
+**What happened & why**
+Pass 3 of the ship gate: NC/NJ candidate answers (the alignment quiz's input). **Verdict: RED.** Of
+42,335 visible answers: ~9% vote-derived (good, ~43% URL'd), **~37% `inferred`** (party-platform AI
+guesses), **~37% `public_statement`** with fabricated provenance (dated tweets/interviews/quotes,
+<1% URL'd — integrity finding #3 confirmed live for NC/NJ; sampled Gill/Mullock/Dafis), ~14%
+`campaign_position` (0 URLs). Critically, **scoring is an equal-weight mean of `answer_value` that
+ignores `source_type`/`confidence`** — so fabricated answers are IN the match math, not just shown.
+
+Owner chose **re-derive from verified votes**. Architect plan: the approved PoliScore key votes map
+to 6 TOPICS, not the ~351 questions, so a **key-vote→question map needs owner curation** (the
+integrity firewall) before any derivation. Two separable tracks; doing both:
+- **Track 1 — demotion (THIS change):** added `isTrustedForScoring()` to `src/lib/scoring.ts`
+  (trusted = `voting_record` evidence OR a real source URL; excludes inferred + URL-less statements/
+  campaign) and filtered the candidate-answer scoring in `useCandidatePersonalizedScore`,
+  `useCandidateScoreMap` (fallback), and `usePersonalizedScoreMap`. So the quiz match now scores
+  ONLY trusted answers; missing ones degrade gracefully. Reversible.
+- **Track 2 — key-vote→question mapping draft:** delegated (for owner review + alignment-quiz-reviewer).
+
+**State** (verified / NOT)
+- lint 0 errors · tsc clean · build ok · 85/85 tests.
+- **`useRepresentativeScores` deliberately NOT filtered** — it generates inferred answers on-demand
+  (filtering could over-trigger) and returns 0% (not NA) when no shared answers; needs the
+  alignment-quiz-reviewer's design call. Flagged.
+- The STORED `candidates.overall_score` (computed by a separate job) is still all-answers; recompute
+  with the same filter is a follow-up (the live match is what users see and it's now demoted).
+
+**Next**
+alignment-quiz-reviewer on the demotion (+ advise on useRepresentativeScores + the stored-score
+recompute); owner-review the key-vote→question mapping draft; then build the derivation engine.
+
+**Deferred**
+- Recompute stored `candidates.overall_score` with the trusted filter (DB job/RPC).
+- vote_sync_status realign; legacy bill_id cleanup (both pre-un-hide).
+
+---
+
 ## 2026-06-17 — Follow-up triage + the 401 fix cascaded into full finance recovery — day
 
 **What happened & why**

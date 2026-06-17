@@ -42,6 +42,31 @@ export interface AnswerRecord {
   answer_value: number; // -10 to +10
 }
 
+/** Provenance fields used to decide whether an answer is trustworthy enough to score on. */
+export interface AnswerProvenance {
+  evidence_type?: string | null;
+  source_type?: string | null;
+  source_url?: string | null;
+  source_urls?: string[] | null;
+}
+
+/**
+ * Whether a candidate answer is trustworthy enough to feed the alignment match.
+ *
+ * Why this exists: scoring is an equal-weight average of answer_value, so an AI-`inferred`
+ * (party-platform guess) or a fabricated-provenance `public_statement` answer with no link
+ * counts exactly as much as a verified vote — and ~74% of NC/NJ answers were one of those
+ * (DATA-ACCURACY §Answers, integrity finding #3). An answer is trusted iff it's derived from
+ * the (verified) voting record OR carries a real source URL we could check. Inferred guesses
+ * and URL-less claimed statements are excluded — partial-but-true beats full-but-fabricated,
+ * and the quiz handles missing answers gracefully (intersection-based, matchedCount surfaced).
+ */
+export function isTrustedForScoring(a: AnswerProvenance): boolean {
+  if (a.evidence_type === 'voting_record' || a.source_type === 'voting_record') return true;
+  return !!(a.source_url && a.source_url.trim()) ||
+    (Array.isArray(a.source_urls) && a.source_urls.some((u) => !!u && u.trim().length > 0));
+}
+
 export interface ScoringResult {
   overall: number;
   byTopic: TopicScore[];
