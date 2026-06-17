@@ -27,6 +27,38 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-17 — Follow-up triage + the 401 fix cascaded into full finance recovery — day
+
+**What happened & why**
+Worked the post-verification follow-up list. Two resolved, two deferred:
+- **Cycle-scope the donor guard (DONE):** #436's 0-donor guard counted donors across all cycles;
+  scoped it to `.eq('cycle', cycle)` so the Cooper case (2024 donors, 0 for 2026) trips it. Committed.
+- **`individual_delta_pct` −45% audit (RESOLVED, no code change):** it was a **stale symptom of the
+  401 incident**, not a formula bug. Before #437, donor imports were blocked, so local individuals
+  were incomplete → −45% vs FEC. After #437 + the re-queue backfill + reconciliation re-ran, the
+  rows corrected: Foxx/Tillis/Rouzer 2024 `individual_delta_pct` now ≈ **0%, status ok** (local
+  matches FEC within dollars). The 16 remaining big-negative deltas are the backfill tail.
+- **Realign `vote_sync_status` (DEFERRED):** surfaced data + dashboard already correct post-#438;
+  it's a sync-cursor table whose only durable fix is in the sync internals; a blind recompute risks
+  the sync's accounting for zero output change. Documented quirk.
+- **Legacy `bill_id` / cross-congress cleanup (DEFERRED):** entirely hidden-state (0 NC/NJ rows);
+  explicitly "before un-hiding states"; the serious collision is already fixed in the PoliScore
+  query layer. Out of scope for the 2-state focus now.
+
+**State** (verified, live)
+- 🎉 **401 fix (#437) recovery is broad:** Roy Cooper donors **0 → 4,220**; NC/NJ queue **24 → 5**;
+  visible recon errors **~37 → 28** (ok 145 → 155); 22 rows re-reconciled in last 2h. Converging.
+- Open PR **#438** (branch `claude/pensive-hypatia-r6m2d8`) now carries: the voting-gate scope fix
+  (script+docs) + the cycle-scope guard commit. Ready for review/merge.
+
+**Next**
+Merge #438. Let the last ~5 backfill (errors + big-neg individual deltas keep dropping on their own).
+
+**Deferred** (with reasons above): vote_sync_status realign; legacy bill_id/collision cleanup
+(both only matter before un-hiding more states).
+
+---
+
 ## 2026-06-16 — Verify NC+NJ voting records → data is fine; the gate was counting challengers — day
 
 **What happened & why**
