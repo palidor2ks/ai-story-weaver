@@ -27,6 +27,51 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-17 — #3 backfill: corroboration engine built + Cooper pilot-applied (paused) — day
+
+**What happened & why**
+Built #3 (give the 55 demoted candidates real sourced answers) as **enrich + CORROBORATE** — owner
+chose this over enrich-as-is because the existing answer_values are AI-inferred, and bolting a URL
+onto a guess (without checking the source backs it) would just legitimize fabrication. New edge fn
+**`corroborate-answers`**: per URL-less answer, `sonar` searches the open web and judges
+supports/contradicts/insufficient + returns a source. Anti-fabrication: a URL is accepted only if it
+appears among the actually-retrieved citations AND passes HEAD/GET. Writes to staging
+`public._answer_corroboration` (NOT candidate_answers) — house gated-apply pattern.
+
+Pilots tuned the search config (committed): **open web (no .gov-only filter), `search_context_size:
+'medium'`, no recency filter** — the federal-legislative filter + recency had starved a non-Congress
+candidate like Cooper. On 4 high-salience Cooper questions: **3/4 corroborated** with real official
+sources (e.g. abortion → **governor.nc.gov** SB20-veto release; guns → NSSF; clean energy). The 4th
+(min wage) found the right source but its URL failed validation → **correctly NOT applied** (guard
+held). Niche questions (microplastics, single-use plastics) correctly returned insufficient — no
+public position exists, honest NA.
+
+**State** (verified on Pulse Dev)
+- `corroborate-answers` deployed (v2, verify_jwt=false, cron-secret-gated) + committed. Staging table
+  `_answer_corroboration` created (admin-read RLS).
+- **Cooper pilot-APPLIED** (owner said pilot-Cooper-then-pause): the 3 corroborated rows archived to
+  `candidate_answers_history`, then set source_url/source_urls/source_titles/source_description +
+  `source_type='web_research'`, `evidence_type='mixed'`. **Cooper: 0 → 3 trusted answers.** Gated
+  write asserted the service_role claim (anti-tampering triggers) and satisfies chk_web_research_has_url.
+- **PAUSED before scaling to the 55** per owner.
+
+**Next — resume #3 scale (when owner greenlights):**
+1. Orchestrate `corroborate-answers` across the 55 (each call processes a candidate's URL-less
+   answers, limit 25/invocation → ~524 invocations; ~$40–80, search-fee-dominated). Stage all.
+2. Inspect aggregate corroboration rates, then run the same **gated apply** (archive → set source +
+   web_research/mixed) for `corroborated=true` rows only. Expect high yield on salient questions,
+   honest NA on the long tail.
+3. Realistic expectation: recover the *salient subset* per candidate; niche questions stay NA.
+
+**Deferred / cleanup**
+- ⚠️ Owner: delete the inert **`enrich-batch-experiment`** edge fn in the dashboard (no delete MCP).
+  `corroborate-answers` is a keeper.
+- min-wage-style misses (real source, dead URL) could retry alternates from `data.citations` — minor.
+- `public_statement` uncited backlog; civil-rights-q22 legacy bill_id; on-demand answer-gen rework
+  (all unchanged, pre-un-hide).
+
+---
+
 ## 2026-06-17 — Provenance #1/#2 shipped + batching experiment (don't batch) + #3 plan — day
 
 **What happened & why**
