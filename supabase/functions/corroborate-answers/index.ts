@@ -38,6 +38,18 @@ function isBlockedDomain(url: string): boolean {
   catch { return true; }
 }
 
+// A citation must point at the actual evidence, not a site root. Homepage-only links
+// (e.g. https://www.zeldaforcongress.org) pass reachability + in-citations checks but make
+// the reader hunt for the claim, so we reject them: require a path segment beyond '/' OR a
+// query string. (Deep paths like /issues, press-release URLs, /wiki/Article all qualify.)
+function hasDeepPath(url: string): boolean {
+  try {
+    const u = new URL(url);
+    const path = u.pathname.replace(/\/+$/, ''); // trim trailing slashes
+    return path.length > 0 || u.search.length > 0;
+  } catch { return false; }
+}
+
 async function validateUrl(url: string, timeout = 3000): Promise<boolean> {
   if (!url || isBlockedDomain(url)) return false;
   for (const method of ['HEAD', 'GET'] as const) {
@@ -120,7 +132,9 @@ async function corroborateOne(ctx: string, q: QRow): Promise<any> {
   const url: string = typeof p.source_url === 'string' ? p.source_url.trim() : '';
   // Anti-fabrication: only trust a URL the search actually retrieved.
   const inCitations = url !== '' && res.citations.some((c) => c === url || c.includes(url) || url.includes(c));
-  const urlValid = url !== '' && !isBlockedDomain(url) && await validateUrl(url);
+  // url_valid now also requires a deep path: a homepage root is reachable but doesn't point at
+  // the evidence, so it shouldn't count as a usable citation (see hasDeepPath).
+  const urlValid = url !== '' && !isBlockedDomain(url) && hasDeepPath(url) && await validateUrl(url);
   const corroborated = verdict === 'supports' && inCitations && urlValid;
 
   return {

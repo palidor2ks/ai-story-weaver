@@ -27,6 +27,143 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-17 — deep-link fix: homepage-only citations rejected + 32 backfilled — night
+
+**What happened & why**
+Owner spotted that some corroboration source links point at a site homepage (e.g.
+`https://www.zeldaforcongress.org`) instead of the exact page with the evidence. Root cause: the
+anti-fabrication guard required the URL to be cited + reachable, but a homepage passes both. Fixed
+on three fronts (all greenlit):
+1. **Tightened guard** (`corroborate-answers` v5): added `hasDeepPath()` — `url_valid` now also
+   requires a path beyond `/` (or a query string). Prompt also updated to demand the specific page.
+2. **Re-corroborated the 33 homepage rows** under the stricter guard (run_label
+   `visible-deeplink-fix-2026-06-17`): 6 found a real deep link, 6 supports-but-still-homepage
+   (rejected), 21 insufficient, 0 contradicts.
+3. **Demoted all 33** to `source_type='other'`/`evidence_type='inferred'` with URL cleared (archived
+   to history first), then re-applied the 6 deep links as trusted `web_research`.
+
+**State** (verified 2026-06-17 night)
+- `bare_web_research_remaining = 0` ✓ (was 33: 32 from our rollouts + 1 older web_research row)
+- 33 archived (`superseded_reason='deeplink_fix demote homepage-only web_research'`), 6 deep links applied
+- Trusted web_research URLs: 1,641 → **1,614** (−33 demoted +6 re-applied)
+- All 6 re-applied URLs confirmed deep (`/platform`, `/issues/finance`, patch.com article, etc.)
+- lint: 0 errors (154 pre-existing `any` warnings) · tests: 94 pass
+- NOTE: `hasDeepPath` has no unit test — it lives in the edge fn's index.ts (not in the test glob);
+  importing it would run top-level `Deno.serve`. Validated by deploy + the live re-corroboration run.
+
+**Next**
+Contradict correction pass (see two entries down) is still the main open data-quality item.
+
+**Deferred**
+- Same as below, plus: the older `public_statement` pipeline also emits homepage-only links (142
+  array entries, 2.4%) and has at least one attribution bug (Charay Smith NC cited `adams.house.gov`
+  / `adamsmith.house.gov` — a different Smith). Worth a similar pass if that pipeline is revived.
+
+---
+
+## 2026-06-17 — visible-states corroboration rollout + gated apply COMPLETE — evening (late +2)
+
+**What happened & why**
+User added US national to visible states (removed 'US' from hidden_states), making visible = NJ + NC + US
+national. Ran corroboration across all 183 visible-state candidates with inferred answers (18,186
+answers, 815 batches), fired in 4 waves of ~46 candidates to stay within proven concurrency envelope.
+Immediately followed by gated apply of all 1,259 corroborated rows.
+
+Run label: `rollout-visible-2026-06-17`
+
+**State** (verified 2026-06-17 late evening)
+- Staged: 18,186 rows, 183 candidates, 0 errors ✓
+- Verdicts: 1,639 supports | 234 contradicts | 16,313 insufficient
+- Anti-fabrication guard filtered 380 supports
+- **Corroborated: 1,259 (6.9%)** — ~3× the prior all-demoted run's 2.3%, as expected for high-profile visible-state candidates
+- Corroborated across 154 of 183 candidates; top: Biden (75), Harris (62), DeSantis (38), Tillis (36), Trump (34), Ted Budd (30), Roy Cooper (26)
+- Gated apply: `archived=1259, marked_applied=1259, ca_updated=1259` ✓
+- Candidates with trusted web_research answers (all-time): **363**
+
+**Next**
+Contradict correction pass — see Deferred below. Separately: next roadmap priority is
+`docs/ROADMAP.md` (likely `public_statement` uncited backlog or on-demand answer-gen rework).
+
+**Deferred**
+- ⚠️ **Contradict correction pass**: 234 contradicts in `rollout-visible-2026-06-17` (plus 35 from
+  `rollout-2026-06-17`) are predominantly wrong `answer_value` signs in `candidate_answers` — not
+  attribution errors. High-priority candidates: Trump (36 contradicts, many clear-cut reversals),
+  DeSantis (17), Tillis (14), JD Vance (12), Biden (10). Fix requires per-row human review since
+  flipping answer_value changes alignment scores for high-traffic candidates. Staging rows are
+  queryable at `_answer_corroboration WHERE verdict='contradicts'` — use those source URLs + quotes
+  as the correction evidence.
+- ⚠️ Owner: delete the inert `enrich-batch-experiment` edge fn in the Supabase dashboard.
+- 1,129 orphaned `candidate_answers` rows (candidate_id not in `candidates`) — worth cleaning.
+- `public_statement` uncited backlog; civil-rights-q22 legacy bill_id; on-demand answer-gen rework.
+
+---
+
+## 2026-06-17 — data quality: relabeled 15,974 URL-less web_research rows to other/inferred — evening (late +1)
+
+**What happened & why**
+The provenance contract migration (`20260617130000_web_research_provenance_contract.sql`) missed rows
+that were already labeled `source_type='web_research'` before it ran. These 15,974 rows had no real
+`source_url` or `source_urls` and were AI-generated inferences (verdict-style summaries with no
+specific citation), but were mislabeled `web_research` by the previous generation pipeline.
+isTrustedForScoring already excluded them (no source_url), so scoring was unaffected — but the label
+was misleading. Fixed by relabeling to `source_type='other'`, `evidence_type='inferred'`.
+
+Execution: wrapped in a single transaction with `DISABLE TRIGGER` on the two slow AFTER UPDATE
+triggers (`candidate_answers_topic_scores_sync`, `trg_recalc_coverage_on_answer_update`) — safe
+because `answer_value` was not changed so recalculated scores are identical. Also used
+`SET LOCAL request.jwt.claim.role = 'service_role'` to bypass anti-tampering triggers.
+1,129 orphaned rows (candidate_id not in `candidates`) were excluded — left as-is, different issue.
+
+**State** (verified 2026-06-17 late evening)
+- `url_less_web_research_remaining = 0` ✓ (was 15,974 across 2,164 candidates)
+- `web_research_with_real_url_untouched = 382` ✓ (our rollout rows + prior cited rows all safe)
+- LePage spot-check: 97 relabeled + 3 real web_research with URLs ✓
+- Triggers re-enabled and committed atomically in the same transaction
+
+**Next**
+The #3 backfill arc and all follow-up cleanup are now fully done. Next roadmap priority:
+see `docs/ROADMAP.md` — likely the `public_statement` uncited backlog or on-demand answer-gen rework.
+
+**Deferred**
+- ⚠️ Owner: delete the inert `enrich-batch-experiment` edge fn in the Supabase dashboard.
+- 1,129 orphaned `candidate_answers` rows (candidate_id not in `candidates`) — still labeled as they
+  were; worth cleaning separately (DELETE if candidates were intentionally removed).
+- 35 contradicts in `_answer_corroboration rollout-2026-06-17`: answer_value sign may be wrong for
+  several candidates — worth a correction pass.
+- `public_statement` uncited backlog; civil-rights-q22 legacy bill_id; on-demand answer-gen rework.
+
+---
+
+## 2026-06-17 — #3 backfill: gated apply COMPLETE — 130 corroborated rows written to candidate_answers — evening (late)
+
+**What happened & why**
+Owner greenlighted the gated apply of the 130 corroborated rows staged in the previous session.
+Ran a single transaction with `SET LOCAL request.jwt.claim.role = 'service_role'` (required by
+anti-tampering triggers):
+1. Archived 130 existing `candidate_answers` rows → `candidate_answers_history` (superseded_reason: `web_research_corroboration rollout-2026-06-17`)
+2. Updated those 130 rows: `source_url`, `source_urls`, `source_titles`, `source_description` from staging; `source_type='web_research'`; `evidence_type='mixed'`
+3. Marked 130 staging rows `applied=true`
+
+Post-apply: **40 candidates now have at least one trusted web_research answer** (flipped from all-demoted to trusted via isTrustedForScoring's source_url check).
+
+**State** (verified 2026-06-17 evening)
+- `archived=130, marked_applied=130, updated_in_candidate_answers=130` — confirmed via row counts
+- `_answer_corroboration WHERE run_label='rollout-2026-06-17' AND applied=true`: 130 rows ✓
+- **Data quality finding (NOT a rollout bug):** LEPAGE, PAUL shows 53 `source_type='web_research'` rows — only 3 from this rollout; the other 50 are pre-existing URL-less web_research rows that the `20260617130000_web_research_provenance_contract.sql` migration missed (no real source_url → NOT trusted by isTrustedForScoring). Verified: `with_real_url=3, without_url=50`.
+- Rollout is complete and clean. Main arc (#3 backfill) is done.
+
+**Next**
+Clean up the pre-existing URL-less `source_type='web_research'` rows that the provenance contract migration missed. These rows have no real source_url and are not trusted by isTrustedForScoring, but they're misleadingly labeled `web_research`. Fix: `UPDATE candidate_answers SET source_type='other', evidence_type='inferred' WHERE source_type='web_research' AND (source_url IS NULL OR source_url='' OR source_url ~ '^\s*$') AND (source_urls IS NULL OR source_urls='{}' OR NOT EXISTS (SELECT 1 FROM unnest(source_urls) u WHERE u IS NOT NULL AND u !~ '^\s*$'))`. Scope first (count + spot-check) before applying.
+
+**Deferred**
+- ⚠️ Owner: delete the inert **`enrich-batch-experiment`** edge fn in the dashboard (no delete MCP).
+- 35 contradicts in `_answer_corroboration` (rollout-2026-06-17): several candidates (LePage, Goldman, Williams OH-09) have `answer_value` signs that appear wrong — worth a correction pass.
+- Two attribution errors in staging (correctly NOT applied — verdict=contradicts): Olszewski (MT-01) sourced from wrong Olszewski; Jacobs (NY-01) sourced from Tenney's website — data quality signal.
+- min-wage-style misses (real source, dead URL): could retry alternates from `data.citations`.
+- `public_statement` uncited backlog; civil-rights-q22 legacy bill_id; on-demand answer-gen rework.
+
+---
+
 ## 2026-06-17 — #3 backfill: full 55-candidate corroboration rollout COMPLETE (staged, not applied) — evening
 
 **What happened & why**
