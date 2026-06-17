@@ -27,6 +27,55 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-17 — Vote-derivation engine applied to Pulse Dev (Phase 2) — day
+
+**What happened & why**
+Built and shipped Phase 2 of the answers remediation: re-deriving NC/NJ candidate position answers
+from their VERIFIED voting records, replacing the fabricated/inferred provenance found in Pass 3.
+Owner-approved spec: HIGH-confidence key-vote→question mappings only; magnitude **±5 for a single
+key vote, ±10 when 2+ key votes on a question agree**; Not Voting/Present → no answer; existing
+values ARCHIVED, never deleted. Migration `20260617120000_poliscore_derive_answers.sql` creates the
+curation-gate table `poliscore_key_vote_questions` (16 approved mappings), the audit table
+`candidate_answers_history`, and a DO block that upserts vote-derived answers with `voting_record`
+provenance + Congress.gov source URLs, scoped to visible states.
+
+The migration-safety-reviewer returned **NO-GO** on the draft; all four fixes applied before
+applying: (1, blocking) congress-year date-window guard on the fp/votes CTEs to fence the
+cross-congress legacy-bill_id collision (HR26 'H R 26' holds 1,573 votes spanning 2023–2025);
+(2) skip even-split (net-0) derivations; (3) archive has_discrepancy/discrepancy_note; (4)
+admin-write RLS on the mappings table. Discovered `candidate_answers` has two BEFORE-UPDATE
+anti-tampering triggers allowing only admin/service_role to change scoring fields — resolved by
+asserting `set local request.jwt.claim.role='service_role'` for the migration transaction (the
+exact carve-out those triggers intend).
+
+**State** (verified)
+- Migration **applied to Pulse Dev** (the only project). Result: **299 answers across 26 candidates**
+  (the full NC+NJ House delegation), 0 zeros, range −10..+10; **299 prior rows archived**.
+- Read-only validation confirmed the date-window guard drops **zero** legitimate votes
+  (`fv_rows == fv_in_window` for every vote-bearing bill_id; action_date fully populated).
+- Spot-checked **Virginia Foxx (NC, R)**: all 13 derived answers carry `voting_record` provenance +
+  Congress.gov URLs, directionally correct (e.g. HR2 118th "Secure the Border Act" → Yea → +5
+  immigration; HR28+HR498 both Yea → +10 civil-rights-q9). Consistent with a conservative record.
+- Security advisors: neither new table appears (both have RLS + policies — no new exposure).
+- Preflight: **lint 0 errors · 90/90 tests · vite build compiles**. (The `bun run build` prebuild
+  step fails on sitemap HTTP 403 — the remote sandbox's network policy, not a code issue.)
+- Pushed to `claude/pensive-hypatia-r6m2d8` (PR #438).
+
+**Next**
+Owner merges PR #438; then confirm the un-hidden NC/NJ quiz surfaces show the new vote-derived
+answers (with sources) and that the demotion + derivation together produce honest match scores.
+
+**Deferred**
+- **civil-rights-q22 (HR26 118th Born-Alive) derives nothing** — its canonical `bills` row
+  (`118-HR.26`) isn't linked to the vote-bearing legacy id (`H R 26`); keeps its prior demoted
+  answer. Folds into the existing legacy-bill_id cleanup (pre-un-hide).
+- 9 open key-vote→question mappings + 7 no-question votes in `docs/poliscore-question-map-draft.md`
+  await owner curation (statement-corroboration deferred — corpus too thin).
+- On-demand answer generation rework; `useInvertedScoreCandidates` admin filter; vote_sync_status
+  realign (all pre-un-hide, unchanged from prior entry).
+
+---
+
 ## 2026-06-17 — Answers verification (RED) + demotion (Track 1) + re-derivation scoping — day
 
 **What happened & why**
