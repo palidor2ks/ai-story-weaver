@@ -27,6 +27,35 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-17 — relabel 3,615 PS "insufficient" → inferred + OPEN-WORK backlog wired into /preflight — night
+
+**What happened & why**
+Two things. (1) Did backlog item #2: the high-signal PS corroboration run found NO verifiable source
+for 3,615 rows (`verdict='insufficient'`). Presenting those as sourced `public_statement` is dishonest,
+so relabeled them → `evidence_type='inferred'`, `source_type='other'` (same safe pattern as the 8,140
+pass: archived to history, slow triggers disabled during bulk update since coverage ignores
+evidence_type and topic scores use answer_value/unchanged, then re-enabled). (2) Owner liked the
+consolidated to-do summary, so made it durable: new **`docs/OPEN-WORK.md`** is the canonical
+prioritized backlog (what / history / state per item), and **`/preflight` now ends with an
+"Outstanding work" section** rendered from it; `/wrap-up` step 5 keeps it current.
+
+**State** (verified 2026-06-17 night)
+- 3,615 relabeled & archived (`superseded_reason='… corroboration found no verifiable source …'`);
+  both slow triggers confirmed re-enabled (tgenabled='O'). No score/coverage change by construction.
+- Visible-state `public_statement` sourceless: **8,048 → 4,433** (remaining = 3,945 never-run
+  ambiguous + ~488 held opposite-sign/contradict).
+- `docs/OPEN-WORK.md` created; `preflight/SKILL.md` + `wrap-up/SKILL.md` updated. Docs/skill-only
+  change — not yet run through `/preflight` (no code changed).
+
+**Next**
+Backlog #1 (corroborate the ambiguous 3,945 PS rows, ~$31) or #3 (FEC Line 14/15 double-count) —
+both in `docs/OPEN-WORK.md`.
+
+**Deferred**
+- See `docs/OPEN-WORK.md` for the full live backlog (replaces the scattered Deferred lists below).
+
+---
+
 ## 2026-06-17 — public_statement corroboration run: 535 sourced + applied (high-signal subset) — night
 
 **What happened & why**

@@ -31,6 +31,9 @@ tackle first.
    - `bun run check:dupes` — duplicate-candidate data-health check
      (`scripts/check-duplicate-candidates.sh`; read-only; needs `SUPABASE_DB_URL` + `psql`).
 3. Collect EVERY problem across all six steps, then report (see below).
+4. Read `docs/OPEN-WORK.md` and render its open items (☐/🟡/⛔, not ✅) as the closing
+   "Outstanding work" section of the report — so every preflight ends with the prioritized backlog
+   the maintainer works from, not just the pass/fail gate. Don't re-derive it; surface what's there.
 
 ## Report format
 Lead with a status table (one row per check → ✅ pass / ❌ fail / ⏭️ skipped, with the
@@ -54,6 +57,12 @@ first — each item one actionable line with its source and location:
 6. **Lint errors** (not warnings).
 
 End with what's clean and what was skipped, so nothing looks greener than it is.
+
+Then, after the gate report, an **"Outstanding work"** section: the open items from
+`docs/OPEN-WORK.md` in priority order (🔴 data quality → 🟠 infra → 🟡 cleanup → ⚪ code health),
+each as a one-line `[priority] title — state`. This is the backlog, distinct from the gate
+findings above (which are *this diff's* problems). Recommend the highest-value low-effort item to
+tackle next.
 
 ## Rules
 - **Be honest.** If a step couldn't run (no network for `bun install`; `check:dupes` has no

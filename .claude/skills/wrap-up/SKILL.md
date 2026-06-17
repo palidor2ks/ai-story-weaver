@@ -22,6 +22,9 @@ do it whenever this session changed code, config, or docs.
    running `/preflight` first if code changed and it hasn't run.
 4. If the roadmap shifted, remind to flip a marker / add a dated note in `docs/ROADMAP.md`
    (don't silently rewrite it).
+5. **Update `docs/OPEN-WORK.md`** — mark finished items ✅ (with date), add any new work this
+   session uncovered. This is the backlog `/preflight` surfaces, so a stale entry misleads the
+   next session.
 
 ## Rules
 - "State" must reflect reality — if tests weren't run, say so; don't claim verification you
