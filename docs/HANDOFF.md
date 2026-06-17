@@ -1735,6 +1735,22 @@ attempt with the tab kept open would pick up the remainder.
   the stale-sweep closes the cosmetic problem but the import still dies if the tab closes.
 - Migration `20260615170000` (Finding B fix: Line 14/15 double-count in `get_contribution_totals`)
   still needs to be applied + FEC finance re-drain triggered. (Not done this session.)
+## 2026-06-17 — Competitive landscape analysis
+
+**What happened & why**
+User asked "Who is my biggest competitor?" on branch `claude/biggest-competitor-equxdr`. This prompted creation of a structured competitive analysis to clarify PoliPulse's positioning and strategic moats. The landscape analysis answers: who is iSideWith (the dominant player), what are their strengths/weaknesses, what do secondary players (Vote411.org, Ballotpedia, state guides) own, and what is our single defensible advantage.
+
+**State** (verified)
+- New file: `docs/COMPETITIVE-LANDSCAPE.md` (structured, 230 lines, covers market, competitor positioning, PoliPulse's differentiation, and strategic implications).
+- Analysis grounded in: iSideWith's public product (web + mobile), Vote411.org & Ballotpedia public presence, PoliPulse's VISION.md (data accuracy as the riskiest assumption → now our moat), and ROADMAP.md (#1 priority: verified data).
+- Not verified: real market share numbers, iSideWith's exact data-sourcing practices, or user behavior surveys. Analysis is informed by product inspection + strategic reasoning, not market research.
+
+**Next**
+Decide: do we want to use this competitive landscape (1) as an internal reference, (2) as a basis for positioning copy / landing page / marketing, or (3) as the foundation for a "why PoliPulse vs. iSideWith" comparison guide? Ship decision determines next PR / work arc.
+
+**Deferred**
+- Market research (user surveys, comparative usability study, campaign adoption tracking) — suggested in the "Monitoring" section but not run. This can happen after we ship v1.
+- Campaign outreach strategy — competitive analysis suggests this is a lever (campaigns should know PoliPulse is where they control their narrative) but didn't scope a playbook.
 
 ---
 
