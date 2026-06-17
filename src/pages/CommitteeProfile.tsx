@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { IconActionButton } from '@/components/ui/icon-action-button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, ArrowLeft, DollarSign, Users, Landmark, MapPin, Calendar, RefreshCw, TrendingUp, Sparkles } from 'lucide-react';
+import { Loader2, DollarSign, Users, Landmark, MapPin, Calendar, RefreshCw, TrendingUp, Sparkles } from 'lucide-react';
 import { useCommittee, useCommitteeDonors } from '@/hooks/useCommittees';
 import { useFetchCommitteeDonors } from '@/hooks/useImportExternalCommittee';
 import { useAdminRole } from '@/hooks/useAdminRole';
@@ -62,15 +62,7 @@ export const CommitteeProfile = () => {
     }
   };
 
-  const navigationState = location.state as { from?: string; cycle?: string } | null;
-  const fromState = navigationState?.from;
-  // If the committee has no candidate-committee receipts, it's an outside-spender (IE-only) committee
-  // that lives on /top-spenders rather than /committees.
-  const isOutsideSpenderOnly = !!committeeBase && !committeeBase.totalRaised && !committeeBase.candidate;
-  const backTo = fromState === '/top-spenders' || fromState === '/committees'
-    ? fromState
-    : isOutsideSpenderOnly ? '/top-spenders' : '/committees';
-  const backLabel = backTo === '/top-spenders' ? 'Back to Top Spenders' : 'Back to Committees';
+  const navigationState = location.state as { cycle?: string } | null;
 
   const availableCycles = useMemo(() => {
     const baseYear = new Date().getFullYear();
@@ -117,26 +109,7 @@ export const CommitteeProfile = () => {
       />
       <Header />
 
-      {/* Mobile back sub-bar — sits directly under Header */}
-      <div className="md:hidden sticky top-16 z-40 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-10 items-center px-4">
-          <Link to={backTo} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
-            <ArrowLeft className="w-4 h-4" />
-            <span>{backLabel}</span>
-          </Link>
-        </div>
-      </div>
-
       <main className="container py-8 px-4">
-        <div className="hidden md:flex items-center gap-2 mb-6">
-          <Link to={backTo}>
-            <Button variant="ghost" size="icon">
-              <ArrowLeft className="w-4 h-4" />
-            </Button>
-          </Link>
-          <p className="text-sm text-muted-foreground">{backLabel}</p>
-        </div>
-
         {isAdmin && exclusion && (
           <div className="mb-6 rounded-md border border-destructive/40 bg-destructive/5 px-4 py-3 flex items-start gap-3">
             <div className="flex-1">
@@ -164,9 +137,6 @@ export const CommitteeProfile = () => {
         {!isLoading && !committee && (
           <div className="text-center py-16">
             <p className="text-muted-foreground">Committee not found.</p>
-            <Link to={backTo}>
-              <Button className="mt-4">Return to list</Button>
-            </Link>
           </div>
         )}
 
