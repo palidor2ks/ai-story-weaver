@@ -4,8 +4,9 @@
 // step applies verdict='supports' rows after human inspection — house pattern, cf. match-answer-
 // citations). Anti-fabrication: a source URL is only accepted if it appears among the actually-
 // retrieved search citations AND passes a HEAD/GET reachability check. Uses base `sonar` with
-// search_context_size:'low' (the per-request search fee is the dominant cost) + a .gov domain
-// filter, matching the validated ~63%-recovery unbatched baseline.
+// search_context_size:'medium' (the per-request search fee is the dominant cost, so we keep it
+// modest) over the open web — no federal-legislative domain allowlist, since most #3 targets are
+// non-incumbents / state & local officials with no congress.gov footprint.
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 declare const EdgeRuntime: { waitUntil: (p: Promise<unknown>) => void };
@@ -19,7 +20,9 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const PERPLEXITY_API_KEY = Deno.env.get('PERPLEXITY_API_KEY');
 
-const SEARCH_DOMAIN_FILTER = ['congress.gov', 'senate.gov', 'house.gov', 'c-span.org', 'govtrack.us'];
+// No federal-legislative domain allowlist: most #3 targets are non-incumbents / state & local
+// officials with no congress.gov footprint, so we search the open web and lean on the prompt
+// (prefer official/reputable), the blocked-domain list, the in-citations check, and URL validation.
 const SEARCH_RECENCY = 'year';
 const DEFAULT_LIMIT = 25;            // answers per invocation (bounds wall-clock + spend)
 
@@ -83,9 +86,8 @@ async function sonar(messages: unknown[]): Promise<{ content: string; citations:
     body: JSON.stringify({
       model: 'sonar',
       messages,
-      search_domain_filter: SEARCH_DOMAIN_FILTER,
       search_recency_filter: SEARCH_RECENCY,
-      web_search_options: { search_context_size: 'low' }, // dominant cost is the per-request search fee
+      web_search_options: { search_context_size: 'medium' }, // 'low' under-retrieved; medium balances cost/recall
     }),
   });
   if (!r.ok) { console.warn('[sonar] status', r.status); return null; }
