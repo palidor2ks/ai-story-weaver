@@ -27,6 +27,49 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-17 — contradict pass: 31 marquee corrections hand-applied (bulk-flip ruled unsafe) — night
+
+**What happened & why**
+Tackled the long-deferred contradict-correction item (269 `verdict='contradicts'` rows from the
+June rollouts). Investigation overturned the original plan ("apply all 269"):
+1. **266/268 contradicted rows are unscored `inferred` guesses** — the pool barely touches
+   alignment math. The 2 trusted/scored ones (`mixed`, Lebovics) were false-positive contradicts;
+   current values already correct, left untouched.
+2. **The LLM's `source_value` is ~50% unreliable** — on close read it's frequently inverted vs.
+   its own quote (Hubbard pathway, Biden asset-forfeiture, Harris plastic-straws, Tillis
+   judicial-overreach all had the OLD value already correct), off-topic, or same-sign. So a bulk
+   mechanical flip would inject as many display errors as it fixes. **Bulk-flip is off the table.**
+
+So per owner's choice we hand-reviewed the **marquee** candidates (Trump, DeSantis, Tillis, Vance,
+Biden, Harris) — high display traffic — reading each quote and flipping ONLY where the quote
+unambiguously contradicts the stored stance in the right direction with a verifiable deep-link
+source. Applied **31 of 68** (Trump 18, DeSantis 4, Vance 3, Biden 3, Tillis 2, Harris 1);
+skipped 37 (inverted `source_value`, off-topic, or false-positive). Each corrected row took
+`answer_value`=reviewed value, the deep-link `source_url`, `evidence_type='mixed'`,
+`source_type='web_research'`, `confidence='medium'`, with the verified quote as `source_description`.
+
+**State** (verified 2026-06-17 night)
+- 31 applied & verified: value matches intent (31/31), every URL deep-path (31/31, no homepages),
+  labels `mixed`/`web_research` (31/31). 31 prior states archived to `candidate_answers_history`
+  (`superseded_reason='contradict correction: marquee hand-reviewed flip …'`).
+- **These 31 DID move alignment scores** (unlike the rest of the pool): they gained a `source_url`
+  so they're now trusted/scored. Triggers were left ENABLED (small batch) so topic scores +
+  coverage recomputed in-txn. Intended — corrects wrong stances on the most-viewed profiles.
+- NOT done: the ~190 non-marquee contradicts. Most are unscored inferred display-only guesses;
+  not worth per-row review now (and bulk-flip is unsafe per finding #2).
+
+**Next**
+Owner held the `public_statement` corroboration run (8,583 rows) one entry down — that or the
+FEC recon items (ROADMAP #1) are the next data-quality moves. The contradict item is effectively
+closed: the safe, high-value slice is done; the rest is low-value + unsafe to mechanize.
+
+**Deferred**
+- ~190 non-marquee contradicts (low value: unscored inferred, ~50% noise). Revisit only if a
+  specific candidate's displayed stances are flagged wrong.
+- Everything below (public_statement corroboration run, FEC recon, disk pressure, cleanup).
+
+---
+
 ## 2026-06-17 — honesty pass: 8,140 mislabeled `public_statement` rows relabeled `inferred` — night
 
 **What happened & why**
