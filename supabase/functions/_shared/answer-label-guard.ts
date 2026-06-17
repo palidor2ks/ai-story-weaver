@@ -16,8 +16,12 @@ export interface VoteLabelFields {
   source_urls?: string[] | null;
 }
 
+// A citation only counts if it's a real, non-blank URL string — mirrors isTrustedForScoring
+// in src/lib/scoring.ts (a whitespace-only source_url is not provenance).
 function hasUrl(a: VoteLabelFields): boolean {
-  return Boolean(a.source_url) || (a.source_urls?.length ?? 0) > 0;
+  if (typeof a.source_url === 'string' && a.source_url.trim() !== '') return true;
+  return Array.isArray(a.source_urls)
+    && a.source_urls.some((u) => typeof u === 'string' && u.trim() !== '');
 }
 
 /** Returns new answer objects; never mutates the input. */
@@ -29,6 +33,22 @@ export function demoteUnverifiableVoteClaims<T extends VoteLabelFields>(
   return answers.map((a) => {
     const claimsVotes = a.evidence_type === 'voting_record' || a.source_type === 'voting_record';
     if (!claimsVotes || hasUrl(a)) return a;
+    return { ...a, evidence_type: 'inferred', source_type: 'other' };
+  });
+}
+
+// Guard against `web_research` labels with no actual citation. The generator maps
+// `organization_scorecard`/`mixed` evidence (and any unmapped type) to source_type
+// 'web_research', but when the research call returns no usable citation the row is still
+// saved as 'web_research' with a null source_url — a provenance badge with nothing behind
+// it (integrity finding #3). A web-research claim is only honest if it carries a URL;
+// without one it's an inference. The DB CHECK constraint chk_web_research_has_url enforces
+// the same invariant at write time for every code path.
+//
+/** Returns new answer objects; never mutates the input. */
+export function demoteUncitedWebResearch<T extends VoteLabelFields>(answers: T[]): T[] {
+  return answers.map((a) => {
+    if (a.source_type !== 'web_research' || hasUrl(a)) return a;
     return { ...a, evidence_type: 'inferred', source_type: 'other' };
   });
 }

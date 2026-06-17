@@ -1,5 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { demoteUnverifiableVoteClaims } from "../_shared/answer-label-guard.ts";
+import { demoteUnverifiableVoteClaims, demoteUncitedWebResearch } from "../_shared/answer-label-guard.ts";
 
 // Declare EdgeRuntime for Supabase Edge Functions background processing
 declare const EdgeRuntime: {
@@ -1033,7 +1033,11 @@ async function saveAnswersBatch(
     .from('candidate_votes')
     .select('id', { count: 'exact', head: true })
     .eq('candidate_id', candidateId);
-  const guardedAnswers = demoteUnverifiableVoteClaims(answers, (voteRowCount ?? 0) > 0);
+  // Two write-time integrity guards: uncited vote claims (finding #2) and uncited
+  // web-research labels (finding #3) are both demoted to inferred/other before save.
+  const guardedAnswers = demoteUncitedWebResearch(
+    demoteUnverifiableVoteClaims(answers, (voteRowCount ?? 0) > 0),
+  );
 
   const answersToInsert = guardedAnswers.map(answer => ({
     candidate_id: candidateId,
