@@ -27,6 +27,46 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-17 — honesty pass: 8,140 mislabeled `public_statement` rows relabeled `inferred` — night
+
+**What happened & why**
+Auditing "answers with no source," we found the visible-state sourceless pool isn't just the
+16,959 `inferred` rows the June rollout targeted — there are also **16,723 `public_statement`
+rows with no source URL** that the rollout never touched (it only queried `inferred`/`mixed`).
+Reading their `source_description`, ~half are inferences mislabeled as statements: the text
+literally says "no direct statement … not readily available … inferred from party platform." A
+`public_statement` with no URL is already untrusted for scoring (`isTrustedForScoring` needs a
+URL for non-voting types), so this never moved scores — but the label was dishonest. Fixed the
+clearest cases.
+
+**What we did**
+Relabeled the **8,140** visible-state rows whose `source_description` explicitly admits no direct
+statement AND contains no quoted text → `evidence_type='inferred'`, `source_type='other'`.
+Archived every row to `candidate_answers_history` first (`superseded_reason='relabel
+public_statement->inferred …'`). One atomic txn with `request.jwt.claim.role='service_role'`;
+disabled the two slow AFTER-UPDATE triggers during the bulk update (safe — `calculate_coverage_tier`
+counts answers by candidate_id only, ignores evidence_type/source_url; `refresh_candidate_topic_scores`
+uses answer_value, unchanged — so neither coverage nor topic scores change), re-enabled after.
+
+**State** (verified 2026-06-17 night)
+- `public_statement` sourceless (visible) **16,723 → 8,583** ✓; 8,140 archived to history ✓
+- Both slow triggers confirmed re-enabled (tgenabled='O') ✓
+- No coverage_tier / topic_score change by construction (functions don't read the changed columns)
+- Conservative partition left untouched: 8 "admits-inference-but-has-a-quote" + 14 genuine-quote
+  + 8,561 ambiguous (no admission, no quote) = 8,583 still labeled `public_statement`, no URL.
+
+**Next**
+Owner held the corroboration run on the remaining 8,583 (asked, chose "hold off"). When resumed:
+fire `corroborate-answers` with explicit `question_ids` per candidate (NOT the default URL-less
+query — that would re-run the already-corroborated `inferred` pool and waste ~$130). Scope choice
+offered: high-signal subset (~2k rows w/ quotes or named outlets, ~$16) vs all 8,583 (~$69).
+
+**Deferred**
+- Corroboration run on the 8,583 (above) — parked at owner's request.
+- Everything in the entries below (contradict correction pass is still the main open item).
+
+---
+
 ## 2026-06-17 — deep-link fix: homepage-only citations rejected + 32 backfilled — night
 
 **What happened & why**
