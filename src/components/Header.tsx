@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/context/AuthContext';
 import { useAdminRole } from '@/hooks/useAdminRole';
 import { usePoliticianRole } from '@/hooks/usePoliticianProfile';
-import { User, Menu, X, BookOpen, HelpCircle, Users, DollarSign, Shield, Building2, FileText, Landmark, Newspaper, Megaphone, LogIn, Briefcase, type LucideIcon } from 'lucide-react';
+import { User, Menu, X, BookOpen, HelpCircle, Users, Shield, Building2, FileText, Newspaper, LogIn, type LucideIcon } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import logoImg from '@/assets/logo.png';
@@ -21,13 +21,9 @@ export const Header = () => {
   const navItems: { path: string; label: string; icon: LucideIcon; requiresAuth: boolean; adminOnly?: boolean }[] = [
     { path: '/candidates', label: 'Candidates', icon: Users, requiresAuth: false },
     { path: '/parties', label: 'Parties', icon: Building2, requiresAuth: false },
-    { path: '/donors', label: 'Donors', icon: DollarSign, requiresAuth: false },
-    { path: '/committees', label: 'Committees', icon: Landmark, requiresAuth: false },
-    { path: '/top-spenders', label: 'Top Spenders', icon: Megaphone, requiresAuth: false },
     { path: '/how-scoring-works', label: 'How it works', icon: HelpCircle, requiresAuth: false },
     { path: '/quiz-library', label: 'Quizzes', icon: BookOpen, requiresAuth: true },
     { path: '/blog', label: 'Blog', icon: Newspaper, requiresAuth: false },
-    { path: '/jobs', label: 'Jobs', icon: Briefcase, requiresAuth: false },
     { path: '/profile', label: 'Profile', icon: User, requiresAuth: true },
   ];
 
