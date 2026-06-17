@@ -27,6 +27,44 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-17 — public_statement corroboration run: 535 sourced + applied (high-signal subset) — night
+
+**What happened & why**
+Ran the held corroboration pass on the visible-state `public_statement`-without-URL pool. Scoped to
+the **high-signal 4,638** (of 8,583) — rows whose `source_description` contains a quote, named outlet,
+"campaign website", interview, or `.gov` cue (best yield/$). Fired via pg_net to `corroborate-answers`
+with **explicit `question_ids` per candidate** (so it targets ONLY these rows, not the already-done
+`inferred` pool), 25/batch, 280 posts in 2 waves of ~91 candidates. run_label `rollout-ps-2026-06-17`.
+
+**Gotcha found & fixed mid-run:** the prior v5 redeploy re-enabled the platform `verify_jwt` on
+`corroborate-answers`, so pg_net posts 401'd at the gateway (`UNAUTHORIZED_NO_AUTH_HEADER`) — caught
+it before any spend. Fix: add `Authorization: Bearer <anon JWT>` header (public key, satisfies the
+gateway) alongside the existing `x-cron-secret` (satisfies the function's own auth). Future pg_net
+calls to this fn need both headers (or redeploy with verify_jwt=false — left as-is for defense-in-depth).
+
+**Results & apply** (verified 2026-06-17 night)
+- 4,638/4,638 corroborated, **0 errors**, ~$37 spend. Verdicts: 677 supports (corroborated),
+  109 contradicts, 3,615 insufficient. 14.6% hit rate (vs 6.9% on the inferred rollout — high-signal paid off).
+- Of 677 corroborated: 538 same-sign (recorded vs source agree), 115 opposite-sign, 27 with a zero.
+- **Applied the 535 clean same-sign rows** (3 lost to dup/no-match) as trusted `web_research`/`mixed`,
+  `confidence='medium'`, keeping `answer_value` (verdict=supports corroborates the existing stance),
+  attaching the deep-link `source_url` + quote. Archived each to history first. Triggers disabled
+  during bulk update (answer_value unchanged → identical recompute) then re-enabled (verified on).
+- `public_statement` sourceless (visible): **8,583 → 8,048**. Staging/test rows cleaned up.
+
+**Next**
+The remaining 8,048 sourceless `public_statement` are: 3,615 insufficient (no source found — these
+are genuinely unsupported, candidates for relabel→inferred later) + 3,945 ambiguous (not yet run) +
+the held opposite-sign/contradict rows. Optional: run the ambiguous 3,945 (~$31) if more coverage
+wanted; or relabel the 3,615 insufficient to `inferred` (honesty, like the earlier 8,140 pass).
+
+**Deferred**
+- 115 opposite-sign "supports" + 27 zero + 109 contradicts from this run → review pool (same LLM
+  polarity-inconsistency caveat as the contradict pass; do NOT auto-apply).
+- Everything below.
+
+---
+
 ## 2026-06-17 — contradict pass: 31 marquee corrections hand-applied (bulk-flip ruled unsafe) — night
 
 **What happened & why**
