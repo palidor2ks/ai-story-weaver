@@ -5,8 +5,18 @@
 DELETE FROM public.candidate_answers
 WHERE candidate_id NOT IN (SELECT id FROM public.candidates);
 
-ALTER TABLE public.candidate_answers
-  ADD CONSTRAINT candidate_answers_candidate_id_fkey
-  FOREIGN KEY (candidate_id)
-  REFERENCES public.candidates(id)
-  ON DELETE CASCADE;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'candidate_answers_candidate_id_fkey'
+      AND conrelid = 'public.candidate_answers'::regclass
+  ) THEN
+    ALTER TABLE public.candidate_answers
+      ADD CONSTRAINT candidate_answers_candidate_id_fkey
+      FOREIGN KEY (candidate_id)
+      REFERENCES public.candidates(id)
+      ON DELETE CASCADE;
+  END IF;
+END;
+$$;

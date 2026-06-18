@@ -27,6 +27,48 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-18 — All Politicians directory perf (PR #467) — congress_members DB cache
+
+**What happened & why**
+User reported the All Politicians directory page was "very slow, every single time." Root cause
+analysis across multiple iterations revealed the dominant bottleneck was `useAllPoliticians` calling
+the `fetch-representatives` Deno edge function on every first load (2–4 s cold start + 2 GitHub
+JSON fetches). This blocked `coreLoading` on the directory page for all users.
+
+Five fixes landed across the session:
+1. `useCandidateScoreMap` key stability — civic IDs excluded from score-map query key (2–3 fewer
+   redundant refetches when civic official IDs stream in)
+2. `useCandidates` serial dep removed — replaced hidden-state client filter with
+   `get_visible_candidates()` RPC, letting all 3 DB queries fire in parallel immediately
+3. Edge function: skip social-media + district-office GitHub fetches on `fetchAll=true`
+4. `useAllPoliticians` localStorage cache (L1)
+5. **Root cause fix (this session)**: `congress_members` DB table (535 rows, ~100 ms query) as L0
+   cache. `useAllPoliticians` now tries `get_all_congress_members()` RPC first, then localStorage,
+   then edge function fallback. Edge function upserts the cache on every `fetchAll` call
+   (fire-and-forget, non-blocking). Cache expires after 25 hours.
+
+**State** (verified)
+- `congress_members` table created and populated in prod (`ornnzinjrcyigazecctf`) — 535 rows,
+  synced_at current.
+- `get_all_congress_members()` RPC returns rows where `synced_at > now() - interval '25 hours'`.
+- Edge function `fetch-representatives` v643 deployed with `refreshCongressMembersCache` side effect.
+- `bunx tsc --noEmit`: 0 errors. TypeScript types added for `get_all_congress_members`.
+- Migration file written locally at `supabase/migrations/20260618190000_congress_members_cache_table.sql`.
+- PR #467 open (draft). Build/lint not runnable in remote container (missing dev deps — pre-existing).
+
+**Next**
+Test the page in a fresh incognito window — confirm cards appear in ~1 s (DB cache path).
+If cards look wrong (wrong IDs, missing party), check the `normalizeParty` mapping in
+`useAllPoliticians.ts`.
+
+**Deferred**
+- Fix 5 (IE 50k row fetch), Fix 6 (useDeferredValue on searchQuery), Fix 7 (stateCount/localCount
+  memo) — remaining items from the original perf analysis, deferred pending user confirming this
+  fix is fast enough.
+- Other states (NY, PA, …); AI scoring (Phase 2) — as before.
+
+---
+
 ## 2026-06-18 — topic-scores trim via server-side RPC (the deferred follow-up, now done)
 
 **What happened & why**

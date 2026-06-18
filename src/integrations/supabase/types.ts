@@ -6539,6 +6539,22 @@ export type Database = {
           topic_id: string
         }[]
       }
+      get_all_congress_members: {
+        Args: never
+        Returns: {
+          bioguide_id: string
+          name: string
+          party: string
+          office: string
+          state: string
+          district: string | null
+          image_url: string
+          is_incumbent: boolean
+          overall_score: number | null
+          coverage_tier: string
+          confidence: string
+        }[]
+      }
       get_visible_candidates: {
         Args: never
         Returns: {
