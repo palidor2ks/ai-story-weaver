@@ -47,12 +47,18 @@ functions so future runs populate the column on new rows (existing rows already 
 old deployed fns leave the column untouched on upsert, so no data loss meanwhile). A full nightly
 drain (fresh FEC fetch) will also refresh deltas.
 
-### 5. ☐ Congress donor backfill stall
-**What:** 159 `candidate_committees` rows with `has_more=true` not progressing (3/day actual vs 144/day
-theoretical). Likely filtered by the `congress_visible` scope in `schedule-congress-donor-sync`.
-**History:** Found 2026-06-15; the missing sync edge fn was added in PR #409 — re-check whether backfill
-now progresses, then widen scope or trigger a manual pass.
-**State:** Needs investigation.
+### 5. 🟡 Congress donor backfill stall — diagnosed + fixed, needs edge-fn deploy
+**What:** ~163 `candidate_committees` rows with `has_more=true` weren't progressing (~3/day vs 144/day
+theoretical, cron `*/10`).
+**Diagnosis (2026-06-17):** ~94% by design — of ~120 never-completed stalled committees, **113 are
+tier_1 but hidden-state** (correctly excluded by the visible-states gate; do NOT widen scope — that
+contradicts the product focus and worsens disk pressure #6). Only **1 visible candidate** (Deborah
+Ross, NC Senate) was genuinely stuck. **Root cause:** `schedule-congress-donor-sync` fetched the
+first `limit*100=100` stalled rows ordered by `created_at` and filtered to visible/tier_1 *after* the
+limit — Ross sat at rank ~115 behind 114 hidden rows, so the filter yielded 0 every run.
+**Fix:** scope-first selection (resolve in-scope candidate ids, THEN find their stalled committees).
+**State:** code committed; **needs edge-fn deploy** — next cron run after deploy will pick up Ross.
+Can't manually trigger fetch-fec-donors from MCP (admin auth + FEC network).
 
 ---
 
@@ -97,6 +103,8 @@ and the large/fragile edge fns `fetch-fec-donors`, `get-candidate-answers`.
 ---
 
 ## ✅ Recently done (prune after ~2 weeks)
+- ✅ **2026-06-17** Congress donor backfill: diagnosed (94% by-design hidden-state exclusion) + fixed
+  the scope-after-limit bug in schedule-congress-donor-sync (#5 — needs edge-fn deploy).
 - ✅ **2026-06-17** FEC Finding A: added `total_receipts_status` completeness metric (separate from
   itemized `status`); computed at 3 write sites, backfilled, surfaced on the card. (#4 — needs edge-fn deploy.)
 - ✅ **2026-06-17** FEC Finding B applied: `other_total` = Line 14+15; 800 recon rows recomputed,

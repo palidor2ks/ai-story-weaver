@@ -27,6 +27,40 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-18 — Congress donor backfill stall: diagnosed (mostly by-design) + scheduler fix — night
+
+**What happened & why**
+Backlog #5. ~163 `candidate_committees` had `has_more=true` not progressing (~3/day vs 144/day). Found
+the "stall" is **~94% by design**: of ~120 never-completed stalled committees, **113 are tier_1 but
+hidden-state**, correctly excluded by the visible-states gate. Only **1 visible candidate** (Deborah
+Ross, NC Senate, committee C00729277) was genuinely stuck — untouched since 2026-06-10.
+
+**Root cause (real bug for the 1 visible):** `schedule-congress-donor-sync` fetched the first
+`limit*100 = 100` stalled committee rows ordered by `created_at`, THEN filtered to visible/tier_1.
+Ross sat at rank ~115 behind 114 hidden-state rows, so the post-limit filter returned 0 in-scope
+candidates every run and she was never reached.
+
+**Fix:** restructured to **scope-first** — resolve in-scope candidate ids (coverage tier + visible
+state) BEFORE querying their stalled committees, so the per-run LIMIT applies to in-scope candidates,
+not a hidden-dominated slice. (`supabase/functions/schedule-congress-donor-sync/index.ts`.)
+
+**State** (verified 2026-06-18)
+- Diagnosis confirmed via SQL: 113 tier_1-hidden / 6 tier_2-hidden / 1 tier_1-visible (Ross @ rank 115).
+- 94 tests pass; edge fns are eslint-ignored (Deno). Uses existing tested helpers (loadHiddenStates/
+  ingestionHiddenList) + standard query patterns. Not runtime-tested (can't invoke from MCP).
+- **Do NOT widen scope to hidden states** — intentional product exclusion + would worsen disk pressure (#6).
+- **Remaining: deploy `schedule-congress-donor-sync`** — next `*/10` cron run after deploy picks up Ross.
+  Couldn't manually trigger fetch-fec-donors from MCP (admin auth + FEC network egress).
+
+**Next**
+Deploy the scheduler (with the #4 edge fns) via normal path; confirm Ross's C00729277 advances
+(`has_more`→false, contributions import). Then #6 (disk pressure) is the next untouched item.
+
+**Deferred**
+- See `docs/OPEN-WORK.md`.
+
+---
+
 ## 2026-06-17 — FEC Finding A: total-receipts completeness metric (separate from accuracy `status`) — night
 
 **What happened & why**

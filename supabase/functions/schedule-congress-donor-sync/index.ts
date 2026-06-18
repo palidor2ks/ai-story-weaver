@@ -48,27 +48,60 @@ serve(async (req) => {
       );
     }
 
-    // Find candidates with stalled committees (has_more=true)
-    // For backfill mode: prioritize never-synced (last_sync_completed_at IS NULL)
-    // For refresh mode: prioritize ones that were synced but hit has_more again
+    // Resolve in-scope candidates FIRST (coverage tier + visible state). This MUST precede the
+    // per-run LIMIT: previously we fetched a created_at-ordered slice of stalled committees and
+    // THEN filtered to visible/tier_1 — but that slice is dominated by hidden-state sitting members
+    // (which the visible-states gate discards), so the few visible candidates that sort behind them
+    // were never reached and their backfill stalled indefinitely (e.g. Deborah Ross, NC, sat at
+    // rank ~115 behind 114 hidden rows while the fetch cap was 100). Scope-first fixes that.
+    const hiddenSet = await loadHiddenStates(supabase);
+    const hiddenList = ingestionHiddenList(hiddenSet);
+    let scopeQuery = supabase
+      .from('candidates')
+      .select('id')
+      .in('coverage_tier', coverageTiers)
+      .not('fec_candidate_id', 'is', null);
+    if (hiddenList.length > 0) {
+      scopeQuery = scopeQuery.or(`state.is.null,state.not.in.(${hiddenList.join(',')})`);
+      console.log(`[SCHEDULE-CONGRESS-DONOR-SYNC] visible-states gate active; ${hiddenList.length} hidden state(s) excluded`);
+    }
+    const { data: scopeCandidates, error: scopeError } = await scopeQuery;
+    if (scopeError) {
+      console.error('[SCHEDULE-CONGRESS-DONOR-SYNC] Error fetching in-scope candidates:', scopeError);
+      return new Response(
+        JSON.stringify({ error: scopeError.message }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    const scopeIds = (scopeCandidates || []).map(c => c.id);
+    if (scopeIds.length === 0) {
+      console.log(`[SCHEDULE-CONGRESS-DONOR-SYNC] No candidates in scope=${scope}`);
+      return new Response(
+        JSON.stringify({ success: true, processed: 0, message: 'No candidates in scope' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Find stalled committees (has_more=true) AMONG in-scope candidates only.
+    // For backfill mode: prioritize never-synced (last_sync_completed_at IS NULL), oldest first.
+    // For refresh mode: prioritize ones synced but stuck again (has_more=true), oldest completion first.
     let query = supabase
       .from('candidate_committees')
       .select('candidate_id')
-      .eq('has_more', true);
+      .eq('has_more', true)
+      .in('candidate_id', scopeIds);
 
     if (mode === 'backfill') {
-      // Backfill: prioritize never-synced, oldest first
       query = query
         .is('last_sync_completed_at', null)
         .order('created_at', { ascending: true });
     } else if (mode === 'refresh') {
-      // Refresh: prioritize ones that were synced but got stuck again (has_more=true again)
       query = query
         .not('last_sync_completed_at', 'is', null)
         .order('last_sync_completed_at', { ascending: true });
     }
 
-    const { data: stalledRows, error: fetchError } = await query.limit(limit * 100); // Fetch more to dedupe
+    const { data: stalledRows, error: fetchError } = await query.limit(limit * 100); // fetch extra to dedupe
 
     if (fetchError) {
       console.error('[SCHEDULE-CONGRESS-DONOR-SYNC] Error fetching stalled committees:', fetchError);
@@ -79,30 +112,19 @@ serve(async (req) => {
     }
 
     if (!stalledRows || stalledRows.length === 0) {
-      console.log(`[SCHEDULE-CONGRESS-DONOR-SYNC] No stalled committees found for scope=${scope}`);
+      console.log(`[SCHEDULE-CONGRESS-DONOR-SYNC] No stalled committees found in scope=${scope}`);
       return new Response(
-        JSON.stringify({ success: true, processed: 0, message: 'No stalled committees found' }),
+        JSON.stringify({ success: true, processed: 0, message: 'No stalled committees found in scope' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Dedupe candidate_ids and filter by coverage_tier.
-    // Hidden-state candidates are excluded at the query level (visible-states gate)
-    // so they don't consume sync slots that belong to visible-state sitting members.
-    const candidateIds = Array.from(new Set(stalledRows.map(row => row.candidate_id)));
-
-    const hiddenSet = await loadHiddenStates(supabase);
-    const hiddenList = ingestionHiddenList(hiddenSet);
-    let candidatesQuery = supabase
+    // Dedupe candidate_ids (preserving created_at order) and take this run's slice.
+    const orderedCandidateIds = Array.from(new Set(stalledRows.map(row => row.candidate_id))).slice(0, limit);
+    const { data: candidates, error: candError } = await supabase
       .from('candidates')
       .select('id, name, fec_candidate_id, coverage_tier')
-      .in('id', candidateIds)
-      .in('coverage_tier', coverageTiers);
-    if (hiddenList.length > 0) {
-      candidatesQuery = candidatesQuery.or(`state.is.null,state.not.in.(${hiddenList.join(',')})`);
-      console.log(`[SCHEDULE-CONGRESS-DONOR-SYNC] visible-states gate active; ${hiddenList.length} hidden state(s) excluded`);
-    }
-    const { data: candidates, error: candError } = await candidatesQuery.limit(limit);
+      .in('id', orderedCandidateIds);
 
     if (candError) {
       console.error('[SCHEDULE-CONGRESS-DONOR-SYNC] Error fetching candidates:', candError);
@@ -113,9 +135,9 @@ serve(async (req) => {
     }
 
     if (!candidates || candidates.length === 0) {
-      console.log(`[SCHEDULE-CONGRESS-DONOR-SYNC] No candidates in scope=${scope} with stalled committees`);
+      console.log(`[SCHEDULE-CONGRESS-DONOR-SYNC] No candidates resolved for scope=${scope}`);
       return new Response(
-        JSON.stringify({ success: true, processed: 0, message: 'No candidates in scope with stalled committees' }),
+        JSON.stringify({ success: true, processed: 0, message: 'No candidates resolved' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
