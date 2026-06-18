@@ -342,17 +342,16 @@ export const Candidates = () => {
           </TabsList>
         </Tabs>
 
-        {/* State coverage callout — only shown when user's home state isn't active yet */}
-        {userStateIsHidden && (
-          <div className="flex gap-3 rounded-lg border border-border bg-muted/50 px-4 py-3 text-sm text-foreground mb-4">
-            <Info className="w-4 h-4 mt-0.5 shrink-0 text-primary" />
-            <p>
-              We don't have full coverage for <span className="font-medium">{userStateCode}</span> yet —
-              you're seeing national officials and candidates from our active states.
-              We're working on expanding to more states soon.
-            </p>
-          </div>
-        )}
+        {/* Coverage callout — always visible; extra context when user's own state isn't active */}
+        <div className="flex gap-3 rounded-lg border border-border bg-muted/50 px-4 py-3 text-sm text-foreground mb-4">
+          <Info className="w-4 h-4 mt-0.5 shrink-0 text-primary" />
+          <p>
+            {userStateIsHidden
+              ? <>We don't have full coverage for <span className="font-medium">{userStateCode}</span> yet — you're seeing national officials and candidates from our active states. We're working on adding more states soon.</>
+              : <>PoliPulse is currently focused on a select set of states. We're actively expanding — more politicians and states are being added regularly.</>
+            }
+          </p>
+        </div>
 
         {/* Filters */}
         <div className="flex flex-col sm:flex-row gap-4 mb-6">
