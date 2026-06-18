@@ -27,6 +27,39 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-18 — state-legislators DEPLOYED + backfilled (live, verified)
+
+**What happened & why**
+Follow-up to the ingest entry below. PR #455 merged; the owner then asked to take it live now
+rather than wait for the Monday cron. So: applied the cron migration to prod via Supabase MCP
+(`apply_migration` — guardrail #2 satisfied by explicit owner go-ahead), confirmed the
+`discover-state-legislators-weekly` job is registered + active (`30 7 * * 1`) and that both Vault
+secrets it reads (`cron_secret`, `nj_elec_cron_anon_key`) exist, then kicked a one-time backfill via
+`net.http_post` using the same Vault-auth path the cron uses.
+
+**State** (verified live against prod `ornnzinjrcyigazecctf`)
+- Edge fn deployed: "Deploy Edge Functions" workflow on the merge commit = success; function present.
+- Manual backfill run: HTTP 200 `{status:"started"}`; sweep finished `status=idle`, **293 fetched /
+  293 new / 0 errors** (`candidate_ingest_status` where `source='openstates_state_leg'`).
+- Party-array guard WORKS (the one untested path): parties mapped to Democrat/Republican/Independent,
+  NOT all "Other". Chamber totals match reality — NJ Assembly 80, NJ Senate 40, NC House 120,
+  NC Senate 49 (1 vacancy). Splits realistic (D-led NJ, R-led NC).
+- Cron applied via MCP; the "Apply new migrations" GH workflow shows RED on the merge — that is the
+  intentional tripwire (no `SUPABASE_DB_URL` secret by design, guardrail #1), already satisfied by the
+  manual apply. Not a real failure.
+- NOT verified by me: the frontend (React) deploy — there's no frontend-deploy GH Action; the app
+  ships via the external host on push to `main`. The tab-filter change must be live there for the 293
+  rows to surface in the directory's State tab.
+
+**Next**
+Confirm the frontend host has deployed `main`, then eyeball the directory State tab for NJ/NC rows.
+
+**Deferred**
+- Other states (NY, PA, …) — expand the `STATES` array once NJ+NC looks right in the UI.
+- AI scoring — Phase 2 (rows are tier_3/pending_research; enroll via the research queue later).
+
+---
+
 ## 2026-06-18 — NJ+NC state legislators ingest (Option 1, directory-first)
 
 **What happened & why**
