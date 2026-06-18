@@ -27,6 +27,62 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-18 — NJ+NC state legislators ingest (Option 1, directory-first)
+
+**What happened & why**
+Implemented the full OpenStates → `candidates` ingest pipeline for NJ and NC state legislators,
+directory-first (no AI scoring). Four parts:
+1. `supabase/functions/discover-state-legislators/index.ts` — new edge function mirroring
+   `discover-fec-candidates` structure (CORS, `requireCronAuth`, `EdgeRuntime.waitUntil`). Sweeps
+   OpenStates v3 `/people` for New Jersey + North Carolina, maps persons to `CandidateInput` using
+   the EXACT same `openstates_${id}` convention as `fetch-civic-officials` for dedup. Calls
+   `resolveAndUpsertCandidate` only — no `kickResearch`, no `linkElectionCandidate`. Respects the
+   10 req/min free-tier rate limit (7s sleep between pages). Writes run metrics to
+   `candidate_ingest_status` (source `openstates_state_leg`).
+2. `supabase/config.toml` — added `[functions.discover-state-legislators] verify_jwt = false`.
+3. `supabase/migrations/20260618160000_discover_state_legislators_cron.sql` — weekly cron at
+   Monday 07:30 UTC, staggered from the nj-elec and ny crons. Vault-based auth identical to
+   `20260612013000_member_statements_freshness_cron.sql`.
+4. Frontend surfacing (revised during review — see below):
+   - `src/hooks/useUnifiedCandidates.ts` — fixed a `deriveLevelFromOffice` ordering bug: it
+     checked the federal `senator|representative` pattern BEFORE the state patterns, so "State
+     Senator"/"State Representative" were misclassified as `federal`. State/local patterns now
+     run first. (The civic `stateExec/stateLeg/local` buckets were left as pure address-scoped
+     feeds — see why below.)
+   - `src/pages/Candidates.tsx` — the State/Local tabs and their counts now filter `allCandidates`
+     by `level` (was: the civic-only buckets). This surfaces the full DB roster in the directory
+     WITHOUT polluting "My Reps" (which still concatenates the address-scoped civic buckets).
+
+**Review caught two bugs (both fixed):**
+- The build agent's first cut routed DB rows into the civic `stateLeg/local` buckets — but
+  `myRepsCombined` concatenates those, so "My Reps" would have ballooned with all ~290 legislators.
+  Switched to filtering `all` by level in the page instead.
+- `deriveLevelFromOffice` federal-first ordering (above) — would have made the routing/filter
+  silently match nothing.
+- etl-pipeline-reviewer (GO) flagged a blocking data bug: OpenStates v3's bulk `/people` endpoint
+  can return `party` as `[{name}]` (array), not the flat string the `.geo` endpoint gives — which
+  `mapParty` would map to `'Other'` for everyone. Added an `Array.isArray` guard + a log.
+
+**State** (verified)
+- `bun run lint`: 0 errors (154 pre-existing warnings, none new). `bunx vite build`: ✓ 0 errors.
+- `candidate_ingest_status` columns confirmed (source/status/last_total_*/error_message exist).
+- etl-pipeline-reviewer verdict: **GO** after the party guard (idempotency, pagination bounds,
+  rate-limit, visible-states gate all verified clean against the `discover-fec-candidates` pattern).
+- `bun run test`: not run (no new pure helpers; edge fn is Deno runtime, not testable locally).
+- NOT verified at runtime: live OpenStates response shape; whether the cron actually populates rows
+  (needs deploy + first Monday run). NOT deployed yet.
+
+**Next**
+Merge the PR (deploy-edge-functions.yml auto-deploys). After the first cron run, query
+`candidate_ingest_status where source='openstates_state_leg'` and confirm NJ/NC legislators appear
+in the directory's State tab with correct party.
+
+**Deferred**
+- Other states (NY, PA, …) — expand the `STATES` array after NJ+NC is verified.
+- AI scoring for these legislators — Phase 2 (enroll via the research queue) when coverage warrants.
+
+---
+
 ## 2026-06-18 — PR #451 merged + edge functions deployed to prod (#4/#5 fully live) — late night
 
 **What happened & why**
