@@ -27,6 +27,43 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-18 — share-card + nav cleanup + PoliScore removal
+
+**What happened & why**
+Four UI cleanup items, all merged:
+
+1. **Share card score label fix** (`PolicyPositionsCard.tsx`): The per-issue score label
+   ("L4.76" etc.) was positioned at `top: -14` inside the 24px slider container, floating
+   up into the description text above it. Moved to `top: 26` (below the slider dot) and
+   expanded the container height to 38px when a label is present.
+
+2. **Nav simplification** (`Header.tsx`): Removed Donors, Committees, Top Spenders, and
+   Jobs from the top nav — focus is on states/reps. Donor/committee data remains accessible
+   from within rep profile pages.
+
+3. **Admin-only list pages** (`App.tsx`): Added `requireAdmin` prop to `RouteGuard`.
+   `/donors`, `/committees`, `/top-spenders` now redirect non-admins to `/candidates`.
+   Back-links ("Back to Donors" etc.) also removed from `DonorProfile` and
+   `CommitteeProfile` since the list pages are no longer public.
+
+4. **PoliScore removal** (`CandidateProfile.tsx`): Pulled `<PoliScoreCard>` from the
+   candidate profile — it was a curated 28-key-vote section added by a previous session
+   that duplicated the existing Voting Record tab. Component/hook/migrations left dormant.
+
+**State** (verified 2026-06-18)
+- All 4 changes shipped via PRs #447–449 (merged); CI green on each (Lint ✓ Test ✓ Build ✓ Typecheck ✓)
+- No migrations applied this session
+- lint/test not run locally (CI is the gate)
+
+**Next**
+Contradict correction pass — the main open data-quality item from the prior session (see entry below).
+
+**Deferred**
+- PoliScore concept (curated key votes + "can't be bought" framing) is parked — component/hook/migrations intact if revived
+- `public_statement` pipeline homepage-only links (142 entries, 2.4%) + attribution bug (Charay Smith NC / adamsmith.house.gov) — carried from prior session
+
+---
+
 ## 2026-06-17 — deep-link fix: homepage-only citations rejected + 32 backfilled — night
 
 **What happened & why**
