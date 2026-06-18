@@ -49,10 +49,15 @@ DB at ~15 GB (matview refresh OOM'd 2026-06-13). Profiled: indexes dominate (`co
 - Reviewer noted an unrelated pre-existing bug: `fetch-committee-donors/index.ts:412` uses
   `onConflict: 'identity_hash'` (no such single-col UNIQUE) — already broken, out of scope here.
 
+**Applied (2026-06-18, owner said go):** migration `20260618130000` applied — **DB 15 → 13 GB**
+(contributions 8,473→7,240 MB; donors 2,937→2,337 MB). Verified `memo_code='X'` now uses an Index
+Only Scan on `contributions_memo_code_idx` (no seq-scan regression). All 9 indexes confirmed gone.
+
 **Next**
-Decide whether to apply `20260618130000` (the ~1.86 GB index drop) — awaiting owner go (guardrail #1).
-After apply, EXPLAIN the conduit backfill `memo_code='X'` scan. Owner-level: storage add-on / matview
-OOM mitigation remain the durable fix as `contributions` keeps growing.
+Owner-level is the durable fix: expand storage add-on and/or mitigate the matview-refresh OOM
+(REFRESH CONCURRENTLY + unique index + headroom, or off-peak schedule) — `contributions` keeps
+growing. Tiny follow-up: fix the pre-existing `fetch-committee-donors:412` `onConflict:'identity_hash'`
+bug (no single-col UNIQUE; already broken).
 
 **Deferred**
 - See `docs/OPEN-WORK.md`.

@@ -64,21 +64,17 @@ Can't manually trigger fetch-fec-donors from MCP (admin auth + FEC network).
 
 ## 🟠 Infrastructure / DB
 
-### 6. 🟡 Supabase disk pressure — staging dropped; index cleanup reviewed, awaiting apply
-**What:** DB ~15 GB; `refresh-donor-consolidated-daily` OOM'd 2026-06-13 (matview refresh needs 2×
-temp). Indexes dominate: `contributions` 3,975 MB idx / 4,499 MB table; `donors` 1,990 / 947.
-**Done (2026-06-18):** dropped orphaned `_enrich_*` staging (~506 MB; `_enrich_member_bills` was a
-1.38M-row leftover from an aborted ETL script). Migration `20260618120000`, applied.
-**Reviewed, not yet applied:** migration `20260618130000` drops 9 `idx_scan=0` indexes (~1.86 GB) on
-contributions/donors/candidate_votes. migration-safety-reviewer returned **GO, no exclusions** (none
-back PK/UNIQUE/FK; ETL `ON CONFLICT` uses the UNIQUE `(identity_hash,cycle)`, not these; reversible).
-The 1 GB `idx_contributions_identity` is fully covered by that UNIQUE index. Watch-items both closed
-(full `contributions_memo_code_idx` covers the partial; no frontend `display_name` trigram use).
-**State:** awaiting deliberate apply (guardrail #1). After apply, EXPLAIN the conduit backfill
-`memo_code='X'` scan to confirm it uses `contributions_memo_code_idx`.
-**Owner-level (still open):** expand storage add-on; mitigate the matview-refresh OOM (REFRESH
-CONCURRENTLY needs a unique index + headroom, or schedule when free space is highest). Index +
-staging reclaim (~2.36 GB) buys runway but isn't a permanent fix as `contributions` keeps growing.
+### 6. 🟡 Supabase disk pressure — reclaimed ~2.36 GB (15→13 GB); owner-level fix still open
+**What:** DB was ~15 GB; `refresh-donor-consolidated-daily` OOM'd 2026-06-13 (matview refresh needs 2× temp).
+**Done (2026-06-18):** dropped orphaned `_enrich_*` staging (~506 MB, migration `20260618120000`) AND
+9 unused `idx_scan=0` indexes (~1.86 GB, migration `20260618130000`, reviewer GO). **DB 15 → 13 GB**
+(contributions 8,473→7,240 MB; donors 2,937→2,337 MB). Verified `memo_code='X'` still uses an index
+(Index Only Scan on `contributions_memo_code_idx`) — no seq-scan regression.
+**Owner-level (still open, the durable fix):** expand the storage add-on, and/or mitigate the
+matview-refresh OOM (REFRESH CONCURRENTLY needs a unique index + headroom, or schedule at lowest-usage
+time). The ~2.36 GB buys runway but `contributions` keeps growing, so this isn't permanent.
+**Tiny follow-up:** reviewer flagged a pre-existing bug — `fetch-committee-donors/index.ts:412` uses
+`onConflict: 'identity_hash'` (no single-col UNIQUE exists; already broken at runtime). Worth fixing.
 
 ### 7. ☐ `public_statement` pipeline homepage-link + attribution fix
 **What:** The older enrichment pipeline emits homepage-only links (142 bare-domain array entries, 2.4%)
@@ -113,8 +109,8 @@ and the large/fragile edge fns `fetch-fec-donors`, `get-candidate-answers`.
 ---
 
 ## ✅ Recently done (prune after ~2 weeks)
-- ✅ **2026-06-18** Disk: dropped orphaned `_enrich_*` staging (~506 MB). Index-cleanup migration
-  (~1.86 GB) reviewed GO, awaiting apply (#6).
+- ✅ **2026-06-18** Disk: dropped orphaned `_enrich_*` staging (~506 MB) + 9 unused indexes
+  (~1.86 GB). **DB 15 → 13 GB.** Owner-level storage/matview fix still open (#6).
 - ✅ **2026-06-17** Congress donor backfill: diagnosed (94% by-design hidden-state exclusion) + fixed
   the scope-after-limit bug in schedule-congress-donor-sync (#5 — needs edge-fn deploy).
 - ✅ **2026-06-17** FEC Finding A: added `total_receipts_status` completeness metric (separate from
