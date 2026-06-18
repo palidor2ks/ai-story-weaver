@@ -27,6 +27,71 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-18 — topic-scores trim via server-side RPC (the deferred follow-up, now done)
+
+**What happened & why**
+Owner picked Option 2 for the topic-scores trim (deferred in the entry below): do the visible-states
+filtering on the backend so it's a reusable concern, not client plumbing. Added
+`public.get_visible_candidate_topic_scores()` — a STABLE SECURITY DEFINER SQL function (mirrors
+`get_hidden_state_codes`) that joins `calculated_candidate_topic_scores` → `candidates` and returns
+only rows for candidates in non-hidden states. `useCandidates` now calls
+`supabase.rpc('get_visible_candidate_topic_scores')` instead of selecting the whole table; added the
+function to the generated `types.ts`.
+
+**State** (verified live against prod `ornnzinjrcyigazecctf`)
+- Migration applied via MCP (owner chose the backend approach). RPC returns **1,416 rows vs 15,201**
+  full-table — ~10.7× fewer topic-score rows shipped to the directory.
+- Security advisors after the DDL: the new fn appears only under the benign, pre-existing
+  `anon/authenticated_security_definer_function_executable` categories (58 such fns already exist,
+  incl. the one it mirrors). No missing-RLS / mutable-search-path / severe flags. It exposes strictly
+  less, already-public data (the table has no RLS).
+- `bun run lint`: 0 errors. `bunx vite build`: ✓ (RPC type resolves).
+
+**Next**
+After the frontend host deploys, confirm match-sort still works in the directory (topic scores now
+arrive via the RPC).
+
+**Deferred**
+- Other states (NY, PA, …); AI scoring (Phase 2) — as before.
+
+---
+
+## 2026-06-18 — directory perf (visible-state fetch) + image-proxy allowlist (PR #460)
+
+**What happened & why**
+After the legislators went live, browsing the directory surfaced two issues: a `proxy-image`
+RUNTIME_ERROR (blank-screen telemetry) on a legislator headshot, and slow loading. Root causes
+found by reading the load path + measuring prod:
+1. **Perf** — `useCandidates` (consumed only by `useUnifiedCandidates` → directory + Feed) fetched
+   the ENTIRE nationwide `candidates` table (2,685 rows) plus all topic scores, then the UI filtered
+   to the ~476 in non-hidden states client-side. Pushed the hidden-state filter into the query
+   (`.not('state','in',(…))`; `US`/national kept since never hidden). Composed `useHiddenStates`,
+   `queryKey: ['candidates', hiddenList]`, `enabled: !hiddenLoading`. ~5.6× smaller payload + client
+   processing. Verified behavior-preserving: 0 null-state rows, 11 `US` kept, **0 active overrides
+   flip the hidden/visible boundary** (the only case where base vs overridden state could differ).
+2. **Error** — the new OpenStates legislators carry `person.image` on hosts the proxy allowlist
+   didn't cover (`ncleg.gov` alone = 135 NC members, plus `nj.gov`, S3/GCS, Wix, Squarespace) → every
+   one 400'd `host not allowed`, surfacing as a window resource-error on the share-card `<img>`.
+   Widened `ALLOWED_HOST_SUFFIXES`; responses still validated `image/*` + 5 MB cap. (The directory
+   itself loads images directly w/ initials fallback, so it was unaffected — this fixes the proxied
+   share-card path.)
+
+**State** (verified)
+- `bun run lint`: 0 errors. `bunx vite build`: ✓. performance-bundle-reviewer verdict: **GO** (no
+  blocking items; confirmed the PostgREST filter, cache-key stability, and that the President/VP
+  `US` promotion + congress dedup don't rely on the now-excluded hidden rows).
+- PR #460 merged. Frontend ships via the external host's `main` build; `proxy-image` via the
+  "Deploy Edge Functions" workflow on merge. NOT independently confirmed live by me post-merge.
+
+**Next**
+Confirm prod: directory loads faster and the legislator share-card images resolve (no proxy 400s).
+
+**Deferred**
+- **Topic-scores trim** — DONE via the RPC in the entry above (Option 2, server-side join).
+- Other states (NY, PA, …); AI scoring (Phase 2) — as before.
+
+---
+
 ## 2026-06-18 — state-legislators DEPLOYED + backfilled (live, verified)
 
 **What happened & why**

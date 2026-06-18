@@ -114,10 +114,12 @@ export const useCandidates = () => {
         candidatesQuery = candidatesQuery.not('state', 'in', `(${hiddenList.join(',')})`);
       }
 
-      // Fetch all data in parallel to reduce latency
+      // Fetch all data in parallel to reduce latency. Topic scores come through a
+      // SECURITY DEFINER RPC that applies the same visible-states filter server-side,
+      // so we don't pull ~15k score rows for candidates that are never displayed.
       const [candidatesResult, topicScoresResult, overridesResult] = await Promise.all([
         candidatesQuery,
-        supabase.from('calculated_candidate_topic_scores').select('candidate_id, topic_id, calculated_score'),
+        supabase.rpc('get_visible_candidate_topic_scores'),
         supabase.from('candidate_overrides').select('candidate_id, overall_score, name, party, office, state, district, image_url, coverage_tier, confidence').eq('is_active', true),
       ]);
 

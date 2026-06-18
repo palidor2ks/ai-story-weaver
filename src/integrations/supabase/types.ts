@@ -6447,6 +6447,14 @@ export type Database = {
           state_code: string
         }[]
       }
+      get_visible_candidate_topic_scores: {
+        Args: never
+        Returns: {
+          candidate_id: string
+          topic_id: string
+          calculated_score: number
+        }[]
+      }
       get_pipeline_failure_summary: {
         Args: never
         Returns: {
