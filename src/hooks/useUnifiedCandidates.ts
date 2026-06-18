@@ -204,17 +204,27 @@ export const useUnifiedCandidates = ({
     return { dbById, allById, repsById, civicById };
   }, [dbCandidates, allPoliticians, userReps, civicAll]);
 
-  // Collect all ids we need to look up scores for.
-  const allIds = useMemo(() => {
+  // Stable IDs for the score map: DB UUIDs + Congress bioguide IDs only.
+  // Civic official IDs (OCD/Google Civic format) don't exist in candidates or
+  // candidate_overrides, so including them only churns the query key every time
+  // the address-based civic feed arrives. userReps are a bioguide subset of
+  // allPoliticians so they're already covered.
+  const scoreMapIds = useMemo(() => {
     const set = new Set<string>();
     for (const c of dbCandidates) set.add(c.id);
     for (const c of allPoliticians) set.add(c.bioguide_id || c.id);
+    return Array.from(set);
+  }, [dbCandidates, allPoliticians]);
+
+  // Full ID set (including civic/reps) used for AI match scoring.
+  const allIds = useMemo(() => {
+    const set = new Set<string>(scoreMapIds);
     for (const c of userReps) set.add(c.bioguide_id || c.id);
     for (const c of civicAll) set.add(c.id);
     return Array.from(set);
-  }, [dbCandidates, allPoliticians, userReps, civicAll]);
+  }, [scoreMapIds, userReps, civicAll]);
 
-  const { data: scoreMap } = useCandidateScoreMap(allIds);
+  const { data: scoreMap } = useCandidateScoreMap(scoreMapIds);
 
   // AI match scores (per-user) — pulled for every candidate we know about.
   const { data: userQuizAnswers = [] } = useUserQuizQuestionIds();
