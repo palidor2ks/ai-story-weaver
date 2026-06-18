@@ -27,6 +27,38 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-18 — Disk pressure (#6): orphaned staging dropped (~506 MB) + reviewed index-cleanup migration (~1.86 GB) — night
+
+**What happened & why**
+DB at ~15 GB (matview refresh OOM'd 2026-06-13). Profiled: indexes dominate (`contributions`
+3,975 MB idx vs 4,499 MB table; `donors` 1,990 vs 947). Two levers found:
+1. **Orphaned staging** — `_enrich_member_bills` (504 MB, 1.38M rows, unlogged) + 4 tiny siblings,
+   left behind when `generate-vote-citation-sql.ts` aborted before its own teardown. **Dropped**
+   (migration `20260618120000`, applied to Dev; repo file added). Script recreates them per run.
+2. **Unused indexes** — 9 indexes with cumulative `idx_scan=0` (stats never reset; siblings show
+   100s–100k scans, so 0 = genuinely unused). Biggest: `idx_contributions_identity` (1 GB,
+   single-col on identity_hash) is fully covered by the UNIQUE `(identity_hash,cycle)` index that
+   ETL dedup uses (879k scans). Migration `20260618130000` drops all 9 (~1.86 GB).
+
+**State** (verified 2026-06-18)
+- Staging drop applied (~506 MB reclaimed at table level). Index migration **written + reviewed,
+  NOT applied**: migration-safety-reviewer returned **GO, no exclusions** (none back PK/UNIQUE/FK;
+  ETL `ON CONFLICT` targets the UNIQUE composite, not these; DROP INDEX IF EXISTS = reversible).
+  Watch-items closed: full `contributions_memo_code_idx` covers the dropped partial; no frontend
+  `display_name` trigram usage (grep clean).
+- Reviewer noted an unrelated pre-existing bug: `fetch-committee-donors/index.ts:412` uses
+  `onConflict: 'identity_hash'` (no such single-col UNIQUE) — already broken, out of scope here.
+
+**Next**
+Decide whether to apply `20260618130000` (the ~1.86 GB index drop) — awaiting owner go (guardrail #1).
+After apply, EXPLAIN the conduit backfill `memo_code='X'` scan. Owner-level: storage add-on / matview
+OOM mitigation remain the durable fix as `contributions` keeps growing.
+
+**Deferred**
+- See `docs/OPEN-WORK.md`.
+
+---
+
 ## 2026-06-18 — Congress donor backfill stall: diagnosed (mostly by-design) + scheduler fix — night
 
 **What happened & why**
