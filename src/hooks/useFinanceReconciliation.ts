@@ -39,6 +39,9 @@ export interface FinanceReconciliation {
   // Total receipts delta (for UI display - matches FEC/Local columns)
   total_receipts_delta_amount: number | null;
   total_receipts_delta_pct: number | null;
+  // Completeness signal vs FEC total receipts ('ok' | 'under' | 'over' | null), separate from
+  // the itemized-accuracy `status`. 'under' = we're missing receipts FEC reports (coverage gap).
+  total_receipts_status: string | null;
   status: string | null;
   checked_at: string | null;
 }
@@ -91,6 +94,7 @@ function aggregateReconciliations(
     pac_delta_amount: null, pac_delta_pct: null,
     delta_amount: null, delta_pct: null,
     total_receipts_delta_amount: null, total_receipts_delta_pct: null,
+    total_receipts_status: null,
   };
   for (const f of SUMMABLE_RECONCILIATION_FIELDS) {
     agg[f] = rows.reduce((s, r) => s + (Number(r[f] ?? 0) || 0), 0);

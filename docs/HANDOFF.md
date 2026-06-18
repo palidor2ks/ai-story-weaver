@@ -27,6 +27,336 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-18 — committee-donors upsert fix (#6 follow-up) + PR #451 opened & CI green — late night
+
+**What happened & why**
+Closed the loose end the migration-safety-reviewer flagged during the disk-pressure work:
+`fetch-committee-donors/index.ts:412` upserted with `onConflict: 'identity_hash'`, but no
+single-column UNIQUE exists — the real constraint is the composite `(identity_hash, cycle)`. Every
+batch was silently erroring at runtime, so committee-donor contributions never persisted via this
+path. Fixed to `'identity_hash,cycle'`, matching both sibling importers (`fetch-fec-donors:994`,
+`import-fec-receipts-csv:680`). Verified the batch already carries `cycle` (line 357) and the hash
+is computed with `cycle` baked in (line 341), so the composite target is consistent.
+
+Then opened **draft PR #451** — there was no open PR; this branch accumulates work across sessions
+and all prior PRs (≤#446) are merged/closed. #451 batches the unmerged commits: disk reclaim (#6),
+FEC completeness metric (#4), donor-backfill scope-first fix (#5), and this upsert fix.
+
+**State** (verified)
+- Tree clean, all commits pushed to `claude/pensive-hypatia-r6m2d8`. Did NOT run `/preflight` —
+  the only code change is a one-line edge-fn string literal (Deno, outside the Vite lint/build/test
+  scope); the other commits were verified in their own prior sessions.
+- **PR #451 CI fully green**: GitGuardian ✅ + Supabase Preview ✅ (Database/Services/APIs/
+  Configurations/Migrations/Seeding/Edge Functions all ✅). All 3 migrations applied cleanly on a
+  fresh preview DB — confirms they're idempotent/order-safe. One transient Supabase-side `502` on
+  edge-fn create cleared on a single empty-commit re-trigger (not our diff).
+- Still **subscribed** to PR #451 activity; self check-in armed to re-verify mergeability.
+
+**Next**
+Owner: review/mark-ready/merge PR #451. (Then the #4/#5 edge functions still need a production
+deploy to take effect — they're code-committed but not deployed.)
+
+**Deferred**
+- Owner-level durable disk fix (#6): storage add-on and/or matview-refresh OOM mitigation.
+- See `docs/OPEN-WORK.md` for the full backlog (#1, #7–#13).
+
+---
+
+## 2026-06-18 — Disk pressure (#6): orphaned staging dropped (~506 MB) + reviewed index-cleanup migration (~1.86 GB) — night
+
+**What happened & why**
+DB at ~15 GB (matview refresh OOM'd 2026-06-13). Profiled: indexes dominate (`contributions`
+3,975 MB idx vs 4,499 MB table; `donors` 1,990 vs 947). Two levers found:
+1. **Orphaned staging** — `_enrich_member_bills` (504 MB, 1.38M rows, unlogged) + 4 tiny siblings,
+   left behind when `generate-vote-citation-sql.ts` aborted before its own teardown. **Dropped**
+   (migration `20260618120000`, applied to Dev; repo file added). Script recreates them per run.
+2. **Unused indexes** — 9 indexes with cumulative `idx_scan=0` (stats never reset; siblings show
+   100s–100k scans, so 0 = genuinely unused). Biggest: `idx_contributions_identity` (1 GB,
+   single-col on identity_hash) is fully covered by the UNIQUE `(identity_hash,cycle)` index that
+   ETL dedup uses (879k scans). Migration `20260618130000` drops all 9 (~1.86 GB).
+
+**State** (verified 2026-06-18)
+- Staging drop applied (~506 MB reclaimed at table level). Index migration **written + reviewed,
+  NOT applied**: migration-safety-reviewer returned **GO, no exclusions** (none back PK/UNIQUE/FK;
+  ETL `ON CONFLICT` targets the UNIQUE composite, not these; DROP INDEX IF EXISTS = reversible).
+  Watch-items closed: full `contributions_memo_code_idx` covers the dropped partial; no frontend
+  `display_name` trigram usage (grep clean).
+- Reviewer noted an unrelated pre-existing bug: `fetch-committee-donors/index.ts:412` uses
+  `onConflict: 'identity_hash'` (no such single-col UNIQUE) — already broken, out of scope here.
+
+**Applied (2026-06-18, owner said go):** migration `20260618130000` applied — **DB 15 → 13 GB**
+(contributions 8,473→7,240 MB; donors 2,937→2,337 MB). Verified `memo_code='X'` now uses an Index
+Only Scan on `contributions_memo_code_idx` (no seq-scan regression). All 9 indexes confirmed gone.
+
+**Next**
+Owner-level is the durable fix: expand storage add-on and/or mitigate the matview-refresh OOM
+(REFRESH CONCURRENTLY + unique index + headroom, or off-peak schedule) — `contributions` keeps
+growing. Tiny follow-up: fix the pre-existing `fetch-committee-donors:412` `onConflict:'identity_hash'`
+bug (no single-col UNIQUE; already broken).
+
+**Deferred**
+- See `docs/OPEN-WORK.md`.
+
+---
+
+## 2026-06-18 — Congress donor backfill stall: diagnosed (mostly by-design) + scheduler fix — night
+
+**What happened & why**
+Backlog #5. ~163 `candidate_committees` had `has_more=true` not progressing (~3/day vs 144/day). Found
+the "stall" is **~94% by design**: of ~120 never-completed stalled committees, **113 are tier_1 but
+hidden-state**, correctly excluded by the visible-states gate. Only **1 visible candidate** (Deborah
+Ross, NC Senate, committee C00729277) was genuinely stuck — untouched since 2026-06-10.
+
+**Root cause (real bug for the 1 visible):** `schedule-congress-donor-sync` fetched the first
+`limit*100 = 100` stalled committee rows ordered by `created_at`, THEN filtered to visible/tier_1.
+Ross sat at rank ~115 behind 114 hidden-state rows, so the post-limit filter returned 0 in-scope
+candidates every run and she was never reached.
+
+**Fix:** restructured to **scope-first** — resolve in-scope candidate ids (coverage tier + visible
+state) BEFORE querying their stalled committees, so the per-run LIMIT applies to in-scope candidates,
+not a hidden-dominated slice. (`supabase/functions/schedule-congress-donor-sync/index.ts`.)
+
+**State** (verified 2026-06-18)
+- Diagnosis confirmed via SQL: 113 tier_1-hidden / 6 tier_2-hidden / 1 tier_1-visible (Ross @ rank 115).
+- 94 tests pass; edge fns are eslint-ignored (Deno). Uses existing tested helpers (loadHiddenStates/
+  ingestionHiddenList) + standard query patterns. Not runtime-tested (can't invoke from MCP).
+- **Do NOT widen scope to hidden states** — intentional product exclusion + would worsen disk pressure (#6).
+- **Remaining: deploy `schedule-congress-donor-sync`** — next `*/10` cron run after deploy picks up Ross.
+  Couldn't manually trigger fetch-fec-donors from MCP (admin auth + FEC network egress).
+
+**Next**
+Deploy the scheduler (with the #4 edge fns) via normal path; confirm Ross's C00729277 advances
+(`has_more`→false, contributions import). Then #6 (disk pressure) is the next untouched item.
+
+**Deferred**
+- See `docs/OPEN-WORK.md`.
+
+---
+
+## 2026-06-17 — FEC Finding A: total-receipts completeness metric (separate from accuracy `status`) — night
+
+**What happened & why**
+Backlog #4, unblocked by the Finding-B fix. ~363 recon rows were `status='ok'` yet materially off on
+TOTAL receipts. Analysis showed those rows have ACCURATE itemized data (avg itemized delta ≈ 0) — the
+divergence is **completeness** (mostly coverage gaps: local < FEC), a different axis from the
+itemized **accuracy** `status` measures. Also found a loophole: rows with no FEC itemized baseline
+default `delta_pct=0 → 'ok'` (only 19 have local data, so minor). Owner chose "separate completeness
+metric" (don't conflate accuracy with completeness / flood the error list).
+
+**What we did**
+- Migration `20260617240000` adds `finance_reconciliation.total_receipts_status` (ok / under / over /
+  null) + backfills from the trustworthy `total_receipts_delta_pct`. Applied (MCP version
+  `20260617<ts>`; idempotent column add). Backfill: **1,655 ok / 865 under / 212 over / 148 n/a**;
+  262 of the 'under' are itemized-`ok` — the coverage gaps the accuracy gate can't see.
+- Computed `totalReceiptsStatus` at all **3 write sites** (nightly-finance-reconciliation + 2 in
+  refresh-fec-totals); threshold ±10% (under = local<FEC, over = local>FEC).
+- Surfaced on `FinanceReconciliationCard` (Complete / Under-counted / Over-counted badge + note on
+  the Total Receipts panel). `status` semantics unchanged.
+
+**State** (verified 2026-06-17 night)
+- lint 0 errors (154 pre-existing `any` warnings) · 94 tests pass · `bunx vite build` ✓ (the
+  `bun run build` prebuild sitemap step 403s on all 4 tables = sandbox egress block, not a code issue;
+  kept last-good sitemap). types.ts updated (Row/Insert/Update).
+- **Remaining: deploy the two edge fns** (`nightly-finance-reconciliation`, `refresh-fec-totals`) so
+  future runs populate the column on new rows. Existing rows are backfilled; old deployed fns leave
+  the column untouched on upsert (ON CONFLICT updates only listed columns), so no data loss meanwhile.
+
+**Next**
+Deploy the two edge fns (or let CD), then a full nightly drain refreshes deltas + completeness. After
+that, #4 is fully closed.
+
+**Deferred**
+- See `docs/OPEN-WORK.md`.
+
+---
+
+## 2026-06-17 — FEC Finding B applied + recon corrected (Line 14/15 double-count) — night
+
+**What happened & why**
+Backlog #3. A prior session (2026-06-15) had authored the fix for the FEC "other receipts"
+double-count — migration `20260615170000` redefines `other_total` from a catch-all (which swept in
+Line-12 transfers, double-counting JFC money) to `Line 14 + 15` — but it was never applied or drained.
+Verified it was still unapplied (deployed fn = old; not in `schema_migrations`), reproduced the bug
+(Cassidy old `other_total` $2,270,864 = his Line-12 transfers exactly; fixed $274,592 = FEC), ran the
+migration-safety-reviewer (**GO** — pure read-path, return signature exact-matches `types.ts`, all 3
+callers read `other_total` by name and handle the smaller value). Owner approved apply + re-drain.
+
+**What we did**
+1. Applied the migration via MCP `apply_migration` (recorded under MCP-assigned version
+   `20260617232826`, NOT the repo's `20260615170000` — harmless, the repo file is idempotent
+   `CREATE OR REPLACE` so the resync script re-running it is a no-op; did NOT hand-edit the ledger).
+2. Couldn't invoke `nightly-finance-reconciliation` (admin-JWT-only + hits FEC API; no auth/egress
+   from MCP), so recomputed the affected columns **set-based, network-free**: new `local_other_receipts`
+   = Line 14+15 over active P/A committees (validated == canonical `get_contribution_totals` for
+   Cassidy), then `total_receipts_delta_amount/pct` via the edge fn's exact formula (`effectiveOther =
+   max(localOther, fecOther+fecOffsets)`, etc.) using already-stored FEC values. Only those 3 columns
+   touched; `status` + itemized deltas untouched (status doesn't depend on `other_total`).
+
+**State** (verified 2026-06-17 night)
+- Fix live (`get_contribution_totals` now `IN ('14','15')`); Cassidy `other` $2.55M → $274,592,
+  total-receipts delta **31.1% → −2.6%**. Double-count signature (`local_other == local_transfers`):
+  **138 → 0 rows**. Excess "other" $89.7M → $3.4M (residual = real local>FEC diffs, e.g. Thanedar,
+  the double-count was masking them — surfaced, not introduced). 800 candidates had recon rows touched.
+- NOT run through `bun run check:accuracy` (no SUPABASE_DB_URL here) and the authoritative nightly
+  drain (fresh FEC fetch) hasn't run — it will reconfirm the recomputed deltas.
+
+**Next**
+Backlog #4 (Finding A) is now **unblocked**: `total_receipts_delta` is trustworthy, so decide whether
+to add a secondary total-receipts gate to recon `status`. Run a full nightly drain first to reconfirm.
+
+**Deferred**
+- See `docs/OPEN-WORK.md` for the full live backlog.
+
+---
+
+## 2026-06-17 — relabel 3,615 PS "insufficient" → inferred + OPEN-WORK backlog wired into /preflight — night
+
+**What happened & why**
+Two things. (1) Did backlog item #2: the high-signal PS corroboration run found NO verifiable source
+for 3,615 rows (`verdict='insufficient'`). Presenting those as sourced `public_statement` is dishonest,
+so relabeled them → `evidence_type='inferred'`, `source_type='other'` (same safe pattern as the 8,140
+pass: archived to history, slow triggers disabled during bulk update since coverage ignores
+evidence_type and topic scores use answer_value/unchanged, then re-enabled). (2) Owner liked the
+consolidated to-do summary, so made it durable: new **`docs/OPEN-WORK.md`** is the canonical
+prioritized backlog (what / history / state per item), and **`/preflight` now ends with an
+"Outstanding work" section** rendered from it; `/wrap-up` step 5 keeps it current.
+
+**State** (verified 2026-06-17 night)
+- 3,615 relabeled & archived (`superseded_reason='… corroboration found no verifiable source …'`);
+  both slow triggers confirmed re-enabled (tgenabled='O'). No score/coverage change by construction.
+- Visible-state `public_statement` sourceless: **8,048 → 4,433** (remaining = 3,945 never-run
+  ambiguous + ~488 held opposite-sign/contradict).
+- `docs/OPEN-WORK.md` created; `preflight/SKILL.md` + `wrap-up/SKILL.md` updated. Docs/skill-only
+  change — not yet run through `/preflight` (no code changed).
+
+**Next**
+Backlog #1 (corroborate the ambiguous 3,945 PS rows, ~$31) or #3 (FEC Line 14/15 double-count) —
+both in `docs/OPEN-WORK.md`.
+
+**Deferred**
+- See `docs/OPEN-WORK.md` for the full live backlog (replaces the scattered Deferred lists below).
+
+---
+
+## 2026-06-17 — public_statement corroboration run: 535 sourced + applied (high-signal subset) — night
+
+**What happened & why**
+Ran the held corroboration pass on the visible-state `public_statement`-without-URL pool. Scoped to
+the **high-signal 4,638** (of 8,583) — rows whose `source_description` contains a quote, named outlet,
+"campaign website", interview, or `.gov` cue (best yield/$). Fired via pg_net to `corroborate-answers`
+with **explicit `question_ids` per candidate** (so it targets ONLY these rows, not the already-done
+`inferred` pool), 25/batch, 280 posts in 2 waves of ~91 candidates. run_label `rollout-ps-2026-06-17`.
+
+**Gotcha found & fixed mid-run:** the prior v5 redeploy re-enabled the platform `verify_jwt` on
+`corroborate-answers`, so pg_net posts 401'd at the gateway (`UNAUTHORIZED_NO_AUTH_HEADER`) — caught
+it before any spend. Fix: add `Authorization: Bearer <anon JWT>` header (public key, satisfies the
+gateway) alongside the existing `x-cron-secret` (satisfies the function's own auth). Future pg_net
+calls to this fn need both headers (or redeploy with verify_jwt=false — left as-is for defense-in-depth).
+
+**Results & apply** (verified 2026-06-17 night)
+- 4,638/4,638 corroborated, **0 errors**, ~$37 spend. Verdicts: 677 supports (corroborated),
+  109 contradicts, 3,615 insufficient. 14.6% hit rate (vs 6.9% on the inferred rollout — high-signal paid off).
+- Of 677 corroborated: 538 same-sign (recorded vs source agree), 115 opposite-sign, 27 with a zero.
+- **Applied the 535 clean same-sign rows** (3 lost to dup/no-match) as trusted `web_research`/`mixed`,
+  `confidence='medium'`, keeping `answer_value` (verdict=supports corroborates the existing stance),
+  attaching the deep-link `source_url` + quote. Archived each to history first. Triggers disabled
+  during bulk update (answer_value unchanged → identical recompute) then re-enabled (verified on).
+- `public_statement` sourceless (visible): **8,583 → 8,048**. Staging/test rows cleaned up.
+
+**Next**
+The remaining 8,048 sourceless `public_statement` are: 3,615 insufficient (no source found — these
+are genuinely unsupported, candidates for relabel→inferred later) + 3,945 ambiguous (not yet run) +
+the held opposite-sign/contradict rows. Optional: run the ambiguous 3,945 (~$31) if more coverage
+wanted; or relabel the 3,615 insufficient to `inferred` (honesty, like the earlier 8,140 pass).
+
+**Deferred**
+- 115 opposite-sign "supports" + 27 zero + 109 contradicts from this run → review pool (same LLM
+  polarity-inconsistency caveat as the contradict pass; do NOT auto-apply).
+- Everything below.
+
+---
+
+## 2026-06-17 — contradict pass: 31 marquee corrections hand-applied (bulk-flip ruled unsafe) — night
+
+**What happened & why**
+Tackled the long-deferred contradict-correction item (269 `verdict='contradicts'` rows from the
+June rollouts). Investigation overturned the original plan ("apply all 269"):
+1. **266/268 contradicted rows are unscored `inferred` guesses** — the pool barely touches
+   alignment math. The 2 trusted/scored ones (`mixed`, Lebovics) were false-positive contradicts;
+   current values already correct, left untouched.
+2. **The LLM's `source_value` is ~50% unreliable** — on close read it's frequently inverted vs.
+   its own quote (Hubbard pathway, Biden asset-forfeiture, Harris plastic-straws, Tillis
+   judicial-overreach all had the OLD value already correct), off-topic, or same-sign. So a bulk
+   mechanical flip would inject as many display errors as it fixes. **Bulk-flip is off the table.**
+
+So per owner's choice we hand-reviewed the **marquee** candidates (Trump, DeSantis, Tillis, Vance,
+Biden, Harris) — high display traffic — reading each quote and flipping ONLY where the quote
+unambiguously contradicts the stored stance in the right direction with a verifiable deep-link
+source. Applied **31 of 68** (Trump 18, DeSantis 4, Vance 3, Biden 3, Tillis 2, Harris 1);
+skipped 37 (inverted `source_value`, off-topic, or false-positive). Each corrected row took
+`answer_value`=reviewed value, the deep-link `source_url`, `evidence_type='mixed'`,
+`source_type='web_research'`, `confidence='medium'`, with the verified quote as `source_description`.
+
+**State** (verified 2026-06-17 night)
+- 31 applied & verified: value matches intent (31/31), every URL deep-path (31/31, no homepages),
+  labels `mixed`/`web_research` (31/31). 31 prior states archived to `candidate_answers_history`
+  (`superseded_reason='contradict correction: marquee hand-reviewed flip …'`).
+- **These 31 DID move alignment scores** (unlike the rest of the pool): they gained a `source_url`
+  so they're now trusted/scored. Triggers were left ENABLED (small batch) so topic scores +
+  coverage recomputed in-txn. Intended — corrects wrong stances on the most-viewed profiles.
+- NOT done: the ~190 non-marquee contradicts. Most are unscored inferred display-only guesses;
+  not worth per-row review now (and bulk-flip is unsafe per finding #2).
+
+**Next**
+Owner held the `public_statement` corroboration run (8,583 rows) one entry down — that or the
+FEC recon items (ROADMAP #1) are the next data-quality moves. The contradict item is effectively
+closed: the safe, high-value slice is done; the rest is low-value + unsafe to mechanize.
+
+**Deferred**
+- ~190 non-marquee contradicts (low value: unscored inferred, ~50% noise). Revisit only if a
+  specific candidate's displayed stances are flagged wrong.
+- Everything below (public_statement corroboration run, FEC recon, disk pressure, cleanup).
+
+---
+
+## 2026-06-17 — honesty pass: 8,140 mislabeled `public_statement` rows relabeled `inferred` — night
+
+**What happened & why**
+Auditing "answers with no source," we found the visible-state sourceless pool isn't just the
+16,959 `inferred` rows the June rollout targeted — there are also **16,723 `public_statement`
+rows with no source URL** that the rollout never touched (it only queried `inferred`/`mixed`).
+Reading their `source_description`, ~half are inferences mislabeled as statements: the text
+literally says "no direct statement … not readily available … inferred from party platform." A
+`public_statement` with no URL is already untrusted for scoring (`isTrustedForScoring` needs a
+URL for non-voting types), so this never moved scores — but the label was dishonest. Fixed the
+clearest cases.
+
+**What we did**
+Relabeled the **8,140** visible-state rows whose `source_description` explicitly admits no direct
+statement AND contains no quoted text → `evidence_type='inferred'`, `source_type='other'`.
+Archived every row to `candidate_answers_history` first (`superseded_reason='relabel
+public_statement->inferred …'`). One atomic txn with `request.jwt.claim.role='service_role'`;
+disabled the two slow AFTER-UPDATE triggers during the bulk update (safe — `calculate_coverage_tier`
+counts answers by candidate_id only, ignores evidence_type/source_url; `refresh_candidate_topic_scores`
+uses answer_value, unchanged — so neither coverage nor topic scores change), re-enabled after.
+
+**State** (verified 2026-06-17 night)
+- `public_statement` sourceless (visible) **16,723 → 8,583** ✓; 8,140 archived to history ✓
+- Both slow triggers confirmed re-enabled (tgenabled='O') ✓
+- No coverage_tier / topic_score change by construction (functions don't read the changed columns)
+- Conservative partition left untouched: 8 "admits-inference-but-has-a-quote" + 14 genuine-quote
+  + 8,561 ambiguous (no admission, no quote) = 8,583 still labeled `public_statement`, no URL.
+
+**Next**
+Owner held the corroboration run on the remaining 8,583 (asked, chose "hold off"). When resumed:
+fire `corroborate-answers` with explicit `question_ids` per candidate (NOT the default URL-less
+query — that would re-run the already-corroborated `inferred` pool and waste ~$130). Scope choice
+offered: high-signal subset (~2k rows w/ quotes or named outlets, ~$16) vs all 8,583 (~$69).
+
+**Deferred**
+- Corroboration run on the 8,583 (above) — parked at owner's request.
+- Everything in the entries below (contradict correction pass is still the main open item).
+
 ## 2026-06-18 — share-card + nav cleanup + PoliScore removal
 
 **What happened & why**

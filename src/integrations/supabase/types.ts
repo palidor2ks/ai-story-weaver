@@ -2674,6 +2674,7 @@ export type Database = {
           status: string | null
           total_receipts_delta_amount: number | null
           total_receipts_delta_pct: number | null
+          total_receipts_status: string | null
           updated_at: string | null
         }
         Insert: {
@@ -2716,6 +2717,7 @@ export type Database = {
           status?: string | null
           total_receipts_delta_amount?: number | null
           total_receipts_delta_pct?: number | null
+          total_receipts_status?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -2758,6 +2760,7 @@ export type Database = {
           status?: string | null
           total_receipts_delta_amount?: number | null
           total_receipts_delta_pct?: number | null
+          total_receipts_status?: string | null
           updated_at?: string | null
         }
         Relationships: []
