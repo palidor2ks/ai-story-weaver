@@ -30,7 +30,15 @@ tackle first.
      apply the same thresholds, and report it as run — the numbers, not just "skipped".
    - `bun run check:dupes` — duplicate-candidate data-health check
      (`scripts/check-duplicate-candidates.sh`; read-only; needs `SUPABASE_DB_URL` + `psql`).
-3. Collect EVERY problem across all six steps, then report (see below).
+   - `bun run check:disk` — Supabase disk-usage tripwire (OPEN-WORK #6;
+     `scripts/check-disk-usage.sh`; read-only; needs `SUPABASE_DB_URL` + `psql`). Reports current
+     DB size vs the configured ceiling (`POLIPULSE_DISK_MAX_GB`, default 15) and whether the
+     daily donor matview refresh still has its ~1.5 GB transient headroom. **AT MAX** (free below
+     that headroom → exit 1) means the next refresh will likely OOM. A near-ceiling **WARN** is a
+     non-blocking heads-up (exit 0). If it exits 2 (no `SUPABASE_DB_URL`) and the Supabase MCP is
+     available, run it manually: `select pg_size_pretty(sum(pg_database_size(datname))) from
+     pg_database` via `execute_sql`, compare to the ceiling, and report the number — not "skipped".
+3. Collect EVERY problem across all seven steps, then report (see below).
 4. Read `docs/OPEN-WORK.md` and render its open items (☐/🟡/⛔, not ✅) as the closing
    "Outstanding work" section of the report — so every preflight ends with the prioritized backlog
    the maintainer works from, not just the pass/fail gate. Don't re-derive it; surface what's there.
@@ -54,7 +62,12 @@ first — each item one actionable line with its source and location:
 5. **Untriaged duplicate clusters** — the `[kind] detail  members` lines from check:dupes;
    fix by triaging in `candidate_merge_map` (merge via `merge_candidate`, or `status='rejected'`
    if they're genuinely distinct people).
-6. **Lint errors** (not warnings).
+6. **Disk AT MAX** — the `[disk] ERROR — AT MAX …` line: the DB is within the matview-refresh
+   headroom of its ceiling, so the daily donor refresh will likely OOM. Surface it loudly and
+   point to OPEN-WORK #6 (expand disk / prune-partition contributions). Always echo the `[disk]`
+   line even when OK/WARN — "where do we stand on disk" is what the maintainer asked preflight to
+   answer; a near-ceiling WARN belongs in the report even though it doesn't block the push.
+7. **Lint errors** (not warnings).
 
 End with what's clean and what was skipped, so nothing looks greener than it is.
 
@@ -79,6 +92,10 @@ tackle next.
 - `check:accuracy` exit codes mirror that: `0` within thresholds, `1` failing categories,
   `2` skipped — but a skip is recoverable via Supabase MCP (see Steps); prefer recovering it
   over reporting ⏭️, since priority #1 status is the report's most important content.
+- `check:disk` exit codes: `0` OK **or** a non-blocking near-ceiling WARN (report the `[disk]`
+  line either way), `1` AT MAX → ❌ fail and surface it, `2` skipped (no DB) → ⏭️, recoverable
+  via MCP. The ceiling is a platform setting Postgres can't read, so it's the `POLIPULSE_DISK_MAX_GB`
+  env default (15) — keep it in sync with the Supabase dashboard's actual disk size.
 - Report the FULL picture before suggesting fixes, and don't push while anything is ❌ for a
   non-environment reason.
 - On all-green (skips noted), say so plainly and note CI re-runs lint/test/build on the PR

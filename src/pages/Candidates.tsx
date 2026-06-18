@@ -145,14 +145,14 @@ export const Candidates = () => {
       case 'representatives':
         return allCandidates.filter(c => normalizeOfficeName(c.office) === 'U.S. House');
       case 'state':
-        return [...stateExecutiveCandidates, ...stateLegislativeCandidates];
+        return allCandidates.filter(c => c.level === 'state');
       case 'local':
-        return localCandidates;
+        return allCandidates.filter(c => c.level === 'local');
       case 'all':
       default:
         return allCandidates;
     }
-  }, [activeTab, myRepsCombined, federalExecutiveCandidates, formerExecutiveCandidates, stateExecutiveCandidates, stateLegislativeCandidates, localCandidates, allCandidates]);
+  }, [activeTab, myRepsCombined, federalExecutiveCandidates, formerExecutiveCandidates, stateExecutiveCandidates, allCandidates]);
 
   const filteredCandidates = useMemo(() => {
     // National offices (President / Vice President) represent the whole country
@@ -247,8 +247,12 @@ export const Candidates = () => {
 
   // Count for tabs
   const executiveCount = federalExecutiveCandidates.length + formerExecutiveCandidates.length + stateExecutiveCandidates.length;
-  const stateCount = stateExecutiveCandidates.length + stateLegislativeCandidates.length;
-  const localCount = localCandidates.length;
+  // State/Local tabs surface ALL known state/local officials (the address-keyed civic
+  // feed AND DB-ingested rows like discover-state-legislators), so count off the unified
+  // `all` list by level rather than the civic-only buckets — which keeps "My Reps"
+  // address-scoped while the directory shows the full roster.
+  const stateCount = allCandidates.filter(c => c.level === 'state').length;
+  const localCount = allCandidates.filter(c => c.level === 'local').length;
 
 
   if (coreLoading) {

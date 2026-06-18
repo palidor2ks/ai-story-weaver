@@ -45,9 +45,12 @@ const nameKey = (name: string, office: string) => `${normName(name)}::${normOffi
 
 const deriveLevelFromOffice = (office: string): CandidateLevel => {
   const o = office.toLowerCase();
-  if (/president|vice president|senator|representative|congress/.test(o)) return 'federal';
+  // State/local patterns MUST be checked before the federal senator/representative
+  // catch: "State Senator" / "State Representative" both contain "senator"/"representative",
+  // so a federal-first check would misclassify every state legislator as federal.
   if (/governor|lieutenant|attorney general|secretary of state|treasurer|comptroller|state senator|state rep|assembly|delegate/.test(o)) return 'state';
   if (/mayor|council|alderman|selectman|sheriff|district attorney|school board|county/.test(o)) return 'local';
+  if (/president|vice president|senator|representative|congress/.test(o)) return 'federal';
   return 'federal';
 };
 
