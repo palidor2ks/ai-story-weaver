@@ -14,72 +14,63 @@ export type Database = {
   }
   public: {
     Tables: {
-      _enrich_bill_kw: {
+      _answer_corroboration: {
         Row: {
-          axis: number | null
-          bill_number: number | null
-          bill_type: string | null
-          congress: number | null
-          matched_keyword: string | null
-          name: string | null
-          question_id: string | null
+          applied: boolean
+          call_ms: number | null
+          candidate_id: string
+          corroborated: boolean | null
+          created_at: string
+          id: string
+          in_citations: boolean | null
+          question_id: string
+          quote: string | null
+          recorded_value: number | null
+          run_label: string
+          source_title: string | null
+          source_url: string | null
+          source_value: number | null
+          total_tokens: number | null
+          url_valid: boolean | null
+          verdict: string | null
         }
         Insert: {
-          axis?: number | null
-          bill_number?: number | null
-          bill_type?: string | null
-          congress?: number | null
-          matched_keyword?: string | null
-          name?: string | null
-          question_id?: string | null
+          applied?: boolean
+          call_ms?: number | null
+          candidate_id: string
+          corroborated?: boolean | null
+          created_at?: string
+          id?: string
+          in_citations?: boolean | null
+          question_id: string
+          quote?: string | null
+          recorded_value?: number | null
+          run_label: string
+          source_title?: string | null
+          source_url?: string | null
+          source_value?: number | null
+          total_tokens?: number | null
+          url_valid?: boolean | null
+          verdict?: string | null
         }
         Update: {
-          axis?: number | null
-          bill_number?: number | null
-          bill_type?: string | null
-          congress?: number | null
-          matched_keyword?: string | null
-          name?: string | null
-          question_id?: string | null
-        }
-        Relationships: []
-      }
-      _enrich_member_bills: {
-        Row: {
-          best_action: string | null
-          bill_number: number | null
-          bill_type: string | null
-          candidate_id: string | null
-          congress: number | null
-          first_action: string | null
-          last_action: string | null
-          name: string | null
-          norm_name: string | null
-          strength: number | null
-        }
-        Insert: {
-          best_action?: string | null
-          bill_number?: number | null
-          bill_type?: string | null
-          candidate_id?: string | null
-          congress?: number | null
-          first_action?: string | null
-          last_action?: string | null
-          name?: string | null
-          norm_name?: string | null
-          strength?: number | null
-        }
-        Update: {
-          best_action?: string | null
-          bill_number?: number | null
-          bill_type?: string | null
-          candidate_id?: string | null
-          congress?: number | null
-          first_action?: string | null
-          last_action?: string | null
-          name?: string | null
-          norm_name?: string | null
-          strength?: number | null
+          applied?: boolean
+          call_ms?: number | null
+          candidate_id?: string
+          corroborated?: boolean | null
+          created_at?: string
+          id?: string
+          in_citations?: boolean | null
+          question_id?: string
+          quote?: string | null
+          recorded_value?: number | null
+          run_label?: string
+          source_title?: string | null
+          source_url?: string | null
+          source_value?: number | null
+          total_tokens?: number | null
+          url_valid?: boolean | null
+          verdict?: string | null
         }
         Relationships: []
       }
@@ -146,90 +137,6 @@ export type Database = {
           title?: string | null
           url?: string | null
           verdict?: string
-        }
-        Relationships: []
-      }
-      _enrich_t2_hits: {
-        Row: {
-          best_action: string | null
-          bill_number: number | null
-          bill_type: string | null
-          candidate_id: string | null
-          congress: number | null
-          evidence_type: string | null
-          last_action: string | null
-          matched_keyword: string | null
-          name: string | null
-          question_id: string | null
-          strength: number | null
-        }
-        Insert: {
-          best_action?: string | null
-          bill_number?: number | null
-          bill_type?: string | null
-          candidate_id?: string | null
-          congress?: number | null
-          evidence_type?: string | null
-          last_action?: string | null
-          matched_keyword?: string | null
-          name?: string | null
-          question_id?: string | null
-          strength?: number | null
-        }
-        Update: {
-          best_action?: string | null
-          bill_number?: number | null
-          bill_type?: string | null
-          candidate_id?: string | null
-          congress?: number | null
-          evidence_type?: string | null
-          last_action?: string | null
-          matched_keyword?: string | null
-          name?: string | null
-          question_id?: string | null
-          strength?: number | null
-        }
-        Relationships: []
-      }
-      _enrich_vc_keywords: {
-        Row: {
-          axis: number
-          keyword: string
-          question_id: string
-        }
-        Insert: {
-          axis: number
-          keyword: string
-          question_id: string
-        }
-        Update: {
-          axis?: number
-          keyword?: string
-          question_id?: string
-        }
-        Relationships: []
-      }
-      _enrich_vc_tier2: {
-        Row: {
-          candidate_id: string | null
-          n_cites: number | null
-          question_id: string | null
-          titles: string[] | null
-          urls: string[] | null
-        }
-        Insert: {
-          candidate_id?: string | null
-          n_cites?: number | null
-          question_id?: string | null
-          titles?: string[] | null
-          urls?: string[] | null
-        }
-        Update: {
-          candidate_id?: string | null
-          n_cites?: number | null
-          question_id?: string | null
-          titles?: string[] | null
-          urls?: string[] | null
         }
         Relationships: []
       }
@@ -824,6 +731,57 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      candidate_answers_history: {
+        Row: {
+          answer_value: number | null
+          candidate_id: string
+          confidence: string | null
+          discrepancy_note: string | null
+          evidence_type: string | null
+          has_discrepancy: boolean | null
+          id: string
+          question_id: string
+          source_description: string | null
+          source_type: string | null
+          source_url: string | null
+          source_urls: string[] | null
+          superseded_at: string
+          superseded_reason: string | null
+        }
+        Insert: {
+          answer_value?: number | null
+          candidate_id: string
+          confidence?: string | null
+          discrepancy_note?: string | null
+          evidence_type?: string | null
+          has_discrepancy?: boolean | null
+          id?: string
+          question_id: string
+          source_description?: string | null
+          source_type?: string | null
+          source_url?: string | null
+          source_urls?: string[] | null
+          superseded_at?: string
+          superseded_reason?: string | null
+        }
+        Update: {
+          answer_value?: number | null
+          candidate_id?: string
+          confidence?: string | null
+          discrepancy_note?: string | null
+          evidence_type?: string | null
+          has_discrepancy?: boolean | null
+          id?: string
+          question_id?: string
+          source_description?: string | null
+          source_type?: string | null
+          source_url?: string | null
+          source_urls?: string[] | null
+          superseded_at?: string
+          superseded_reason?: string | null
+        }
+        Relationships: []
       }
       candidate_committees: {
         Row: {
@@ -4251,6 +4209,41 @@ export type Database = {
         }
         Relationships: []
       }
+      poliscore_key_vote_questions: {
+        Row: {
+          bill_number: number
+          bill_type: string
+          congress: number
+          created_at: string
+          id: string
+          question_id: string
+        }
+        Insert: {
+          bill_number: number
+          bill_type: string
+          congress: number
+          created_at?: string
+          id?: string
+          question_id: string
+        }
+        Update: {
+          bill_number?: number
+          bill_type?: string
+          congress?: number
+          created_at?: string
+          id?: string
+          question_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "poliscore_key_vote_questions_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       poliscore_key_votes: {
         Row: {
           bill_number: number
@@ -6320,7 +6313,7 @@ export type Database = {
           partial_sync: number
           recon_error: number
           recon_error_gap_usd: number
-          recon_latest_check: string | null
+          recon_latest_check: string
           recon_ok: number
           recon_partial: number
           recon_warning: number
@@ -6447,14 +6440,6 @@ export type Database = {
           state_code: string
         }[]
       }
-      get_visible_candidate_topic_scores: {
-        Args: never
-        Returns: {
-          candidate_id: string
-          topic_id: string
-          calculated_score: number
-        }[]
-      }
       get_pipeline_failure_summary: {
         Args: never
         Returns: {
@@ -6544,6 +6529,14 @@ export type Database = {
           primary_id: string
           total_amount: number
           type: string
+        }[]
+      }
+      get_visible_candidate_topic_scores: {
+        Args: never
+        Returns: {
+          calculated_score: number
+          candidate_id: string
+          topic_id: string
         }[]
       }
       has_role: {
