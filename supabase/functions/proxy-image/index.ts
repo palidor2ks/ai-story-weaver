@@ -19,6 +19,21 @@ const ALLOWED_HOST_SUFFIXES = [
   'nj.us',
   'state.nj.us',
   'njleg.state.nj.us',
+  // State-legislature + government photo hosts surfaced by OpenStates `person.image`
+  // for state legislators (NJ + NC and future states). The response is still
+  // validated as image/* and size-capped below, so these only widen the source list.
+  'nj.gov',
+  'ncleg.gov',
+  'ncga.state.nc.us',
+  'nc.gov',
+  'naag.org',
+  // Common image CDNs that OpenStates / official bios point at.
+  'amazonaws.com',
+  'googleapis.com',
+  'gstatic.com',
+  'wixstatic.com',
+  'squarespace-cdn.com',
+  'civicengine.com',
 ];
 
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
