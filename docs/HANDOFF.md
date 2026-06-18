@@ -27,6 +27,41 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-18 — committee-donors upsert fix (#6 follow-up) + PR #451 opened & CI green — late night
+
+**What happened & why**
+Closed the loose end the migration-safety-reviewer flagged during the disk-pressure work:
+`fetch-committee-donors/index.ts:412` upserted with `onConflict: 'identity_hash'`, but no
+single-column UNIQUE exists — the real constraint is the composite `(identity_hash, cycle)`. Every
+batch was silently erroring at runtime, so committee-donor contributions never persisted via this
+path. Fixed to `'identity_hash,cycle'`, matching both sibling importers (`fetch-fec-donors:994`,
+`import-fec-receipts-csv:680`). Verified the batch already carries `cycle` (line 357) and the hash
+is computed with `cycle` baked in (line 341), so the composite target is consistent.
+
+Then opened **draft PR #451** — there was no open PR; this branch accumulates work across sessions
+and all prior PRs (≤#446) are merged/closed. #451 batches the unmerged commits: disk reclaim (#6),
+FEC completeness metric (#4), donor-backfill scope-first fix (#5), and this upsert fix.
+
+**State** (verified)
+- Tree clean, all commits pushed to `claude/pensive-hypatia-r6m2d8`. Did NOT run `/preflight` —
+  the only code change is a one-line edge-fn string literal (Deno, outside the Vite lint/build/test
+  scope); the other commits were verified in their own prior sessions.
+- **PR #451 CI fully green**: GitGuardian ✅ + Supabase Preview ✅ (Database/Services/APIs/
+  Configurations/Migrations/Seeding/Edge Functions all ✅). All 3 migrations applied cleanly on a
+  fresh preview DB — confirms they're idempotent/order-safe. One transient Supabase-side `502` on
+  edge-fn create cleared on a single empty-commit re-trigger (not our diff).
+- Still **subscribed** to PR #451 activity; self check-in armed to re-verify mergeability.
+
+**Next**
+Owner: review/mark-ready/merge PR #451. (Then the #4/#5 edge functions still need a production
+deploy to take effect — they're code-committed but not deployed.)
+
+**Deferred**
+- Owner-level durable disk fix (#6): storage add-on and/or matview-refresh OOM mitigation.
+- See `docs/OPEN-WORK.md` for the full backlog (#1, #7–#13).
+
+---
+
 ## 2026-06-18 — Disk pressure (#6): orphaned staging dropped (~506 MB) + reviewed index-cleanup migration (~1.86 GB) — night
 
 **What happened & why**

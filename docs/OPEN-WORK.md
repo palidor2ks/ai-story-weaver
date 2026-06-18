@@ -73,8 +73,9 @@ Can't manually trigger fetch-fec-donors from MCP (admin auth + FEC network).
 **Owner-level (still open, the durable fix):** expand the storage add-on, and/or mitigate the
 matview-refresh OOM (REFRESH CONCURRENTLY needs a unique index + headroom, or schedule at lowest-usage
 time). The ~2.36 GB buys runway but `contributions` keeps growing, so this isn't permanent.
-**Tiny follow-up:** reviewer flagged a pre-existing bug — `fetch-committee-donors/index.ts:412` uses
-`onConflict: 'identity_hash'` (no single-col UNIQUE exists; already broken at runtime). Worth fixing.
+**Tiny follow-up:** ✅ **2026-06-18** — fixed the pre-existing `fetch-committee-donors/index.ts:412`
+bug (`onConflict: 'identity_hash'` → `'identity_hash,cycle'`, matching the real composite UNIQUE and
+both sibling importers). Shipped in PR #451.
 
 ### 7. ☐ `public_statement` pipeline homepage-link + attribution fix
 **What:** The older enrichment pipeline emits homepage-only links (142 bare-domain array entries, 2.4%)
@@ -109,6 +110,8 @@ and the large/fragile edge fns `fetch-fec-donors`, `get-candidate-answers`.
 ---
 
 ## ✅ Recently done (prune after ~2 weeks)
+- ✅ **2026-06-18** Fixed `fetch-committee-donors:412` upsert `onConflict` → `'identity_hash,cycle'`
+  (was silently erroring on a non-existent single-col UNIQUE). Shipped in PR #451 (CI green).
 - ✅ **2026-06-18** Disk: dropped orphaned `_enrich_*` staging (~506 MB) + 9 unused indexes
   (~1.86 GB). **DB 15 → 13 GB.** Owner-level storage/matview fix still open (#6).
 - ✅ **2026-06-17** Congress donor backfill: diagnosed (94% by-design hidden-state exclusion) + fixed
