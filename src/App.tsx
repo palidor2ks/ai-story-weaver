@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { UserProvider } from "./context/UserContext";
 import { useHasCompletedOnboarding } from "./hooks/useProfile";
+import { useAdminRole } from "./hooks/useAdminRole";
 import { LoadingScreen } from "./components/LoadingScreen";
 import { BadgeAwardToast } from "./components/BadgeAwardToast";
 
@@ -77,6 +78,7 @@ interface RouteGuardProps {
   requireAuth?: boolean;
   requireOnboarding?: boolean;
   requireVerifiedEmail?: boolean;
+  requireAdmin?: boolean;
 }
 
 const isLazyImportError = (error: unknown) => {
@@ -122,18 +124,20 @@ class ChunkErrorBoundary extends Component<{ children: React.ReactNode }, { hasE
   }
 }
 
-const RouteGuard = ({ children, requireAuth = true, requireOnboarding = false, requireVerifiedEmail = true }: RouteGuardProps) => {
+const RouteGuard = ({ children, requireAuth = true, requireOnboarding = false, requireVerifiedEmail = true, requireAdmin = false }: RouteGuardProps) => {
   const { user, loading: authLoading } = useAuth();
   const { data: hasCompleted, isLoading: onboardingLoading } = useHasCompletedOnboarding();
+  const { data: adminData, isLoading: adminLoading } = useAdminRole();
   // Public routes (requireAuth=false) have no auth-dependent redirect, so render them
   // immediately instead of waiting on the auth session round-trip. Auth-gated routes still
   // wait so we don't flash protected content or redirect prematurely.
-  const isLoading = requireAuth && (authLoading || (requireOnboarding && onboardingLoading));
+  const isLoading = (requireAuth || requireAdmin) && (authLoading || (requireOnboarding && onboardingLoading) || (requireAdmin && adminLoading));
 
   if (isLoading) return <LoadingScreen />;
-  if (requireAuth && !user) return <Navigate to="/auth" replace />;
+  if ((requireAuth || requireAdmin) && !user) return <Navigate to="/auth" replace />;
   if (requireAuth && requireVerifiedEmail && user && !user.email_confirmed_at) return <Navigate to="/verify-email" replace />;
   if (requireOnboarding && !hasCompleted) return <Navigate to="/" replace />;
+  if (requireAdmin && !adminData?.isAdmin) return <Navigate to="/candidates" replace />;
 
   return <>{children}</>;
 };
@@ -156,9 +160,9 @@ const AppRoutes = () => (
       <Route path="/feed" element={<Navigate to="/profile" replace />} />
       <Route path="/political-compass-test" element={<RouteGuard requireAuth={false} requireOnboarding={false}><PoliticalCompassTest /></RouteGuard>} />
       <Route path="/candidates" element={<RouteGuard requireAuth={false} requireOnboarding={false}><Candidates /></RouteGuard>} />
-      <Route path="/donors" element={<RouteGuard requireAuth={false} requireOnboarding={false}><Donors /></RouteGuard>} />
-      <Route path="/committees" element={<RouteGuard requireAuth={false} requireOnboarding={false}><Committees /></RouteGuard>} />
-      <Route path="/top-spenders" element={<RouteGuard requireAuth={false} requireOnboarding={false}><TopSpenders /></RouteGuard>} />
+      <Route path="/donors" element={<RouteGuard requireAdmin><Donors /></RouteGuard>} />
+      <Route path="/committees" element={<RouteGuard requireAdmin><Committees /></RouteGuard>} />
+      <Route path="/top-spenders" element={<RouteGuard requireAdmin><TopSpenders /></RouteGuard>} />
       <Route path="/committee/:id" element={<RouteGuard requireAuth requireOnboarding={false}><CommitteeProfile /></RouteGuard>} />
       <Route path="/parties" element={<RouteGuard requireAuth={false} requireOnboarding={false}><Parties /></RouteGuard>} />
       <Route path="/party/:id" element={<RouteGuard requireAuth={false} requireOnboarding={false}><PartyProfile /></RouteGuard>} />
