@@ -168,7 +168,7 @@ export const DemographicsForm = ({
               <div className="flex gap-2 rounded-lg border border-border bg-muted/50 p-3 text-sm text-foreground">
                 <Info className="w-4 h-4 mt-0.5 shrink-0 text-primary" />
                 <p>
-                  <span className="font-medium">{addressState?.name}</span> isn't fully supported yet. You can still complete the quiz, see national candidates (President, etc.), and your local candidate requests will be saved for when we launch in your state.
+                  <span className="font-medium">{addressState?.name}</span> isn't fully covered yet — you'll still see your federal officials and members of Congress. We're actively adding more states and will expand to yours soon.
                 </p>
               </div>
             )}
