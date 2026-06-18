@@ -36,18 +36,17 @@ specific candidate's displayed stances are flagged wrong.
 Line 14+15); 800 recon rows recomputed. Double-count signature rows **138 → 0**; Cassidy delta
 31.1% → −2.6%. Details in `docs/DATA-ACCURACY.md §1`.
 
-### 4. 🟡 FEC recon — total-receipts completeness signal (Finding A) — implemented, needs edge-fn deploy
+### 4. ✅ FEC recon — total-receipts completeness signal (Finding A) — done 2026-06-18 (deployed)
 **What:** `status` answers itemized accuracy only; ~363 `ok` rows were materially off on TOTAL
 receipts (mostly coverage gaps). **Done (2026-06-17):** chose "separate completeness metric" —
 added `finance_reconciliation.total_receipts_status` (ok/under/over), computed at all 3 write sites
 (nightly-finance-reconciliation + 2 in refresh-fec-totals), backfilled (1,655 ok / 865 under /
 212 over / 148 n/a), surfaced on `FinanceReconciliationCard`. `status` semantics unchanged.
-**State:** code committed + migration applied + backfilled. **Remaining:** deploy the two edge
-functions so future runs populate the column on new rows (existing rows already backfilled; the
-old deployed fns leave the column untouched on upsert, so no data loss meanwhile). A full nightly
-drain (fresh FEC fetch) will also refresh deltas.
+**State:** code merged (PR #451) + migration applied + backfilled. Edge functions **deployed to prod
+2026-06-18** by `deploy-edge-functions.yml` on the #451 merge (run succeeded) — future runs now
+populate the column on new rows. A full nightly drain (fresh FEC fetch) will also refresh deltas.
 
-### 5. 🟡 Congress donor backfill stall — diagnosed + fixed, needs edge-fn deploy
+### 5. ✅ Congress donor backfill stall — done 2026-06-18 (deployed)
 **What:** ~163 `candidate_committees` rows with `has_more=true` weren't progressing (~3/day vs 144/day
 theoretical, cron `*/10`).
 **Diagnosis (2026-06-17):** ~94% by design — of ~120 never-completed stalled committees, **113 are
@@ -57,8 +56,9 @@ Ross, NC Senate) was genuinely stuck. **Root cause:** `schedule-congress-donor-s
 first `limit*100=100` stalled rows ordered by `created_at` and filtered to visible/tier_1 *after* the
 limit — Ross sat at rank ~115 behind 114 hidden rows, so the filter yielded 0 every run.
 **Fix:** scope-first selection (resolve in-scope candidate ids, THEN find their stalled committees).
-**State:** code committed; **needs edge-fn deploy** — next cron run after deploy will pick up Ross.
-Can't manually trigger fetch-fec-donors from MCP (admin auth + FEC network).
+**State:** code merged (PR #451) + **deployed to prod 2026-06-18** (same workflow run). The next
+`*/10` cron run picks up Ross. Worth a spot-check that her backfill actually advances over the next
+day (still can't manually trigger fetch-fec-donors from MCP — admin auth + FEC network).
 
 ---
 
@@ -110,6 +110,9 @@ and the large/fragile edge fns `fetch-fec-donors`, `get-candidate-answers`.
 ---
 
 ## ✅ Recently done (prune after ~2 weeks)
+- ✅ **2026-06-18** PR #451 **merged**; `deploy-edge-functions.yml` auto-deployed all edge fns to
+  prod (run succeeded) — closes the "needs edge-fn deploy" tail on **#4** (FEC completeness metric)
+  and **#5** (donor backfill scope-first fix). Both now fully live, not just merged.
 - ✅ **2026-06-18** Fixed `fetch-committee-donors:412` upsert `onConflict` → `'identity_hash,cycle'`
   (was silently erroring on a non-existent single-col UNIQUE). Shipped in PR #451 (CI green).
 - ✅ **2026-06-18** Disk: dropped orphaned `_enrich_*` staging (~506 MB) + 9 unused indexes

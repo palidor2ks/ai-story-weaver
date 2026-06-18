@@ -27,6 +27,34 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-18 — PR #451 merged + edge functions deployed to prod (#4/#5 fully live) — late night
+
+**What happened & why**
+PR #451 merged to `main` (by owner). The merge auto-triggered `deploy-edge-functions.yml`, which
+deploys ALL edge functions to prod (`ornnzinjrcyigazecctf`) from the repo via Supabase CLI, with
+`verify_jwt` read from `config.toml`. Confirmed that workflow run **succeeded** — so the #4/#5
+function changes are now live, not just merged. This closes the "needs edge-fn deploy" tail that
+had blocked both from taking effect. Marked #4 and #5 ✅ in `docs/OPEN-WORK.md`.
+
+No manual MCP deploy was needed (and it would have meant hand-transcribing 25–37 KB function
+bodies — the CLI-from-repo path is the authoritative, transcription-safe one).
+
+**State** (verified)
+- `deploy-edge-functions.yml` run `27735300390` on the #451 merge commit = `completed/success`.
+- Branch `claude/pensive-hypatia-r6m2d8` fast-forwarded to `main` (07955ef2). Docs-only changes here.
+- NOT verified: that the next `*/10` cron actually advances Deborah Ross's backfill (needs a
+  day to observe) and that new recon rows populate `total_receipts_status` (needs next run).
+
+**Next**
+Spot-check tomorrow that Deborah Ross's `candidate_committees` backfill advanced (#5) and that
+fresh `finance_reconciliation` rows carry `total_receipts_status` (#4).
+
+**Deferred**
+- Owner-level durable disk fix (#6): storage add-on and/or matview-refresh OOM mitigation.
+- See `docs/OPEN-WORK.md` for the rest (#1, #7–#13).
+
+---
+
 ## 2026-06-18 — committee-donors upsert fix (#6 follow-up) + PR #451 opened & CI green — late night
 
 **What happened & why**
