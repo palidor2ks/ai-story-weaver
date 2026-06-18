@@ -35,6 +35,25 @@ test('formatCandidateName: double comma (FEC data artifact)', () => {
   expect(formatCandidateName('BRINK,, BRIDGET')).toBe('Bridget Brink');
 });
 
+test('formatCandidateName: strips FEC honorific appended to first-name portion', () => {
+  // FEC stores "LAST, FIRST MIDDLE MR" — MR must not appear in the output
+  expect(formatCandidateName('MAPP, ADRIAN O MR')).toBe('Adrian O Mapp');
+  expect(formatCandidateName('AGUILAR, ANTHONY BAILEY MR.')).toBe('Anthony Bailey Aguilar');
+  expect(formatCandidateName('SMITH, JANE MS')).toBe('Jane Smith');
+  expect(formatCandidateName('JONES, ROBERT DR.')).toBe('Robert Jones');
+  expect(formatCandidateName('WILLIAMS, CAROL MRS.')).toBe('Carol Williams');
+});
+
+test('formatCandidateName: strips leading honorific from comma-free names', () => {
+  expect(formatCandidateName('Mr. John Smith')).toBe('John Smith');
+  expect(formatCandidateName('DR. ALICE JONES')).toBe('Alice Jones');
+});
+
+test('formatCandidateName: suffixes (JR/SR) are preserved, not stripped', () => {
+  expect(formatCandidateName('ADAMS-FALCONER, THOMAS MICHAEL JR.')).toBe('Thomas Michael Jr. Adams-Falconer');
+  expect(formatCandidateName('JOHNSON, JAMES SR.')).toBe('James Sr. Johnson');
+});
+
 test('formatCandidateName: null/empty', () => {
   expect(formatCandidateName(null)).toBe('');
   expect(formatCandidateName(undefined)).toBe('');
