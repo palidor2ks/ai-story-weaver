@@ -1,11 +1,9 @@
-import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { CoverageTier, ConfidenceLevel } from '@/lib/scoreFormat';
 import { resolveCandidateImageUrl } from '@/lib/candidateImages';
 import { isConduitDonor } from '@/lib/conduits';
 import { formatCandidateName } from '@/lib/utils';
-import { useHiddenStates } from '@/hooks/useHiddenStates';
 
 interface CandidateTopicScore {
   topic_id: string;
@@ -96,29 +94,15 @@ const CANDIDATE_LIST_COLUMNS =
   'id, name, party, office, state, district, image_url, overall_score, coverage_tier, confidence, is_incumbent, score_version, last_updated, claimed_by_user_id, claimed_at, fec_candidate_id, last_donor_sync, person_id';
 
 export const useCandidates = () => {
-  // The directory only ever displays candidates in non-hidden ("active") states —
-  // the rest were already filtered out client-side. Push that filter into the query
-  // so we don't ship the entire nationwide table (≈2,700 rows) just to show ≈480.
-  // National offices (President/VP, state 'US') are never hidden, so excluding hidden
-  // states keeps them automatically.
-  const { hidden, isLoading: hiddenLoading } = useHiddenStates();
-  const hiddenList = useMemo(() => Array.from(hidden).sort(), [hidden]);
-
   return useQuery({
-    queryKey: ['candidates', hiddenList],
-    enabled: !hiddenLoading,
+    queryKey: ['candidates'],
     staleTime: 10 * 60 * 1000,
     queryFn: async () => {
-      let candidatesQuery = supabase.from('candidates').select(CANDIDATE_LIST_COLUMNS).order('name');
-      if (hiddenList.length > 0) {
-        candidatesQuery = candidatesQuery.not('state', 'in', `(${hiddenList.join(',')})`);
-      }
-
-      // Fetch all data in parallel to reduce latency. Topic scores come through a
-      // SECURITY DEFINER RPC that applies the same visible-states filter server-side,
-      // so we don't pull ~15k score rows for candidates that are never displayed.
+      // All three fire in parallel immediately — hidden-state filtering is now
+      // server-side inside get_visible_candidates() (mirrors get_visible_candidate_topic_scores).
+      // No longer blocked on useHiddenStates completing first.
       const [candidatesResult, topicScoresResult, overridesResult] = await Promise.all([
-        candidatesQuery,
+        supabase.rpc('get_visible_candidates'),
         supabase.rpc('get_visible_candidate_topic_scores'),
         supabase.from('candidate_overrides').select('candidate_id, overall_score, name, party, office, state, district, image_url, coverage_tier, confidence').eq('is_active', true),
       ]);

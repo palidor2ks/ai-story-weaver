@@ -6539,6 +6539,29 @@ export type Database = {
           topic_id: string
         }[]
       }
+      get_visible_candidates: {
+        Args: never
+        Returns: {
+          id: string
+          name: string
+          party: string
+          office: string
+          state: string
+          district: string | null
+          image_url: string | null
+          overall_score: number | null
+          coverage_tier: string | null
+          confidence: string | null
+          is_incumbent: boolean | null
+          score_version: string | null
+          last_updated: string | null
+          claimed_by_user_id: string | null
+          claimed_at: string | null
+          fec_candidate_id: string | null
+          last_donor_sync: string | null
+          person_id: string | null
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
