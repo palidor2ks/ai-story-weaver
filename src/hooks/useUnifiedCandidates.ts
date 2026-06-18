@@ -165,18 +165,24 @@ interface Options {
   address?: string | null;
   /** Whether to load all Congress members (Candidates page). Defaults to false. */
   includeAllCongress?: boolean;
+  /** Whether to fetch address-based civic/reps data. Defaults to true.
+   *  Set false when on a tab that doesn't need local reps (e.g. the "All" tab)
+   *  so the geocode + civic API round-trips don't fire until actually needed. */
+  fetchCivic?: boolean;
 }
 
 export const useUnifiedCandidates = ({
   address,
   includeAllCongress = false,
+  fetchCivic = true,
 }: Options = {}): UnifiedCandidatesResult => {
   const { data: dbCandidates = [], isLoading: dbLoading } = useCandidates();
   const { data: allPoliticians = [], isLoading: allLoading } = useAllPoliticians({
     enabled: includeAllCongress,
   });
-  const { data: repsData, isLoading: repsLoading } = useRepresentatives(address);
-  const { data: civicData, isLoading: civicLoading } = useCivicOfficials(address);
+  const civicAddress = fetchCivic ? address : null;
+  const { data: repsData, isLoading: repsLoading } = useRepresentatives(civicAddress);
+  const { data: civicData, isLoading: civicLoading } = useCivicOfficials(civicAddress);
 
   const userReps = repsData?.representatives ?? [];
   const federalExecRaw = civicData?.federalExecutive ?? [];

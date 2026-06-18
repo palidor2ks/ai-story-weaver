@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
 export interface IETotals {
@@ -241,6 +241,7 @@ export const useCandidatesIE = (candidateIds: string[]) => {
     queryKey: ['ie-candidates-bulk-latest-cycle', sortedKey],
     enabled: candidateIds.length > 0,
     staleTime: 1000 * 60 * 10,
+    placeholderData: keepPreviousData,
     queryFn: async (): Promise<IETotalsMap> => {
       const { data, error } = await supabase
         .from('independent_expenditures')
