@@ -240,9 +240,9 @@ export const Candidates = () => {
   const deferredVisibleIds = useDeferredValue(visibleIds);
   const { data: ieMap } = useCandidatesIE(deferredVisibleIds);
 
-  // Only block the page on the fast sources (DB + all-Congress when requested).
-  // Civic + address-based reps stream in progressively.
-  const coreLoading = unified.dbLoading || unified.allLoading || profileLoading;
+  // Only block the page on the fast DB query. Congress members (allLoading) and
+  // address-based reps stream in progressively so DB candidates appear immediately.
+  const coreLoading = unified.dbLoading || profileLoading;
   const reposLoading = unified.civicLoading || unified.repsLoading;
 
   // Count for tabs
