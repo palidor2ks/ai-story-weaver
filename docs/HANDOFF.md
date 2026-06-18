@@ -27,6 +27,35 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-18 — topic-scores trim via server-side RPC (the deferred follow-up, now done)
+
+**What happened & why**
+Owner picked Option 2 for the topic-scores trim (deferred in the entry below): do the visible-states
+filtering on the backend so it's a reusable concern, not client plumbing. Added
+`public.get_visible_candidate_topic_scores()` — a STABLE SECURITY DEFINER SQL function (mirrors
+`get_hidden_state_codes`) that joins `calculated_candidate_topic_scores` → `candidates` and returns
+only rows for candidates in non-hidden states. `useCandidates` now calls
+`supabase.rpc('get_visible_candidate_topic_scores')` instead of selecting the whole table; added the
+function to the generated `types.ts`.
+
+**State** (verified live against prod `ornnzinjrcyigazecctf`)
+- Migration applied via MCP (owner chose the backend approach). RPC returns **1,416 rows vs 15,201**
+  full-table — ~10.7× fewer topic-score rows shipped to the directory.
+- Security advisors after the DDL: the new fn appears only under the benign, pre-existing
+  `anon/authenticated_security_definer_function_executable` categories (58 such fns already exist,
+  incl. the one it mirrors). No missing-RLS / mutable-search-path / severe flags. It exposes strictly
+  less, already-public data (the table has no RLS).
+- `bun run lint`: 0 errors. `bunx vite build`: ✓ (RPC type resolves).
+
+**Next**
+After the frontend host deploys, confirm match-sort still works in the directory (topic scores now
+arrive via the RPC).
+
+**Deferred**
+- Other states (NY, PA, …); AI scoring (Phase 2) — as before.
+
+---
+
 ## 2026-06-18 — directory perf (visible-state fetch) + image-proxy allowlist (PR #460)
 
 **What happened & why**
@@ -58,10 +87,7 @@ found by reading the load path + measuring prod:
 Confirm prod: directory loads faster and the legislator share-card images resolve (no proxy 400s).
 
 **Deferred**
-- **Topic-scores trim** — `useCandidates` still fetches all ~15k `calculated_candidate_topic_scores`
-  rows (only needed for match-sort of visible candidates). Trimming needs a sequenced
-  candidates→scores query (`.in(ids)` has URL-length risk at ~476 ids) or a server-side join via
-  RPC/view. Deferred to keep PR #460 low-risk; the big win (wide candidate rows) is already done.
+- **Topic-scores trim** — DONE via the RPC in the entry above (Option 2, server-side join).
 - Other states (NY, PA, …); AI scoring (Phase 2) — as before.
 
 ---
