@@ -70,9 +70,18 @@ day (still can't manually trigger fetch-fec-donors from MCP — admin auth + FEC
 9 unused `idx_scan=0` indexes (~1.86 GB, migration `20260618130000`, reviewer GO). **DB 15 → 13 GB**
 (contributions 8,473→7,240 MB; donors 2,937→2,337 MB). Verified `memo_code='X'` still uses an index
 (Index Only Scan on `contributions_memo_code_idx`) — no seq-scan regression.
-**Owner-level (still open, the durable fix):** expand the storage add-on, and/or mitigate the
-matview-refresh OOM (REFRESH CONCURRENTLY needs a unique index + headroom, or schedule at lowest-usage
-time). The ~2.36 GB buys runway but `contributions` keeps growing, so this isn't permanent.
+**Owner-level (still open, the durable fix):** (a) expand the disk in the Supabase dashboard — the
+direct headroom fix; the daily MV refresh needs ~1.5 GB transient free space (biggest MV ~700 MB,
+non-concurrent REFRESH builds a 2nd copy then swaps), and (b) attack the growth driver
+`contributions` (7.2 GB, climbing) by pruning out-of-product-scope rows (hidden states / stale
+cycles) or partitioning by cycle. NOTE: `REFRESH … CONCURRENTLY` is NOT a disk fix — it needs ≥ the
+same disk (builds new + diffs), a UNIQUE index per MV, and can't run inside pg_cron's txn; its only
+benefit is read-availability during refresh, which isn't our problem. The ~2.36 GB reclaim buys
+runway but isn't permanent.
+**Monitoring (added 2026-06-18):** `bun run check:disk` (`scripts/check-disk-usage.sh`) is now a
+`/preflight` step — reports DB size vs ceiling each run, WARNs near the ceiling, and FAILS (AT MAX)
+when free space drops below the refresh headroom. Owner watches the authoritative number in the
+Supabase dashboard; keep `POLIPULSE_DISK_MAX_GB` (default 15) in sync with the real disk size.
 **Tiny follow-up:** ✅ **2026-06-18** — fixed the pre-existing `fetch-committee-donors/index.ts:412`
 bug (`onConflict: 'identity_hash'` → `'identity_hash,cycle'`, matching the real composite UNIQUE and
 both sibling importers). Shipped in PR #451.

@@ -14,6 +14,7 @@
     "check:dupes": "bash scripts/check-duplicate-candidates.sh",
     "check:data": "bash scripts/check-data-health.sh",
     "check:accuracy": "bash scripts/check-data-accuracy.sh",
+    "check:disk": "bash scripts/check-disk-usage.sh",
     "preview": "vite preview",
     "analyze": "ANALYZE=true vite build"
   },
