@@ -209,6 +209,56 @@ fresh `finance_reconciliation` rows carry `total_receipts_status` (#4).
 
 ---
 
+## 2026-06-18 — UI/UX polish: name formatting, back-link, tab counts, state coverage callout (PRs #453–#457)
+
+**What happened & why**
+Four user-reported issues fixed and shipped:
+
+1. **FEC honorific stripping** (PR #453/commit `214cf37f`): Candidate names like "Adrian O Mr Mapp"
+   were appearing because FEC stores names as `"LAST, FIRST MIDDLE MR."` — the honorific sits at the
+   END of the first-name token list, not the front. `formatCandidateName` in `src/lib/utils.ts` now
+   filters every token in the first-name portion against a `HONORIFIC_TITLES` set (mr, dr, ms, mrs,
+   etc.), while preserving suffixes (JR, SR). Unit tests added in `src/lib/utils.test.ts`.
+
+2. **"Back to Feed" link** (PR #453/`3fc835e6`): The candidate profile page had `to="/profile"` 
+   (the news feed) for its back-arrow. Changed to `to="/candidates"` with label "Back to Candidates"
+   in both the "not found" fallback and the main back button in `src/pages/CandidateProfile.tsx`.
+
+3. **Tab count hidden-state filtering** (PR #453/`3fc835e6`): The All/Senators/House counts showed
+   2410/334/2038 (all states) but only ~197 politicians were actually visible. Moved `useHiddenStates`
+   earlier in `Candidates.tsx` so `isHidden` is available in `officeCounts` useMemo; national offices
+   (state=US, President) always pass through.
+
+4. **State coverage callout** (PRs #456 `62e99f9a` + #457 `ef77d300`): Added messaging so users know
+   PoliPulse is limited to select states with more coming. Two surfaces:
+   - `DemographicsForm.tsx` (signup): updated the existing "isn't fully supported" message to cleaner
+     copy ("you'll still see your federal officials and members of Congress...").
+   - `Candidates.tsx` (politicians page): always-visible info banner between Tabs and filters, with
+     two variants — one if the user's own state is in the hidden set (personalized), one generic for
+     everyone else. PR #456 only showed it for hidden-state users; #457 made it always visible.
+
+All four PRs were merged to main by session end. The `bun install` + `bun run test` cycle confirmed
+the honorific-fix tests pass (416 packages installed fresh; no prior node_modules in the container).
+
+**State** (verified)
+- All commits pushed; PRs #453, #454 (test commit), #456, #457 all merged to main.
+- `bun run test` passes for `src/lib/utils.test.ts` (honorific cases + suffix preservation).
+- Build and lint NOT explicitly run via `/preflight` this session — changes are UI/hook wiring
+  only (no new deps, no schema changes). TypeScript types are stable since no new props were added.
+- Not deployed — these are frontend-only changes, so they go live on next Vercel/hosting deploy.
+
+**Next**
+Owner: deploy to production (or trigger whatever the hosting deploy pipeline is) so the four fixes
+are live. Then consider PR #451's deferred items — edge-fn deploys for #4 and #5 still needed.
+
+**Deferred**
+- Edge-fn deploys for #4 (FEC completeness metric) and #5 (congress donor backfill fix) — code
+  committed but not deployed; the old fns are still running in production.
+- Owner-level durable disk fix (#6): storage add-on and/or matview-refresh OOM mitigation.
+- See `docs/OPEN-WORK.md` for full backlog (#1, #2, #7–#13).
+
+---
+
 ## 2026-06-18 — committee-donors upsert fix (#6 follow-up) + PR #451 opened & CI green — late night
 
 **What happened & why**

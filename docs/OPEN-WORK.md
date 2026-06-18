@@ -147,6 +147,9 @@ and the large/fragile edge fns `fetch-fec-donors`, `get-candidate-answers`.
 - ✅ **2026-06-18** PR #451 **merged**; `deploy-edge-functions.yml` auto-deployed all edge fns to
   prod (run succeeded) — closes the "needs edge-fn deploy" tail on **#4** (FEC completeness metric)
   and **#5** (donor backfill scope-first fix). Both now fully live, not just merged.
+- ✅ **2026-06-18** UI polish — FEC honorific stripping (`formatCandidateName`), "Back to Candidates"
+  link fix, hidden-state tab count filtering, state coverage callout on signup + candidates page.
+  Shipped in PRs #453/#456/#457 (all merged).
 - ✅ **2026-06-18** Fixed `fetch-committee-donors:412` upsert `onConflict` → `'identity_hash,cycle'`
   (was silently erroring on a non-existent single-col UNIQUE). Shipped in PR #451 (CI green).
 - ✅ **2026-06-18** Disk: dropped orphaned `_enrich_*` staging (~506 MB) + 9 unused indexes
