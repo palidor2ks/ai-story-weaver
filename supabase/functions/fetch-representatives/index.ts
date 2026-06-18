@@ -305,12 +305,14 @@ serve(async (req) => {
     console.log(`=== FETCH REPRESENTATIVES START ===`);
     console.log(`fetchAll: ${fetchAll}, state: ${state}, district: ${district}, includeExecutives: ${includeExecutives}`);
 
-    // Fetch all data from GitHub (cached)
+    // fetchAll is the directory use-case and only needs name/party/office/state/district/image.
+    // Skip social-media and district-offices (two extra GitHub fetches) to cut cold-start time.
+    const skipDetails = !!fetchAll;
     const [legislators, executives, socialMediaMap, districtOfficesMap] = await Promise.all([
       fetchLegislators(),
       includeExecutives ? fetchExecutives() : Promise.resolve([]),
-      fetchSocialMedia(),
-      fetchDistrictOffices(),
+      skipDetails ? Promise.resolve(new Map<string, SocialMedia>()) : fetchSocialMedia(),
+      skipDetails ? Promise.resolve(new Map<string, DistrictOffice[]>()) : fetchDistrictOffices(),
     ]);
 
     // Map executives to representatives
