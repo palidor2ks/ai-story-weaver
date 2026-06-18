@@ -409,7 +409,7 @@ serve(async (req) => {
       const batch = contributions.slice(i, i + CONTRIBUTION_BATCH_SIZE);
       const { error } = await supabase
         .from('contributions')
-        .upsert(batch, { onConflict: 'identity_hash' });
+        .upsert(batch, { onConflict: 'identity_hash,cycle' });
       
       if (error) {
         console.error('[COMMITTEE-DONORS] Error saving contributions batch:', error);
