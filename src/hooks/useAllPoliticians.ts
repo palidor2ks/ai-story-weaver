@@ -45,17 +45,54 @@ function writeLocalCache(data: Representative[]) {
   }
 }
 
+function normalizeParty(p: string): Representative['party'] {
+  if (p === 'Democrat' || p === 'Republican' || p === 'Independent') return p;
+  return 'Other';
+}
+
 export function useAllPoliticians(options?: { enabled?: boolean }) {
   const enabled = options?.enabled ?? true;
   return useQuery({
     queryKey: ['all-politicians'],
     queryFn: async (): Promise<Representative[]> => {
+      // 1. Try localStorage first (fastest, ~0 ms)
       const cached = readLocalCache();
       if (cached) {
         console.log(`[Cache] all-politicians from localStorage: ${cached.length}`);
         return cached;
       }
 
+      // 2. Try DB cache (~100 ms, shared across all users, no cold start)
+      console.log('[DB] Fetching Congress members from congress_members table...');
+      const { data: dbRows, error: dbError } = await supabase.rpc('get_all_congress_members');
+
+      if (!dbError && dbRows && dbRows.length > 0) {
+        console.log(`[DB] Got ${dbRows.length} Congress members from DB cache`);
+        const result: Representative[] = dbRows.map(r => ({
+          id: r.bioguide_id,
+          bioguide_id: r.bioguide_id,
+          name: r.name,
+          party: normalizeParty(r.party),
+          office: r.office,
+          state: r.state,
+          district: r.district,
+          image_url: r.image_url,
+          is_incumbent: r.is_incumbent,
+          overall_score: r.overall_score ?? null,
+          coverage_tier: r.coverage_tier,
+          confidence: r.confidence,
+        }));
+        writeLocalCache(result);
+        return result;
+      }
+
+      if (dbError) {
+        console.warn('[DB] congress_members RPC failed, falling back to edge function:', dbError.message);
+      } else {
+        console.log('[DB] congress_members cache is empty or stale, falling back to edge function');
+      }
+
+      // 3. Edge function fallback (2-4 s cold start, populates DB for next user)
       console.log('Fetching all Congress members from edge function...');
       const { data, error } = await supabase.functions.invoke<FetchAllResponse>(
         'fetch-representatives',
@@ -72,7 +109,7 @@ export function useAllPoliticians(options?: { enabled?: boolean }) {
       }
 
       const result = data?.representatives || [];
-      console.log(`Fetched ${result.length} Congress members`);
+      console.log(`Fetched ${result.length} Congress members from edge function`);
       writeLocalCache(result);
       return result;
     },

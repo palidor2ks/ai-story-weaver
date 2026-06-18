@@ -12,6 +12,43 @@ const EXECUTIVE_URL = 'https://unitedstates.github.io/congress-legislators/execu
 const SOCIAL_MEDIA_URL = 'https://unitedstates.github.io/congress-legislators/legislators-social-media.json';
 const DISTRICT_OFFICES_URL = 'https://unitedstates.github.io/congress-legislators/legislators-district-offices.json';
 
+// Supabase admin client for writing to the congress_members cache table.
+// Uses service_role key — server-side only, never reaches the browser.
+function getAdminClient() {
+  const url = Deno.env.get('SUPABASE_URL')!;
+  const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  return createClient(url, key, { auth: { persistSession: false } });
+}
+
+async function refreshCongressMembersCache(representatives: any[]) {
+  const admin = getAdminClient();
+  const rows = representatives
+    .filter(r => r.bioguide_id && r.bioguide_id.match(/^[A-Z]\d{6}$/))
+    .map(r => ({
+      bioguide_id: r.bioguide_id,
+      name: r.name,
+      party: r.party,
+      office: r.office,
+      state: r.state,
+      district: r.district ?? null,
+      image_url: r.image_url || '',
+      is_incumbent: true,
+      overall_score: null,
+      coverage_tier: r.coverage_tier || 'tier_3',
+      confidence: r.confidence || 'low',
+      synced_at: new Date().toISOString(),
+    }));
+
+  if (rows.length === 0) return;
+
+  const { error } = await admin
+    .from('congress_members')
+    .upsert(rows, { onConflict: 'bioguide_id' });
+
+  if (error) throw new Error(error.message);
+  console.log(`[Cache] Refreshed congress_members table with ${rows.length} rows`);
+}
+
 // Cached data to avoid repeated fetches
 let cachedLegislators: any[] | null = null;
 let cachedExecutives: any[] | null = null;
@@ -322,20 +359,25 @@ serve(async (req) => {
 
     console.log(`Executives found: ${executiveReps.length}`);
 
-    // If fetchAll is true, return all Congress members
+    // If fetchAll is true, return all Congress members and refresh the DB cache
     if (fetchAll) {
       const representatives = legislators
         .map(l => mapLegislatorToRepresentative(l, socialMediaMap, districtOfficesMap))
         .filter((r): r is NonNullable<typeof r> => r !== null);
-      
+
       console.log(`Returning all ${representatives.length} legislators`);
-      
-      return new Response(JSON.stringify({ 
+
+      // Refresh DB cache as a side effect (fire-and-forget — don't block the response)
+      refreshCongressMembersCache(representatives).catch(err =>
+        console.error('[Cache] Failed to refresh congress_members table:', err)
+      );
+
+      return new Response(JSON.stringify({
         representatives: [...executiveReps, ...representatives],
         executives: executiveReps,
         total: representatives.length,
         state: null,
-        district: null 
+        district: null
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
