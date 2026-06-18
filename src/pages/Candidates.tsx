@@ -102,12 +102,20 @@ export const Candidates = () => {
     return combined.filter((c, i, arr) => arr.findIndex(x => x.id === c.id) === i);
   }, [unified.myReps, unified.federalExec, unified.stateExec, unified.stateLeg, unified.local]);
 
-  // Pre-compute office counts once instead of filtering allCandidates per tab label
+  const { isHidden } = useHiddenStates();
+
+  // Pre-compute office counts once, applying the same hidden-state filter used in
+  // filteredCandidates so tab badges match what's actually visible in each tab.
   const officeCounts = useMemo(() => {
     let senator = 0;
     let rep = 0;
+    let visibleAll = 0;
     const offices = new Set<string>();
     for (const c of allCandidates) {
+      // National offices (President/VP, state='US') are never hidden.
+      const isNational = c.state === 'US' || (c.level === 'federal' && /president/i.test(c.office));
+      if (!isNational && isHidden(c.state)) continue;
+      visibleAll++;
       // Use the canonical label so the same role isn't split across raw variants
       // (e.g. "Representative" vs "U.S. House FL-01" are both counted as U.S. House).
       const office = normalizeOfficeName(c.office);
@@ -115,8 +123,8 @@ export const Candidates = () => {
       if (office === 'U.S. Senate') senator++;
       else if (office === 'U.S. House') rep++;
     }
-    return { senator, rep, uniqueOffices: Array.from(offices).sort() };
-  }, [allCandidates]);
+    return { senator, rep, visibleAll, uniqueOffices: Array.from(offices).sort() };
+  }, [allCandidates, isHidden]);
 
   const uniqueOffices = officeCounts.uniqueOffices;
 
@@ -140,8 +148,6 @@ export const Candidates = () => {
         return allCandidates;
     }
   }, [activeTab, myRepsCombined, federalExecutiveCandidates, formerExecutiveCandidates, stateExecutiveCandidates, stateLegislativeCandidates, localCandidates, allCandidates]);
-
-  const { isHidden } = useHiddenStates();
 
   const filteredCandidates = useMemo(() => {
     // National offices (President / Vice President) represent the whole country
@@ -292,7 +298,7 @@ export const Candidates = () => {
             All Politicians
           </h1>
           <p className="text-muted-foreground">
-            Browse {allCandidates.length} officials including the President, Congress, Governors, and local representatives.
+            Browse {officeCounts.visibleAll} officials including the President, Congress, Governors, and local representatives.
           </p>
         </div>
 
@@ -302,7 +308,7 @@ export const Candidates = () => {
           <TabsList className="flex flex-wrap h-auto gap-1 w-full lg:w-auto lg:inline-flex">
             <TabsTrigger value="all" className="gap-2">
               <Building className="w-4 h-4 hidden sm:inline" />
-              All ({allCandidates.length})
+              All ({officeCounts.visibleAll})
             </TabsTrigger>
             <TabsTrigger value="my-reps" className="gap-2">
               <MapPin className="w-4 h-4 hidden sm:inline" />
