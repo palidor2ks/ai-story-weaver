@@ -94,6 +94,23 @@ and has at least one misattribution (Charay Smith NC cited `adamsmith.house.gov`
 
 ---
 
+## 🟢 State coverage (product expansion)
+
+### 14. ☐ Expand state-legislator ingestion beyond NJ + NC
+**What:** `discover-state-legislators` (OpenStates → `candidates`) currently sweeps only NJ + NC.
+Add more visible states (NY, PA, …) by extending the `STATES` array once NJ+NC looks right in the UI.
+**History:** Shipped 2026-06-18 (PR #455) directory-first; 293 NJ+NC legislators ingested + verified.
+**State:** Not started. Each new state is just an array entry; the cron + dedup funnel already handle it.
+
+### 15. ☐ Phase-2 AI scoring for state legislators
+**What:** The 293 ingested legislators are `tier_3` / `pending_research` (browseable, unscored). Enroll
+them in the research/scoring queue so they get alignment scores like federal candidates.
+**History:** Deliberately deferred at ingestion (directory-first decision, PR #455) to avoid burning
+AI quota on the whole body before the directory entries were validated.
+**State:** Not started. Enroll via the existing research-queue drainer when coverage warrants.
+
+---
+
 ## 🟡 Cleanup (low-risk)
 
 ### 8. ☐ Delete inert `enrich-batch-experiment` edge function
@@ -119,6 +136,14 @@ and the large/fragile edge fns `fetch-fec-donors`, `get-candidate-answers`.
 ---
 
 ## ✅ Recently done (prune after ~2 weeks)
+- ✅ **2026-06-18** State-legislator ingestion (PR #455): `discover-state-legislators` edge fn +
+  weekly cron + State/Local tab wiring; 293 NJ+NC legislators ingested & verified live (correct
+  parties, chamber totals match reality). Directory-first, unscored — see #14/#15 for follow-ups.
+- ✅ **2026-06-18** Directory perf (PR #460 + #461): pushed the visible-states filter server-side —
+  candidate fetch 2,685→476 rows (`.not state in hidden`), and topic scores 15,201→1,416 via a new
+  `get_visible_candidate_topic_scores()` SECURITY DEFINER RPC. Reviewer GO; advisors clean.
+- ✅ **2026-06-18** `proxy-image` allowlist widened (PR #460) for state-legislator photo hosts
+  (ncleg.gov = 135 NC members, nj.gov, S3/GCS, Wix, Squarespace) — fixes the `host not allowed` 400s.
 - ✅ **2026-06-18** PR #451 **merged**; `deploy-edge-functions.yml` auto-deployed all edge fns to
   prod (run succeeded) — closes the "needs edge-fn deploy" tail on **#4** (FEC completeness metric)
   and **#5** (donor backfill scope-first fix). Both now fully live, not just merged.
