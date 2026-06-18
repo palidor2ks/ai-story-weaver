@@ -242,7 +242,7 @@ export const Candidates = () => {
 
   // Block on DB + Congress members so the full list renders in one pass (avoids
   // visible reorder when allPoliticians arrives as a second wave).
-  const coreLoading = unified.dbLoading || unified.allLoading || profileLoading;
+  const coreLoading = unified.dbLoading || unified.allLoading;
   const reposLoading = unified.civicLoading || unified.repsLoading;
 
   // Count for tabs

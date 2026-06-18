@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Candidate } from '@/types';
 import { Card, CardContent } from '@/components/ui/card';
@@ -22,7 +23,7 @@ interface CandidateCardProps {
   ieTotals?: IETotals;
 }
 
-export const CandidateCard = ({ 
+export const CandidateCard = memo(function CandidateCard({ 
   candidate, 
   index = 0,
   compareMode = false,
@@ -191,4 +192,4 @@ export const CandidateCard = ({
       {cardContent}
     </Link>
   );
-};
+});
