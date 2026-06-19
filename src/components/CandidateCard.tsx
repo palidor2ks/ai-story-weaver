@@ -127,7 +127,9 @@ export const CandidateCard = memo(function CandidateCard({
                 <span className="line-clamp-2 break-words">{normalizeOfficeName(candidate.office)}</span>
                 <span className="flex-shrink-0">•</span>
                 <MapPin className="w-3 h-3 flex-shrink-0" />
-                <span className="flex-shrink-0">{candidate.state}</span>
+                <span className="flex-shrink-0">
+                  {candidate.city ? `${candidate.city}, ${candidate.state}` : candidate.state}
+                </span>
               </div>
               <IESummaryInline totals={ieTotals} className="mt-1" />
             </div>

@@ -12,6 +12,7 @@ export interface CivicOfficial {
   office: string;
   level: OfficeLevelType;
   state: string;
+  city?: string;
   district?: string;
   image_url: string;
   phones?: string[];
