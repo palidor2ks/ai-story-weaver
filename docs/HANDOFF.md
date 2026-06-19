@@ -27,6 +27,34 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-19 — CDN cache cron wired + PR #469 merged
+
+**What happened & why**
+Closed out the candidates-directory CDN perf work from the previous session. The CDN JSON file
+was already seeded (via pg_net invocation of the edge function from within the DB). This session
+added the daily auto-refresh so the cache never goes stale:
+- `supabase/migrations/20260619000000_refresh_candidates_cache_cron.sql` — pg_cron job
+  `refresh-candidates-cache-daily` runs at 03:00 UTC every day, calls the edge function via
+  `pg_net.http_post()` using `supabase_publishable_key` from Vault (same pattern as other crons).
+- Migration applied to prod directly via Supabase MCP. Cron job verified active in `cron.job`.
+- PR #469 opened, all CI green (Lint/Build/Typecheck/Test/GitGuardian ✅), merged to main.
+
+**State** (verified)
+- `data-cache/candidates-directory.json` exists in prod storage: 407 KB, updated 01:45 UTC.
+- Cron job `refresh-candidates-cache-daily` active: `SELECT jobname, schedule, active FROM cron.job WHERE jobname = 'refresh-candidates-cache-daily'` confirmed.
+- All CI checks green; PR #469 merged to main.
+- `/candidates` page now fetches ~50ms from CDN on cold loads (CDN-first path in `useCandidates` + `useAllPoliticians`).
+
+**Next**
+Tackle remaining perf items from the original analysis: Fix 5 (IE 50k row fetch — `useIndependentExpenditures` loads all rows on every card render), Fix 6 (`useDeferredValue` on searchQuery), Fix 7 (stateCount/localCount memo in the filter sidebar).
+
+**Deferred**
+- Fix 5: IE 50k row fetch (highest remaining impact — loads per-candidate IE data for every visible card).
+- Fix 6: `useDeferredValue` on `searchQuery` to avoid blocking renders on keystroke.
+- Fix 7: `stateCount`/`localCount` memoization in filter sidebar.
+
+---
+
 ## 2026-06-19 — All Politicians directory perf (continuing) — CDN pre-baked JSON
 
 **What happened & why**

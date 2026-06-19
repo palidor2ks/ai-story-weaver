@@ -6253,6 +6253,17 @@ export type Database = {
           routed_count: number
         }[]
       }
+      get_candidate_ie_totals: {
+        Args: { p_candidate_ids: string[] }
+        Returns: {
+          candidate_id: string
+          cycle: string | null
+          expenditure_count: number
+          oppose_amount: number
+          support_amount: number
+          total_amount: number
+        }[]
+      }
       get_committee_card_facts: { Args: { _fec_id: string }; Returns: Json }
       get_committee_cycles: { Args: never; Returns: string[] }
       get_contribution_totals: {
