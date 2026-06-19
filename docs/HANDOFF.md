@@ -27,6 +27,36 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-19 — Fix 6+7: deferred search + memoized tab counts — PR #471 merged
+
+**What happened & why**
+Two small render-path fixes to `src/pages/Candidates.tsx`:
+- **Fix 6:** Added `deferredSearchQuery = useDeferredValue(searchQuery)` and switched
+  `filteredCandidates` to depend on the deferred value. The search input now updates
+  instantly on every keystroke; the expensive filter (476 candidates, multi-field string
+  match + sort) runs in a lower-priority pass. Page-reset effect stays on raw `searchQuery`
+  so pagination snaps to page 1 immediately on type.
+- **Fix 7:** `stateCount`/`localCount` were bare `.filter()` calls re-running on every render.
+  Merged into one `useMemo([allCandidates])` — recomputes only when the candidate list changes.
+- PR #471: all 6 CI checks ✅, merged to main.
+
+**State** (verified)
+- TypeScript: 0 errors (verified locally before push).
+- All CI green; PR #471 merged to main.
+
+**Next**
+All three deferred perf fixes (5, 6, 7) are now shipped. The `/candidates` page should be
+noticeably faster: CDN cold load (~50ms), IE data ≤25 rows, search input non-blocking.
+Next priority from OPEN-WORK: #1 remaining `public_statement` corroboration (~3,945 rows),
+or #14 expand state-legislator ingestion (trivial — just add states to the array).
+
+**Deferred**
+- OPEN-WORK #1: remaining `public_statement` corroboration (~3,945 ambiguous rows).
+- OPEN-WORK #6: Supabase disk owner-level fix (expand disk / prune contributions table).
+- OPEN-WORK #14: expand state-legislator ingestion beyond NJ+NC.
+
+---
+
 ## 2026-06-19 — Fix 5: IE 50k row fetch eliminated — PR #470 merged
 
 **What happened & why**
