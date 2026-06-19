@@ -1164,6 +1164,7 @@ export type Database = {
       candidates: {
         Row: {
           answers_source: string | null
+          city: string | null
           claimed_at: string | null
           claimed_by_user_id: string | null
           confidence: Database["public"]["Enums"]["confidence_level"] | null
@@ -1194,6 +1195,7 @@ export type Database = {
         }
         Insert: {
           answers_source?: string | null
+          city?: string | null
           claimed_at?: string | null
           claimed_by_user_id?: string | null
           confidence?: Database["public"]["Enums"]["confidence_level"] | null
@@ -1224,6 +1226,7 @@ export type Database = {
         }
         Update: {
           answers_source?: string | null
+          city?: string | null
           claimed_at?: string | null
           claimed_by_user_id?: string | null
           confidence?: Database["public"]["Enums"]["confidence_level"] | null
@@ -1542,6 +1545,51 @@ export type Database = {
           name?: string
           type?: string | null
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      congress_members: {
+        Row: {
+          bioguide_id: string
+          confidence: string
+          coverage_tier: string
+          district: string | null
+          image_url: string
+          is_incumbent: boolean
+          name: string
+          office: string
+          overall_score: number | null
+          party: string
+          state: string
+          synced_at: string
+        }
+        Insert: {
+          bioguide_id: string
+          confidence?: string
+          coverage_tier?: string
+          district?: string | null
+          image_url?: string
+          is_incumbent?: boolean
+          name: string
+          office: string
+          overall_score?: number | null
+          party: string
+          state: string
+          synced_at?: string
+        }
+        Update: {
+          bioguide_id?: string
+          confidence?: string
+          coverage_tier?: string
+          district?: string | null
+          image_url?: string
+          is_incumbent?: boolean
+          name?: string
+          office?: string
+          overall_score?: number | null
+          party?: string
+          state?: string
+          synced_at?: string
         }
         Relationships: []
       }
@@ -6240,6 +6288,22 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_all_congress_members: {
+        Args: never
+        Returns: {
+          bioguide_id: string
+          confidence: string
+          coverage_tier: string
+          district: string
+          image_url: string
+          is_incumbent: boolean
+          name: string
+          office: string
+          overall_score: number
+          party: string
+          state: string
+        }[]
+      }
       get_candidate_caption_facts: {
         Args: { _candidate_id: string; _cycle?: string }
         Returns: Json
@@ -6260,7 +6324,7 @@ export type Database = {
         Args: { p_candidate_ids: string[] }
         Returns: {
           candidate_id: string
-          cycle: string | null
+          cycle: string
           expenditure_count: number
           oppose_amount: number
           support_amount: number
@@ -6553,43 +6617,28 @@ export type Database = {
           topic_id: string
         }[]
       }
-      get_all_congress_members: {
-        Args: never
-        Returns: {
-          bioguide_id: string
-          name: string
-          party: string
-          office: string
-          state: string
-          district: string | null
-          image_url: string
-          is_incumbent: boolean
-          overall_score: number | null
-          coverage_tier: string
-          confidence: string
-        }[]
-      }
       get_visible_candidates: {
         Args: never
         Returns: {
+          city: string
+          claimed_at: string
+          claimed_by_user_id: string
+          confidence: string
+          coverage_tier: string
+          district: string
+          fec_candidate_id: string
           id: string
+          image_url: string
+          is_incumbent: boolean
+          last_donor_sync: string
+          last_updated: string
           name: string
-          party: string
           office: string
+          overall_score: number
+          party: string
+          person_id: string
+          score_version: string
           state: string
-          district: string | null
-          image_url: string | null
-          overall_score: number | null
-          coverage_tier: string | null
-          confidence: string | null
-          is_incumbent: boolean | null
-          score_version: string | null
-          last_updated: string | null
-          claimed_by_user_id: string | null
-          claimed_at: string | null
-          fec_candidate_id: string | null
-          last_donor_sync: string | null
-          person_id: string | null
         }[]
       }
       has_role: {
@@ -6696,6 +6745,7 @@ export type Database = {
           updated: boolean
         }[]
       }
+      reconcile_vote_sync_status: { Args: never; Returns: Json }
       refresh_admin_stats_cache: { Args: { p_keys?: string[] }; Returns: Json }
       refresh_bill_summary_stats: { Args: never; Returns: undefined }
       refresh_committee_pool: { Args: never; Returns: undefined }
