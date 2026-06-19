@@ -81,6 +81,7 @@ serve(async (req) => {
         party: normalizeParty(o?.party ?? c.party ?? 'Other'),
         office: o?.office ?? c.office,
         state: o?.state ?? c.state,
+        city: c.city ?? undefined,
         district: o?.district ?? c.district ?? null,
         image_url: resolveImageUrl({
           overrideUrl: o?.image_url,
