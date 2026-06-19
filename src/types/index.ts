@@ -63,6 +63,7 @@ export interface Candidate {
   party: 'Democrat' | 'Republican' | 'Independent' | 'Other';
   office: string;
   state: string;
+  city?: string;
   district?: string;
   imageUrl?: string;
   overallScore: number;

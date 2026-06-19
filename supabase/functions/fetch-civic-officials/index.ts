@@ -34,6 +34,7 @@ interface OfficialInfo {
   office: string;
   level: OfficeLevelType;
   state: string;
+  city?: string;
   district?: string;
   image_url: string;
   phones?: string[];
@@ -599,6 +600,7 @@ async function fetchLocalOfficialsFromDB(state: string, city?: string): Promise<
       office: official.office,
       level: official.level as OfficeLevelType,
       state: official.state,
+      city: official.city || undefined,
       district: official.district,
       image_url: official.image_url || '',
       urls: official.website_url ? [official.website_url] : [],
@@ -1010,6 +1012,7 @@ async function fetchManualCivicOverrides(state: string, city?: string): Promise<
         office: o.office || 'Official',
         level,
         state: o.state || state.toUpperCase(),
+        city: cityById.get(o.candidate_id) || undefined,
         district: o.district || undefined,
         image_url: o.image_url || '',
         is_incumbent: true,
