@@ -106,6 +106,43 @@ over the next hour to confirm it decreases ~1 per cron cycle; if it doesn't, che
 
 ---
 
+## 2026-06-19 — Admin Answers column: silent-failure fix (PR #478 merged)
+
+**What happened & why**
+User noticed the Answers column showed "0/251" for Cory A. Booker, Deborah K. Ross, and
+LaMonica McIver — candidates who clearly have answers. Previous session's 4-item table audit
+(PR #474) hadn't touched the Answers column, so this was a new investigation.
+
+Root cause: the DB data was correct all along — all three candidates have `answer_count=251`
+in `candidate_answer_coverage_stats`. The bug is in `chunkedIn()`: when a PostgREST chunk
+query fails (network hiccup, transient timeout, etc.), it logs to console but returns `[]`
+silently. This makes every candidate in that chunk show `answerCount=0`, which is
+indistinguishable from a candidate with genuinely no answers.
+
+**Fix:** Wrapped the answer-coverage `chunkedIn` call to capture a `hadError` flag. Added
+`answerCountError: boolean` to `CandidateAnswerCoverage`. Component now renders `⚠ ?/251`
+with tooltip "Answer data failed to load — click Refresh to retry" instead of misleading
+`0/251` when the flag is set.
+
+**State** (verified)
+- PR #478 merged to `main`. All 7 CI checks green: Lint ✓, Build ✓, Typecheck ✓, Test ✓,
+  Lockfile guard ✓, GitGuardian ✓, Supabase Preview skipped (no supabase/ changes).
+- TypeScript clean locally (`bun run tsc --noEmit`).
+- Not runtime-tested in browser (remote env) — but the fix is purely additive: normal loads
+  are unaffected; only failed chunks now show ⚠ instead of 0.
+
+**Next**
+Roadmap #2: tackle remaining deferred items — DB disk pressure (#3) or FEC total-receipts
+gate (#4).
+
+**Deferred**
+- Roadmap #3: DB disk pressure (15 GB, `contributions` 8.4 GB).
+- Roadmap #4: FEC Finding A — total-receipts gate to reconciliation `status`.
+- Perf Fix 6: `useDeferredValue` on `searchQuery`.
+- Perf Fix 7: `stateCount`/`localCount` memoization in filter sidebar.
+
+---
+
 ## 2026-06-19 — vote_sync_status reconciliation + admin table accuracy fixes (PR #474)
 
 **What happened & why**
