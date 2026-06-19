@@ -22,6 +22,16 @@ interface FetchAllResponse {
   error?: string;
 }
 
+interface CdnPayload {
+  generatedAt: string;
+  version: number;
+  candidates: unknown[];
+  congressMembers: Representative[];
+}
+
+const CDN_URL = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/data-cache/candidates-directory.json`;
+const CDN_MAX_AGE_MS = 26 * 60 * 60 * 1000; // 26 hours
+
 const LS_KEY = 'all-politicians-v1';
 const LS_TTL = 1000 * 60 * 60; // 1 hour
 
@@ -55,14 +65,34 @@ export function useAllPoliticians(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['all-politicians'],
     queryFn: async (): Promise<Representative[]> => {
-      // 1. Try localStorage first (fastest, ~0 ms)
+      // 1. Try localStorage first (~0 ms — same browser session)
       const cached = readLocalCache();
       if (cached) {
         console.log(`[Cache] all-politicians from localStorage: ${cached.length}`);
         return cached;
       }
 
-      // 2. Try DB cache (~100 ms, shared across all users, no cold start)
+      // 2. Try CDN (~50 ms — pre-baked JSON, no cold start, shared across all users)
+      try {
+        const cdnRes = await fetch(CDN_URL);
+        if (cdnRes.ok) {
+          const json = await cdnRes.json() as CdnPayload;
+          const age = Date.now() - new Date(json.generatedAt).getTime();
+          if (age < CDN_MAX_AGE_MS && Array.isArray(json.congressMembers) && json.congressMembers.length > 0) {
+            const result: Representative[] = json.congressMembers.map(m => ({
+              ...m,
+              party: normalizeParty(m.party),
+            }));
+            console.log(`[CDN] congress members: ${result.length} (age ${Math.round(age / 60000)}m)`);
+            writeLocalCache(result);
+            return result;
+          }
+        }
+      } catch {
+        // network error — fall through to DB
+      }
+
+      // 3. Try DB cache (~100 ms — congress_members table, no edge-function cold start)
       console.log('[DB] Fetching Congress members from congress_members table...');
       const { data: dbRows, error: dbError } = await supabase.rpc('get_all_congress_members');
 
@@ -92,7 +122,7 @@ export function useAllPoliticians(options?: { enabled?: boolean }) {
         console.log('[DB] congress_members cache is empty or stale, falling back to edge function');
       }
 
-      // 3. Edge function fallback (2-4 s cold start, populates DB for next user)
+      // 4. Edge function fallback (2-4 s cold start, populates DB for next user)
       console.log('Fetching all Congress members from edge function...');
       const { data, error } = await supabase.functions.invoke<FetchAllResponse>(
         'fetch-representatives',

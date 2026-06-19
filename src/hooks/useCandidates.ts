@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { CoverageTier, ConfidenceLevel } from '@/lib/scoreFormat';
 import { resolveCandidateImageUrl } from '@/lib/candidateImages';
@@ -93,41 +94,54 @@ interface Question {
 const CANDIDATE_LIST_COLUMNS =
   'id, name, party, office, state, district, image_url, overall_score, coverage_tier, confidence, is_incumbent, score_version, last_updated, claimed_by_user_id, claimed_at, fec_candidate_id, last_donor_sync, person_id';
 
+// CDN pre-baked JSON — refreshed by scripts/generate-candidates-json.ts
+const CDN_URL = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/data-cache/candidates-directory.json`;
+// Accept CDN data up to 26 hours old (script should run daily)
+const CDN_MAX_AGE_MS = 26 * 60 * 60 * 1000;
+
+interface CdnPayload {
+  generatedAt: string;
+  version: number;
+  candidates: Candidate[];
+  congressMembers: unknown[];
+}
+
 export const useCandidates = () => {
-  return useQuery({
+  const coreQuery = useQuery({
     queryKey: ['candidates'],
     staleTime: 10 * 60 * 1000,
     queryFn: async () => {
-      // All three fire in parallel immediately — hidden-state filtering is now
-      // server-side inside get_visible_candidates() (mirrors get_visible_candidate_topic_scores).
-      // No longer blocked on useHiddenStates completing first.
-      const [candidatesResult, topicScoresResult, overridesResult] = await Promise.all([
+      // 1. Try CDN (fastest path — ~50ms vs ~300ms from Postgres)
+      try {
+        const cdnRes = await fetch(CDN_URL);
+        if (cdnRes.ok) {
+          const json = await cdnRes.json() as CdnPayload;
+          const age = Date.now() - new Date(json.generatedAt).getTime();
+          if (age < CDN_MAX_AGE_MS && Array.isArray(json.candidates) && json.candidates.length > 0) {
+            console.log(`[CDN] candidates: ${json.candidates.length} (age ${Math.round(age / 60000)}m)`);
+            return json.candidates;
+          }
+        }
+      } catch {
+        // network error — fall through to Supabase
+      }
+
+      // 2. Supabase fallback (hidden-state filtering is server-side inside get_visible_candidates())
+      const [candidatesResult, overridesResult] = await Promise.all([
         supabase.rpc('get_visible_candidates'),
-        supabase.rpc('get_visible_candidate_topic_scores'),
-        supabase.from('candidate_overrides').select('candidate_id, overall_score, name, party, office, state, district, image_url, coverage_tier, confidence').eq('is_active', true),
+        supabase.from('candidate_overrides')
+          .select('candidate_id, overall_score, name, party, office, state, district, image_url, coverage_tier, confidence')
+          .eq('is_active', true),
       ]);
 
       if (candidatesResult.error) throw candidatesResult.error;
 
       const candidates = candidatesResult.data ?? [];
-      const topicScores = topicScoresResult.data || [];
       const overrides = overridesResult.data || [];
-
-      // Create maps for O(1) lookups
       const overrideMap = new Map(overrides.map(o => [o.candidate_id, o]));
-      const topicScoresMap = new Map<string, typeof topicScores>();
-      topicScores.forEach(ts => {
-        if (!topicScoresMap.has(ts.candidate_id!)) {
-          topicScoresMap.set(ts.candidate_id!, []);
-        }
-        topicScoresMap.get(ts.candidate_id!)!.push(ts);
-      });
 
-      // Map and merge data in single pass
-      const candidatesWithScores = candidates.map((candidate) => {
+      return candidates.map((candidate) => {
         const override = overrideMap.get(candidate.id);
-        const candidateTopicScores = topicScoresMap.get(candidate.id) || [];
-
         return {
           id: candidate.id,
           name: formatCandidateName(override?.name ?? candidate.name),
@@ -152,16 +166,44 @@ export const useCandidates = () => {
           fec_candidate_id: candidate.fec_candidate_id,
           last_donor_sync: candidate.last_donor_sync,
           person_id: candidate.person_id,
-          topicScores: candidateTopicScores.map(ts => ({
-            topic_id: ts.topic_id,
-            score: ts.calculated_score ?? 0,
-          })),
+          topicScores: [] as { topic_id: string; score: number }[],
         };
-      });
-
-      return candidatesWithScores as Candidate[];
+      }) as Candidate[];
     },
   });
+
+  const topicScoresQuery = useQuery({
+    queryKey: ['candidates-topic-scores'],
+    staleTime: 10 * 60 * 1000,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_visible_candidate_topic_scores');
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const data = useMemo(() => {
+    if (!coreQuery.data) return undefined;
+    const scores = topicScoresQuery.data;
+    if (!scores || scores.length === 0) return coreQuery.data;
+
+    const scoresMap = new Map<string, { topic_id: string; score: number }[]>();
+    for (const ts of scores) {
+      if (!ts.candidate_id) continue;
+      if (!scoresMap.has(ts.candidate_id)) scoresMap.set(ts.candidate_id, []);
+      scoresMap.get(ts.candidate_id)!.push({ topic_id: ts.topic_id, score: ts.calculated_score ?? 0 });
+    }
+
+    return coreQuery.data.map(c => ({
+      ...c,
+      topicScores: scoresMap.get(c.id) ?? [],
+    }));
+  }, [coreQuery.data, topicScoresQuery.data]);
+
+  return {
+    ...coreQuery,
+    data,
+  };
 };
 
 

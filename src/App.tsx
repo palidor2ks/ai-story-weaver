@@ -10,6 +10,8 @@ import { useHasCompletedOnboarding } from "./hooks/useProfile";
 import { useAdminRole } from "./hooks/useAdminRole";
 import { LoadingScreen } from "./components/LoadingScreen";
 import { BadgeAwardToast } from "./components/BadgeAwardToast";
+import { useCandidates } from "./hooks/useCandidates";
+import { useAllPoliticians } from "./hooks/useAllPoliticians";
 
 const Auth = lazy(() => import("./pages/Auth").then((m) => ({ default: m.Auth })));
 const Candidates = lazy(() => import("./pages/Candidates").then((m) => ({ default: m.Candidates })));
@@ -51,6 +53,15 @@ const Onboarding = lazy(() => import("./pages/Onboarding").then((m) => ({ defaul
 const PoliticalCompassTest = lazy(() => import("./pages/PoliticalCompassTest"));
 const PoliticalIdeologyTestsComparison = lazy(() => import("./pages/PoliticalIdeologyTestsComparison"));
 const PoliticalCompassExplained = lazy(() => import("./pages/PoliticalCompassExplained"));
+
+// Fires useCandidates + useAllPoliticians at app boot so data is ready
+// by the time the user navigates to /candidates. TanStack Query deduplicates
+// by key, so the Candidates page picks up the pre-fetched results instantly.
+function PrefetchCandidates() {
+  useCandidates();
+  useAllPoliticians();
+  return null;
+}
 
 // Root route: route users based on auth + onboarding status
 const RootRedirect = () => {
@@ -203,6 +214,7 @@ const App = () => (
           <Toaster />
           <Sonner />
           <BrowserRouter>
+            <PrefetchCandidates />
             <BadgeAwardToast />
             <AppRoutes />
           </BrowserRouter>

@@ -16,7 +16,8 @@
     "check:accuracy": "bash scripts/check-data-accuracy.sh",
     "check:disk": "bash scripts/check-disk-usage.sh",
     "preview": "vite preview",
-    "analyze": "ANALYZE=true vite build"
+    "analyze": "ANALYZE=true vite build",
+    "generate:candidates-json": "bunx tsx scripts/generate-candidates-json.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

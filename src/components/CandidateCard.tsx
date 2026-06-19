@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Candidate } from '@/types';
 import { Card, CardContent } from '@/components/ui/card';
@@ -22,14 +23,14 @@ interface CandidateCardProps {
   ieTotals?: IETotals;
 }
 
-export const CandidateCard = ({ 
+export const CandidateCard = memo(function CandidateCard({ 
   candidate, 
   index = 0,
   compareMode = false,
   isSelected = false,
   onToggleSelect,
   ieTotals,
-}: CandidateCardProps) => {
+}: CandidateCardProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const hasAIAnswers = candidate.hasAIAnswers ?? false;
@@ -191,4 +192,4 @@ export const CandidateCard = ({
       {cardContent}
     </Link>
   );
-};
+});

@@ -44,9 +44,13 @@ const getPageList = (current: number, total: number): (number | 'ellipsis')[] =>
 
 export const Candidates = () => {
   const { data: profile, isLoading: profileLoading } = useProfile();
+  const [activeTab, setActiveTab] = useState<string>('all');
   const unified = useUnifiedCandidates({
     address: profile?.address,
     includeAllCongress: true,
+    // Only fetch geocode + civic API when on a tab that actually needs local reps.
+    // Avoids the 0.5–2s civic round-trip on the default "All" tab.
+    fetchCivic: activeTab !== 'all' && activeTab !== 'congress',
   });
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -54,7 +58,6 @@ export const Candidates = () => {
   const [partyFilter, setPartyFilter] = useState<string>('all');
   const [officeFilter, setOfficeFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'incumbent' | 'challenger'>('all');
-  const [activeTab, setActiveTab] = useState<string>('all');
 
   // Compare mode state
   const [compareMode, setCompareMode] = useState(false);
@@ -242,7 +245,7 @@ export const Candidates = () => {
 
   // Block on DB + Congress members so the full list renders in one pass (avoids
   // visible reorder when allPoliticians arrives as a second wave).
-  const coreLoading = unified.dbLoading || unified.allLoading || profileLoading;
+  const coreLoading = unified.dbLoading || unified.allLoading;
   const reposLoading = unified.civicLoading || unified.repsLoading;
 
   // Count for tabs
