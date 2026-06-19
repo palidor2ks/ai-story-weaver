@@ -6050,6 +6050,57 @@ export type Database = {
         }
         Relationships: []
       }
+      fec_candidates_public: {
+        Row: {
+          cycle: string | null
+          election_year: string | null
+          fec_candidate_id: string | null
+          incumbent_challenger: string | null
+          name: string | null
+          office: string | null
+          office_district: string | null
+          office_state: string | null
+          party: string | null
+          principal_committee_id: string | null
+          source: string | null
+          state: string | null
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          cycle?: string | null
+          election_year?: string | null
+          fec_candidate_id?: string | null
+          incumbent_challenger?: string | null
+          name?: string | null
+          office?: string | null
+          office_district?: string | null
+          office_state?: string | null
+          party?: string | null
+          principal_committee_id?: string | null
+          source?: string | null
+          state?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          cycle?: string | null
+          election_year?: string | null
+          fec_candidate_id?: string | null
+          incumbent_challenger?: string | null
+          name?: string | null
+          office?: string | null
+          office_district?: string | null
+          office_state?: string | null
+          party?: string | null
+          principal_committee_id?: string | null
+          source?: string | null
+          state?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       ie_excluded_committees_public: {
         Row: {
           excluded_at: string | null
