@@ -5,6 +5,51 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-19 — Politician card display consistency (PR #475)
+
+**What happened & why**
+User noticed two visual inconsistencies on the All Politicians page:
+
+1. **Name casing**: FEC-sourced candidates are stored with ALL-CAPS names
+   ("ABU-GHAZALAH, MAAD", "ADAMS, MATTHEW MARK") while locally-entered candidates
+   are in proper Title Case ("Abe Jones"). The card rendered `candidate.name` raw.
+
+2. **Office label style**: State legislators showed the verbose job title
+   ("State Representative") while federal members showed the short chamber name
+   ("U.S. House") — inconsistent style within the same grid.
+
+Fixes:
+- Added `toDisplayName()` to `src/lib/officeLabel.ts`: detects ALL-CAPS names,
+  reorders "LAST, FIRST MIDDLE" → "First Middle Last", converts to Title Case,
+  handles Mc/Mac/O' prefixes and degree/suffix abbreviations (Ph.D., Jr., II, etc.).
+  Mixed-case names pass through unchanged.
+- Extended `normalizeOfficeName()` in the same file to canonicalize state legislative
+  titles: "State Representative"/"State Delegate"/etc. → "State House",
+  "State Senator" → "State Senate" (mirrors "U.S. House"/"U.S. Senate" style).
+- `CandidateCard.tsx` now calls `toDisplayName(candidate.name)` instead of raw name.
+
+PR #475 — all CI green (Lint ✅ Build ✅ Test ✅ Typecheck ✅), merged to main.
+
+**State** (verified)
+- `bunx tsc --noEmit` passes locally (no TS errors).
+- CI: Lint, Build, Test, Typecheck all green on GitHub Actions.
+- PR #475 merged to main.
+- NOT verified: visual spot-check in running app (no dev server in this env).
+
+**Next**
+Tackle Roadmap Item #2: Congress donor backfill stall — 159 `candidate_committees`
+rows with `has_more=true` not progressing, likely filtered by `congress_visible`
+scope in `schedule-congress-donor-sync`.
+
+**Deferred**
+- Roadmap #2: Congress donor backfill stall (~3/day vs 144/day expected).
+- Roadmap #3: DB disk pressure (15 GB, `contributions` 8.4 GB, cron hit disk-full 2026-06-13).
+- Roadmap #4: FEC Finding A — add total-receipts gate to reconciliation `status`.
+- Perf Fix 6: `useDeferredValue` on `searchQuery`.
+- Perf Fix 7: `stateCount`/`localCount` memoization in filter sidebar.
+
+---
+
 ## Entry template (copy this, fill it in, put it at the TOP)
 
 ```
