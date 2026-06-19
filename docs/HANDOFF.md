@@ -27,6 +27,39 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-19 — Fix 5: IE 50k row fetch eliminated — PR #470 merged
+
+**What happened & why**
+`useCandidatesIE()` was fetching up to 50,000 raw rows from `independent_expenditures` on
+every cold visit to `/candidates`, aggregating them in JavaScript, and discarding 99%. New
+`get_candidate_ie_totals(text[])` RPC does the aggregation server-side using a window function
+(`ROW_NUMBER() OVER PARTITION BY candidate_id ORDER BY cycle DESC`), picks the latest cycle
+per candidate, filters excluded committees, and returns ≤25 rows for a typical directory page.
+
+Changes:
+- `supabase/migrations/20260619010000_get_candidate_ie_totals_rpc.sql` — new STABLE/SECURITY
+  DEFINER RPC; grants to anon + authenticated.
+- `src/hooks/useIndependentExpenditures.ts` — `useCandidatesIE` replaced 40-line fetch+aggregate
+  loop with a 6-line `supabase.rpc('get_candidate_ie_totals', ...)` call.
+- `src/integrations/supabase/types.ts` — type entry for the new RPC added.
+- PR #470 opened, all 7 CI checks ✅ (Lint/Build/Typecheck/Test/GitGuardian/Supabase Preview),
+  merged to main.
+
+**State** (verified)
+- Migration applied to prod (via MCP before push) and to preview branch (Supabase Preview ✅).
+- All CI green; PR #470 merged to main.
+- `/candidates` IE data now fetches ≤25 rows (server-side RPC) instead of up to 50k raw rows.
+
+**Next**
+Fix 6: add `useDeferredValue` on `searchQuery` in `src/pages/Candidates.tsx` to avoid
+blocking renders on every keystroke while the filter reruns.
+
+**Deferred**
+- Fix 6: `useDeferredValue` on `searchQuery`.
+- Fix 7: `stateCount`/`localCount` memoization in the filter sidebar.
+
+---
+
 ## 2026-06-19 — CDN cache cron wired + PR #469 merged
 
 **What happened & why**
