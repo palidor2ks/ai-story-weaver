@@ -522,13 +522,16 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
         
         // Determine sync status
         const hasPartialSync = partialSyncMap[c.id] || false;
+        // completeSyncMap is scoped to FINANCE_CYCLE via the committee query filter —
+        // only count a sync "complete" when the selected cycle's receipts are fully in.
+        // last_donor_sync on the candidates row is NOT cycle-scoped (it tracks any-cycle
+        // activity) so we intentionally exclude it from the sync-status decision here.
         const hasCompletedAnySync = completeSyncMap[c.id] || false;
-        const hasLastDonorSync = !!c.last_donor_sync;
-        
+
         let syncStatus: 'never' | 'partial' | 'complete' = 'never';
         if (hasPartialSync) {
           syncStatus = 'partial';
-        } else if (hasLastDonorSync || hasCompletedAnySync) {
+        } else if (hasCompletedAnySync) {
           syncStatus = 'complete';
         }
         
