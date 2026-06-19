@@ -1,0 +1,2 @@
+ALTER VIEW public.fec_candidates_public SET (security_invoker = true);
+GRANT SELECT (fec_candidate_id, cycle, name, party, election_year, office, office_state, office_district, incumbent_challenger, status, principal_committee_id, state, source, updated_at) ON public.fec_candidates TO anon, authenticated;
