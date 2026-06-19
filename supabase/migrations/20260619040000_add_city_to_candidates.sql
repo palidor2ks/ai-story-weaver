@@ -8,10 +8,13 @@ UPDATE candidates SET city = 'Piscataway' WHERE id IN (
   'seed_piscataway_mayor_1',
   'ai_a02fd188c5ae52fa5a98d2f3e812261d9a753533',
   'ai_d37fc8446d34a11102e2b9eaf1c44885de65f70c',
+  'ai_25d68a2afa1eb9a3e14d7ae28966a9f6465741fe',
+  'ai_60f0d161bf044f1619207cefad0cff4f1ebec7d9',
   'manual_betsy_aumack_piscataway_w2',
   'manual_rashaad_couloote_piscataway_w4',
   'manual_shantell_cherry_piscataway_w1',
-  'manual_william_lawrence_piscataway_w1'
+  'manual_william_lawrence_piscataway_w1',
+  'manual_viola_stone_piscataway_w3'
 );
 
 UPDATE candidates SET city = 'Newark' WHERE id = 'seed_newark_mayor_1';
