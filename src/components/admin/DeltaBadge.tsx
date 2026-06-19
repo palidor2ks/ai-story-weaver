@@ -84,7 +84,8 @@ export function DeltaBadge({
         <TooltipContent side="top" className="text-xs max-w-[300px]">
           <div className="space-y-1.5">
             <div className="font-medium">Finance Variance</div>
-            
+            <div className="text-[10px] text-muted-foreground -mt-0.5">Badge shows Total Receipts delta (Local vs FEC)</div>
+
             {/* Total Receipts Delta (primary) */}
             <div className="flex justify-between gap-4">
               <span className="text-muted-foreground">Total Receipts:</span>

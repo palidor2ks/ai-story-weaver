@@ -243,40 +243,20 @@ export const useCandidatesIE = (candidateIds: string[]) => {
     staleTime: 1000 * 60 * 10,
     placeholderData: keepPreviousData,
     queryFn: async (): Promise<IETotalsMap> => {
-      const { data, error } = await supabase
-        .from('independent_expenditures')
-        .select('candidate_id, amount, support_oppose_indicator, cycle')
-        .in('candidate_id', candidateIds)
-        .limit(50000);
+      const { data, error } = await supabase.rpc('get_candidate_ie_totals', {
+        p_candidate_ids: candidateIds,
+      });
       if (error) throw error;
 
-      // Group by candidate_id -> cycle -> totals
-      const byCand = new Map<string, Map<string, IETotals>>();
-      (data ?? []).forEach((r) => {
-        if (!r.candidate_id) return;
-        const cycle = r.cycle ? String(r.cycle) : '';
-        const cyclesMap = byCand.get(r.candidate_id) ?? new Map<string, IETotals>();
-        const cur = cyclesMap.get(cycle) ?? {
-          expenditure_count: 0,
-          total_amount: 0,
-          support_amount: 0,
-          oppose_amount: 0,
-          cycle: cycle || null,
-        };
-        const amt = num(r.amount);
-        cur.expenditure_count += 1;
-        cur.total_amount += amt;
-        if (r.support_oppose_indicator === 'S') cur.support_amount += amt;
-        else cur.oppose_amount += amt;
-        cyclesMap.set(cycle, cur);
-        byCand.set(r.candidate_id, cyclesMap);
-      });
-
       const map: IETotalsMap = new Map();
-      byCand.forEach((cyclesMap, candId) => {
-        const latest = Array.from(cyclesMap.keys()).sort((a, b) => b.localeCompare(a))[0];
-        const t = cyclesMap.get(latest);
-        if (t) map.set(candId, t);
+      (data ?? []).forEach((r) => {
+        map.set(r.candidate_id, {
+          expenditure_count: num(r.expenditure_count),
+          total_amount: num(r.total_amount),
+          support_amount: num(r.support_amount),
+          oppose_amount: num(r.oppose_amount),
+          cycle: r.cycle ?? null,
+        });
       });
       return map;
     },

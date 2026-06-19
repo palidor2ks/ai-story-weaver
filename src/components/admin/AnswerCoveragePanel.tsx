@@ -572,6 +572,15 @@ export function AnswerCoveragePanel() {
     [filteredCandidates]
   );
 
+  const staleReconciliationCount = useMemo(() =>
+    filteredCandidates.filter(c =>
+      c.reconciliationCheckedAt
+        ? isReconciliationStale(c.reconciliationCheckedAt)
+        : c.fecCandidateId !== null  // has FEC ID but no reconciliation row at all
+    ).length,
+    [filteredCandidates]
+  );
+
   // Pagination calculations
   const totalPages = Math.ceil(filteredCandidates.length / PAGE_SIZE);
   const paginatedCandidates = filteredCandidates.slice(
@@ -994,6 +1003,9 @@ export function AnswerCoveragePanel() {
                       <AlertDialogDescription>
                         Searches the FEC database to find and link FEC candidate IDs for {candidatesWithoutFecId.length} candidates
                         who don't have one yet. Required before importing donor data. Processes up to 50 at a time.
+                        <span className="block mt-1.5 text-xs text-muted-foreground">
+                          ⓘ Operates across all party/state/name-filtered candidates, not just the current filter view.
+                        </span>
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -1014,8 +1026,11 @@ export function AnswerCoveragePanel() {
                     <AlertDialogHeader>
                       <AlertDialogTitle>Fetch Campaign Committees from FEC?</AlertDialogTitle>
                       <AlertDialogDescription>
-                        Fetches all FEC-registered campaign committees for {noCommitteeCandidates.length} candidates 
+                        Fetches all FEC-registered campaign committees for {noCommitteeCandidates.length} candidates
                         who have FEC IDs but no linked committees. Required before importing donor contributions.
+                        <span className="block mt-1.5 text-xs text-muted-foreground">
+                          ⓘ Operates across all party/state/name-filtered candidates, not just the current filter view.
+                        </span>
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -1038,6 +1053,9 @@ export function AnswerCoveragePanel() {
                       <AlertDialogDescription>
                         Downloads all itemized ($200+) contributions from FEC for candidates with linked committees.
                         Imports donor names, amounts, employers, and dates. Processes up to 50 candidates. Takes 5-15 minutes.
+                        <span className="block mt-1.5 text-xs text-muted-foreground">
+                          ⓘ Operates across all party/state/name-filtered candidates, not just the current filter view.
+                        </span>
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -2263,6 +2281,41 @@ export function AnswerCoveragePanel() {
             </Select>
           </div>
         </div>
+
+        {/* Stale reconciliation warning — shown when finance data is outdated */}
+        {staleReconciliationCount > 0 && hasSelectedFilters && (
+          <div className="flex items-center justify-between gap-3 rounded-md border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 px-3 py-2 text-xs">
+            <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+              <span>
+                <span className="font-medium">{staleReconciliationCount} row{staleReconciliationCount !== 1 ? 's' : ''}</span>
+                {' '}in this view {staleReconciliationCount !== 1 ? 'have' : 'has'} stale FEC/Local/Delta data (&gt;{RECONCILIATION_STALE_DAYS}d).
+                Finance numbers may be inaccurate.
+              </span>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 text-xs text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900 shrink-0"
+              disabled={isBatchReconciling}
+              onClick={async () => {
+                setIsBatchReconciling(true);
+                try {
+                  const result = await runBatchReconciliation(financeCycle, 200);
+                  toast.success(`Reconciliation complete: ${result.success} OK, ${result.warnings} warnings, ${result.failed} errors`);
+                  refetchCandidates();
+                } catch {
+                  toast.error('Failed to run reconciliation');
+                } finally {
+                  setIsBatchReconciling(false);
+                }
+              }}
+            >
+              {isBatchReconciling ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+              <span className="ml-1">Refresh Now</span>
+            </Button>
+          </div>
+        )}
 
         {/* Candidates Table */}
         {!hasSelectedFilters ? (
