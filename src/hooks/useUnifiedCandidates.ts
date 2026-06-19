@@ -85,7 +85,7 @@ const buildCandidate = (
   const office = (civicMarksFormer ? civic!.office : db?.office) ?? api?.office ?? '';
   const party = (db?.party ?? api?.party ?? 'Other') as Candidate['party'];
   const state = db?.state ?? api?.state ?? '';
-  const city = civic?.city ?? undefined;
+  const city = civic?.city ?? (db as { city?: string | null } | undefined)?.city ?? undefined;
   const district = db?.district ?? api?.district ?? undefined;
 
   const imageUrl = resolveCandidateImageUrl({
