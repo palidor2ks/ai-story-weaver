@@ -50,18 +50,16 @@ Deployed to prod (`ornnzinjrcyigazecctf`) as `fetch-fec-donors` v609 (ACTIVE) be
 
 **State** (verified)
 - `fetch-fec-donors` v609 ACTIVE in prod.
-- Changes committed (2e15691) and pushed to `claude/exciting-pascal-ycq0ov`.
-- PR #477 open (draft). CI in progress at time of handoff.
+- PR #477 merged to main. All CI checks passed (GitGuardian ✅, Supabase Preview ✅).
 - 162 stalled rows have NOT yet been manually verified as advancing — the next scheduler run
-  (every 10 min) is the first test.
+  (every 10 min) is the first real test. Monitor via:
+  `SELECT COUNT(*) FROM candidate_committees WHERE has_more = true AND last_sync_completed_at IS NULL`
 
 **Next**
-Monitor `candidate_committees WHERE has_more = true AND last_sync_completed_at IS NULL` count
-over the next hour to confirm it decreases ~1 per cron cycle; if it doesn't, check
-`schedule-congress-donor-sync` and `fetch-fec-donors` edge function logs.
+Check the stalled-row count after a few cron cycles to confirm it's decreasing. If not, inspect
+`schedule-congress-donor-sync` and `fetch-fec-donors` edge function logs in the Supabase dashboard.
 
 **Deferred**
-- Merge PR #477 once CI green.
 - Roadmap #3: DB disk pressure (15 GB, `contributions` 8.4 GB, cron hit disk-full 2026-06-13).
 - Roadmap #4: FEC Finding A — add total-receipts gate to reconciliation `status`.
 - Perf Fix 6: `useDeferredValue` on `searchQuery`.

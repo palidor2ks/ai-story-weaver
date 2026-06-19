@@ -46,19 +46,22 @@ added `finance_reconciliation.total_receipts_status` (ok/under/over), computed a
 2026-06-18** by `deploy-edge-functions.yml` on the #451 merge (run succeeded) — future runs now
 populate the column on new rows. A full nightly drain (fresh FEC fetch) will also refresh deltas.
 
-### 5. ✅ Congress donor backfill stall — done 2026-06-18 (deployed)
-**What:** ~163 `candidate_committees` rows with `has_more=true` weren't progressing (~3/day vs 144/day
+### 5. ✅ Congress donor backfill stall — done 2026-06-19 (two-phase fix)
+**What:** ~162 `candidate_committees` rows with `has_more=true` weren't progressing (~3/day vs 144/day
 theoretical, cron `*/10`).
-**Diagnosis (2026-06-17):** ~94% by design — of ~120 never-completed stalled committees, **113 are
-tier_1 but hidden-state** (correctly excluded by the visible-states gate; do NOT widen scope — that
-contradicts the product focus and worsens disk pressure #6). Only **1 visible candidate** (Deborah
-Ross, NC Senate) was genuinely stuck. **Root cause:** `schedule-congress-donor-sync` fetched the
-first `limit*100=100` stalled rows ordered by `created_at` and filtered to visible/tier_1 *after* the
-limit — Ross sat at rank ~115 behind 114 hidden rows, so the filter yielded 0 every run.
-**Fix:** scope-first selection (resolve in-scope candidate ids, THEN find their stalled committees).
-**State:** code merged (PR #451) + **deployed to prod 2026-06-18** (same workflow run). The next
-`*/10` cron run picks up Ross. Worth a spot-check that her backfill actually advances over the next
-day (still can't manually trigger fetch-fec-donors from MCP — admin auth + FEC network).
+**Phase 1 (2026-06-18, PR #451):** ~94% were hidden-state tier_1 (correctly excluded by the
+visible-states gate). Only **Deborah Ross (NC Senate)** was genuinely stuck due to scope-filter-after-
+limit: `schedule-congress-donor-sync` fetched the first 100 stalled rows by `created_at` *then*
+filtered — Ross at rank ~115 behind 114 hidden rows always got dropped. **Fix:** scope-first selection.
+**Phase 2 (2026-06-19, PR #477):** Deeper root cause — 504 cursor loss. For large-donor candidates
+the post-loop reconciliation block (`get_contribution_totals_by_committee` RPC + 5 upserts) ran against
+the 8.4 GB `contributions` table after the 25s loop timeout, consuming 60-120s of the remaining 125s
+budget. Worker killed at 150s infra limit with `last_index` unsaved → infinite restart loop.
+**Fix:** (1) save cursor immediately inside the `MAX_RUNTIME_MS` break (before flush ops); (2) early
+return on `stoppedDueToTimeout`, skipping reconciliation entirely (updates on next full sync).
+**State:** PR #477 merged. `fetch-fec-donors` v609 ACTIVE in prod. Stalled-row drain not yet spot-
+checked — monitor `SELECT COUNT(*) FROM candidate_committees WHERE has_more=true AND
+last_sync_completed_at IS NULL` over next few cron cycles.
 
 ---
 
