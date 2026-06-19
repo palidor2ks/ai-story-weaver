@@ -5363,6 +5363,7 @@ export type Database = {
           icon: string
           id: string
           name: string
+          nolan_axis: string | null
           scope: string
           weight: number | null
         }
@@ -5370,6 +5371,7 @@ export type Database = {
           icon: string
           id: string
           name: string
+          nolan_axis?: string | null
           scope?: string
           weight?: number | null
         }
@@ -5377,6 +5379,7 @@ export type Database = {
           icon?: string
           id?: string
           name?: string
+          nolan_axis?: string | null
           scope?: string
           weight?: number | null
         }
