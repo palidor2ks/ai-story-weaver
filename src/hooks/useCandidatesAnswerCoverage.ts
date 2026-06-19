@@ -95,6 +95,8 @@ export interface CandidateAnswerCoverage {
   // Cross-cycle finance availability
   hasReconciliation: boolean;     // True if a finance_reconciliation row exists for the SELECTED cycle
   otherCyclesWithData: string[];  // Other cycles (≠ selected) that have reconciliation data, newest first
+  // Data-load error flags
+  answerCountError: boolean; // True when the answer-coverage sub-query failed (chunkedIn swallowed an error)
   // Source tracking
   source: CandidateSource;
   level: GovernmentLevel;
@@ -160,6 +162,7 @@ function makeCivicCoverage(
     state: c.state || '',
     district: normalizeDistrict(c.district),
     answerCount,
+    answerCountError: false,
     totalQuestions,
     percentage,
     sourcedCount,
@@ -298,7 +301,7 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
       // Each one is id-chunked (see chunkedIn) — a single .in() with the full
       // candidate list exceeds URL limits and used to fail silently.
       const [
-        answerCoverageData,
+        answerCoverageResult,
         votingCoverageData,
         donorCountsData,
         reconciliationData,
@@ -306,12 +309,23 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
         voteSyncData,
         allCyclesData,
       ] = await Promise.all([
-        // Answer counts - filter by candidate IDs
-        chunkedIn('candidate_answer_coverage_stats', candidateIds, chunk =>
-          supabase
-            .from('candidate_answer_coverage_stats')
-            .select('candidate_id, answer_count, sourced_count')
-            .in('candidate_id', chunk)),
+        // Answer counts - filter by candidate IDs. Wrap so a failed chunk is
+        // detectable: chunkedIn logs the error but returns [] silently, which
+        // causes every candidate in that chunk to display "0/251". The flag is
+        // threaded onto each CandidateAnswerCoverage so the UI can show ⚠
+        // instead of a misleading zero.
+        (async () => {
+          let hadError = false;
+          const rows = await chunkedIn('candidate_answer_coverage_stats', candidateIds, async chunk => {
+            const result = await supabase
+              .from('candidate_answer_coverage_stats')
+              .select('candidate_id, answer_count, sourced_count')
+              .in('candidate_id', chunk);
+            if (result.error) hadError = true;
+            return result;
+          });
+          return { rows, hadError };
+        })(),
         // Vote counts - filter by candidate IDs
         chunkedIn('candidate_voting_coverage', candidateIds, chunk =>
           supabase
@@ -356,7 +370,8 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
       // Build lookup maps for answer counts
       const answerCountMap: Record<string, number> = {};
       const sourcedCountMap: Record<string, number> = {};
-      (answerCoverageData || []).forEach(row => {
+      const answerCoverageHadError = answerCoverageResult.hadError;
+      (answerCoverageResult.rows || []).forEach(row => {
         if (row.candidate_id) {
           answerCountMap[row.candidate_id] = Number(row.answer_count) || 0;
           sourcedCountMap[row.candidate_id] = Number(row.sourced_count) || 0;
@@ -578,6 +593,7 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
           state: c.state,
           district: normalizeDistrict(c.district),
           answerCount,
+          answerCountError: answerCoverageHadError && answerCount === 0,
           totalQuestions: federalQuestions,
           percentage,
           sourcedCount,
