@@ -13,9 +13,9 @@ const PARTY_META: Record<string, { color: string; label: string; short: string }
   green:       { color: '#22c55e', label: 'Green',       short: 'G' },
 };
 
-const W = 300;
-const H = 300;
-const PAD = 52;
+const W = 480;
+const H = 480;
+const PAD = 72;
 const CW = W - 2 * PAD;
 const CH = H - 2 * PAD;
 
@@ -39,7 +39,7 @@ export function NolanChart({ className }: NolanChartProps) {
         <>
           <svg
             viewBox={`0 0 ${W} ${H}`}
-            className="w-full max-w-[300px] mx-auto"
+            className="w-full max-w-[560px] mx-auto"
             aria-label="Nolan Chart political compass"
           >
             {/* Quadrant fills */}
@@ -56,10 +56,10 @@ export function NolanChart({ className }: NolanChartProps) {
             <line x1={PAD}           y1={PAD + CH / 2} x2={PAD + CW}     y2={PAD + CH / 2} stroke="#9ca3af" strokeWidth={1} strokeDasharray="4 3" />
 
             {/* Quadrant labels */}
-            <text x={PAD + CW * 0.25} y={PAD + 13}     textAnchor="middle" fontSize={9} fill="#6b7280" fontWeight="600">Liberal</text>
-            <text x={PAD + CW * 0.75} y={PAD + 13}     textAnchor="middle" fontSize={9} fill="#92400e" fontWeight="600">Libertarian</text>
-            <text x={PAD + CW * 0.25} y={PAD + CH - 5} textAnchor="middle" fontSize={9} fill="#6b7280" fontWeight="600">Authoritarian</text>
-            <text x={PAD + CW * 0.75} y={PAD + CH - 5} textAnchor="middle" fontSize={9} fill="#6b7280" fontWeight="600">Conservative</text>
+            <text x={PAD + CW * 0.25} y={PAD + 18}     textAnchor="middle" fontSize={13} fill="#6b7280" fontWeight="600">Liberal</text>
+            <text x={PAD + CW * 0.75} y={PAD + 18}     textAnchor="middle" fontSize={13} fill="#92400e" fontWeight="600">Libertarian</text>
+            <text x={PAD + CW * 0.25} y={PAD + CH - 7} textAnchor="middle" fontSize={13} fill="#6b7280" fontWeight="600">Authoritarian</text>
+            <text x={PAD + CW * 0.75} y={PAD + CH - 7} textAnchor="middle" fontSize={13} fill="#6b7280" fontWeight="600">Conservative</text>
 
             {/* Party markers — scored only on questions the user answered */}
             {data && Object.entries(data.partyPositions).map(([partyId, pos]) => {
@@ -67,12 +67,12 @@ export function NolanChart({ className }: NolanChartProps) {
               if (!meta) return null;
               return (
                 <g key={partyId}>
-                  <circle cx={toX(pos.economic)} cy={toY(pos.personal)} r={5} fill={meta.color} opacity={0.85} />
+                  <circle cx={toX(pos.economic)} cy={toY(pos.personal)} r={8} fill={meta.color} opacity={0.85} />
                   <text
                     x={toX(pos.economic)}
-                    y={toY(pos.personal) - 7}
+                    y={toY(pos.personal) - 11}
                     textAnchor="middle"
-                    fontSize={8}
+                    fontSize={12}
                     fill={meta.color}
                     fontWeight="700"
                   >
@@ -83,22 +83,22 @@ export function NolanChart({ className }: NolanChartProps) {
             })}
 
             {/* User dot */}
-            <circle cx={userX} cy={userY} r={8} fill="#7c3aed" stroke="white" strokeWidth={2} />
-            <text x={userX} y={userY - 12} textAnchor="middle" fontSize={9} fill="#7c3aed" fontWeight="700">You</text>
+            <circle cx={userX} cy={userY} r={12} fill="#7c3aed" stroke="white" strokeWidth={2.5} />
+            <text x={userX} y={userY - 17} textAnchor="middle" fontSize={13} fill="#7c3aed" fontWeight="700">You</text>
 
             {/* X-axis label */}
-            <text x={PAD + CW / 2} y={H - 8} textAnchor="middle" fontSize={8.5} fill="#6b7280">
+            <text x={PAD + CW / 2} y={H - 10} textAnchor="middle" fontSize={12} fill="#6b7280">
               ← Regulated · Economic Freedom · Free Market →
             </text>
 
             {/* Y-axis label (rotated) */}
             <text
-              x={13}
+              x={18}
               y={PAD + CH / 2}
               textAnchor="middle"
-              fontSize={8.5}
+              fontSize={12}
               fill="#6b7280"
-              transform={`rotate(-90, 13, ${PAD + CH / 2})`}
+              transform={`rotate(-90, 18, ${PAD + CH / 2})`}
             >
               ← Auth · Personal Freedom · Liberty →
             </text>
