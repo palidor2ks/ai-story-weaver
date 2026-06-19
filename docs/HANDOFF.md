@@ -27,6 +27,57 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-19 — vote_sync_status reconciliation + admin table accuracy fixes (PR #474)
+
+**What happened & why**
+Admin candidates table audit revealed four accuracy issues; user approved all four fixes:
+
+1. **Sync column cycle-scoping** (`useCandidatesAnswerCoverage.ts`): Removed `hasLastDonorSync`
+   from the "complete" condition — `candidates.last_donor_sync` is not cycle-scoped so it was
+   showing "complete" for members whose current cycle hasn't been synced yet.
+
+2. **Stale reconciliation warning** (`AnswerCoveragePanel.tsx`): Added amber banner when
+   `staleReconciliationCount > 0` (>7d since last FEC check), with inline "Refresh Now" button.
+
+3. **DeltaBadge tooltip clarity** (`DeltaBadge.tsx`): Added sub-label "Badge shows Total Receipts
+   delta (Local vs FEC)" so users know what the badge represents.
+
+4. **Batch action scope note** (`AnswerCoveragePanel.tsx`): Added "(ⓘ Operates across all
+   party/state/name-filtered candidates...)" to Find FEC IDs, Fetch Committees, Import Donors
+   dialog descriptions.
+
+Then tackled Roadmap Action Item #1: **vote_sync_status stale persisted counts**.
+Root cause: both sync edge functions wrote persisted_count/persisted_floor_votes from a
+run-scoped counter, not the actual DB total. Multi-run syncs across congress windows accumulate
+rows the counter never sees.
+
+- Applied `20260619020000_reconcile_vote_sync_status.sql` to prod — created
+  `reconcile_vote_sync_status()` fn and ran it twice: fixed 390 legislative + 534 floor
+  mismatches, 272 zero-expected-has-data rows, 0 mismatches remaining.
+- `fetch-member-votes` and `fetch-floor-votes` both updated to query actual DB count before
+  writing the final `vote_sync_status` upsert (prevents drift on all future syncs).
+- Both edge functions deployed to prod (fetch-member-votes v656, fetch-floor-votes v431).
+
+**State** (verified)
+- `reconcile_vote_sync_status()` returns `{"updated": 0}` — all counts aligned.
+- Both edge functions deployed and ACTIVE in prod.
+- PR #474 open (draft), CI in progress at time of handoff. Subscribed to PR activity.
+- Items 1-4 above were committed in c88cf2c (PR #472, merged earlier this session).
+
+**Next**
+Merge PR #474 (all CI green). Then tackle Roadmap Item #2: Congress donor backfill stall
+(159 `candidate_committees` rows with `has_more=true` not progressing — likely filtered out
+by `congress_visible` scope in `schedule-congress-donor-sync`).
+
+**Deferred**
+- Roadmap #2: Congress donor backfill stall (~3/day vs 144/day expected).
+- Roadmap #3: DB disk pressure (15 GB, `contributions` 8.4 GB, cron hit disk-full 2026-06-13).
+- Roadmap #4: FEC Finding A — add total-receipts gate to reconciliation `status`.
+- Perf Fix 6: `useDeferredValue` on `searchQuery`.
+- Perf Fix 7: `stateCount`/`localCount` memoization in filter sidebar.
+
+---
+
 ## 2026-06-19 — Seed 20 test users (random NC/NJ addresses → quiz)
 
 **What happened & why**

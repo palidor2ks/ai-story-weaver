@@ -861,14 +861,23 @@ async function processFloorVoteSync(
     }
     
     console.log(`[BG] Completed: ${result.totalPersisted} floor votes persisted for ${bioguideId}`);
-    
+
+    // Query actual row count from the DB rather than trusting the run counter.
+    // The sync processes one congress window at a time; prior windows' rows are
+    // already in the DB and the run counter never includes them, causing drift.
+    const { count: actualFloorCount } = await supabase
+      .from('candidate_votes')
+      .select('id', { count: 'exact', head: true })
+      .eq('candidate_id', bioguideId)
+      .eq('action_type', 'floor_vote');
+
     // Final status update
     await supabase
       .from('vote_sync_status')
       .upsert({
         candidate_id: bioguideId,
-        expected_floor_votes: result.totalPersisted,
-        persisted_floor_votes: result.totalPersisted,
+        expected_floor_votes: actualFloorCount ?? result.totalPersisted,
+        persisted_floor_votes: actualFloorCount ?? result.totalPersisted,
         last_floor_vote_date: result.lastVoteDate,
         floor_vote_sync_error: null,
         last_sync_completed_at: new Date().toISOString(),

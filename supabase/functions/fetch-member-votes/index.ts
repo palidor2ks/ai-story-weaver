@@ -486,6 +486,15 @@ async function processVoteSync(bioguideId: string, persistVotes: boolean, syncSt
     ));
     const uniqueExpected = uniqueVoteIds.size;
 
+    // Query actual row count from the DB rather than trusting the run counter.
+    // The counter only tracks what THIS run inserted; prior sync windows and repair
+    // runs add rows that the counter never sees, causing persisted_count to drift.
+    const { count: actualPersisted } = await supabase
+      .from('candidate_votes')
+      .select('id', { count: 'exact', head: true })
+      .eq('candidate_id', bioguideId)
+      .in('action_type', ['sponsor', 'cosponsor']);
+
     // Log successful sync status
     const { error: statusError } = await supabase
       .from('vote_sync_status')
@@ -494,7 +503,7 @@ async function processVoteSync(bioguideId: string, persistVotes: boolean, syncSt
         expected_sponsored: totalSponsored,
         expected_cosponsored: totalCosponsored,
         expected_total: uniqueExpected,
-        persisted_count: persisted,
+        persisted_count: actualPersisted ?? persisted,
         last_sync_started_at: syncStartedAt,
         last_sync_completed_at: new Date().toISOString(),
         sync_error: null,
