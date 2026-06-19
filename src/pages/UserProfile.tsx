@@ -624,16 +624,9 @@ export const UserProfile = () => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {analysis && (
-              <div className="mb-6 pb-6 border-b border-border">
-                <NolanChart
-                  democratAlignment={analysis.democratAlignment}
-                  republicanAlignment={analysis.republicanAlignment}
-                  greenAlignment={analysis.greenAlignment}
-                  libertarianAlignment={analysis.libertarianAlignment}
-                />
-              </div>
-            )}
+            <div className="mb-6 pb-6 border-b border-border">
+              <NolanChart />
+            </div>
             <TooltipProvider>
               <div className="flex flex-col gap-4">
                 <PartyComparisonCard

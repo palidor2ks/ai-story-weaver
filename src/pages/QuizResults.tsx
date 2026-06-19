@@ -321,12 +321,7 @@ export const QuizResults = () => {
               </div>
             ) : (
               <div className="space-y-4">
-                <NolanChart
-                  democratAlignment={profileAnalysis?.democratAlignment ?? 50}
-                  republicanAlignment={profileAnalysis?.republicanAlignment ?? 50}
-                  greenAlignment={profileAnalysis?.greenAlignment ?? 50}
-                  libertarianAlignment={profileAnalysis?.libertarianAlignment ?? 50}
-                />
+                <NolanChart />
                 {profileAnalysis?.partyComparison && (
                   <p className="text-sm text-muted-foreground pt-2 border-t border-border">
                     {profileAnalysis.partyComparison}

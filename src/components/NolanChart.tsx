@@ -1,16 +1,11 @@
-import { useMemo } from 'react';
 import { Loader2 } from 'lucide-react';
-import { useNolanPartyPositions } from '@/hooks/useNolanPartyPositions';
+import { useNolanPositions } from '@/hooks/useNolanPositions';
 
 interface NolanChartProps {
-  democratAlignment: number;
-  republicanAlignment: number;
-  greenAlignment: number;
-  libertarianAlignment: number;
   className?: string;
 }
 
-// Static party display metadata — colours and labels are stable; positions come from the DB.
+// Static display metadata — colours and labels never change; positions come from the DB.
 const PARTY_META: Record<string, { color: string; label: string; short: string }> = {
   democrat:    { color: '#3b82f6', label: 'Democrat',    short: 'D' },
   republican:  { color: '#ef4444', label: 'Republican',  short: 'R' },
@@ -25,45 +20,13 @@ const CW = W - 2 * PAD;
 const CH = H - 2 * PAD;
 
 function toX(score: number) { return PAD + (score / 100) * CW; }
-function toY(score: number) { return PAD + ((100 - score) / 100) * CH; } // Y is inverted
+function toY(score: number) { return PAD + ((100 - score) / 100) * CH; } // Y inverted
 
-export function NolanChart({
-  democratAlignment,
-  republicanAlignment,
-  greenAlignment,
-  libertarianAlignment,
-  className,
-}: NolanChartProps) {
-  const { data: partyPositions, isLoading } = useNolanPartyPositions();
+export function NolanChart({ className }: NolanChartProps) {
+  const { data, isLoading } = useNolanPositions();
 
-  const { economicScore, personalScore } = useMemo(() => {
-    if (!partyPositions) return { economicScore: 50, personalScore: 50 };
-
-    const alignments: Record<string, number> = {
-      democrat:    democratAlignment,
-      republican:  republicanAlignment,
-      green:       greenAlignment,
-      libertarian: libertarianAlignment,
-    };
-
-    let eSum = 0, pSum = 0, total = 0;
-    for (const [partyId, alignment] of Object.entries(alignments)) {
-      const pos = partyPositions[partyId];
-      if (!pos) continue;
-      eSum  += alignment * pos.economic;
-      pSum  += alignment * pos.personal;
-      total += alignment;
-    }
-
-    if (total === 0) return { economicScore: 50, personalScore: 50 };
-    return {
-      economicScore: Math.round(eSum / total),
-      personalScore: Math.round(pSum / total),
-    };
-  }, [partyPositions, democratAlignment, republicanAlignment, greenAlignment, libertarianAlignment]);
-
-  const userX = toX(economicScore);
-  const userY = toY(personalScore);
+  const userX = toX(data?.userPosition.economic ?? 50);
+  const userY = toY(data?.userPosition.personal  ?? 50);
 
   return (
     <div className={className}>
@@ -88,7 +51,7 @@ export function NolanChart({
             {/* Chart border */}
             <rect x={PAD} y={PAD} width={CW} height={CH} fill="none" stroke="#d1d5db" strokeWidth={1} />
 
-            {/* Center cross */}
+            {/* Centre cross */}
             <line x1={PAD + CW / 2} y1={PAD}          x2={PAD + CW / 2} y2={PAD + CH}     stroke="#9ca3af" strokeWidth={1} strokeDasharray="4 3" />
             <line x1={PAD}           y1={PAD + CH / 2} x2={PAD + CW}     y2={PAD + CH / 2} stroke="#9ca3af" strokeWidth={1} strokeDasharray="4 3" />
 
@@ -98,8 +61,8 @@ export function NolanChart({
             <text x={PAD + CW * 0.25} y={PAD + CH - 5} textAnchor="middle" fontSize={9} fill="#6b7280" fontWeight="600">Authoritarian</text>
             <text x={PAD + CW * 0.75} y={PAD + CH - 5} textAnchor="middle" fontSize={9} fill="#6b7280" fontWeight="600">Conservative</text>
 
-            {/* Party markers — positions from DB */}
-            {partyPositions && Object.entries(partyPositions).map(([partyId, pos]) => {
+            {/* Party markers — scored only on questions the user answered */}
+            {data && Object.entries(data.partyPositions).map(([partyId, pos]) => {
               const meta = PARTY_META[partyId];
               if (!meta) return null;
               return (
@@ -143,8 +106,8 @@ export function NolanChart({
 
           {/* Axis scores */}
           <div className="mt-2 flex justify-center gap-6 text-xs text-muted-foreground">
-            <span>Economic freedom: <strong className="text-foreground">{economicScore}%</strong></span>
-            <span>Personal freedom: <strong className="text-foreground">{personalScore}%</strong></span>
+            <span>Economic freedom: <strong className="text-foreground">{data?.userPosition.economic ?? 50}%</strong></span>
+            <span>Personal freedom: <strong className="text-foreground">{data?.userPosition.personal ?? 50}%</strong></span>
           </div>
 
           {/* Legend */}
