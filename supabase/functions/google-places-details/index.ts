@@ -100,7 +100,7 @@ serve(async (req) => {
     }
 
     const result = await response.json();
-    console.log('Place details received for:', result.formattedAddress);
+    console.log('Place details received, has_address:', !!result.formattedAddress);
     
     const components = result.addressComponents || [];
     
