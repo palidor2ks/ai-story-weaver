@@ -1,3 +1,54 @@
+const SUFFIX_MAP: Record<string, string> = {
+  'ph.d.': 'Ph.D.',
+  'phd': 'Ph.D.',
+  'm.d.': 'M.D.',
+  'jr.': 'Jr.',
+  'jr': 'Jr.',
+  'sr.': 'Sr.',
+  'sr': 'Sr.',
+  'ii': 'II',
+  'iii': 'III',
+  'iv': 'IV',
+  'esq.': 'Esq.',
+  'esq': 'Esq.',
+};
+
+function capWord(w: string): string {
+  if (!w) return w;
+  const lower = w.toLowerCase();
+  if (SUFFIX_MAP[lower]) return SUFFIX_MAP[lower];
+  if (/^mc[a-z]/i.test(w)) return 'Mc' + w[2].toUpperCase() + w.slice(3).toLowerCase();
+  if (/^mac[a-z]/i.test(w)) return 'Mac' + w[3].toUpperCase() + w.slice(4).toLowerCase();
+  if (/^o'[a-z]/i.test(w)) return "O'" + w[2].toUpperCase() + w.slice(3).toLowerCase();
+  return w.charAt(0).toUpperCase() + lower.slice(1);
+}
+
+function titleCase(str: string): string {
+  return str.split(/\s+/).map((token) => {
+    if (token.includes('-')) return token.split('-').map(capWord).join('-');
+    return capWord(token);
+  }).join(' ');
+}
+
+/**
+ * Convert ALL-CAPS candidate names (as stored from FEC) to display-friendly Title Case.
+ * Reorders "LAST, FIRST MIDDLE" to "First Middle Last".
+ * Mixed-case names pass through unchanged.
+ */
+export function toDisplayName(name: string | null | undefined): string {
+  const s = (name ?? '').trim();
+  if (!s) return s;
+  const letters = s.replace(/[^a-zA-Z]/g, '');
+  if (!letters || letters !== letters.toUpperCase()) return s;
+  const commaIdx = s.indexOf(',');
+  if (commaIdx > 0) {
+    const last = s.slice(0, commaIdx).trim();
+    const rest = s.slice(commaIdx + 1).trim();
+    return titleCase(rest ? `${rest} ${last}` : last);
+  }
+  return titleCase(s);
+}
+
 /**
  * Normalize an office string to a clean, location-free canonical title.
  *
@@ -7,6 +58,8 @@
  *  "Town Council Member, Piscataway (Ward 1)"      -> "Town Council Member"
  *  "President of the United States"                -> "President"
  *  "Governor of New Jersey"                        -> "Governor"
+ *  "State Representative"                          -> "State House"
+ *  "State Senator"                                 -> "State Senate"
  *
  * Well-known titles that legitimately contain "of" (e.g. "Secretary of State",
  * "Attorney General", "Speaker of the House") are preserved.
@@ -55,6 +108,9 @@ export function normalizeOfficeName(
   // "U.S. House" / "U.S. Senate" forms handled above.
   if (/^u\.?s\.?\s*house$/i.test(s) || /^(u\.?s\.?\s*|united\s+states\s+)?representative$/i.test(s)) s = 'U.S. House';
   else if (/^u\.?s\.?\s*senate$/i.test(s) || /^(u\.?s\.?\s*|united\s+states\s+)?senator$/i.test(s)) s = 'U.S. Senate';
+  // State legislative chambers — mirror "U.S. House" / "U.S. Senate" style
+  else if (/^state\s+(representative|delegate|assemblyman|assemblywoman|assembly\s+member|house\s+member|legislator)$/i.test(s)) s = 'State House';
+  else if (/^state\s+senator?$/i.test(s)) s = 'State Senate';
 
   return s || raw;
 }

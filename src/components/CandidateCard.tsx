@@ -12,7 +12,7 @@ import { OfficialAvatar } from './OfficialAvatar';
 import { useAuth } from '@/context/AuthContext';
 import { IESummaryInline } from './IESummaryInline';
 import type { IETotals } from '@/hooks/useIndependentExpenditures';
-import { normalizeOfficeName } from '@/lib/officeLabel';
+import { normalizeOfficeName, toDisplayName } from '@/lib/officeLabel';
 
 interface CandidateCardProps {
   candidate: Candidate;
@@ -117,7 +117,7 @@ export const CandidateCard = memo(function CandidateCard({
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <h3 className="font-display text-base font-semibold text-foreground group-hover:text-primary transition-colors line-clamp-2 break-words">
-                  {candidate.name}
+                  {toDisplayName(candidate.name)}
                 </h3>
                 <span className={cn("text-xs font-bold flex-shrink-0", getPartyColor(candidate.party))}>
                   ({getPartyInitial(candidate.party)})
