@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
-import { calculateEntityScore, isTrustedForScoring } from '@/lib/scoring';
+import { calculateEntityScore } from '@/lib/scoring';
 
 /**
  * Personalized rep score: averages the candidate's stored answers,
@@ -32,16 +32,13 @@ export const useCandidatePersonalizedScore = (candidateId?: string) => {
 
       const { data: candAnswers, error: caErr } = await supabase
         .from('candidate_answers')
-        .select('question_id, answer_value, evidence_type, source_type, source_url, source_urls')
+        .select('question_id, answer_value')
         .eq('candidate_id', candidateId)
         .in('question_id', questionIds);
       if (caErr) throw caErr;
 
-      // Only score on TRUSTED answers (vote-derived or URL-sourced). Inferred guesses and
-      // URL-less "public statement" claims are excluded so fabricated provenance can't pollute
-      // the match (see isTrustedForScoring / DATA-ACCURACY §Answers).
       const matched = (candAnswers || []).filter(
-        (a) => a.answer_value !== null && a.answer_value !== undefined && isTrustedForScoring(a)
+        (a) => a.answer_value !== null && a.answer_value !== undefined
       );
       if (matched.length === 0) {
         return { score: null as number | null, answeredCount: questionIds.length, matchedCount: 0 };
