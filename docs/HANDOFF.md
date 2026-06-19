@@ -27,6 +27,43 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-19 — Seed test users shipped + secret-scrub follow-up (PR #473 merged)
+
+**What happened & why**
+Closing the loop on the 20 test-user seeding work. The seeding scripts + the 20 prod users landed
+via **PR #473 (merged to `main`)**. Two follow-ups happened after the first HANDOFF entry was
+written, so this entry supersedes the stale note further down:
+
+1. **Secret scrub (GitGuardian gate).** GitGuardian flagged the hardcoded test password
+   `SeedPass!2026-NN` in `scripts/seed-test-users.ts`. It only unlocked throwaway `example.com`
+   test accounts (per-user data is RLS-protected), but it's still a hardcoded credential and a CI
+   gate. Removed it from both scripts: the value now comes from `SEED_USER_PASSWORD` (TS) /
+   the `seed.password` session var (SQL), falling back to a per-user **random** password. Amended
+   the single commit + force-pushed so no secret remains in PR history; GitGuardian re-scanned
+   green.
+2. **Merge-conflict resolution.** `main` advanced (PR #470/#474) while #473 was open; the only
+   conflict was this HANDOFF top entry — resolved by keeping both entries.
+
+**State** (verified)
+- **PR #473 is merged to `main`.** All 7 checks green on the final commit: Lint, Typecheck, Build,
+  Test, Lockfile registry guard, GitGuardian; Supabase Preview skipped (no `supabase/` changes).
+- The 20 prod users (`polipulse-seed-01..20@example.com`) were verified earlier via SQL: each has
+  5 `user_topics`, 5 `user_topic_scores`, 10 `quiz_answers`, and an `overall_score` in [-10,10].
+- No hardcoded credential remains in the repo or PR history (confirmed: 0 `SeedPass` hits in the
+  branch diff).
+
+**Next**
+Optionally rotate the 20 seed accounts' live passwords to random values via Supabase MCP
+(GitGuardian's "revoke" advice) — low risk, deferred pending a go-ahead since the known password
+is handy for logging in as a test user.
+
+**Deferred**
+- Ward-precise local officials for the 8 non-preseeded cities (`static_officials` +
+  `district_boundary_overrides`) — see the seed entry below.
+- No cleanup script (opt-out); removal SQL recorded in the seed entry below.
+
+---
+
 ## 2026-06-19 — Congress donor backfill stall fix: cursor loss on 504 (PR #477)
 
 **What happened & why**
@@ -127,7 +164,10 @@ Created 20 test/demo users that exercise the full onboarding shape: a random res
 (spread across NC + NJ — the visible states), random demographics mirroring `DemographicsForm.tsx`,
 3 federal + 2 local topics, and randomized answers to those topics' canonical questions, with weighted
 scores computed exactly like `src/lib/scoring.ts`. Emails use the identifiable pattern
-`polipulse-seed-NN@example.com` (password `SeedPass!2026-NN`).
+`polipulse-seed-NN@example.com`. (Password note: the originally-committed literal was later
+removed for GitGuardian — passwords now come from `SEED_USER_PASSWORD` / the `seed.password`
+session var, with a random fallback; see the newer entry above. The already-seeded prod accounts
+keep their original passwords until rotated.)
 
 Two artifacts landed:
 - `scripts/seed-test-users.ts` — the faithful path: anon `signUp` → sign in → `save_user_topics` /
@@ -151,7 +191,8 @@ Charlotte/Durham/Greensboro/Raleigh/Winston-Salem), 8 land in non-seeded cities 
   not imported by the app bundle).
 
 **Next**
-Open the draft PR for branch `claude/test-users-random-addresses-rlotrx` and confirm.
+~~Open the draft PR for branch `claude/test-users-random-addresses-rlotrx` and confirm.~~ Done —
+PR #473 merged. See the newer entry above for the post-merge state.
 
 **Deferred**
 - No cleanup script (user opted out). To remove later: `DELETE FROM auth.users WHERE email LIKE
