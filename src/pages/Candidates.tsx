@@ -54,6 +54,7 @@ export const Candidates = () => {
   });
 
   const [searchQuery, setSearchQuery] = useState('');
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   const [sortBy, setSortBy] = useState<'match' | 'name' | 'party'>('name');
   const [partyFilter, setPartyFilter] = useState<string>('all');
   const [officeFilter, setOfficeFilter] = useState<string>('all');
@@ -167,8 +168,8 @@ export const Candidates = () => {
       c.state === 'US' || (c.level === 'federal' && /president/i.test(c.office));
     let result = tabCandidates.filter(c => isNationalOffice(c) || !isHidden(c.state));
 
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
+    if (deferredSearchQuery) {
+      const query = deferredSearchQuery.toLowerCase();
       result = result.filter(c =>
         c.name.toLowerCase().includes(query) ||
         c.state.toLowerCase().includes(query) ||
@@ -206,7 +207,7 @@ export const Candidates = () => {
     }
 
     return result;
-  }, [searchQuery, sortBy, partyFilter, officeFilter, statusFilter, tabCandidates, profile, isHidden]);
+  }, [deferredSearchQuery, sortBy, partyFilter, officeFilter, statusFilter, tabCandidates, profile, isHidden]);
 
   // Pagination: only ever mount one fixed-size page of cards, so the DOM stays
   // small no matter how many candidates exist (it doesn't grow with the dataset).
@@ -254,8 +255,10 @@ export const Candidates = () => {
   // feed AND DB-ingested rows like discover-state-legislators), so count off the unified
   // `all` list by level rather than the civic-only buckets — which keeps "My Reps"
   // address-scoped while the directory shows the full roster.
-  const stateCount = allCandidates.filter(c => c.level === 'state').length;
-  const localCount = allCandidates.filter(c => c.level === 'local').length;
+  const [stateCount, localCount] = useMemo(() => [
+    allCandidates.filter(c => c.level === 'state').length,
+    allCandidates.filter(c => c.level === 'local').length,
+  ], [allCandidates]);
 
 
   if (coreLoading) {
