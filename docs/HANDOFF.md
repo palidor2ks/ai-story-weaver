@@ -27,6 +27,46 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-19 — Seed 20 test users (random NC/NJ addresses → quiz)
+
+**What happened & why**
+Created 20 test/demo users that exercise the full onboarding shape: a random residential address
+(spread across NC + NJ — the visible states), random demographics mirroring `DemographicsForm.tsx`,
+3 federal + 2 local topics, and randomized answers to those topics' canonical questions, with weighted
+scores computed exactly like `src/lib/scoring.ts`. Emails use the identifiable pattern
+`polipulse-seed-NN@example.com` (password `SeedPass!2026-NN`).
+
+Two artifacts landed:
+- `scripts/seed-test-users.ts` — the faithful path: anon `signUp` → sign in → `save_user_topics` /
+  `save_quiz_results` RPCs → calls `geocode-address` + `fetch-civic-officials` to resolve (and warm,
+  via `fetch-mayor`) the local politician. `package.json` gets a `seed:test-users` script.
+- `scripts/seed-test-users.sql` — equivalent server-side seed for egress-restricted environments.
+
+The local politician is derived live from `profiles.address` at view time, so seeding the address is
+enough; 12 users land in cities with seeded council members (Piscataway/Newark/Jersey City;
+Charlotte/Durham/Greensboro/Raleigh/Winston-Salem), 8 land in non-seeded cities that exercise the live
+`fetch-mayor` research path.
+
+**State** (verified)
+- All 20 users exist in PROD: each has 5 `user_topics`, 5 `user_topic_scores`, 10 `quiz_answers`, and an
+  `overall_score` in [-10,10] (verified via SQL). `polipulse-seed-01` validated for confirmed email +
+  working bcrypt password.
+- This container's network egress blocks the Supabase host, so the **TS script was NOT run here** — the
+  users were created by running `scripts/seed-test-users.sql` through the Supabase MCP (`execute_sql`),
+  with explicit user authorization for the `auth.users`/`auth.identities` inserts.
+- `eslint scripts/seed-test-users.ts` passes (0 problems). Full `/preflight` not run (standalone script,
+  not imported by the app bundle).
+
+**Next**
+Open the draft PR for branch `claude/test-users-random-addresses-rlotrx` and confirm.
+
+**Deferred**
+- No cleanup script (user opted out). To remove later: `DELETE FROM auth.users WHERE email LIKE
+  'polipulse-seed-%@example.com';` (cascades to profiles/quiz_answers/user_topics/user_topic_scores).
+- Broader local coverage: to make the 8 non-seeded cities resolve a *specific* ward instead of relying
+  on live `fetch-mayor`, add `static_officials` + `district_boundary_overrides` rows (NJ wards resolve
+  HIGH automatically via the statewide ArcGIS registry).
+
 ## 2026-06-19 — All Politicians directory perf (continuing) — CDN pre-baked JSON
 
 **What happened & why**
