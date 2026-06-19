@@ -256,11 +256,13 @@ Return your response as JSON with this exact structure:
 
     if (!response.ok) {
       if (response.status === 429) {
-        return new Response(JSON.stringify({ 
+        return new Response(JSON.stringify({
           error: 'Rate limited. Please try again later.',
           summary: 'AI analysis temporarily unavailable.',
           democratAlignment,
           republicanAlignment,
+          greenAlignment,
+          libertarianAlignment,
           fallback: true,
         }), {
           status: 200,
@@ -268,11 +270,13 @@ Return your response as JSON with this exact structure:
         });
       }
       if (response.status === 402) {
-        return new Response(JSON.stringify({ 
+        return new Response(JSON.stringify({
           error: 'AI credits exhausted.',
           summary: 'AI analysis unavailable.',
           democratAlignment,
           republicanAlignment,
+          greenAlignment,
+          libertarianAlignment,
           fallback: true,
         }), {
           status: 200,
@@ -327,11 +331,13 @@ Return your response as JSON with this exact structure:
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('Error in user-profile-analysis function:', errorMessage);
-    return new Response(JSON.stringify({ 
+    return new Response(JSON.stringify({
       error: errorMessage,
       summary: 'Unable to generate AI analysis at this time.',
       democratAlignment: 50,
       republicanAlignment: 50,
+      greenAlignment: 50,
+      libertarianAlignment: 50,
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

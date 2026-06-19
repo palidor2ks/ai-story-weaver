@@ -23,6 +23,7 @@ import { useToast } from '@/hooks/use-toast';
 import { formatScore, getScoreLabel } from '@/lib/scoreFormat';
 import { Loader2, Sparkles, ArrowRight, BarChart3, Users, Share2, Building2, MapPin, Calendar, Vote } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { NolanChart } from '@/components/NolanChart';
 
 interface ProfileAnalysis {
   summary: string;
@@ -31,6 +32,8 @@ interface ProfileAnalysis {
   strongestPositions?: string[];
   democratAlignment: number;
   republicanAlignment: number;
+  greenAlignment: number;
+  libertarianAlignment: number;
   overallScore: number;
 }
 
@@ -302,12 +305,12 @@ export const QuizResults = () => {
           </CardContent>
         </Card>
 
-        {/* Party Alignment Card */}
+        {/* Party Alignment — Nolan Chart */}
         <Card className="mb-8 shadow-elevated animate-slide-up" style={{ animationDelay: '50ms' }}>
           <CardHeader>
             <CardTitle className="font-display flex items-center gap-2">
               <Users className="w-5 h-5 text-primary" />
-              Party Alignment
+              Political Compass
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -317,45 +320,13 @@ export const QuizResults = () => {
                 <span>Calculating party alignment...</span>
               </div>
             ) : (
-              <div className="space-y-6">
-                {/* Democratic Alignment */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-blue-500" />
-                      <span className="font-medium text-foreground">Democratic Party</span>
-                    </div>
-                    <span className="font-bold text-blue-600">
-                      {profileAnalysis?.democratAlignment ?? 50}%
-                    </span>
-                  </div>
-                  <div className="h-3 bg-secondary rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-blue-500 transition-all duration-500"
-                      style={{ width: `${profileAnalysis?.democratAlignment ?? 50}%` }}
-                    />
-                  </div>
-                </div>
-
-                {/* Republican Alignment */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-red-500" />
-                      <span className="font-medium text-foreground">Republican Party</span>
-                    </div>
-                    <span className="font-bold text-red-600">
-                      {profileAnalysis?.republicanAlignment ?? 50}%
-                    </span>
-                  </div>
-                  <div className="h-3 bg-secondary rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-red-500 transition-all duration-500"
-                      style={{ width: `${profileAnalysis?.republicanAlignment ?? 50}%` }}
-                    />
-                  </div>
-                </div>
-
+              <div className="space-y-4">
+                <NolanChart
+                  democratAlignment={profileAnalysis?.democratAlignment ?? 50}
+                  republicanAlignment={profileAnalysis?.republicanAlignment ?? 50}
+                  greenAlignment={profileAnalysis?.greenAlignment ?? 50}
+                  libertarianAlignment={profileAnalysis?.libertarianAlignment ?? 50}
+                />
                 {profileAnalysis?.partyComparison && (
                   <p className="text-sm text-muted-foreground pt-2 border-t border-border">
                     {profileAnalysis.partyComparison}
