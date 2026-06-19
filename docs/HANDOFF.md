@@ -27,6 +27,40 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-19 — FEC name ordering in race comparison card (PR #489 merged)
+
+**What happened & why**
+The race comparison social card (SVG rendered by `supabase/functions/_shared/social-card.ts`)
+was showing candidate names in raw FEC `LAST, FIRST` format — e.g. "Ojeda, Richard N." instead
+of "Richard N. Ojeda". The root cause was `tidyName()` in `finance-caption.ts`, which only
+title-cased ALL-CAPS strings but never reordered the FEC comma-separated format.
+
+Fixed `tidyName` to detect `LAST, FIRST [MIDDLE]` person-name shape (single word before the
+comma, first word after is not an org suffix like INC/LLC/PAC) and reorder to `First Last`.
+Also added credential handling (Ph.D., M.D., Esq.) consistent with the earlier
+`formatCandidateName` fix. The `capWord` helper was extracted to avoid duplicating the
+acronym-preservation logic. Added `tidyName` test cases to `finance-caption.test.ts`.
+
+**State** (verified)
+- **PR #489 merged to `main`.** All 7 CI checks green: GitGuardian, Lockfile, Build, Typecheck,
+  Lint, Test, Supabase Preview.
+- `bun test supabase/functions/_shared/finance-caption.test.ts` — 12 tests pass (verified
+  locally before push).
+- `bunx tsc --noEmit` clean.
+- Note: this affects the SVG social card generation path. The card is rendered server-side by
+  the edge function; no live UI to manually screenshot in this container.
+
+**Next**
+Verify the fix visually by generating a real race comparison card via the admin social-posts UI
+(or triggering `post-social-card` with an NC-09 race) and confirming "Richard N. Ojeda" renders
+correctly.
+
+**Deferred**
+- Ward-precise local officials for the 8 non-preseeded cities.
+- Rotate the 20 seed-account passwords to random values (GitGuardian revoke advice).
+
+---
+
 ## 2026-06-19 — City display, Ph.D. name fix, party badge fix (PR #488 merged)
 
 **What happened & why**
