@@ -1,4 +1,5 @@
-import { useQuery, useMemo } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
+import { useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { CoverageTier, ConfidenceLevel } from '@/lib/scoreFormat';
 import { resolveCandidateImageUrl } from '@/lib/candidateImages';
@@ -93,12 +94,39 @@ interface Question {
 const CANDIDATE_LIST_COLUMNS =
   'id, name, party, office, state, district, image_url, overall_score, coverage_tier, confidence, is_incumbent, score_version, last_updated, claimed_by_user_id, claimed_at, fec_candidate_id, last_donor_sync, person_id';
 
+// CDN pre-baked JSON — refreshed by scripts/generate-candidates-json.ts
+const CDN_URL = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/data-cache/candidates-directory.json`;
+// Accept CDN data up to 26 hours old (script should run daily)
+const CDN_MAX_AGE_MS = 26 * 60 * 60 * 1000;
+
+interface CdnPayload {
+  generatedAt: string;
+  version: number;
+  candidates: Candidate[];
+  congressMembers: unknown[];
+}
+
 export const useCandidates = () => {
   const coreQuery = useQuery({
     queryKey: ['candidates'],
     staleTime: 10 * 60 * 1000,
     queryFn: async () => {
-      // Hidden-state filtering is server-side inside get_visible_candidates().
+      // 1. Try CDN (fastest path — ~50ms vs ~300ms from Postgres)
+      try {
+        const cdnRes = await fetch(CDN_URL);
+        if (cdnRes.ok) {
+          const json = await cdnRes.json() as CdnPayload;
+          const age = Date.now() - new Date(json.generatedAt).getTime();
+          if (age < CDN_MAX_AGE_MS && Array.isArray(json.candidates) && json.candidates.length > 0) {
+            console.log(`[CDN] candidates: ${json.candidates.length} (age ${Math.round(age / 60000)}m)`);
+            return json.candidates;
+          }
+        }
+      } catch {
+        // network error — fall through to Supabase
+      }
+
+      // 2. Supabase fallback (hidden-state filtering is server-side inside get_visible_candidates())
       const [candidatesResult, overridesResult] = await Promise.all([
         supabase.rpc('get_visible_candidates'),
         supabase.from('candidate_overrides')

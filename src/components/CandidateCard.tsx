@@ -30,7 +30,7 @@ export const CandidateCard = memo(function CandidateCard({
   isSelected = false,
   onToggleSelect,
   ieTotals,
-}: CandidateCardProps) => {
+}: CandidateCardProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const hasAIAnswers = candidate.hasAIAnswers ?? false;

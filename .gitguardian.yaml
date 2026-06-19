@@ -1,0 +1,7 @@
+# The Supabase anon key is a PUBLIC key by design (same as VITE_SUPABASE_PUBLISHABLE_KEY
+# in the browser bundle). It is not a secret. Paths below contain it only in
+# curl examples and script fallbacks; ignore them to avoid false-positive alerts.
+version: 2
+paths-ignore:
+  - "docs/**"
+  - "scripts/**"

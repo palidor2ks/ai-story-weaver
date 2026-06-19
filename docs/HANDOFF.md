@@ -27,6 +27,57 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-19 — All Politicians directory perf (continuing) — CDN pre-baked JSON
+
+**What happened & why**
+User confirmed the page was still slow. After the DB cache (L0) landed, the remaining bottleneck is
+that `useCandidates` still makes 2 parallel Postgres round-trips on every cold visit (browsers don't
+share TanStack Query cache across sessions). The architectural fix approved by the user: pre-bake the
+full candidates directory into a static JSON file stored in Supabase Storage, so clients fetch from
+the CDN (~50ms vs ~300ms from Postgres).
+
+Changes landed this session:
+- `data-cache` Supabase Storage bucket created in prod (`public: true`, 10MB limit)
+- `refresh-candidates-cache` edge function deployed — fetches `get_visible_candidates` + overrides +
+  `get_all_congress_members`, applies overrides and image resolution, uploads
+  `candidates-directory.json` to storage. `verify_jwt: false` so it's callable with just the anon key.
+- `src/hooks/useCandidates.ts` — CDN URL tried first in queryFn; falls back to Supabase on
+  404/error/stale (>26h old). Completely transparent — same returned shape as before.
+- `src/hooks/useAllPoliticians.ts` — CDN inserted between localStorage (L1) and DB cache (L2),
+  before edge function fallback (L3).
+- `scripts/generate-candidates-json.ts` — same logic as edge function, runnable locally with bun
+  (needs `SUPABASE_SERVICE_ROLE_KEY`).
+- `package.json` — `generate:candidates-json` script entry added.
+
+All committed on `claude/dazzling-pascal-6ikap1`. TypeScript: 0 errors.
+
+**State**
+- Code committed and pushed to branch. Edge function deployed as v1 (`refresh-candidates-cache`).
+- CDN JSON file **NOT yet seeded** — the remote container lacked egress to invoke the edge function.
+  Until seeded, all hooks silently fall through to Supabase (no regression, just no speedup yet).
+
+**Next**
+Seed the CDN file by running this once from a terminal with network access:
+```
+curl -X POST \
+  https://ornnzinjrcyigazecctf.supabase.co/functions/v1/refresh-candidates-cache \
+  -H "apikey: <VITE_SUPABASE_PUBLISHABLE_KEY>"
+```
+Then verify CDN URL returns 200:
+```
+curl -I https://ornnzinjrcyigazecctf.supabase.co/storage/v1/object/public/data-cache/candidates-directory.json
+```
+Then check the page — first cold load should be ~50ms for candidate data.
+
+**Deferred**
+- Wire the `refresh-candidates-cache` function to a daily pg_cron job so the cache auto-refreshes
+  (candidates and scores change ~daily during score updates).
+- Remaining perf items from original analysis: Fix 5 (IE 50k row fetch), Fix 6 (useDeferredValue on
+  searchQuery), Fix 7 (stateCount/localCount memo).
+- PR #467 is still open (draft) — contains all perf work from both sessions.
+
+---
+
 ## 2026-06-18 — All Politicians directory perf (PR #467) — congress_members DB cache
 
 **What happened & why**
