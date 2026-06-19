@@ -1111,6 +1111,12 @@ serve(async (req) => {
         console.log('[FEC-DONORS] Runtime limit reached mid-pagination');
         committeeHasMore = true;
         stoppedDueToTimeout = true;
+        // Save cursor NOW — before slow flush ops. The post-loop reconciliation queries
+        // on the large contributions table can consume the remaining 150s budget and get
+        // the worker killed, leaving last_index unsaved and the committee permanently stuck.
+        if (lastIndex) {
+          await saveCursor(true);
+        }
         break;
       }
 
@@ -1415,8 +1421,32 @@ serve(async (req) => {
     totalContributions = committeeContributionsSaved;
     totalRaised = committeeItemized;
 
-    // Update committee sync cursors
+    // Update committee sync cursors (no-op if saveCursor was already called in the timeout break)
     await saveCursor(committeeHasMore);
+
+    // On timeout, skip reconciliation/rollup queries — they run against the large contributions
+    // table and can take 60-120s, consuming the remaining 150s budget and causing a 504 kill
+    // that wipes the cursor we just saved. These updates run on the next successful sync.
+    if (stoppedDueToTimeout) {
+      console.log('[FEC-DONORS] Timeout: skipping rollup/reconciliation to prevent 504 cursor loss');
+      const elapsedMs = Date.now() - startTime;
+      return new Response(
+        JSON.stringify({
+          success: true,
+          imported: totalDonors,
+          contributionsImported: totalContributions,
+          totalRaised,
+          hasMore: true,
+          stoppedDueToTimeout: true,
+          cycle,
+          committeesProcessed: 1,
+          committeesSynced: committeeId,
+          elapsedMs,
+          message: `Partial sync: cursor saved at page ${pageCount}. Call again to continue.`
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // Update rollups for EVERY sync batch (not just when complete)
     // This ensures the dashboard shows accurate dollar amounts during partial syncs

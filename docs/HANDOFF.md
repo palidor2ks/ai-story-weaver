@@ -64,6 +64,48 @@ is handy for logging in as a test user.
 
 ---
 
+## 2026-06-19 — Congress donor backfill stall fix: cursor loss on 504 (PR #477)
+
+**What happened & why**
+Roadmap Item #2: 162 `candidate_committees` rows with `has_more=true` were permanently stuck,
+advancing at only ~3/day instead of the expected ~144/day.
+
+Root cause: after the 25s `MAX_RUNTIME_MS` loop timeout in `fetch-fec-donors`, the post-loop
+reconciliation block ran multiple queries against the 8.4 GB `contributions` table
+(`get_contribution_totals_by_committee` RPC + 5 upserts + optional FEC API calls), consuming
+60-120s of the remaining 125s Supabase budget. The worker was killed at the 150s infra limit
+before (or sometimes after) writing `last_index` — so on the next scheduler run, the same
+candidate started from scratch again, stuck in an infinite restart loop.
+
+Two targeted edits to `supabase/functions/fetch-fec-donors/index.ts`:
+1. **Save cursor inside the timeout break** (before any flush ops) — `last_index` is now
+   persisted even if the post-loop cleanup is subsequently killed.
+2. **Early return when `stoppedDueToTimeout`** — skips the entire reconciliation/rollup block,
+   reducing post-timeout runtime from ~120s to ~5s and eliminating the 150s kill window.
+
+Deployed to prod (`ornnzinjrcyigazecctf`) as `fetch-fec-donors` v609 (ACTIVE) before commit.
+
+**State** (verified)
+- `fetch-fec-donors` v609 ACTIVE in prod.
+- Changes committed (2e15691) and pushed to `claude/exciting-pascal-ycq0ov`.
+- PR #477 open (draft). CI in progress at time of handoff.
+- 162 stalled rows have NOT yet been manually verified as advancing — the next scheduler run
+  (every 10 min) is the first test.
+
+**Next**
+Monitor `candidate_committees WHERE has_more = true AND last_sync_completed_at IS NULL` count
+over the next hour to confirm it decreases ~1 per cron cycle; if it doesn't, check
+`schedule-congress-donor-sync` and `fetch-fec-donors` edge function logs.
+
+**Deferred**
+- Merge PR #477 once CI green.
+- Roadmap #3: DB disk pressure (15 GB, `contributions` 8.4 GB, cron hit disk-full 2026-06-13).
+- Roadmap #4: FEC Finding A — add total-receipts gate to reconciliation `status`.
+- Perf Fix 6: `useDeferredValue` on `searchQuery`.
+- Perf Fix 7: `stateCount`/`localCount` memoization in filter sidebar.
+
+---
+
 ## 2026-06-19 — vote_sync_status reconciliation + admin table accuracy fixes (PR #474)
 
 **What happened & why**
