@@ -27,6 +27,7 @@ const staticEntries: SitemapEntry[] = [
   { path: "/blog/political-ideology-tests-comparison", changefreq: "monthly", priority: "0.8" },
   { path: "/blog/political-compass-explained", changefreq: "monthly", priority: "0.8" },
   { path: "/jobs", changefreq: "monthly", priority: "0.6" },
+  { path: "/issues", changefreq: "weekly", priority: "0.85" },
   { path: "/terms", changefreq: "yearly", priority: "0.3" },
   { path: "/privacy", changefreq: "yearly", priority: "0.3" },
   { path: "/data-deletion", changefreq: "yearly", priority: "0.3" },
