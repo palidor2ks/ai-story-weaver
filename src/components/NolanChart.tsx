@@ -123,6 +123,12 @@ export function NolanChart({ className }: NolanChartProps) {
               You
             </span>
           </div>
+
+          {/* Scope note */}
+          <p className="mt-3 text-center text-xs text-muted-foreground italic">
+            All positions are based only on the questions you've answered.
+            Party dots shift as you answer more questions.
+          </p>
         </>
       )}
     </div>
