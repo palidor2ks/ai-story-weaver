@@ -2518,7 +2518,12 @@ export function AnswerCoveragePanel() {
                               className="hover:opacity-80 transition-opacity cursor-pointer"
                               onClick={() => setAnswerDialogCandidate({ id: candidate.id, name: candidate.name })}
                             >
-                              {isComplete ? (
+                              {candidate.answerCountError ? (
+                                <div className="flex items-center justify-center gap-1 text-xs text-amber-600" title="Answer data failed to load — click Refresh to retry">
+                                  <AlertTriangle className="h-3 w-3 shrink-0" />
+                                  <span>?/{candidate.totalQuestions}</span>
+                                </div>
+                              ) : isComplete ? (
                                 <div className="flex items-center justify-center gap-1">
                                   <CheckCircle2 className="h-3.5 w-3.5 text-green-500" aria-hidden="true" />
                                   <span className={`w-2 h-2 rounded-full ${getSourceDotColor(candidate.sourcePercentage)}`} />
