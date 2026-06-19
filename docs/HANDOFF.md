@@ -27,6 +27,54 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-19 — City display, Ph.D. name fix, party badge fix (PR #488 merged)
+
+**What happened & why**
+Three polish fixes for the candidate cards / directory:
+
+1. **City display for local officials.** Cards for NJ local politicians (Piscataway Town Council,
+   Mayor, Newark Mayor, Middlesex County Commissioners) were showing only "NJ" instead of a city.
+   Added a `city` column to the `candidates` table, populated it for all 14 local officials
+   (`Piscataway`, `Newark`, `Middlesex County`), rebuilt `get_visible_candidates()` to include it,
+   fixed `refresh-candidates-cache` edge function (which had its own mapping that silently dropped
+   `city`), and propagated `city` through `useCandidates`, `useUnifiedCandidates`,
+   `fetch-civic-officials`, and `CandidateCard`. Cards now show e.g. "Piscataway, NJ" or
+   "Middlesex County, NJ". CDN was force-refreshed immediately via `net.http_post` instead of
+   waiting for the daily cron.
+
+2. **Ph.D. credential ordering.** FEC stores names as `ADUBATO, BETH ELLEN PH.D.` — the existing
+   `formatCandidateName` was treating `PH.D.` as a middle-name token, rendering
+   "Beth Ellen Ph.D. Adubato". Added a `CREDENTIAL_SUFFIXES` map (Ph.D., M.D., Esq.) to
+   `formatCandidateName` in `src/lib/utils.ts`: credential tokens in the FEC first-name portion
+   are now extracted and appended after the last name → "Beth Ellen Adubato, Ph.D.". Jr./Sr. are
+   NOT in the credential map — they stay inline as before.
+
+3. **Party badge `(?)` → `(O)`.** `getPartyInitial` in `CandidateCard.tsx` returned `'?'` for
+   any party outside D/R/I, hitting `'Other'` for e.g. Maad Abu-Ghazalah. Changed default to
+   `'O'` so Other-party candidates show `(O)` instead of a confusing question mark.
+
+**State** (verified)
+- **PR #488 merged to `main`.** All CI checks passed: GitGuardian, Supabase Preview (all tasks
+  green), Build, Typecheck, Test, Lint, Lockfile registry guard.
+- `bunx tsc --noEmit` clean locally.
+- Unit tests for `formatCandidateName` (including new Ph.D. case) exist in
+  `src/lib/utils.test.ts` but can't run in this container (`clsx` missing from node_modules —
+  pre-existing env issue); new test verified by manual trace.
+- City SQL migration (`20260619040000_add_city_to_candidates.sql`) applied to prod and committed.
+- CDN refresh (`candidates-directory.json`) was triggered mid-session; daily cron keeps it warm.
+
+**Next**
+Manually verify the candidate cards in the live app: confirm "Piscataway, NJ" / "Middlesex County,
+NJ" city labels, "Beth Ellen Adubato, Ph.D." name, and "(O)" badge for Maad Abu-Ghazalah.
+
+**Deferred**
+- Ward-precise local officials for the 8 non-preseeded cities (`static_officials` +
+  `district_boundary_overrides`).
+- Rotate the 20 seed-account passwords to random values (GitGuardian revoke advice, low-risk,
+  deferred since known password is handy for test logins).
+
+---
+
 ## 2026-06-19 — Seed test users shipped + secret-scrub follow-up (PR #473 merged)
 
 **What happened & why**

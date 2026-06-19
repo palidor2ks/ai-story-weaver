@@ -94,15 +94,50 @@ export function fmtMoney(n: number | null | undefined): string | null {
 }
 
 const ACRONYMS = new Set(['PAC', 'PACS', 'INC', 'INC.', 'LLC', 'USA', 'AIPAC', 'US', 'GOP', 'NRA', 'AFL', 'CIO']);
+
+// When ALL-CAPS text has "LAST, FIRST" shape, these first-after-comma tokens indicate
+// an organization (not a person) — don't reorder those.
+const ORG_FIRST_TOKENS = new Set([
+  'inc', 'inc.', 'llc', 'llc.', 'pac', 'corp', 'corp.', 'ltd', 'ltd.',
+  'committee', 'foundation', 'fund', 'assoc', 'assoc.', 'co.',
+]);
+
+// Post-nominal credentials in the FEC first-name slot that belong after the last name.
+const FEC_CREDENTIALS: Record<string, string> = {
+  'ph.d.': 'Ph.D.', 'phd': 'Ph.D.', 'm.d.': 'M.D.', 'esq.': 'Esq.', 'esq': 'Esq.',
+};
+
+function capWord(w: string): string {
+  const bare = w.replace(/[^A-Za-z.]/g, '');
+  if (ACRONYMS.has(bare.toUpperCase())) return w.toUpperCase();
+  return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+}
+
 export function tidyName(name: string | null | undefined): string {
   const s = (name ?? '').trim();
   if (!s) return '';
   if (s !== s.toUpperCase()) return s; // only re-case if it's shouting in ALL CAPS
-  return s.split(/\s+/).map((w) => {
-    const bare = w.replace(/[^A-Za-z.]/g, '');
-    if (ACRONYMS.has(bare.toUpperCase())) return w.toUpperCase();
-    return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
-  }).join(' ');
+
+  // Detect FEC "LAST, FIRST [MIDDLE]" person-name format and reorder to "First Last".
+  // Guard: skip when the first token after the comma looks like an org suffix (INC, LLC…).
+  const commaIdx = s.indexOf(',');
+  if (commaIdx > 0) {
+    const before = s.slice(0, commaIdx).trim();
+    const afterTokens = s.slice(commaIdx + 1).trim().split(/\s+/).filter(Boolean);
+    if (!before.includes(' ') && afterTokens.length > 0 && !ORG_FIRST_TOKENS.has(afterTokens[0].toLowerCase())) {
+      const creds: string[] = [];
+      const firstMid: string[] = [];
+      for (const w of afterTokens) {
+        const cred = FEC_CREDENTIALS[w.toLowerCase()];
+        if (cred) creds.push(cred);
+        else firstMid.push(w);
+      }
+      const base = [...firstMid, before].map(capWord).join(' ');
+      return creds.length ? `${base}, ${creds.join(', ')}` : base;
+    }
+  }
+
+  return s.split(/\s+/).map(capWord).join(' ');
 }
 
 export interface Facts {
