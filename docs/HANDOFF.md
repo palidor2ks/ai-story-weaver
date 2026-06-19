@@ -62,12 +62,12 @@ rows the counter never sees.
 - `reconcile_vote_sync_status()` returns `{"updated": 0}` — all counts aligned.
 - Both edge functions deployed and ACTIVE in prod.
 - PR #474 open (draft), CI in progress at time of handoff. Subscribed to PR activity.
-- Items 1-4 above were committed in c88cf2c (PR #470, merged earlier this session).
+- Items 1-4 above were committed in c88cf2c (PR #472, merged earlier this session).
 
 **Next**
-Review PR #474 CI results; merge when green. Then tackle Roadmap Item #2: Congress donor
-backfill stall (159 `candidate_committees` rows with `has_more=true` not progressing —
-likely filtered out by `congress_visible` scope in `schedule-congress-donor-sync`).
+Merge PR #474 (all CI green). Then tackle Roadmap Item #2: Congress donor backfill stall
+(159 `candidate_committees` rows with `has_more=true` not progressing — likely filtered out
+by `congress_visible` scope in `schedule-congress-donor-sync`).
 
 **Deferred**
 - Roadmap #2: Congress donor backfill stall (~3/day vs 144/day expected).
@@ -75,6 +75,81 @@ likely filtered out by `congress_visible` scope in `schedule-congress-donor-sync
 - Roadmap #4: FEC Finding A — add total-receipts gate to reconciliation `status`.
 - Perf Fix 6: `useDeferredValue` on `searchQuery`.
 - Perf Fix 7: `stateCount`/`localCount` memoization in filter sidebar.
+
+---
+
+## 2026-06-19 — Seed 20 test users (random NC/NJ addresses → quiz)
+
+**What happened & why**
+Created 20 test/demo users that exercise the full onboarding shape: a random residential address
+(spread across NC + NJ — the visible states), random demographics mirroring `DemographicsForm.tsx`,
+3 federal + 2 local topics, and randomized answers to those topics' canonical questions, with weighted
+scores computed exactly like `src/lib/scoring.ts`. Emails use the identifiable pattern
+`polipulse-seed-NN@example.com` (password `SeedPass!2026-NN`).
+
+Two artifacts landed:
+- `scripts/seed-test-users.ts` — the faithful path: anon `signUp` → sign in → `save_user_topics` /
+  `save_quiz_results` RPCs → calls `geocode-address` + `fetch-civic-officials` to resolve (and warm,
+  via `fetch-mayor`) the local politician. `package.json` gets a `seed:test-users` script.
+- `scripts/seed-test-users.sql` — equivalent server-side seed for egress-restricted environments.
+
+The local politician is derived live from `profiles.address` at view time, so seeding the address is
+enough; 12 users land in cities with seeded council members (Piscataway/Newark/Jersey City;
+Charlotte/Durham/Greensboro/Raleigh/Winston-Salem), 8 land in non-seeded cities that exercise the live
+`fetch-mayor` research path.
+
+**State** (verified)
+- All 20 users exist in PROD: each has 5 `user_topics`, 5 `user_topic_scores`, 10 `quiz_answers`, and an
+  `overall_score` in [-10,10] (verified via SQL). `polipulse-seed-01` validated for confirmed email +
+  working bcrypt password.
+- This container's network egress blocks the Supabase host, so the **TS script was NOT run here** — the
+  users were created by running `scripts/seed-test-users.sql` through the Supabase MCP (`execute_sql`),
+  with explicit user authorization for the `auth.users`/`auth.identities` inserts.
+- `eslint scripts/seed-test-users.ts` passes (0 problems). Full `/preflight` not run (standalone script,
+  not imported by the app bundle).
+
+**Next**
+Open the draft PR for branch `claude/test-users-random-addresses-rlotrx` and confirm.
+
+**Deferred**
+- No cleanup script (user opted out). To remove later: `DELETE FROM auth.users WHERE email LIKE
+  'polipulse-seed-%@example.com';` (cascades to profiles/quiz_answers/user_topics/user_topic_scores).
+- Broader local coverage: to make the 8 non-seeded cities resolve a *specific* ward instead of relying
+  on live `fetch-mayor`, add `static_officials` + `district_boundary_overrides` rows (NJ wards resolve
+  HIGH automatically via the statewide ArcGIS registry).
+
+---
+
+## 2026-06-19 — Fix 5: IE 50k row fetch eliminated — PR #470 merged
+
+**What happened & why**
+`useCandidatesIE()` was fetching up to 50,000 raw rows from `independent_expenditures` on
+every cold visit to `/candidates`, aggregating them in JavaScript, and discarding 99%. New
+`get_candidate_ie_totals(text[])` RPC does the aggregation server-side using a window function
+(`ROW_NUMBER() OVER PARTITION BY candidate_id ORDER BY cycle DESC`), picks the latest cycle
+per candidate, filters excluded committees, and returns ≤25 rows for a typical directory page.
+
+Changes:
+- `supabase/migrations/20260619010000_get_candidate_ie_totals_rpc.sql` — new STABLE/SECURITY
+  DEFINER RPC; grants to anon + authenticated.
+- `src/hooks/useIndependentExpenditures.ts` — `useCandidatesIE` replaced 40-line fetch+aggregate
+  loop with a 6-line `supabase.rpc('get_candidate_ie_totals', ...)` call.
+- `src/integrations/supabase/types.ts` — type entry for the new RPC added.
+- PR #470 opened, all 7 CI checks ✅ (Lint/Build/Typecheck/Test/GitGuardian/Supabase Preview),
+  merged to main.
+
+**State** (verified)
+- Migration applied to prod (via MCP before push) and to preview branch (Supabase Preview ✅).
+- All CI green; PR #470 merged to main.
+- `/candidates` IE data now fetches ≤25 rows (server-side RPC) instead of up to 50k raw rows.
+
+**Next**
+Fix 6: add `useDeferredValue` on `searchQuery` in `src/pages/Candidates.tsx` to avoid
+blocking renders on every keystroke while the filter reruns.
+
+**Deferred**
+- Fix 6: `useDeferredValue` on `searchQuery`.
+- Fix 7: `stateCount`/`localCount` memoization in the filter sidebar.
 
 ---
 

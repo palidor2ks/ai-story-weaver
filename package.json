@@ -17,7 +17,8 @@
     "check:disk": "bash scripts/check-disk-usage.sh",
     "preview": "vite preview",
     "analyze": "ANALYZE=true vite build",
-    "generate:candidates-json": "bunx tsx scripts/generate-candidates-json.ts"
+    "generate:candidates-json": "bunx tsx scripts/generate-candidates-json.ts",
+    "seed:test-users": "bunx tsx scripts/seed-test-users.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
