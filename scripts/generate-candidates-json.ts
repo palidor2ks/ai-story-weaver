@@ -79,6 +79,7 @@ interface RawCandidate {
   party: string;
   office: string;
   state: string;
+  city: string | null;
   district: string | null;
   image_url: string | null;
   overall_score: number | null;
@@ -153,6 +154,7 @@ async function main() {
       party: normalizeParty(o?.party ?? c.party),
       office: o?.office ?? c.office,
       state: o?.state ?? c.state,
+      city: c.city ?? undefined,
       district: o?.district ?? c.district,
       image_url: resolveImageUrl({
         overrideUrl: o?.image_url,

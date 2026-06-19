@@ -21,6 +21,7 @@ interface Candidate {
   party: 'Democrat' | 'Republican' | 'Independent' | 'Other';
   office: string;
   state: string;
+  city?: string | null;
   district: string | null;
   image_url: string | null;
   overall_score: number;
@@ -92,7 +93,7 @@ interface Question {
 }
 
 const CANDIDATE_LIST_COLUMNS =
-  'id, name, party, office, state, district, image_url, overall_score, coverage_tier, confidence, is_incumbent, score_version, last_updated, claimed_by_user_id, claimed_at, fec_candidate_id, last_donor_sync, person_id';
+  'id, name, party, office, state, city, district, image_url, overall_score, coverage_tier, confidence, is_incumbent, score_version, last_updated, claimed_by_user_id, claimed_at, fec_candidate_id, last_donor_sync, person_id';
 
 // CDN pre-baked JSON — refreshed by scripts/generate-candidates-json.ts
 const CDN_URL = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/data-cache/candidates-directory.json`;
