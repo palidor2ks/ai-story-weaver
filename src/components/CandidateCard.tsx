@@ -50,7 +50,7 @@ export const CandidateCard = memo(function CandidateCard({
       case 'Democrat': return 'D';
       case 'Republican': return 'R';
       case 'Independent': return 'I';
-      default: return '?';
+      default: return 'O';
     }
   };
 

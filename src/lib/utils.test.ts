@@ -54,6 +54,12 @@ test('formatCandidateName: suffixes (JR/SR) are preserved, not stripped', () => 
   expect(formatCandidateName('JOHNSON, JAMES SR.')).toBe('James Sr. Johnson');
 });
 
+test('formatCandidateName: academic credentials move after last name', () => {
+  expect(formatCandidateName('ADUBATO, BETH ELLEN PH.D.')).toBe('Beth Ellen Adubato, Ph.D.');
+  expect(formatCandidateName('SMITH, ALICE M.D.')).toBe('Alice Smith, M.D.');
+  expect(formatCandidateName('DOE, JOHN ESQ.')).toBe('John Doe, Esq.');
+});
+
 test('formatCandidateName: null/empty', () => {
   expect(formatCandidateName(null)).toBe('');
   expect(formatCandidateName(undefined)).toBe('');

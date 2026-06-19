@@ -29,27 +29,46 @@ const HONORIFIC_TITLES = new Set([
   'sir', 'prof', 'prof.',
 ]);
 
+// Post-nominal academic/professional credentials in the FEC first-name portion
+// that should appear AFTER the last name: "Beth Ellen Adubato, Ph.D."
+const CREDENTIAL_SUFFIXES: Record<string, string> = {
+  'ph.d.': 'Ph.D.',
+  'phd': 'Ph.D.',
+  'm.d.': 'M.D.',
+  'esq.': 'Esq.',
+  'esq': 'Esq.',
+};
+
 /**
  * Normalises a candidate name to "First [Middle] Last" title-case format.
  * Handles FEC-style "LAST, FIRST MIDDLE MR." all-caps strings (stripping
  * honorific prefixes) and passes through names already in proper mixed case.
+ * Post-nominal credentials (Ph.D., M.D., Esq.) are moved after the last name.
  */
 export function formatCandidateName(name: string | null | undefined): string {
   if (!name) return name ?? '';
   const isAllCaps = name === name.toUpperCase();
   let result = name;
+  let credential = '';
   if (name.includes(',')) {
     const comma = name.indexOf(',');
     const last = name.slice(0, comma).trim();
     // Strip any extra leading commas (e.g. "BRINK,, BRIDGET" → first="BRIDGET")
     const rawFirst = name.slice(comma + 1).replace(/^[,\s]+/, '').trim();
-    // Drop honorific tokens FEC places at the end of the first-name portion
-    // (e.g. "ADRIAN O MR" → "ADRIAN O", "ANTHONY BAILEY MR." → "ANTHONY BAILEY")
-    const first = rawFirst
-      .split(/\s+/)
-      .filter(w => !HONORIFIC_TITLES.has(w.toLowerCase()))
-      .join(' ')
-      .trim();
+    const firstTokens: string[] = [];
+    const credTokens: string[] = [];
+    for (const w of rawFirst.split(/\s+/)) {
+      const lower = w.toLowerCase();
+      if (HONORIFIC_TITLES.has(lower)) continue;
+      const cred = CREDENTIAL_SUFFIXES[lower];
+      if (cred) {
+        credTokens.push(cred);
+      } else {
+        firstTokens.push(w);
+      }
+    }
+    const first = firstTokens.join(' ').trim();
+    credential = credTokens.join(', ');
     result = first && last ? `${first} ${last}` : first || last;
   } else {
     // No comma: strip a leading honorific if present (e.g. "Mr. John Smith" → "John Smith")
@@ -58,7 +77,8 @@ export function formatCandidateName(name: string | null | undefined): string {
       result = tokens.slice(1).join(' ');
     }
   }
-  return isAllCaps ? toNameTitleCase(result) : result;
+  const base = isAllCaps ? toNameTitleCase(result) : result;
+  return credential ? `${base}, ${credential}` : base;
 }
 
 export function stripHtml(html: string): string {
