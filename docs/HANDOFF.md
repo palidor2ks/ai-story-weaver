@@ -27,6 +27,34 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-19 — Disk expansion to 27 GB (OPEN-WORK #6 closed)
+
+**What happened & why**
+The Supabase disk was at 13 GB / 15 GB ceiling (⚠️ WARN in preflight) with only ~2 GB free vs the
+~1.5 GB the daily donor matview refresh needs. Owner expanded the disk in the Supabase dashboard
+from 15 → **27 GB**. Dashboard now shows 14.27 GB used of 27 GB (DB 13.1 + WAL 1 + system 0.17),
+giving ~12.7 GB free headroom — well clear of the OOM threshold.
+
+Updated `POLIPULSE_DISK_MAX_GB` default in `scripts/check-disk-usage.sh` from 15 → 27 to match,
+and marked OPEN-WORK #6 ✅ in `docs/OPEN-WORK.md`.
+
+**State** (verified)
+- Supabase dashboard screenshot confirms 14.27 GB used of 27 GB.
+- `check-disk-usage.sh` default updated to 27 — next preflight will report OK (not WARN).
+- OPEN-WORK #6 closed.
+
+**Next**
+Verify the PR #489 race-comparison card fix visually by generating a real NC-09 race card via the
+admin social-posts UI and confirming "Richard N. Ojeda" renders correctly.
+
+**Deferred**
+- `contributions` (7.2 GB, climbing) is still the long-term growth driver — partition or prune
+  hidden-state / stale-cycle rows before disk fills again (now deferred; not urgent with 12.7 GB free).
+- Ward-precise local officials for the 8 non-preseeded cities.
+- Rotate the 20 seed-account passwords to random values (GitGuardian revoke advice).
+
+---
+
 ## 2026-06-19 — FEC name ordering in race comparison card (PR #489 merged)
 
 **What happened & why**

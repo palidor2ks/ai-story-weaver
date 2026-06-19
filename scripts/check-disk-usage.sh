@@ -22,7 +22,7 @@
 # Exit codes:  0 = OK   1 = AT MAX (refresh would fail / over warn threshold)   2 = skipped (no DB)
 set +e
 
-MAX_GB="${POLIPULSE_DISK_MAX_GB:-15}"
+MAX_GB="${POLIPULSE_DISK_MAX_GB:-27}"
 REFRESH_GB="${POLIPULSE_DISK_REFRESH_GB:-1.5}"
 WARN_PCT="${POLIPULSE_DISK_WARN_PCT:-85}"
 
