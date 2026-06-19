@@ -201,6 +201,8 @@ const AppRoutes = () => (
       <Route path="/blog/political-compass-explained" element={<RouteGuard requireAuth={false} requireOnboarding={false}><PoliticalCompassExplained /></RouteGuard>} />
       <Route path="/blog" element={<RouteGuard requireAuth={false} requireOnboarding={false}><Blog /></RouteGuard>} />
       <Route path="/jobs" element={<RouteGuard requireAuth={false} requireOnboarding={false}><Jobs /></RouteGuard>} />
+      <Route path="/issues" element={<RouteGuard requireAuth={false} requireOnboarding={false}><Issues /></RouteGuard>} />
+      <Route path="/polls" element={<Navigate to="/issues" replace />} />
       <Route path="*" element={<NotFound />} />
       </Routes>
     </Suspense>
