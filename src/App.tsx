@@ -53,6 +53,7 @@ const Onboarding = lazy(() => import("./pages/Onboarding").then((m) => ({ defaul
 const PoliticalCompassTest = lazy(() => import("./pages/PoliticalCompassTest"));
 const PoliticalIdeologyTestsComparison = lazy(() => import("./pages/PoliticalIdeologyTestsComparison"));
 const PoliticalCompassExplained = lazy(() => import("./pages/PoliticalCompassExplained"));
+const Issues = lazy(() => import("./pages/Issues"));
 
 // Fires useCandidates + useAllPoliticians at app boot so data is ready
 // by the time the user navigates to /candidates. TanStack Query deduplicates
