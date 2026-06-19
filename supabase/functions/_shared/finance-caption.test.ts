@@ -1,7 +1,22 @@
 // Tests for pickAnalysisMode — the angle selector behind the analysis caption, and the
 // guarantee that the "Analysis" caption style pins the record (positions/goals) angle.
 import { expect, test } from 'bun:test';
-import { composeNewsCaption, composeRecordCaption, pickAnalysisMode } from './finance-caption.ts';
+import { composeNewsCaption, composeRecordCaption, pickAnalysisMode, tidyName } from './finance-caption.ts';
+
+test('tidyName: reorders FEC LAST, FIRST to First Last', () => {
+  expect(tidyName('OJEDA, RICHARD N.')).toBe('Richard N. Ojeda');
+  expect(tidyName('HUDSON, RICHARD')).toBe('Richard Hudson');
+  expect(tidyName('OCHAL, LEON')).toBe('Leon Ochal');
+});
+
+test('tidyName: does not reorder org names with FEC-style commas', () => {
+  expect(tidyName('AMGEN INC. PAC')).toBe('Amgen INC. PAC');
+});
+
+test('tidyName: passes through mixed-case names unchanged', () => {
+  expect(tidyName('Richard Hudson')).toBe('Richard Hudson');
+  expect(tidyName('Ojeda, Richard N.')).toBe('Ojeda, Richard N.');
+});
 
 // With no AI key, aiCaption returns null, so these exercise the deterministic templates.
 const meta = { name: 'Jane Smith', party: 'Republican', office: 'U.S. House', state: 'OH', score: 2, handle: null };
