@@ -27,54 +27,52 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
-## 2026-06-20 — generate-legislator-answers full run (gemini-3.5-flash, in progress)
+## 2026-06-20 — generate-legislator-answers full run (gemini-3.5-flash, v11, in progress)
 
 **What happened & why**
 Goal: fill in the ~221 missing policy answers for each of the 293 NJ+NC state legislators
-using `generate-legislator-answers`. The June 19 run (gemini-2.5-flash) wrote ~123/344
-answers per candidate; this session finishes the rest.
+using `generate-legislator-answers`. Multiple rounds of fixes were needed:
 
-Issues encountered and fixed:
 1. **API key invalid** — GOOGLE_AI_API_KEY had expired; owner updated in Supabase Vault.
-2. **parse failed on gemini-2.5-flash** — 2.5 Flash emits `thought: true` thinking parts
-   before the JSON output; `parts[0].text` was the thinking text. Fixed in v7: skip parts
-   where `thought: true`.
-3. **Model switch to gemini-3.5-flash** — user confirmed the model exists (released 2026-05-19;
-   $1.50/$9.00 per MTok). Updated `GEMINI_MODEL` constant and deployed v8.
-4. **Timeout at batch=10** — v8/v9 background jobs timed out before writing progress (10
-   candidates × ~70s ≈ 420s > Supabase's 400s waitUntil wall clock). Reduced to 5, then 1.
-5. **parse failed on gemini-3.5-flash (maxOutputTokens too low)** — 221 answers × verbose
-   JSON ≈ 20k+ tokens, exceeding 8192 and 16384 limits. Fixed in v10: `maxOutputTokens: 65536`.
-   Verified: "Abe Jones" got 253/253 answers at 02:47 UTC.
-6. **Batch size reduced to 1** — gemini-3.5-flash takes ~3-4 min/candidate, safely under the
-   400s wall clock.
+2. **parse failed on gemini-2.5-flash** — thinking parts emitted before JSON output; fixed in v7.
+3. **Model switch to gemini-3.5-flash** — deployed v8.
+4. **Timeout at batch=10** — reduced to limit=1 per batch.
+5. **maxOutputTokens too low** — 221 answers × verbose JSON needs 65536 tokens; fixed in v10.
+6. **Sign inversion on Local topic questions** (critical, caught at 03:15 UTC) — Gemini correctly
+   researched positions but returned negative values for all Local questions (e.g., NC Democrat
+   Amos Quick who co-sponsored affordable housing bills got -10 on "Should the state invest more
+   in public housing?"). Root cause: the prompt said "-10 (strongly oppose) to +10 (strongly
+   support)" without clarifying that support/oppose refers to the described action happening.
+   Fix in v11: added a CRITICAL sign convention block with explicit examples showing
+   "Should the state fund universal pre-K?" + Democrat → +10.
+   900 inverted Local answers for 9 processed candidates were deleted before re-run.
 
-Current run: triggered at ~02:48 UTC with `offset=0, limit=1, selfChain=true` — self-chaining
-through all ~293 legislators autonomously.
+Current run: re-triggered at ~03:27 UTC with `offset=0, limit=1, selfChain=true` using v11.
 
-**State** (verified as of 03:03 UTC 2026-06-20)
-- v10 of `generate-legislator-answers` deployed (prod project `ornnzinjrcyigazecctf`):
-  `gemini-3.5-flash`, `maxOutputTokens=65536`, triggered with `limit=1`.
-- Run is healthy: 4 candidates fully answered (344/344 questions each), no errors in edge-function logs.
-- Progress snapshot: offset=4, last="Allen Chesser" (244/244), completedAt=2026-06-20T03:03:19Z.
-- 311 total sub-federal candidates; ~18 in hidden states → ~293 to process; ~289 remaining.
-- Rate: ~3-4 min/candidate → estimated completion ~17:00-21:00 UTC June 20.
+**State** (verified as of 03:33 UTC 2026-06-20)
+- v11 of `generate-legislator-answers` deployed (prod `ornnzinjrcyigazecctf`):
+  `gemini-3.5-flash`, `maxOutputTokens=65536`, explicit sign convention examples in prompt.
+- Sign fix verified: Abe Jones (Democrat, NC) Local answers now overwhelmingly positive
+  (Local Cost of Living: 13×+10, Local Housing: 10×+10, Local Public Health: 16×+10, etc.)
+- Progress: offset=0, last="Abe Jones" (100/100 Local answers), completedAt=03:33:55Z.
+- Chain is self-advancing; ~293 candidates to process; ~292 remaining.
+- Rate: ~4-5 min/candidate for 100-question Local-only batches (first 9 candidates);
+  ~12-15 min/candidate for ~221-question full batches (candidates 9+).
+- Estimated completion: ~24-36 hours from trigger (due to full batches for 284 candidates).
 - Cancel flag: `{"cancel": false}`.
-- `la-trigger` relay function still deployed (MCP only, not in git) — delete from dashboard after run.
-- PR #494 branch `claude/stoic-einstein-mpvb5m` has 3 commits from this session.
+- `la-trigger` relay function still deployed (MCP only, not in git) — delete after run.
+- PR #494 branch `claude/stoic-einstein-mpvb5m` has 4 commits; preview branch green.
 
 **Next**
-Monitor: check `admin_stats_cache.legislator_answers_progress` to confirm offset advances.
-To cancel: `UPDATE admin_stats_cache SET stat_value = '{"cancel":true}' WHERE stat_key = 'legislator_answers_cancel'`.
-To resume from where it stopped: check the `offset` in progress snapshot, then re-trigger via la-trigger relay:
-`SELECT net.http_post(url:='https://ornnzinjrcyigazecctf.supabase.co/functions/v1/la-trigger', body:='{"offset":<N>,"limit":1,"selfChain":true}'::jsonb);`
-
+Monitor: confirm offset advances and spot-check a few candidates for correct Local answer signs.
 Monitor SQL:
 ```sql
 SELECT stat_value->>'offset', stat_value->>'completedAt',
        stat_value->'results'->0->>'name', stat_value->'results'->0->>'answered'
 FROM admin_stats_cache WHERE stat_key = 'legislator_answers_progress';
 ```
+To cancel: `UPDATE admin_stats_cache SET stat_value = '{"cancel":true}' WHERE stat_key = 'legislator_answers_cancel'`.
+To resume: `SELECT net.http_post(url:='https://ornnzinjrcyigazecctf.supabase.co/functions/v1/la-trigger', body:='{"offset":<N>,"limit":1,"selfChain":true}'::jsonb);`
 
 **Deferred**
 - Merge PR #494 once CI is green and the run completes.
