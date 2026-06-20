@@ -11,7 +11,9 @@
 //
 // Requires: GOOGLE_AI_API_KEY secret in Supabase Vault.
 // Trigger:  POST /functions/v1/generate-legislator-answers  (admin auth)
-// Body:     { offset?, limit?, state?, dryRun?, selfChain? }
+// Body:     { offset?, limit?, state?, dryRun?, selfChain?, candidateIds? }
+//           candidateIds: regenerate exactly these candidates (targeted remediation); bypasses
+//           the office/state/offset batch filter and self-chaining.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
@@ -396,7 +398,14 @@ serve(async (req) => {
     const limit = Number(body.limit ?? DEFAULT_BATCH_SIZE);
     const state = typeof body.state === 'string' ? body.state.toUpperCase() : null;
     const dryRun = body.dryRun === true;
-    const selfChain = body.selfChain !== false;
+    // candidateIds: targeted remediation — regenerate exactly these candidates and nothing else
+    // (the score-inversion runbook's "scope to reviewed ids" step). When set, the office/state/
+    // offset batch filter and self-chaining are bypassed so spend is bounded to the listed ids.
+    const candidateIds = Array.isArray(body.candidateIds)
+      ? (body.candidateIds as unknown[]).filter((x): x is string => typeof x === 'string' && x.length > 0)
+      : null;
+    const targeted = candidateIds !== null && candidateIds.length > 0;
+    const selfChain = !targeted && body.selfChain !== false;
 
     if (!GOOGLE_AI_KEY && !dryRun) return json({ error: 'GOOGLE_AI_API_KEY not configured' }, 500);
 
@@ -412,27 +421,37 @@ serve(async (req) => {
     //   U.S. House*, U.S. Senate*, President*, plain Representative/Senator
     let query = supabase
       .from('candidates')
-      .select('id, name, party, office, state')
-      .not('office', 'ilike', '%U.S. House%')
-      .not('office', 'ilike', '%U.S. Senate%')
-      .not('office', 'ilike', '%President%')
-      .not('office', 'ilike', 'Representative')
-      .not('office', 'ilike', 'Senator')
-      .order('state,name')
-      .range(offset, offset + limit - 1);
-    if (state) query = query.eq('state', state);
+      .select('id, name, party, office, state');
+    if (targeted) {
+      // Exact-id remediation: take the operator's reviewed list as-is, no batch windowing.
+      query = query.in('id', candidateIds!);
+    } else {
+      query = query
+        .not('office', 'ilike', '%U.S. House%')
+        .not('office', 'ilike', '%U.S. Senate%')
+        .not('office', 'ilike', '%President%')
+        .not('office', 'ilike', 'Representative')
+        .not('office', 'ilike', 'Senator')
+        .order('state,name')
+        .range(offset, offset + limit - 1);
+      if (state) query = query.eq('state', state);
+    }
 
     const { data: raw, error: qErr } = await query;
     if (qErr) return json({ error: qErr.message }, 500);
 
-    const candidates: Candidate[] = (raw ?? []).filter((c: Candidate) => !hidden.has(c.state));
+    // A targeted run honours the operator's explicit id list even for hidden states;
+    // the batch sweep still skips hidden states.
+    const candidates: Candidate[] = targeted
+      ? (raw ?? [])
+      : (raw ?? []).filter((c: Candidate) => !hidden.has(c.state));
 
     if (candidates.length === 0) return json({ done: true, offset });
 
     // Fire background work; return immediately so the HTTP response doesn't time out
     EdgeRuntime.waitUntil(runBatch({ offset, limit, state, dryRun, selfChain, supabase, candidates }));
 
-    return json({ started: true, offset, limit, batchSize: candidates.length, dryRun });
+    return json({ started: true, offset, limit, batchSize: candidates.length, dryRun, targeted });
 
   } catch (e) {
     console.error('[generate-legislator-answers]', e);
