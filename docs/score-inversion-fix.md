@@ -96,13 +96,29 @@ rows must be cleared and regenerated.
 
 ## Pilot results & operational findings (2026-06-20)
 
-Piloted the regeneration on the three reference candidates. **Alan Branson was successfully
-regenerated and his headline score flipped from `L7.09` (−7.09) to `R1.62` (+1.62)** — trusted
-average +1.62 over 90 URL-cited answers, `answers_source='ai_generated'`. This validates the full
-chain end-to-end (stance guard + label guards + `overall_score` re-derivation). **Al Barlas and
-Allen Chesser are NOT yet regenerated** — they were restored to their original (inverted) state
-after live invocation was blocked by transient infra (see below). Complete them by re-running the
-function for their ids once the project is healthy.
+Regenerated all three reference candidates. Every one now has a **positive** trusted-pool score
+(the harmful inversion is gone), `answers_source='ai_generated'`:
+
+| Candidate | Before | After | Answers | trusted_avg |
+| --------- | ------ | ----- | ------- | ----------- |
+| Alan Branson | `L7.09` (−7.09) | `R1.62` (+1.62) | 344 | +1.62 |
+| Al Barlas | `L5.00` (−5.00) | `R3.58` (+3.58) | 344 | +3.58 |
+| Allen Chesser | `L4.33` (−4.33) | `R0.10` (+0.10) | 300 / 344 | +0.10 |
+
+This validates the full chain end-to-end (stance guard + label guards + `overall_score`
+re-derivation). **Branson and Barlas are complete (344/344). Allen Chesser reached 300/344** before
+the project entered a heavy-load window (persistent `fetch-fec-donors`/`fec-candidate-drain` 504
+storms + the legacy-anon-key 401 storm) that starved the background task — three successive
+re-fires wrote zero. His score is already correctly positive and he is **not degraded**; the last
+~44 answers are an idempotent top-up to firm up the exact value. Re-run the function for his id when
+the project is healthy (`getMissingQuestions` resumes from 300).
+
+> **Note on the step-2 "inversion signature" query after the fix:** it flags `sign(all_avg) <>
+> sign(trusted_avg)`. Post-fix, Branson (all −0.72 / trusted +1.62) and Chesser (all −1.25 /
+> trusted +0.10) still trip it — but in the *benign* direction: the **trusted pool (which is what
+> scores) is positive**, while the full pool (including answers the guards stripped of trusted
+> provenance) leans slightly negative. The harmful bug was the reverse (trusted *negative*). Judge
+> success by "is the trusted/scoring average correct," not by raw sign-divergence.
 
 Three things had to change in `generate-legislator-answers` to make this runbook actually work
 (all on branch `claude/score-verification-rgbv2l`):
@@ -155,5 +171,7 @@ went positive after its answers complete.
 A full backup of the three candidates' **original** answers is in
 `candidate_answers_inversion_backup_20260620` (1,032 rows). Restore with
 `INSERT INTO candidate_answers SELECT * FROM candidate_answers_inversion_backup_20260620 WHERE candidate_id = ANY($1) ON CONFLICT (candidate_id, question_id) DO NOTHING;`.
-Branson's backup rows are now stale (he's regenerated). **Drop this table once Barlas + Chesser are
-done.**
+Branson's and Barlas's backup rows are now stale (both fully regenerated). **Keep this table until
+Allen Chesser is topped up to 344/344**, then drop it. (Chesser is at 300/344 and correctly
+positive, but not yet complete — the backup remains his only safety net for the as-yet-ungenerated
+questions.)
