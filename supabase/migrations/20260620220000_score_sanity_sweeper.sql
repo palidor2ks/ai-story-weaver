@@ -1,40 +1,40 @@
--- Score-sanity sweeper: automated detect -> queue -> fix loop for the 2026-06-20 score-inversion
--- bug (see docs/score-inversion-fix.md). Background: generate-legislator-answers occasionally
--- stored answers whose answer_value sign contradicted their own evidence prose, and because those
--- rows carried real source URLs they counted as TRUSTED and flipped a legislator's persisted
--- overall_score to the wrong side (e.g. a Republican shown far-left). #501 added the stance guard
--- that prevents NEW inversions, but already-stored rows are only corrected when a candidate is
+-- Score-sanity sweeper (tables + functions). The pg_cron SCHEDULES live in the companion migration
+-- 20260620220001_score_sanity_sweeper_cron.sql, kept separate so apply-missing-migrations.sh pauses
+-- on the cron gate (--include-crons) per guardrail #2 — this file is safe to apply on its own and
+-- registers no scheduled work.
+--
+-- Background: the 2026-06-20 score-inversion bug (docs/score-inversion-fix.md). generate-legislator-
+-- answers occasionally stored answers whose answer_value sign contradicted their own evidence prose,
+-- and because those rows carried real source URLs they counted as TRUSTED and flipped a legislator's
+-- persisted overall_score to the wrong side (e.g. a Republican shown far-left). #501 added the stance
+-- guard that prevents NEW inversions, but already-stored rows are only corrected when a candidate is
 -- REGENERATED. Regenerating the ~100 affected legislators by hand is slow, so this automates it.
 --
--- DESIGN (mirrors the existing requeue-stalled-research sweeper + drain-research-queue cron):
+-- DESIGN (mirrors requeue-stalled-research + drain-research-queue):
 --   * Detector (score_sanity_detect): walks visible-state STATE/LOCAL legislators (the population
 --     generate-legislator-answers handles — federal offices excluded) that have answers and aren't
---     yet in the queue, computes their full-answer average vs their TRUSTED-pool average, and
---     enqueues each as 'flagged' (egregious inversion signature) or 'done' (looks fine, no action).
---     Bounded to 300 candidates/run, so it sweeps the population over a few runs then idles —
---     this is the "stop once all visible-state reps have had a review" behaviour.
---   * Fixer (score_sanity_fix): drains 'flagged' rows in small batches. On the first pass it BACKS
---     UP then deletes the candidate's answers (so generate-legislator-answers' getMissingQuestions
---     treats them as missing) and fires generate-legislator-answers for them via pg_net. On later
---     passes it resumes/finalizes: once the regenerated score is no longer inverted it marks 'done';
---     an attempt cap stops it from looping forever on a stubborn candidate ('gave_up').
+--     yet in the queue, compares each one's full-answer average vs its TRUSTED-pool average, and
+--     enqueues a verdict: 'flagged' (egregious inversion signature) or 'done' (looks fine). Bounded
+--     to 300/run, so it sweeps the population over a few runs then idles — the "stop once all
+--     visible-state reps have had a review" behaviour.
+--   * Fixer (score_sanity_fix): drains 'flagged' rows. It BACKS UP then deletes a candidate's answers
+--     (so generate-legislator-answers' getMissingQuestions treats them as missing) and fires
+--     generate-legislator-answers via pg_net to regenerate them through the guard. It resumes on
+--     later passes; once the regenerated score is no longer inverted it marks 'done'; an attempt cap
+--     parks a stubborn candidate as 'gave_up' for human review.
 --
--- SAFETY (this cron auto-deletes answers and auto-spends Gemini budget, so it is deliberately timid):
---   * KILL-SWITCH, DEFAULT OFF. Both functions no-op unless admin_stats_cache key
---     'score_sweeper_enabled' is {"enabled": true}. Applying this migration does NOT start any work;
---     an admin flips the switch when ready (and can flip it back to pause instantly).
---   * Backup-before-delete: every deletion is copied to candidate_answers_score_sweep_backup first.
---   * Bounded batch (3 candidates fired/run) + 30-min cooldown per candidate => predictable spend.
---   * Attempt cap (3 delete+regen passes) => no infinite loops; a candidate that can't be fixed is
---     parked as 'gave_up' for human review rather than reprocessed forever.
+-- SAFETY (this auto-deletes answers + spends Gemini budget when enabled, so it is deliberately timid):
+--   * KILL-SWITCH, DEFAULT OFF (admin_stats_cache 'score_sweeper_enabled'). Both functions no-op
+--     until it is flipped on; applying this migration starts nothing.
+--   * Backup-before-delete: every deletion is copied to candidate_answers_score_sweep_backup first,
+--     in the same transaction as the delete.
+--   * One shared per-run budget (3) bounds BOTH the delete blast radius and the regen fires; every
+--     delete is paired with a regen fire in the same run; 30-min per-candidate cooldown.
+--   * Attempt cap (3) => no infinite loops; a candidate that can't be fixed is parked 'gave_up'.
 --   * Egregious-only threshold (|trusted_avg| >= 5 AND |all_avg - trusted_avg| >= 5) so correctly
---     scored candidates whose voting record legitimately diverges from their full answer set
---     (e.g. a fixed legislator at +3.5 with full-avg ~0) are NOT re-fixed. Thresholds are simple
---     and tunable below.
---   * cron auth uses the vault publishable key + cron secret (the legacy anon JWT 401s at the
---     gateway under load), matching the score-inversion runbook.
+--     scored candidates whose voting record legitimately diverges from their full answer set are NOT
+--     re-fixed. Thresholds/batch/cap/cooldown are simple constants at the top of each function.
 
-CREATE EXTENSION IF NOT EXISTS pg_cron;
 CREATE EXTENSION IF NOT EXISTS pg_net;
 
 -- ----------------------------------------------------------------------------
@@ -53,8 +53,8 @@ CREATE TABLE IF NOT EXISTS public.score_review_queue (
 CREATE INDEX IF NOT EXISTS idx_score_review_queue_status ON public.score_review_queue (status);
 
 -- Retains every answer the fixer deletes, so a bad regeneration can be investigated/reverted.
--- No PK/unique copied from candidate_answers (LIKE copies columns only) — a candidate can be
--- backed up across multiple attempts without conflict.
+-- LIKE copies columns only (no PK/unique/check) — intentional: a candidate can be backed up across
+-- multiple attempts without conflict, and the backup never feeds the app.
 CREATE TABLE IF NOT EXISTS public.candidate_answers_score_sweep_backup (
   LIKE public.candidate_answers
 );
@@ -63,23 +63,26 @@ ALTER TABLE public.candidate_answers_score_sweep_backup
 CREATE INDEX IF NOT EXISTS idx_score_sweep_backup_candidate
   ON public.candidate_answers_score_sweep_backup (candidate_id);
 
--- RLS: these are operational tables, not user data, but the security baseline is "RLS on every
--- table". Admin-only, mirroring admin_stats_cache.
+-- RLS: operational tables, not user data, but the security baseline is "RLS on every table".
+-- Admin-only, mirroring admin_stats_cache. (service_role bypasses RLS in Supabase, and the cron
+-- functions are SECURITY DEFINER, so neither tooling nor the cron is blocked by these policies.)
 ALTER TABLE public.score_review_queue ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.candidate_answers_score_sweep_backup ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "score_review_queue admin all" ON public.score_review_queue;
 CREATE POLICY "score_review_queue admin all" ON public.score_review_queue
-  FOR ALL USING (public.has_role(auth.uid(), 'admin'))
-  WITH CHECK (public.has_role(auth.uid(), 'admin'));
+  FOR ALL USING (public.has_role(auth.uid(), 'admin'::app_role))
+  WITH CHECK (public.has_role(auth.uid(), 'admin'::app_role));
 
 DROP POLICY IF EXISTS "score_sweep_backup admin all" ON public.candidate_answers_score_sweep_backup;
 CREATE POLICY "score_sweep_backup admin all" ON public.candidate_answers_score_sweep_backup
-  FOR ALL USING (public.has_role(auth.uid(), 'admin'))
-  WITH CHECK (public.has_role(auth.uid(), 'admin'));
+  FOR ALL USING (public.has_role(auth.uid(), 'admin'::app_role))
+  WITH CHECK (public.has_role(auth.uid(), 'admin'::app_role));
 
 -- Kill-switch, DEFAULT OFF. Enable with:
 --   update admin_stats_cache set stat_value = '{"enabled": true}' where stat_key = 'score_sweeper_enabled';
+-- NOTE: ON CONFLICT DO NOTHING means re-running this migration after the switch was turned ON leaves
+-- it ON (it will not be reset to off). Intentional — re-migration must not clobber a deliberate enable.
 INSERT INTO public.admin_stats_cache (stat_key, stat_value, updated_at)
 VALUES ('score_sweeper_enabled', '{"enabled": false}'::jsonb, now())
 ON CONFLICT (stat_key) DO NOTHING;
@@ -103,8 +106,8 @@ BEGIN
   INSERT INTO public.score_review_queue (candidate_id, status, all_avg, trusted_avg)
   SELECT x.id,
          CASE WHEN x.trusted_avg IS NOT NULL
-                   AND abs(x.trusted_avg) >= 5                       -- tunable: trusted-pool magnitude
-                   AND abs(coalesce(x.all_avg, 0) - x.trusted_avg) >= 5  -- tunable: divergence
+                   AND abs(x.trusted_avg) >= 5                          -- tunable: trusted-pool magnitude
+                   AND abs(coalesce(x.all_avg, 0) - x.trusted_avg) >= 5 -- tunable: divergence
               THEN 'flagged' ELSE 'done' END,
          round(x.all_avg::numeric, 2),
          round(x.trusted_avg::numeric, 2)
@@ -130,7 +133,7 @@ BEGIN
       AND (upper(coalesce(c.state, '')) IN ('', 'US')
            OR upper(coalesce(c.state, '')) NOT IN (SELECT upper(state_code) FROM public.hidden_states))
     GROUP BY c.id
-    LIMIT 300                                                       -- bounded sweep; idles when done
+    LIMIT 300                                                          -- bounded sweep; idles when done
   ) x;
 END $$;
 
@@ -146,8 +149,8 @@ AS $$
 DECLARE
   v_enabled  boolean;
   v_quiz     int;
-  v_batch    int := 3;                       -- candidates fired per run (bounds Gemini spend)
-  v_cap      int := 3;                        -- max delete+regen passes before giving up
+  v_batch    int := 3;                       -- shared per-run budget: bounds BOTH deletes and fires
+  v_cap      int := 3;                        -- max regen passes before giving up
   v_cooldown interval := interval '30 minutes';
   r          record;
   v_fire     text[] := '{}';
@@ -159,21 +162,9 @@ BEGIN
   IF NOT coalesce(v_enabled, false) THEN RETURN; END IF;
 
   SELECT count(*) INTO v_quiz FROM public.questions WHERE include_in_politician_quiz;
+  IF v_quiz IS NULL OR v_quiz <= 0 THEN RETURN; END IF;   -- no active quiz => nothing sensible to do
 
-  -- 1) Promote a few fresh 'flagged' rows to 'fixing': back up + delete their answers ONCE.
-  FOR r IN
-    SELECT candidate_id FROM public.score_review_queue
-    WHERE status = 'flagged' ORDER BY flagged_at LIMIT v_batch
-  LOOP
-    INSERT INTO public.candidate_answers_score_sweep_backup
-      SELECT ca.*, now() FROM public.candidate_answers ca WHERE ca.candidate_id = r.candidate_id;
-    DELETE FROM public.candidate_answers WHERE candidate_id = r.candidate_id;
-    UPDATE public.score_review_queue
-      SET status = 'fixing', attempts = 0, last_fired_at = NULL, updated_at = now()
-      WHERE candidate_id = r.candidate_id;
-  END LOOP;
-
-  -- 2) Advance / finalize 'fixing' rows that are off cooldown.
+  -- Pass A: advance / finalize in-progress ('fixing') candidates first (uses the shared budget).
   FOR r IN
     SELECT q.candidate_id, q.attempts,
       (SELECT count(*) FROM public.candidate_answers ca WHERE ca.candidate_id = q.candidate_id) AS n,
@@ -188,7 +179,7 @@ BEGIN
     WHERE q.status = 'fixing'
       AND (q.last_fired_at IS NULL OR q.last_fired_at < now() - v_cooldown)
     ORDER BY q.flagged_at
-    LIMIT 50
+    LIMIT 100
   LOOP
     v_inverted := r.trusted_avg IS NOT NULL
                   AND abs(r.trusted_avg) >= 5
@@ -206,30 +197,42 @@ BEGIN
           SET status = 'gave_up', all_avg = round(r.all_avg::numeric,2),
               trusted_avg = round(r.trusted_avg::numeric,2), updated_at = now()
           WHERE candidate_id = r.candidate_id;
-      ELSE
-        -- complete but still inverted and under cap: another backup+delete+regen pass
-        IF coalesce(array_length(v_fire,1),0) < v_batch THEN
-          INSERT INTO public.candidate_answers_score_sweep_backup
-            SELECT ca.*, now() FROM public.candidate_answers ca WHERE ca.candidate_id = r.candidate_id;
-          DELETE FROM public.candidate_answers WHERE candidate_id = r.candidate_id;
-          UPDATE public.score_review_queue
-            SET attempts = attempts + 1, last_fired_at = now(), updated_at = now()
-            WHERE candidate_id = r.candidate_id;
-          v_fire := array_append(v_fire, r.candidate_id);
-        END IF;
-      END IF;
-    ELSE
-      -- incomplete and under cap: resume (generate-legislator-answers fills missing, idempotent)
-      IF coalesce(array_length(v_fire,1),0) < v_batch THEN
+      ELSIF coalesce(array_length(v_fire,1),0) < v_batch THEN
+        -- complete but still inverted and under cap: another backup+delete+regen pass (uses budget)
+        INSERT INTO public.candidate_answers_score_sweep_backup
+          SELECT ca.*, now() FROM public.candidate_answers ca WHERE ca.candidate_id = r.candidate_id;
+        DELETE FROM public.candidate_answers WHERE candidate_id = r.candidate_id;
         UPDATE public.score_review_queue
           SET attempts = attempts + 1, last_fired_at = now(), updated_at = now()
           WHERE candidate_id = r.candidate_id;
         v_fire := array_append(v_fire, r.candidate_id);
       END IF;
+    ELSIF coalesce(array_length(v_fire,1),0) < v_batch THEN
+      -- incomplete and under cap: resume regeneration (NO delete; getMissingQuestions fills the rest)
+      UPDATE public.score_review_queue
+        SET attempts = attempts + 1, last_fired_at = now(), updated_at = now()
+        WHERE candidate_id = r.candidate_id;
+      v_fire := array_append(v_fire, r.candidate_id);
     END IF;
   END LOOP;
 
-  -- 3) Fire generate-legislator-answers once for the collected batch.
+  -- Pass B: promote fresh 'flagged' candidates with whatever budget remains (back up + delete + fire).
+  FOR r IN
+    SELECT candidate_id FROM public.score_review_queue
+    WHERE status = 'flagged'
+    ORDER BY flagged_at
+    LIMIT GREATEST(v_batch - coalesce(array_length(v_fire,1),0), 0)
+  LOOP
+    INSERT INTO public.candidate_answers_score_sweep_backup
+      SELECT ca.*, now() FROM public.candidate_answers ca WHERE ca.candidate_id = r.candidate_id;
+    DELETE FROM public.candidate_answers WHERE candidate_id = r.candidate_id;
+    UPDATE public.score_review_queue
+      SET status = 'fixing', attempts = 1, last_fired_at = now(), updated_at = now()
+      WHERE candidate_id = r.candidate_id;
+    v_fire := array_append(v_fire, r.candidate_id);
+  END LOOP;
+
+  -- Fire generate-legislator-answers once for the whole batch.
   IF coalesce(array_length(v_fire,1),0) >= 1 THEN
     PERFORM net.http_post(
       url := 'https://ornnzinjrcyigazecctf.supabase.co/functions/v1/generate-legislator-answers',
@@ -243,13 +246,3 @@ BEGIN
     );
   END IF;
 END $$;
-
--- ----------------------------------------------------------------------------
--- Schedules (offset from the existing drain :00/:30 and requeue :20). The functions are no-ops
--- while the kill-switch is off, so these are safe to register here.
--- ----------------------------------------------------------------------------
-DO $$ BEGIN PERFORM cron.unschedule('score-sanity-detector'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
-DO $$ BEGIN PERFORM cron.unschedule('score-sanity-fixer');    EXCEPTION WHEN OTHERS THEN NULL; END $$;
-
-SELECT cron.schedule('score-sanity-detector', '10,40 * * * *', $cron$ SELECT public.score_sanity_detect(); $cron$);
-SELECT cron.schedule('score-sanity-fixer',    '25,55 * * * *', $cron$ SELECT public.score_sanity_fix();    $cron$);
