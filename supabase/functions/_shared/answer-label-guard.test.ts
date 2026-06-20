@@ -2,7 +2,7 @@
 // relabel (2026-06-11) cleaned 47,066 historical rows; this guard is what keeps the pool
 // from regrowing, so the invariants here are the contract.
 import { expect, test } from 'bun:test';
-import { demoteUnverifiableVoteClaims, demoteUncitedWebResearch } from './answer-label-guard.ts';
+import { demoteUnverifiableVoteClaims, demoteUncitedWebResearch, dropStanceInconsistent } from './answer-label-guard.ts';
 
 const voteClaim = {
   evidence_type: 'voting_record',
@@ -90,4 +90,50 @@ test('web_research guard leaves other source types and inputs untouched', () => 
   expect(out[0]).toEqual(statement);
   expect(input.source_type).toBe('web_research'); // original object unchanged
   expect(out[1].source_type).toBe('other');
+});
+
+// ── dropStanceInconsistent (2026-06-20 inverted-score guard) ────────────────────
+
+test('drops a "support" answer with a negative value (the Branson inversion)', () => {
+  // Evidence said he co-sponsored/supported the bill, yet answer_value was -10.
+  const { kept, dropped } = dropStanceInconsistent([{ stance: 'support', answer_value: -10 }]);
+  expect(kept).toHaveLength(0);
+  expect(dropped).toHaveLength(1);
+});
+
+test('drops an "oppose" answer with a positive value', () => {
+  const { kept, dropped } = dropStanceInconsistent([{ stance: 'oppose', answer_value: 7 }]);
+  expect(kept).toHaveLength(0);
+  expect(dropped).toHaveLength(1);
+});
+
+test('keeps consistent answers (support/positive, oppose/negative)', () => {
+  const { kept, dropped } = dropStanceInconsistent([
+    { stance: 'support', answer_value: 10 },
+    { stance: 'oppose', answer_value: -5 },
+    { stance: 'Supports', answer_value: 3 }, // case-insensitive + synonym
+  ]);
+  expect(kept).toHaveLength(3);
+  expect(dropped).toHaveLength(0);
+});
+
+test('keeps neutral/zero/absent/unknown stances (only hard sign flips are dropped)', () => {
+  const { kept, dropped } = dropStanceInconsistent([
+    { stance: 'neutral', answer_value: 5 },
+    { stance: 'support', answer_value: 0 },
+    { stance: 'mixed', answer_value: -7 },
+    { answer_value: -10 },              // no stance
+    { stance: 'support', answer_value: null }, // no value
+  ]);
+  expect(kept).toHaveLength(5);
+  expect(dropped).toHaveLength(0);
+});
+
+test('does not mutate inputs and partitions a mixed batch', () => {
+  const good = { stance: 'support', answer_value: 5 };
+  const bad = { stance: 'support', answer_value: -5 };
+  const { kept, dropped } = dropStanceInconsistent([good, bad]);
+  expect(kept).toEqual([good]);
+  expect(dropped).toEqual([bad]);
+  expect(bad.answer_value).toBe(-5); // unchanged
 });
