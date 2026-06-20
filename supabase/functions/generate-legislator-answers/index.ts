@@ -132,7 +132,7 @@ Rules:
   const body = {
     contents: [{ role: 'user', parts: [{ text: prompt }] }],
     tools: [{ googleSearch: {} }],
-    generationConfig: { temperature: 0.2, maxOutputTokens: 16384 },
+    generationConfig: { temperature: 0.2, maxOutputTokens: 65536 },
   };
 
   const res = await fetch(
@@ -155,8 +155,10 @@ Rules:
   const parsed = extractJson(text);
 
   if (!parsed || !Array.isArray(parsed.answers)) {
-    console.error('[Gemini] Unparseable response:', text.slice(0, 600));
-    return null;
+    const finishReason = data?.candidates?.[0]?.finishReason ?? 'unknown';
+    const snippet = text.slice(0, 400);
+    console.error('[Gemini] Unparseable response. finishReason:', finishReason, 'text:', snippet);
+    throw new Error(`parse_failed[${finishReason}]: ${snippet}`);
   }
   return parsed.answers as RawAnswer[];
 }
