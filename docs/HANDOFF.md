@@ -71,6 +71,90 @@ project is healthy; confirm both `overall_score` go positive, then drop the back
 
 ---
 
+## 2026-06-20 — Candidate-name saga RESOLVED: live CDN baker was the culprit (PRs #495/#497/#498/#499/#500)
+
+**What happened & why**
+Owner kept reporting mangled directory names ("Beth Ellen Ph.D. Adubato", "Anthony Bailey Mr.
+Aguilar") that earlier fixes didn't resolve. Root cause turned out to be **five divergent name
+formatters** plus a deploy blind spot:
+
+1. `formatCandidateName` (`src/lib/utils.ts`) — **#495** taught it to drop honorifics / relocate
+   credentials wherever they sit (incl. mid-name in comma-free strings).
+2. `toDisplayName` (`src/lib/officeLabel.ts`, used by `CandidateCard`) — **#497** same fix.
+3. `formatName` in `scripts/generate-candidates-json.ts` (manual CDN bake) — **#498** routed through
+   `formatCandidateName`.
+4. `useCandidates` **CDN path** returned the baked JSON unformatted (only the Supabase fallback
+   formatted) — **#499** maps CDN names through `formatCandidateName` so the list matches the profile.
+5. **The real production culprit:** the live `candidates-directory.json` is baked by the
+   **`refresh-candidates-cache` edge function**, which only trimmed whitespace → baked raw FEC
+   strings. **#500** inlined a Deno `formatCandidateName` there. Edge functions auto-deploy
+   (`deploy-edge-functions.yml`); the **frontend does NOT** (Lovable hosts it), which is why #497/#499
+   never reached the live site.
+
+After #500 deployed (confirmed: function version 13 contains the formatter), **re-baked the live CDN**
+by invoking the function via `pg_net` from SQL (anon JWT, `verify_jwt: true`).
+
+**State** (verified)
+- All five PRs merged to `main`. Local `bun test src` = 48 pass; lint 0 errors; `tsc --noEmit` clean;
+  `vite build` succeeds (across the relevant PRs).
+- Deployed edge fn `refresh-candidates-cache` v13 contains `formatCandidateName` (read via MCP).
+- Re-bake invoked → HTTP 200, `ok:true`, 476 candidates / 537 congress members; `storage.objects`
+  shows `candidates-directory.json` updated 2026-06-20 18:41:45Z, 408 KB.
+- NOT verified: the live mobile UI (CDN edge cache `max-age=3600` can linger ~1h). Could not fetch the
+  408 KB CDN body via `pg_net` (response-size cap) to eyeball names — relied on the bake result +
+  unit-verified formatter instead.
+
+**Next**
+Confirm the live directory on polipulseapp.com renders "Beth Ellen Adubato, Ph.D." /
+"Anthony Bailey Aguilar" after a hard refresh (allow up to ~1h for CDN edge cache).
+
+**Deferred**
+- **Republish the frontend via Lovable** to actually ship #497/#499 (live site runs an old bundle;
+  it renders the now-clean CDN data fine, so this is defense-in-depth, not urgent).
+- **Consolidate the 5 name formatters into one shared module** (real cleanup — see OPEN-WORK).
+- DB stores FEC canonical form ("ADUBATO, BETH ELLEN PH.D.") intentionally (ETL matching) — left
+  untouched; all formatting is display-side.
+
+---
+
+## 2026-06-20 — Candidate names: honorifics/credentials stranded mid-name
+
+**What happened & why**
+Owner reported the candidate list still showed mangled names — "Beth Ellen Ph.D. Adubato",
+"Anthony Bailey Mr. Aguilar" — despite earlier name-format work. Two findings:
+
+1. **PR #495 (merged)** fixed `formatCandidateName` (`src/lib/utils.ts`) to drop honorifics and
+   relocate credentials *wherever* they appear, incl. stranded mid-name in comma-free strings. A
+   real improvement, but it was the wrong function for this screen.
+2. **The actual list bug** was in `toDisplayName` (`src/lib/officeLabel.ts`), used by
+   `CandidateCard`. The list is fed by `useUnifiedCandidates`, which passes `name: src.name`
+   **raw** (no `formatCandidateName`), so `toDisplayName` is the only formatter — and it reordered
+   "LAST, FIRST MIDDLE MR." → "First Middle Mr. Last" without stripping the title. Fixed
+   `toDisplayName` to drop honorifics and move credentials (Ph.D./M.D./Esq.) after the last name,
+   while preserving Jr/Sr/II/III/IV in place (matches `formatCandidateName` convention).
+
+Deliberately did **not** mutate the DB: it stores correct FEC canonical form
+("ADUBATO, BETH ELLEN PH.D.") which the FEC ETL relies on for matching. The bug was purely
+display; denormalizing source-of-truth names would risk ETL joins and violates the guardrails.
+
+**State** (verified)
+- `bun test src/lib/officeLabel.test.ts src/lib/utils.test.ts` → 22 pass (new officeLabel.test.ts
+  covers the two regression cases + Jr/Sr/Mc/O'/mixed-case passthrough).
+- Lint 0 errors, `tsc --noEmit` clean, `vite build` succeeds locally (sitemap prebuild fails only
+  on sandbox network 403 — unrelated).
+- Not yet verified in the live app UI.
+
+**Next**
+Visually confirm the candidate list on polipulseapp.com renders "Beth Ellen Adubato, Ph.D." and
+"Anthony Bailey Aguilar" once this deploys.
+
+**Deferred**
+- Consider routing `useUnifiedCandidates` names through `formatCandidateName` too, so there's one
+  name formatter instead of two parallel ones (`toDisplayName` vs `formatCandidateName`).
+- `contributions` table growth (partition/prune); ward-precise local officials; rotate seed-account passwords.
+
+---
+
 ## 2026-06-20 — Legislator score inversion: ETL root-cause fix (`claude/score-verification-rgbv2l`)
 
 **What happened & why**

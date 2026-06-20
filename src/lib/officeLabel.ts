@@ -1,7 +1,6 @@
+// Genealogical suffixes that stay in place between first and last name
+// (matching formatCandidateName's "James Sr. Johnson" convention).
 const SUFFIX_MAP: Record<string, string> = {
-  'ph.d.': 'Ph.D.',
-  'phd': 'Ph.D.',
-  'm.d.': 'M.D.',
   'jr.': 'Jr.',
   'jr': 'Jr.',
   'sr.': 'Sr.',
@@ -9,9 +8,43 @@ const SUFFIX_MAP: Record<string, string> = {
   'ii': 'II',
   'iii': 'III',
   'iv': 'IV',
+};
+
+// Honorific titles that FEC data appends to the name (e.g.
+// "AGUILAR, ANTHONY BAILEY MR.") — these must never appear in the display name.
+const HONORIFIC_TITLES = new Set([
+  'mr', 'mr.', 'mrs', 'mrs.', 'ms', 'ms.', 'miss',
+  'dr', 'dr.', 'hon', 'hon.', 'rev', 'rev.',
+  'sir', 'prof', 'prof.',
+]);
+
+// Post-nominal academic/professional credentials that should appear AFTER the
+// last name (e.g. "Beth Ellen Adubato, Ph.D."), not stranded mid-name.
+const CREDENTIAL_SUFFIXES: Record<string, string> = {
+  'ph.d.': 'Ph.D.',
+  'phd': 'Ph.D.',
+  'm.d.': 'M.D.',
   'esq.': 'Esq.',
   'esq': 'Esq.',
 };
+
+// Drops honorifics and pulls credentials out of a token list, wherever they sit.
+function partitionTitles(tokens: string[]): { kept: string[]; creds: string[] } {
+  const kept: string[] = [];
+  const creds: string[] = [];
+  for (const t of tokens) {
+    if (!t) continue;
+    const lower = t.toLowerCase();
+    if (HONORIFIC_TITLES.has(lower)) continue;
+    const cred = CREDENTIAL_SUFFIXES[lower];
+    if (cred) {
+      creds.push(cred);
+    } else {
+      kept.push(t);
+    }
+  }
+  return { kept, creds };
+}
 
 function capWord(w: string): string {
   if (!w) return w;
@@ -32,7 +65,8 @@ function titleCase(str: string): string {
 
 /**
  * Convert ALL-CAPS candidate names (as stored from FEC) to display-friendly Title Case.
- * Reorders "LAST, FIRST MIDDLE" to "First Middle Last".
+ * Reorders "LAST, FIRST MIDDLE" to "First Middle Last", drops honorifics (Mr., Dr., …),
+ * and moves academic credentials (Ph.D., M.D., Esq.) after the last name.
  * Mixed-case names pass through unchanged.
  */
 export function toDisplayName(name: string | null | undefined): string {
@@ -41,12 +75,15 @@ export function toDisplayName(name: string | null | undefined): string {
   const letters = s.replace(/[^a-zA-Z]/g, '');
   if (!letters || letters !== letters.toUpperCase()) return s;
   const commaIdx = s.indexOf(',');
+  let core = s;
   if (commaIdx > 0) {
     const last = s.slice(0, commaIdx).trim();
     const rest = s.slice(commaIdx + 1).trim();
-    return titleCase(rest ? `${rest} ${last}` : last);
+    core = rest ? `${rest} ${last}` : last;
   }
-  return titleCase(s);
+  const { kept, creds } = partitionTitles(core.split(/\s+/));
+  const base = titleCase(kept.join(' '));
+  return creds.length ? `${base}, ${creds.join(', ')}` : base;
 }
 
 /**
