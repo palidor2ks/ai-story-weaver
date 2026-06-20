@@ -27,6 +27,80 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-20 — Score-sanity sweeper: automate the inversion cleanup (cron + queue, OFF by default)
+
+**What happened & why**
+A user spotted more reps with inverted scores (Anna Ferguson, NC State Rep: −9.14 with full-answer
+avg −0.17). The fix from #501 is per-candidate and NOT retroactive — only regeneration corrects a
+stored score. I confirmed it works (Anna: −9.14 → +6.13 once regenerated) and sized the rest:
+**~108 visible-state legislators are still egregiously inverted**. Rather than hand-regenerate all
+of them, the owner asked for a cron that detects bad scores, queues them, and fixes them, stopping
+once all visible-state reps are reviewed. Built exactly that.
+
+Key discovery while designing: the generic queue generator `get-candidate-answers` does NOT emit a
+`stance` field, so the `dropStanceInconsistent` guard is a no-op there — the only function that both
+emits stance AND applies the guard is `generate-legislator-answers` (what fixed the references). So
+the auto-fixer routes flagged legislators through THAT function, not the general drain.
+
+**State** (verified / not)
+- New migration `supabase/migrations/20260620220000_score_sanity_sweeper.sql`: a `score_review_queue`
+  table, a backup table, two SECURITY DEFINER functions (`score_sanity_detect` / `score_sanity_fix`),
+  and two pg_cron jobs. Modelled on `requeue-stalled-research` + the drain cron. Detector enqueues
+  flagged/done verdicts for visible-state state/local legislators (federal excluded, same filter as
+  generate-legislator-answers); fixer backs-up→deletes→fires generate-legislator-answers in batches
+  of 3 with a 30-min cooldown and a 3-attempt cap. Signature: `|trusted_avg|≥5 AND |all_avg−trusted_avg|≥5`.
+- **OFF by default** via kill-switch `admin_stats_cache.score_sweeper_enabled` (`{"enabled": false}`);
+  both functions no-op until flipped on. Migration is NOT auto-applied (cron/migration guardrails).
+- NOT yet verified end-to-end: the migration hasn't been applied to prod and the sweeper hasn't run.
+  Anna was fixed manually (regenerating, ~244→344). Docs updated (`docs/score-inversion-fix.md` new
+  "Automated remediation" section). Shipping as a draft PR for migration-safety review.
+
+**Next**
+Review the migration (esp. RLS + the auto-delete fixer), apply it deliberately, then flip the
+kill-switch on and watch `select status, count(*) from score_review_queue group by status`.
+
+**Deferred**
+- `get-candidate-answers` can't self-protect against inversions (no `stance` in its prompt) — a
+  follow-up could add a stance field + the guard there too.
+- Non-legislator visible candidates aren't covered (the fixer is legislator-specific by design).
+
+---
+
+## 2026-06-20 — Score-inversion remediation COMPLETE: all 3 reference legislators fixed
+
+**What happened & why**
+Finished the job from the previous entry. Re-fired `generate-legislator-answers` for Allen Chesser
+once more after the 504/401 infra storm eased; the idempotent background task picked up from 300 and
+completed the final ~44 answers. All three reference legislators are now fully regenerated and
+verified — the score-inversion remediation is done for the in-scope set.
+
+**State** (verified by direct query)
+- **Alan Branson +1.62, Al Barlas +3.58, Allen Chesser +0.12** — all 344/344 answers,
+  `answers_source='ai_generated'`, and `overall_score == trusted_avg` for each (score correctly
+  derived from the trusted pool; no inversion).
+- Backup table `candidate_answers_inversion_backup_20260620` **dropped** (`to_regclass` → null) now
+  that all three are complete and positive — per the runbook's final step.
+- Candidates cache re-baked so the app surfaces Chesser's full-344 score (+0.12) rather than the
+  earlier 300-answer bake (+0.10).
+- Docs updated: `docs/score-inversion-fix.md` results table (Chesser 344/+0.12), the operational
+  "keep re-firing under load" lesson, and the safety-net section (backup dropped). No app code
+  changed this session.
+
+**Next**
+If the owner wants the *broader* inversion set remediated (not just the 3 reference candidates), run
+the runbook step-2 query to list suspects, review, then regenerate by `candidateIds` in batches —
+re-firing each until `count(candidate_answers)` hits the quiz size (~344).
+
+**Deferred**
+- Bulk remediation of the rest of the inversion set — still not done (only the 3 reference
+  candidates were ever in scope).
+- The `fetch-fec-donors`/`fec-candidate-drain` 504 storm + legacy-anon-key 401 storm are
+  pre-existing infra issues, untouched.
+- `isCronAuthorized`'s reliance on `get_cron_secret()` (flaky under load) and the duplicated
+  `updateCandidateScore` helper — both still open.
+
+---
+
 ## 2026-06-20 — Score-inversion remediation RUN: Barlas fixed, Chesser flipped positive (post-merge of #501)
 
 **What happened & why**
