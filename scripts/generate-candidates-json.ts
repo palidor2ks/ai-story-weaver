@@ -11,6 +11,8 @@
  * round-trips on every page load.
  */
 
+import { formatCandidateName } from '../src/lib/utils';
+
 const SUPABASE_URL =
   process.env.VITE_SUPABASE_URL || 'https://ornnzinjrcyigazecctf.supabase.co';
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -128,8 +130,11 @@ function normalizeParty(p: string): 'Democrat' | 'Republican' | 'Independent' | 
 }
 
 function formatName(name: string): string {
-  // Collapse extra whitespace
-  return name.replace(/\s+/g, ' ').trim();
+  // Use the same formatter the app renders with, so the baked CDN JSON carries
+  // clean display names (FEC "LAST, FIRST MIDDLE MR." → "First Middle Last",
+  // honorifics dropped, credentials moved to the end) instead of raw all-caps
+  // strings that previously leaked through to the candidate list.
+  return formatCandidateName(name.replace(/\s+/g, ' ').trim());
 }
 
 async function main() {
