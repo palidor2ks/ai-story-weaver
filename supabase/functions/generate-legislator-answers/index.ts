@@ -39,7 +39,6 @@ const DELAY_MS = 2000;
 // quiz truncated the JSON → unparseable → the candidate wrote 0 answers). Chunk the questions so
 // each call's output stays well within the token budget; results are accumulated and written once.
 const QUESTION_CHUNK_SIZE = 50;
-const CHUNK_DELAY_MS = 1500;
 
 // Match the valid answer values used everywhere else in the app.
 const VALID_VALUES = [-10, -7, -5, -3, 0, 3, 5, 7, 10];
@@ -195,98 +194,99 @@ async function processCandidate(
 
   if (dryRun) return { answered: 0, missing: missing.length };
 
-  // Chunk the questions so each Gemini call's JSON output stays within maxOutputTokens.
-  // Accumulate answers across chunks; a chunk that fails to parse is skipped (the rest still
-  // land) rather than failing the whole candidate.
-  const questionChunks = chunk(missing, QUESTION_CHUNK_SIZE);
-  const rawAnswers: RawAnswer[] = [];
-  let failedChunks = 0;
-  for (let i = 0; i < questionChunks.length; i++) {
-    const part = await callGemini(candidate, questionChunks[i]);
-    if (part) rawAnswers.push(...part);
-    else {
-      failedChunks++;
-      console.error(`[chunk] ${candidate.name}: chunk ${i + 1}/${questionChunks.length} parse failed`);
-    }
-    if (i < questionChunks.length - 1) await delay(CHUNK_DELAY_MS);
-  }
-  if (rawAnswers.length === 0) {
-    return { answered: 0, missing: missing.length, error: 'parse failed' };
-  }
-
   const missingIds = new Set(missing.map(q => q.id));
-  // Build candidate-answer objects, carrying `stance` (not a DB column) so the integrity guards
-  // can run before we strip it for the insert.
-  const parsedRows = [];
 
-  for (const raw of rawAnswers) {
-    const qid = String(raw.question_id ?? '');
-    if (!missingIds.has(qid)) continue;
-    if (typeof raw.answer_value !== 'number' && typeof raw.answer_value !== 'string') continue;
-
-    const evidenceType = validEvidenceType(raw.evidence_type);
-    const sourceUrl = typeof raw.source_url === 'string' && raw.source_url.startsWith('http')
-      ? raw.source_url : null;
-
-    parsedRows.push({
-      candidate_id: candidate.id,
-      question_id: qid,
-      answer_value: snapToValid(typeof raw.answer_value === 'string'
-        ? Number(raw.answer_value) : raw.answer_value),
-      evidence_type: evidenceType,
-      source_type: evidenceToSourceType(evidenceType),
-      confidence: ['high', 'medium', 'low'].includes(String(raw.confidence))
-        ? String(raw.confidence) : 'low',
-      source_description: String(raw.source_description ?? '').slice(0, 1000),
-      source_url: sourceUrl,
-      source_urls: sourceUrl ? [sourceUrl] : [],
-      source_titles: [],
-      stance: typeof raw.stance === 'string' ? raw.stance : null,
-    });
-  }
-
-  // ── Integrity guards (shared with get-candidate-answers) ──────────────────────
-  // 1. Drop answers whose stated stance contradicts the sign of answer_value. This is the
-  //    fix for the 2026-06-20 inverted-score bug: the model emitted "supports X" prose with a
-  //    strongly-negative value, which (URL-cited + high confidence) passed isTrustedForScoring
-  //    and flipped the candidate's overall_score. A self-contradictory answer is untrustworthy.
-  // 2. Demote uncited "voting_record" labels when we hold no real votes for this candidate, and
-  //    uncited "web_research" labels — these self-asserted provenance badges have nothing behind
-  //    them. (See _shared/answer-label-guard.ts.)
-  const { kept, dropped } = dropStanceInconsistent(parsedRows);
-  if (dropped.length > 0) {
-    console.log(`[guard] ${candidate.name}: dropped ${dropped.length} stance-inconsistent answer(s)`);
-  }
-
+  // Whether we hold real votes for this candidate — needed by demoteUnverifiableVoteClaims.
+  // Queried once up front so it isn't repeated per chunk.
   const { count: voteRowCount } = await supabase
     .from('candidate_votes')
     .select('id', { count: 'exact', head: true })
     .eq('candidate_id', candidate.id);
+  const hasVotes = (voteRowCount ?? 0) > 0;
 
-  const guarded = demoteUncitedWebResearch(
-    demoteUnverifiableVoteClaims(kept, (voteRowCount ?? 0) > 0),
-  );
+  // Chunk the questions so each Gemini call's JSON output stays within maxOutputTokens, and
+  // UPSERT EACH CHUNK as it comes back. The background task (EdgeRuntime.waitUntil) has a bounded
+  // wall-clock budget; a multi-chunk candidate can exceed it and be terminated before a single
+  // final write. Writing per chunk means completed chunks always persist, and a re-run resumes
+  // via getMissingQuestions (idempotent), so repeated invocations converge.
+  const questionChunks = chunk(missing, QUESTION_CHUNK_SIZE);
+  let answered = 0;
+  let totalDropped = 0;
+  let failedChunks = 0;
 
-  // Strip the transient `stance` field — it is not a candidate_answers column.
-  const rows = guarded.map(({ stance: _stance, ...row }) => row);
+  for (let i = 0; i < questionChunks.length; i++) {
+    const part = await callGemini(candidate, questionChunks[i]);
+    if (!part) {
+      failedChunks++;
+      console.error(`[chunk] ${candidate.name}: chunk ${i + 1}/${questionChunks.length} parse failed`);
+      continue;
+    }
 
-  if (rows.length === 0) return { answered: 0, missing: missing.length, error: 'no valid rows parsed' };
+    // Build candidate-answer objects, carrying `stance` (not a DB column) so the integrity
+    // guards can run before we strip it for the insert.
+    const parsedRows = [];
+    for (const raw of part) {
+      const qid = String(raw.question_id ?? '');
+      if (!missingIds.has(qid)) continue;
+      if (typeof raw.answer_value !== 'number' && typeof raw.answer_value !== 'string') continue;
 
-  // ignoreDuplicates: true — never overwrite higher-quality existing answers.
-  // (getMissingQuestions pre-filters so conflicts only happen on race conditions.)
-  const { error: upsertErr } = await supabase
-    .from('candidate_answers')
-    .upsert(rows, { onConflict: 'candidate_id,question_id', ignoreDuplicates: true });
+      const evidenceType = validEvidenceType(raw.evidence_type);
+      const sourceUrl = typeof raw.source_url === 'string' && raw.source_url.startsWith('http')
+        ? raw.source_url : null;
 
-  if (upsertErr) throw new Error(upsertErr.message);
+      parsedRows.push({
+        candidate_id: candidate.id,
+        question_id: qid,
+        answer_value: snapToValid(typeof raw.answer_value === 'string'
+          ? Number(raw.answer_value) : raw.answer_value),
+        evidence_type: evidenceType,
+        source_type: evidenceToSourceType(evidenceType),
+        confidence: ['high', 'medium', 'low'].includes(String(raw.confidence))
+          ? String(raw.confidence) : 'low',
+        source_description: String(raw.source_description ?? '').slice(0, 1000),
+        source_url: sourceUrl,
+        source_urls: sourceUrl ? [sourceUrl] : [],
+        source_titles: [],
+        stance: typeof raw.stance === 'string' ? raw.stance : null,
+      });
+    }
+
+    // ── Integrity guards (shared with get-candidate-answers) ──────────────────────
+    // 1. Drop answers whose stated stance contradicts the sign of answer_value (the 2026-06-20
+    //    inverted-score bug: "supports X" prose with a strongly-negative, URL-cited value that
+    //    passed isTrustedForScoring and flipped overall_score). Self-contradictory => untrusted.
+    // 2. Demote uncited "voting_record" labels when we hold no real votes, and uncited
+    //    "web_research" labels — provenance badges with nothing behind them.
+    const { kept, dropped } = dropStanceInconsistent(parsedRows);
+    totalDropped += dropped.length;
+
+    const guarded = demoteUncitedWebResearch(demoteUnverifiableVoteClaims(kept, hasVotes));
+    // Strip the transient `stance` field — it is not a candidate_answers column.
+    const rows = guarded.map(({ stance: _stance, ...row }) => row);
+    if (rows.length === 0) continue;
+
+    // ignoreDuplicates: true — never overwrite higher-quality existing answers.
+    const { error: upsertErr } = await supabase
+      .from('candidate_answers')
+      .upsert(rows, { onConflict: 'candidate_id,question_id', ignoreDuplicates: true });
+    if (upsertErr) throw new Error(upsertErr.message);
+    answered += rows.length;
+  }
+
+  if (totalDropped > 0) {
+    console.log(`[guard] ${candidate.name}: dropped ${totalDropped} stance-inconsistent answer(s)`);
+  }
+  if (answered === 0) {
+    return { answered: 0, missing: missing.length, error: 'parse failed', ...(failedChunks ? { failedChunks } : {}) };
+  }
 
   // Re-derive the persisted overall_score from TRUSTED answers (matches get-candidate-answers
   // and the live alignment match in src/lib/scoring.ts), so a candidate's headline score reflects
   // the guard-filtered data rather than a stale value.
   await updateCandidateScore(supabase, candidate.id, candidate.name);
 
-  console.log(`[done] ${candidate.name}: wrote ${rows.length}/${missing.length}${failedChunks ? ` (${failedChunks} chunk(s) failed)` : ''}`);
-  return { answered: rows.length, missing: missing.length, ...(failedChunks ? { failedChunks } : {}) };
+  console.log(`[done] ${candidate.name}: wrote ${answered}/${missing.length}${failedChunks ? ` (${failedChunks} chunk(s) failed)` : ''}`);
+  return { answered, missing: missing.length, ...(failedChunks ? { failedChunks } : {}) };
 }
 
 // Re-derive candidates.overall_score from TRUSTED answers only (vote-derived or carrying a real
