@@ -21,6 +21,7 @@ import {
   demoteUncitedWebResearch,
   dropStanceInconsistent,
 } from "../_shared/answer-label-guard.ts";
+import { isCronAuthorized } from "../_shared/cron-auth.ts";
 
 declare const EdgeRuntime: { waitUntil: (promise: Promise<unknown>) => void };
 
@@ -380,11 +381,13 @@ serve(async (req) => {
     });
 
   try {
-    // Auth: service-role key or admin profile
+    // Auth: trusted server (service-role bearer or vault x-cron-secret, via the shared
+    // cron-auth helper) OR an admin user profile. The cron/service path lets this remediation
+    // run be triggered server-side (pg_net / cron) the same way the other ingestion functions are.
     const token = (req.headers.get('Authorization') ?? '').replace('Bearer ', '');
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
-    if (token !== SUPABASE_SERVICE_KEY) {
+    if (!(await isCronAuthorized(req))) {
       const { data: { user }, error: authErr } =
         await createClient(SUPABASE_URL, SUPABASE_ANON_KEY).auth.getUser(token);
       if (authErr || !user) return json({ error: 'Unauthorized' }, 401);
