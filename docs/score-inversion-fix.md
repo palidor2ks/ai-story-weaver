@@ -103,19 +103,21 @@ Regenerated all three reference candidates. Every one now has a **positive** tru
 | --------- | ------ | ----- | ------- | ----------- |
 | Alan Branson | `L7.09` (−7.09) | `R1.62` (+1.62) | 344 | +1.62 |
 | Al Barlas | `L5.00` (−5.00) | `R3.58` (+3.58) | 344 | +3.58 |
-| Allen Chesser | `L4.33` (−4.33) | `R0.10` (+0.10) | 300 / 344 | +0.10 |
+| Allen Chesser | `L4.33` (−4.33) | `R0.12` (+0.12) | 344 | +0.12 |
 
 This validates the full chain end-to-end (stance guard + label guards + `overall_score`
-re-derivation). **Branson and Barlas are complete (344/344). Allen Chesser reached 300/344** before
-the project entered a heavy-load window (persistent `fetch-fec-donors`/`fec-candidate-drain` 504
-storms + the legacy-anon-key 401 storm) that starved the background task — three successive
-re-fires wrote zero. His score is already correctly positive and he is **not degraded**; the last
-~44 answers are an idempotent top-up to firm up the exact value. Re-run the function for his id when
-the project is healthy (`getMissingQuestions` resumes from 300).
+re-derivation). **All three are complete (344/344) and verified positive** (`overall_score` ==
+`trusted_avg` for each). Chesser was the slow one: he stalled at 300/344 through a heavy-load window
+(persistent `fetch-fec-donors`/`fec-candidate-drain` 504 storms + the legacy-anon-key 401 storm) in
+which several re-fires wrote zero — but the background task is idempotent (`getMissingQuestions`
+resumes), so once the storm eased a later re-fire completed the final ~44 and his score settled at
++0.12. **Operational lesson:** under load, each invocation only manages ~1–5 chunks (50 q) before
+its wall-clock budget cuts it off; just keep re-firing the same `candidateIds` until
+`count(candidate_answers)` reaches the quiz size — progress never regresses.
 
 > **Note on the step-2 "inversion signature" query after the fix:** it flags `sign(all_avg) <>
 > sign(trusted_avg)`. Post-fix, Branson (all −0.72 / trusted +1.62) and Chesser (all −1.25 /
-> trusted +0.10) still trip it — but in the *benign* direction: the **trusted pool (which is what
+> trusted +0.12) still trip it — but in the *benign* direction: the **trusted pool (which is what
 > scores) is positive**, while the full pool (including answers the guards stripped of trusted
 > provenance) leans slightly negative. The harmful bug was the reverse (trusted *negative*). Judge
 > success by "is the trusted/scoring average correct," not by raw sign-divergence.
@@ -168,10 +170,9 @@ went positive after its answers complete.
 
 ### Safety net
 
-A full backup of the three candidates' **original** answers is in
-`candidate_answers_inversion_backup_20260620` (1,032 rows). Restore with
-`INSERT INTO candidate_answers SELECT * FROM candidate_answers_inversion_backup_20260620 WHERE candidate_id = ANY($1) ON CONFLICT (candidate_id, question_id) DO NOTHING;`.
-Branson's and Barlas's backup rows are now stale (both fully regenerated). **Keep this table until
-Allen Chesser is topped up to 344/344**, then drop it. (Chesser is at 300/344 and correctly
-positive, but not yet complete — the backup remains his only safety net for the as-yet-ungenerated
-questions.)
+A full backup of the three candidates' **original** answers was held in
+`candidate_answers_inversion_backup_20260620` (1,032 rows) while the remediation was in flight.
+**All three are now complete (344/344) and verified positive, so the table was dropped
+(2026-06-20).** If a future regeneration ever needs to be reverted, the backup is gone — but the run
+is idempotent and the guard chain makes regenerated answers strictly more trustworthy than the
+original inverted rows, so reverting to the old data is never the right move anyway.

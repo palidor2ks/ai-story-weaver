@@ -27,6 +27,41 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-20 — Score-inversion remediation COMPLETE: all 3 reference legislators fixed
+
+**What happened & why**
+Finished the job from the previous entry. Re-fired `generate-legislator-answers` for Allen Chesser
+once more after the 504/401 infra storm eased; the idempotent background task picked up from 300 and
+completed the final ~44 answers. All three reference legislators are now fully regenerated and
+verified — the score-inversion remediation is done for the in-scope set.
+
+**State** (verified by direct query)
+- **Alan Branson +1.62, Al Barlas +3.58, Allen Chesser +0.12** — all 344/344 answers,
+  `answers_source='ai_generated'`, and `overall_score == trusted_avg` for each (score correctly
+  derived from the trusted pool; no inversion).
+- Backup table `candidate_answers_inversion_backup_20260620` **dropped** (`to_regclass` → null) now
+  that all three are complete and positive — per the runbook's final step.
+- Candidates cache re-baked so the app surfaces Chesser's full-344 score (+0.12) rather than the
+  earlier 300-answer bake (+0.10).
+- Docs updated: `docs/score-inversion-fix.md` results table (Chesser 344/+0.12), the operational
+  "keep re-firing under load" lesson, and the safety-net section (backup dropped). No app code
+  changed this session.
+
+**Next**
+If the owner wants the *broader* inversion set remediated (not just the 3 reference candidates), run
+the runbook step-2 query to list suspects, review, then regenerate by `candidateIds` in batches —
+re-firing each until `count(candidate_answers)` hits the quiz size (~344).
+
+**Deferred**
+- Bulk remediation of the rest of the inversion set — still not done (only the 3 reference
+  candidates were ever in scope).
+- The `fetch-fec-donors`/`fec-candidate-drain` 504 storm + legacy-anon-key 401 storm are
+  pre-existing infra issues, untouched.
+- `isCronAuthorized`'s reliance on `get_cron_secret()` (flaky under load) and the duplicated
+  `updateCandidateScore` helper — both still open.
+
+---
+
 ## 2026-06-20 — Score-inversion remediation RUN: Barlas fixed, Chesser flipped positive (post-merge of #501)
 
 **What happened & why**
