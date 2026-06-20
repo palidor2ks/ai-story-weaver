@@ -146,7 +146,12 @@ Rules:
   }
 
   const data = await res.json();
-  const text: string = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+  // Gemini 2.5 Flash emits thinking parts (thought: true) before the actual output;
+  // find the first non-thinking part that contains text.
+  const parts: Array<{ thought?: boolean; text?: string }> =
+    data?.candidates?.[0]?.content?.parts ?? [];
+  const outputPart = parts.find(p => !p.thought && p.text) ?? parts[0];
+  const text: string = outputPart?.text ?? '';
   const parsed = extractJson(text);
 
   if (!parsed || !Array.isArray(parsed.answers)) {
