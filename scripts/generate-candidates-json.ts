@@ -11,7 +11,7 @@
  * round-trips on every page load.
  */
 
-import { formatCandidateName } from '../src/lib/utils';
+import { formatCandidateName } from '../src/lib/candidateName';
 
 const SUPABASE_URL =
   process.env.VITE_SUPABASE_URL || 'https://ornnzinjrcyigazecctf.supabase.co';

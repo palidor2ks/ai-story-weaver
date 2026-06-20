@@ -14,6 +14,7 @@
  */
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { formatCandidateName } from "../_shared/candidateName.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -50,70 +51,6 @@ function normalizeParty(p: string): 'Democrat' | 'Republican' | 'Independent' | 
   if (p === 'Democrat' || p === 'Republican' || p === 'Independent') return p;
   return 'Other';
 }
-
-// Candidate-name formatter — kept in sync with src/lib/utils.ts `formatCandidateName`.
-// The baked CDN must carry clean display names ("Beth Ellen Adubato, Ph.D.")
-// rather than raw FEC strings ("ADUBATO, BETH ELLEN PH.D."), since clients read
-// this JSON directly. Honorifics are dropped and academic credentials moved
-// after the last name, wherever they appear; genealogical suffixes stay in place.
-const HONORIFIC_TITLES = new Set([
-  'mr', 'mr.', 'mrs', 'mrs.', 'ms', 'ms.', 'miss',
-  'dr', 'dr.', 'hon', 'hon.', 'rev', 'rev.',
-  'sir', 'prof', 'prof.',
-]);
-const CREDENTIAL_SUFFIXES: Record<string, string> = {
-  'ph.d.': 'Ph.D.', 'phd': 'Ph.D.', 'm.d.': 'M.D.', 'esq.': 'Esq.', 'esq': 'Esq.',
-};
-
-function capitalizeNameWord(word: string): string {
-  if (!word) return word;
-  if (word.includes('-')) return word.split('-').map(capitalizeNameWord).join('-');
-  if (word.includes("'")) return word.split("'").map(capitalizeNameWord).join("'");
-  if (word.startsWith('mc') && word.length > 3) {
-    return 'Mc' + word[2].toUpperCase() + word.slice(3);
-  }
-  return word[0].toUpperCase() + word.slice(1);
-}
-function toNameTitleCase(str: string): string {
-  return str.toLowerCase().split(/\s+/).map(capitalizeNameWord).join(' ');
-}
-function partitionNameTokens(tokens: string[]): { nameTokens: string[]; credTokens: string[] } {
-  const nameTokens: string[] = [];
-  const credTokens: string[] = [];
-  for (const w of tokens) {
-    if (!w) continue;
-    const lower = w.toLowerCase();
-    if (HONORIFIC_TITLES.has(lower)) continue;
-    const cred = CREDENTIAL_SUFFIXES[lower];
-    if (cred) credTokens.push(cred);
-    else nameTokens.push(w);
-  }
-  return { nameTokens, credTokens };
-}
-function formatCandidateName(name: string | null | undefined): string {
-  if (!name) return name ?? '';
-  const collapsed = name.replace(/\s+/g, ' ').trim();
-  if (!collapsed) return '';
-  const isAllCaps = collapsed === collapsed.toUpperCase();
-  let result = collapsed;
-  let credential = '';
-  if (collapsed.includes(',')) {
-    const comma = collapsed.indexOf(',');
-    const last = collapsed.slice(0, comma).trim();
-    const rawFirst = collapsed.slice(comma + 1).replace(/^[,\s]+/, '').trim();
-    const { nameTokens, credTokens } = partitionNameTokens(rawFirst.split(/\s+/));
-    const first = nameTokens.join(' ').trim();
-    credential = credTokens.join(', ');
-    result = first && last ? `${first} ${last}` : first || last;
-  } else {
-    const { nameTokens, credTokens } = partitionNameTokens(collapsed.split(/\s+/));
-    credential = credTokens.join(', ');
-    result = nameTokens.join(' ');
-  }
-  const base = isAllCaps ? toNameTitleCase(result) : result;
-  return credential ? `${base}, ${credential}` : base;
-}
-
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
