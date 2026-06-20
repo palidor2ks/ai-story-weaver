@@ -27,6 +27,46 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-20 — list page still showed "C" after score fix; CDN cache regenerated
+
+**What happened & why**
+After the sign-convention fix and bulk `overall_score` update (~4 AM UTC), the politicians
+list page still showed "C" for Abe Jones even after a hard refresh. Root cause: `useCandidates`
+has a CDN-first fetch path that serves a pre-built JSON from Supabase Storage
+(`data-cache/candidates-directory.json`) with up to 26-hour TTL — React Query cache expiry
+is irrelevant when the CDN file itself is stale.
+
+Two fixes applied:
+1. **`UPDATE candidates.overall_score`** for all 290 sub-federal candidates with trusted
+   answers, from the live trusted-answer average (voting_record or URL-sourced). Abe Jones
+   went from 0.00 → -8.58.
+2. **`refresh-candidates-cache` triggered** (HTTP 200, 534ms) to regenerate the Supabase
+   Storage CDN file with the new scores. After a page refresh, Abe Jones should show L8.58.
+
+No code was changed in this session beyond what was already committed.
+
+**State** (verified as of ~10:30 UTC 2026-06-20)
+- `candidates.overall_score` for all state/local legislators updated (SQL verified)
+- `refresh-candidates-cache` returned 200 — CDN file is fresh
+- `generate-legislator-answers` v12 chain still running (self-chaining, cancel=false)
+- All 5 candidate_answers triggers remain enabled
+- No lint/build/test run this session (no code changed)
+
+**Next**
+Spot-check 2-3 NC/NJ candidates on the live site after a fresh page load to confirm
+L/R scores are correct on the list (not just the profile). Then monitor the v12 chain
+until it completes and merge PR #494.
+
+**Deferred**
+- `overall_score` will drift again as v12 chain adds new trusted answers; run
+  `refresh-candidates-cache` once more after the full run completes (~24-36h from 04:08 UTC)
+- Merge PR #494 once CI is green and run completes
+- Delete `la-trigger` edge function from Supabase dashboard after run
+- Update OPEN-WORK #15 (phase-2 AI scoring) to reflect scoring is live
+- `contributions` table growth still needs partition/prune strategy (OPEN-WORK #6)
+
+---
+
 ## 2026-06-20 — sign-convention fix complete, v12 deployed, re-run in progress
 
 **What happened & why**
