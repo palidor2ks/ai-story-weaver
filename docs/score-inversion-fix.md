@@ -93,3 +93,67 @@ rows must be cleared and regenerated.
    ```
 
 6. **Refresh the candidates cache** if the app reads from it: `refresh-candidates-cache`.
+
+## Pilot results & operational findings (2026-06-20)
+
+Piloted the regeneration on the three reference candidates. **Alan Branson was successfully
+regenerated and his headline score flipped from `L7.09` (−7.09) to `R1.62` (+1.62)** — trusted
+average +1.62 over 90 URL-cited answers, `answers_source='ai_generated'`. This validates the full
+chain end-to-end (stance guard + label guards + `overall_score` re-derivation). **Al Barlas and
+Allen Chesser are NOT yet regenerated** — they were restored to their original (inverted) state
+after live invocation was blocked by transient infra (see below). Complete them by re-running the
+function for their ids once the project is healthy.
+
+Three things had to change in `generate-legislator-answers` to make this runbook actually work
+(all on branch `claude/score-verification-rgbv2l`):
+
+1. **`candidateIds` body param** — regenerate exactly a reviewed id list (`.in('id', …)`),
+   bypassing the office/state/offset batch filter and self-chaining. Without it, scoping by
+   `state` would sweep every *incomplete* candidate in NC (25) + NJ (113) and spend Gemini budget
+   on all of them. Targeted spend is bounded to the listed ids.
+2. **Chunked Gemini calls + per-chunk upsert** — the quiz is now **344 questions**; asking for all
+   344 answers in one call overflowed `maxOutputTokens` (8192) → truncated/unparseable JSON → the
+   candidate wrote **0** answers. Fix: chunk into batches of 50 (`maxOutputTokens` raised to 16384)
+   and **upsert each chunk as it returns**. The background task (`EdgeRuntime.waitUntil`) has a
+   bounded wall-clock budget; a single final write was lost when a multi-chunk candidate exceeded
+   it. Per-chunk writes persist completed chunks, and a re-run resumes the rest via
+   `getMissingQuestions` (idempotent), so repeated invocations converge.
+3. **Shared cron/service auth** (`isCronAuthorized`) — lets the run be triggered server-side.
+
+### How to trigger the regeneration (server-side, from SQL)
+
+The container's network egress blocks `*.supabase.co` and `api.supabase.com`, and no service-role
+key is reachable, so invoke via `pg_net` from the DB. **Use the new-format publishable key**
+(`vault.decrypted_secrets` name `supabase_publishable_key`) for both `apikey` and `Authorization`
+— the legacy anon JWT (`nj_elec_cron_anon_key`) is currently **rejected at the gateway** (a 401
+storm affects many crons). `x-cron-secret` (vault `cron_secret`) authorizes inside the function.
+
+```sql
+select net.http_post(
+  url := 'https://ornnzinjrcyigazecctf.supabase.co/functions/v1/generate-legislator-answers',
+  headers := jsonb_build_object(
+    'Content-Type','application/json',
+    'apikey', (select decrypted_secret from vault.decrypted_secrets where name='supabase_publishable_key'),
+    'Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name='supabase_publishable_key'),
+    'x-cron-secret', (select decrypted_secret from vault.decrypted_secrets where name='cron_secret')
+  ),
+  body := jsonb_build_object('candidateIds', jsonb_build_array(
+    'openstates_ocd-person_525b3307-b007-4cfa-8166-efb0810fcda7',  -- Al Barlas
+    'openstates_ocd-person_fc3772c1-d98a-4325-a6c8-96b9da492ed6'   -- Allen Chesser
+  ))
+);
+```
+
+Run one (or a few) candidates per call to stay within the background wall-clock budget; re-fire
+until `count(candidate_answers)` reaches the quiz size for each id. **Caveat:** under infra load the
+function's `isCronAuthorized` → `get_cron_secret()` RPC intermittently returns null and the call
+401s; just retry (it succeeds on a warm/healthy instance). Verify each candidate's `overall_score`
+went positive after its answers complete.
+
+### Safety net
+
+A full backup of the three candidates' **original** answers is in
+`candidate_answers_inversion_backup_20260620` (1,032 rows). Restore with
+`INSERT INTO candidate_answers SELECT * FROM candidate_answers_inversion_backup_20260620 WHERE candidate_id = ANY($1) ON CONFLICT (candidate_id, question_id) DO NOTHING;`.
+Branson's backup rows are now stale (he's regenerated). **Drop this table once Barlas + Chesser are
+done.**

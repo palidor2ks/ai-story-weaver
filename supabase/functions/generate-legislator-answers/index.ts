@@ -11,7 +11,9 @@
 //
 // Requires: GOOGLE_AI_API_KEY secret in Supabase Vault.
 // Trigger:  POST /functions/v1/generate-legislator-answers  (admin auth)
-// Body:     { offset?, limit?, state?, dryRun?, selfChain? }
+// Body:     { offset?, limit?, state?, dryRun?, selfChain?, candidateIds? }
+//           candidateIds: regenerate exactly these candidates (targeted remediation); bypasses
+//           the office/state/offset batch filter and self-chaining.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
@@ -19,6 +21,7 @@ import {
   demoteUncitedWebResearch,
   dropStanceInconsistent,
 } from "../_shared/answer-label-guard.ts";
+import { isCronAuthorized } from "../_shared/cron-auth.ts";
 
 declare const EdgeRuntime: { waitUntil: (promise: Promise<unknown>) => void };
 
@@ -31,6 +34,11 @@ const GEMINI_MODEL = 'gemini-2.5-flash';
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 const DEFAULT_BATCH_SIZE = 10;
 const DELAY_MS = 2000;
+// Gemini emits one JSON answer object per question. Asking for ALL of a candidate's missing
+// questions in a single call overflows maxOutputTokens once the quiz is large (the 344-question
+// quiz truncated the JSON → unparseable → the candidate wrote 0 answers). Chunk the questions so
+// each call's output stays well within the token budget; results are accumulated and written once.
+const QUESTION_CHUNK_SIZE = 50;
 
 // Match the valid answer values used everywhere else in the app.
 const VALID_VALUES = [-10, -7, -5, -3, 0, 3, 5, 7, 10];
@@ -70,6 +78,12 @@ function evidenceToSourceType(e: string): string {
 }
 
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+function chunk<T>(arr: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -144,7 +158,7 @@ Rules:
   const body = {
     contents: [{ role: 'user', parts: [{ text: prompt }] }],
     tools: [{ googleSearch: {} }],
-    generationConfig: { temperature: 0.2, maxOutputTokens: 8192 },
+    generationConfig: { temperature: 0.2, maxOutputTokens: 16384 },
   };
 
   const res = await fetch(
@@ -172,7 +186,7 @@ async function processCandidate(
   supabase: ReturnType<typeof createClient>,
   candidate: Candidate,
   dryRun: boolean,
-): Promise<{ answered: number; missing: number; skipped?: boolean; error?: string }> {
+): Promise<{ answered: number; missing: number; skipped?: boolean; error?: string; failedChunks?: number }> {
   const missing = await getMissingQuestions(supabase, candidate.id);
   if (missing.length === 0) return { answered: 0, missing: 0, skipped: true };
 
@@ -180,82 +194,99 @@ async function processCandidate(
 
   if (dryRun) return { answered: 0, missing: missing.length };
 
-  const rawAnswers = await callGemini(candidate, missing);
-  if (!rawAnswers) return { answered: 0, missing: missing.length, error: 'parse failed' };
-
   const missingIds = new Set(missing.map(q => q.id));
-  // Build candidate-answer objects, carrying `stance` (not a DB column) so the integrity guards
-  // can run before we strip it for the insert.
-  const parsedRows = [];
 
-  for (const raw of rawAnswers) {
-    const qid = String(raw.question_id ?? '');
-    if (!missingIds.has(qid)) continue;
-    if (typeof raw.answer_value !== 'number' && typeof raw.answer_value !== 'string') continue;
-
-    const evidenceType = validEvidenceType(raw.evidence_type);
-    const sourceUrl = typeof raw.source_url === 'string' && raw.source_url.startsWith('http')
-      ? raw.source_url : null;
-
-    parsedRows.push({
-      candidate_id: candidate.id,
-      question_id: qid,
-      answer_value: snapToValid(typeof raw.answer_value === 'string'
-        ? Number(raw.answer_value) : raw.answer_value),
-      evidence_type: evidenceType,
-      source_type: evidenceToSourceType(evidenceType),
-      confidence: ['high', 'medium', 'low'].includes(String(raw.confidence))
-        ? String(raw.confidence) : 'low',
-      source_description: String(raw.source_description ?? '').slice(0, 1000),
-      source_url: sourceUrl,
-      source_urls: sourceUrl ? [sourceUrl] : [],
-      source_titles: [],
-      stance: typeof raw.stance === 'string' ? raw.stance : null,
-    });
-  }
-
-  // ── Integrity guards (shared with get-candidate-answers) ──────────────────────
-  // 1. Drop answers whose stated stance contradicts the sign of answer_value. This is the
-  //    fix for the 2026-06-20 inverted-score bug: the model emitted "supports X" prose with a
-  //    strongly-negative value, which (URL-cited + high confidence) passed isTrustedForScoring
-  //    and flipped the candidate's overall_score. A self-contradictory answer is untrustworthy.
-  // 2. Demote uncited "voting_record" labels when we hold no real votes for this candidate, and
-  //    uncited "web_research" labels — these self-asserted provenance badges have nothing behind
-  //    them. (See _shared/answer-label-guard.ts.)
-  const { kept, dropped } = dropStanceInconsistent(parsedRows);
-  if (dropped.length > 0) {
-    console.log(`[guard] ${candidate.name}: dropped ${dropped.length} stance-inconsistent answer(s)`);
-  }
-
+  // Whether we hold real votes for this candidate — needed by demoteUnverifiableVoteClaims.
+  // Queried once up front so it isn't repeated per chunk.
   const { count: voteRowCount } = await supabase
     .from('candidate_votes')
     .select('id', { count: 'exact', head: true })
     .eq('candidate_id', candidate.id);
+  const hasVotes = (voteRowCount ?? 0) > 0;
 
-  const guarded = demoteUncitedWebResearch(
-    demoteUnverifiableVoteClaims(kept, (voteRowCount ?? 0) > 0),
-  );
+  // Chunk the questions so each Gemini call's JSON output stays within maxOutputTokens, and
+  // UPSERT EACH CHUNK as it comes back. The background task (EdgeRuntime.waitUntil) has a bounded
+  // wall-clock budget; a multi-chunk candidate can exceed it and be terminated before a single
+  // final write. Writing per chunk means completed chunks always persist, and a re-run resumes
+  // via getMissingQuestions (idempotent), so repeated invocations converge.
+  const questionChunks = chunk(missing, QUESTION_CHUNK_SIZE);
+  let answered = 0;
+  let totalDropped = 0;
+  let failedChunks = 0;
 
-  // Strip the transient `stance` field — it is not a candidate_answers column.
-  const rows = guarded.map(({ stance: _stance, ...row }) => row);
+  for (let i = 0; i < questionChunks.length; i++) {
+    const part = await callGemini(candidate, questionChunks[i]);
+    if (!part) {
+      failedChunks++;
+      console.error(`[chunk] ${candidate.name}: chunk ${i + 1}/${questionChunks.length} parse failed`);
+      continue;
+    }
 
-  if (rows.length === 0) return { answered: 0, missing: missing.length, error: 'no valid rows parsed' };
+    // Build candidate-answer objects, carrying `stance` (not a DB column) so the integrity
+    // guards can run before we strip it for the insert.
+    const parsedRows = [];
+    for (const raw of part) {
+      const qid = String(raw.question_id ?? '');
+      if (!missingIds.has(qid)) continue;
+      if (typeof raw.answer_value !== 'number' && typeof raw.answer_value !== 'string') continue;
 
-  // ignoreDuplicates: true — never overwrite higher-quality existing answers.
-  // (getMissingQuestions pre-filters so conflicts only happen on race conditions.)
-  const { error: upsertErr } = await supabase
-    .from('candidate_answers')
-    .upsert(rows, { onConflict: 'candidate_id,question_id', ignoreDuplicates: true });
+      const evidenceType = validEvidenceType(raw.evidence_type);
+      const sourceUrl = typeof raw.source_url === 'string' && raw.source_url.startsWith('http')
+        ? raw.source_url : null;
 
-  if (upsertErr) throw new Error(upsertErr.message);
+      parsedRows.push({
+        candidate_id: candidate.id,
+        question_id: qid,
+        answer_value: snapToValid(typeof raw.answer_value === 'string'
+          ? Number(raw.answer_value) : raw.answer_value),
+        evidence_type: evidenceType,
+        source_type: evidenceToSourceType(evidenceType),
+        confidence: ['high', 'medium', 'low'].includes(String(raw.confidence))
+          ? String(raw.confidence) : 'low',
+        source_description: String(raw.source_description ?? '').slice(0, 1000),
+        source_url: sourceUrl,
+        source_urls: sourceUrl ? [sourceUrl] : [],
+        source_titles: [],
+        stance: typeof raw.stance === 'string' ? raw.stance : null,
+      });
+    }
+
+    // ── Integrity guards (shared with get-candidate-answers) ──────────────────────
+    // 1. Drop answers whose stated stance contradicts the sign of answer_value (the 2026-06-20
+    //    inverted-score bug: "supports X" prose with a strongly-negative, URL-cited value that
+    //    passed isTrustedForScoring and flipped overall_score). Self-contradictory => untrusted.
+    // 2. Demote uncited "voting_record" labels when we hold no real votes, and uncited
+    //    "web_research" labels — provenance badges with nothing behind them.
+    const { kept, dropped } = dropStanceInconsistent(parsedRows);
+    totalDropped += dropped.length;
+
+    const guarded = demoteUncitedWebResearch(demoteUnverifiableVoteClaims(kept, hasVotes));
+    // Strip the transient `stance` field — it is not a candidate_answers column.
+    const rows = guarded.map(({ stance: _stance, ...row }) => row);
+    if (rows.length === 0) continue;
+
+    // ignoreDuplicates: true — never overwrite higher-quality existing answers.
+    const { error: upsertErr } = await supabase
+      .from('candidate_answers')
+      .upsert(rows, { onConflict: 'candidate_id,question_id', ignoreDuplicates: true });
+    if (upsertErr) throw new Error(upsertErr.message);
+    answered += rows.length;
+  }
+
+  if (totalDropped > 0) {
+    console.log(`[guard] ${candidate.name}: dropped ${totalDropped} stance-inconsistent answer(s)`);
+  }
+  if (answered === 0) {
+    return { answered: 0, missing: missing.length, error: 'parse failed', ...(failedChunks ? { failedChunks } : {}) };
+  }
 
   // Re-derive the persisted overall_score from TRUSTED answers (matches get-candidate-answers
   // and the live alignment match in src/lib/scoring.ts), so a candidate's headline score reflects
   // the guard-filtered data rather than a stale value.
   await updateCandidateScore(supabase, candidate.id, candidate.name);
 
-  console.log(`[done] ${candidate.name}: wrote ${rows.length}/${missing.length}`);
-  return { answered: rows.length, missing: missing.length };
+  console.log(`[done] ${candidate.name}: wrote ${answered}/${missing.length}${failedChunks ? ` (${failedChunks} chunk(s) failed)` : ''}`);
+  return { answered, missing: missing.length, ...(failedChunks ? { failedChunks } : {}) };
 }
 
 // Re-derive candidates.overall_score from TRUSTED answers only (vote-derived or carrying a real
@@ -378,11 +409,13 @@ serve(async (req) => {
     });
 
   try {
-    // Auth: service-role key or admin profile
+    // Auth: trusted server (service-role bearer or vault x-cron-secret, via the shared
+    // cron-auth helper) OR an admin user profile. The cron/service path lets this remediation
+    // run be triggered server-side (pg_net / cron) the same way the other ingestion functions are.
     const token = (req.headers.get('Authorization') ?? '').replace('Bearer ', '');
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
-    if (token !== SUPABASE_SERVICE_KEY) {
+    if (!(await isCronAuthorized(req))) {
       const { data: { user }, error: authErr } =
         await createClient(SUPABASE_URL, SUPABASE_ANON_KEY).auth.getUser(token);
       if (authErr || !user) return json({ error: 'Unauthorized' }, 401);
@@ -396,7 +429,14 @@ serve(async (req) => {
     const limit = Number(body.limit ?? DEFAULT_BATCH_SIZE);
     const state = typeof body.state === 'string' ? body.state.toUpperCase() : null;
     const dryRun = body.dryRun === true;
-    const selfChain = body.selfChain !== false;
+    // candidateIds: targeted remediation — regenerate exactly these candidates and nothing else
+    // (the score-inversion runbook's "scope to reviewed ids" step). When set, the office/state/
+    // offset batch filter and self-chaining are bypassed so spend is bounded to the listed ids.
+    const candidateIds = Array.isArray(body.candidateIds)
+      ? (body.candidateIds as unknown[]).filter((x): x is string => typeof x === 'string' && x.length > 0)
+      : null;
+    const targeted = candidateIds !== null && candidateIds.length > 0;
+    const selfChain = !targeted && body.selfChain !== false;
 
     if (!GOOGLE_AI_KEY && !dryRun) return json({ error: 'GOOGLE_AI_API_KEY not configured' }, 500);
 
@@ -412,27 +452,37 @@ serve(async (req) => {
     //   U.S. House*, U.S. Senate*, President*, plain Representative/Senator
     let query = supabase
       .from('candidates')
-      .select('id, name, party, office, state')
-      .not('office', 'ilike', '%U.S. House%')
-      .not('office', 'ilike', '%U.S. Senate%')
-      .not('office', 'ilike', '%President%')
-      .not('office', 'ilike', 'Representative')
-      .not('office', 'ilike', 'Senator')
-      .order('state,name')
-      .range(offset, offset + limit - 1);
-    if (state) query = query.eq('state', state);
+      .select('id, name, party, office, state');
+    if (targeted) {
+      // Exact-id remediation: take the operator's reviewed list as-is, no batch windowing.
+      query = query.in('id', candidateIds!);
+    } else {
+      query = query
+        .not('office', 'ilike', '%U.S. House%')
+        .not('office', 'ilike', '%U.S. Senate%')
+        .not('office', 'ilike', '%President%')
+        .not('office', 'ilike', 'Representative')
+        .not('office', 'ilike', 'Senator')
+        .order('state,name')
+        .range(offset, offset + limit - 1);
+      if (state) query = query.eq('state', state);
+    }
 
     const { data: raw, error: qErr } = await query;
     if (qErr) return json({ error: qErr.message }, 500);
 
-    const candidates: Candidate[] = (raw ?? []).filter((c: Candidate) => !hidden.has(c.state));
+    // A targeted run honours the operator's explicit id list even for hidden states;
+    // the batch sweep still skips hidden states.
+    const candidates: Candidate[] = targeted
+      ? (raw ?? [])
+      : (raw ?? []).filter((c: Candidate) => !hidden.has(c.state));
 
     if (candidates.length === 0) return json({ done: true, offset });
 
     // Fire background work; return immediately so the HTTP response doesn't time out
     EdgeRuntime.waitUntil(runBatch({ offset, limit, state, dryRun, selfChain, supabase, candidates }));
 
-    return json({ started: true, offset, limit, batchSize: candidates.length, dryRun });
+    return json({ started: true, offset, limit, batchSize: candidates.length, dryRun, targeted });
 
   } catch (e) {
     console.error('[generate-legislator-answers]', e);
