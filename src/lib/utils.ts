@@ -39,11 +39,37 @@ const CREDENTIAL_SUFFIXES: Record<string, string> = {
   'esq': 'Esq.',
 };
 
+// Splits a list of name tokens into the real name words and any post-nominal
+// credentials, dropping honorifics entirely. Works regardless of where the
+// honorific/credential sits in the list — leading, middle, or trailing — so
+// stranded titles like "Beth Ellen Ph.D. Adubato" are cleaned up.
+function partitionNameTokens(tokens: string[]): {
+  nameTokens: string[];
+  credTokens: string[];
+} {
+  const nameTokens: string[] = [];
+  const credTokens: string[] = [];
+  for (const w of tokens) {
+    if (!w) continue;
+    const lower = w.toLowerCase();
+    if (HONORIFIC_TITLES.has(lower)) continue;
+    const cred = CREDENTIAL_SUFFIXES[lower];
+    if (cred) {
+      credTokens.push(cred);
+    } else {
+      nameTokens.push(w);
+    }
+  }
+  return { nameTokens, credTokens };
+}
+
 /**
  * Normalises a candidate name to "First [Middle] Last" title-case format.
  * Handles FEC-style "LAST, FIRST MIDDLE MR." all-caps strings (stripping
  * honorific prefixes) and passes through names already in proper mixed case.
- * Post-nominal credentials (Ph.D., M.D., Esq.) are moved after the last name.
+ * Honorifics (Mr., Dr., …) are removed and post-nominal credentials (Ph.D.,
+ * M.D., Esq.) are moved after the last name — wherever they appear in the
+ * string, including stranded in the middle of an already-rearranged name.
  */
 export function formatCandidateName(name: string | null | undefined): string {
   if (!name) return name ?? '';
@@ -55,27 +81,16 @@ export function formatCandidateName(name: string | null | undefined): string {
     const last = name.slice(0, comma).trim();
     // Strip any extra leading commas (e.g. "BRINK,, BRIDGET" → first="BRIDGET")
     const rawFirst = name.slice(comma + 1).replace(/^[,\s]+/, '').trim();
-    const firstTokens: string[] = [];
-    const credTokens: string[] = [];
-    for (const w of rawFirst.split(/\s+/)) {
-      const lower = w.toLowerCase();
-      if (HONORIFIC_TITLES.has(lower)) continue;
-      const cred = CREDENTIAL_SUFFIXES[lower];
-      if (cred) {
-        credTokens.push(cred);
-      } else {
-        firstTokens.push(w);
-      }
-    }
-    const first = firstTokens.join(' ').trim();
+    const { nameTokens, credTokens } = partitionNameTokens(rawFirst.split(/\s+/));
+    const first = nameTokens.join(' ').trim();
     credential = credTokens.join(', ');
     result = first && last ? `${first} ${last}` : first || last;
   } else {
-    // No comma: strip a leading honorific if present (e.g. "Mr. John Smith" → "John Smith")
-    const tokens = result.trim().split(/\s+/);
-    if (tokens.length > 1 && HONORIFIC_TITLES.has(tokens[0].toLowerCase())) {
-      result = tokens.slice(1).join(' ');
-    }
+    // No comma: drop honorifics anywhere (e.g. "Mr. John Smith", "Anthony
+    // Bailey Mr. Aguilar") and pull credentials out to the end.
+    const { nameTokens, credTokens } = partitionNameTokens(result.trim().split(/\s+/));
+    credential = credTokens.join(', ');
+    result = nameTokens.join(' ');
   }
   const base = isAllCaps ? toNameTitleCase(result) : result;
   return credential ? `${base}, ${credential}` : base;
