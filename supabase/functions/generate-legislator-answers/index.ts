@@ -24,7 +24,7 @@ const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 
 const GEMINI_MODEL = 'gemini-3.5-flash';
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
-const DEFAULT_BATCH_SIZE = 10;
+const DEFAULT_BATCH_SIZE = 5;
 const DELAY_MS = 2000;
 
 // Match the valid answer values used everywhere else in the app.
@@ -132,7 +132,7 @@ Rules:
   const body = {
     contents: [{ role: 'user', parts: [{ text: prompt }] }],
     tools: [{ googleSearch: {} }],
-    generationConfig: { temperature: 0.2, maxOutputTokens: 8192 },
+    generationConfig: { temperature: 0.2, maxOutputTokens: 16384 },
   };
 
   const res = await fetch(
