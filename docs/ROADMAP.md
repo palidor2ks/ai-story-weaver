@@ -64,6 +64,15 @@ Candidates, **the alignment quiz** (the core job), donor & party profiles, race 
 share pages — built on top of data that's already verified (don't ship features over unverified
 data).
 
+- ☐ **Individual issue/topic pages (`/issues/:slug`)** — the SEO unlock: one crawlable page per
+  policy topic (e.g. `/issues/healthcare`, `/issues/immigration`) showing a plain-English summary,
+  where parties stand (score bars), active polls for that topic, candidate positions, and a topic-
+  specific FAQ section with JSON-LD. Mirrors the iSideWith model for capturing "[issue] political
+  positions" search intent. The `/issues` directory index and all required data hooks already exist
+  (`TOPIC_DESCRIPTIONS`, `useAllCandidateTopicScores`, `usePartyMatchScores`, polls filtered by
+  `topic_id`); build work is 1 new page component + route + sitemap extension + per-topic FAQ copy.
+  *(added 2026-06-20)*
+
 ### 4. ⏳ Social / AI content — *parked for v1 (see Out of scope)*
 X/TikTok posting, Remotion social cards, AI-generated analysis. Deferred until the core
 (accurate alignment matching) is solid.
@@ -93,6 +102,7 @@ X/TikTok posting, Remotion social cards, AI-generated analysis. Deferred until t
   *(parked 2026-06-09)*
 
 ## Changelog
+- **2026-06-20** — added individual issue/topic pages (`/issues/:slug`) to Priority #3 as an SEO-driven user-facing feature; all required data hooks already exist, build work is one new page + route + sitemap.
 - **2026-06-15 (cron health audit → two new action items)** — reviewed all 23 cron jobs over
   the last 14 days (2,826+ runs, 1 failure). Found: (1) `refresh-donor-consolidated-daily`
   hit a disk-full error on 2026-06-13 (DB is at 15 GB, `contributions` alone 8.4 GB and
