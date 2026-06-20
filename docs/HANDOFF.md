@@ -27,6 +27,46 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-20 — Score-inversion remediation RUN: Barlas fixed, Chesser flipped positive (post-merge of #501)
+
+**What happened & why**
+PR #501 merged, so the regen tooling is on `main` and auto-deployed (`generate-legislator-answers`
+fn v20→v21). Ran the remediation runbook against prod for the two legislators left from the pilot.
+Process per candidate: `DELETE` their `candidate_answers` (so `getMissingQuestions` sees them as
+missing), then fire the function via `pg_net` with `{candidateIds:[…]}` using the **new-format
+publishable key** for apikey+Authorization and `x-cron-secret` for in-function auth. Auth worked
+cleanly this time (HTTP 200 `started:true,targeted:true` — no 401). The background task only manages
+~1–5 chunks (50 q each) per invocation under load before its wall-clock budget cuts it off, so each
+candidate took several re-fires; per-chunk upsert means progress persists and re-runs resume.
+
+**State** (verified by direct query)
+- **Al Barlas: −5.00 → +3.58**, 344/344 answers, `answers_source='ai_generated'`. ✅ complete.
+- **Allen Chesser: −4.33 → +0.10**, **300/344** answers, `ai_generated`. Positive (inversion gone),
+  **not degraded**, but 44 short: the project hit a heavy-load window (persistent
+  `fetch-fec-donors`/`fec-candidate-drain` **504 storms** + legacy-anon-key **401 storm**) and three
+  successive top-up re-fires wrote zero — background task starved before any Gemini chunk landed.
+- Alan Branson still +1.62 (344) from the pilot. All three trusted-pool averages are now positive.
+- Backup table `candidate_answers_inversion_backup_20260620` (1,032 rows) **kept** — Chesser isn't
+  complete, so it's still his safety net. Do NOT drop it yet.
+- Docs updated: `docs/score-inversion-fix.md` pilot-results table + the benign post-fix
+  sign-divergence note; this HANDOFF entry. No app code changed this session (operational run).
+- Fired `refresh-candidates-cache` so the app surfaces the corrected scores (result pending verify).
+
+**Next**
+Re-fire `generate-legislator-answers` for Chesser's id
+(`openstates_ocd-person_fc3772c1-d98a-4325-a6c8-96b9da492ed6`) when the 504/401 storm clears, until
+he reaches 344; confirm his `overall_score` holds positive, then drop the backup table. If re-fires
+keep writing zero even on a healthy instance, check whether the last ~44 questions are being fully
+guard-dropped (would need the function's console logs, not just gateway logs).
+
+**Deferred**
+- Bulk remediation of the rest of the inversion set (runbook step-2 query) — still only the 3
+  reference candidates done.
+- The `fetch-fec-donors`/`fec-candidate-drain` 504 storm and legacy-anon-key 401 storm are
+  pre-existing infra issues, not addressed here.
+
+---
+
 ## 2026-06-20 — Consolidated the 5 candidate-name formatters into one (OPEN-WORK #16 ✅)
 
 **What happened & why**
