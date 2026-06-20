@@ -27,6 +27,49 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-20 — Per-answer source audit: evidence-grounded inversion auditor (OFF by default)
+
+**What happened & why**
+The aggregate score-sanity sweeper (#506/#507) is per-candidate and assumes party-opposite ==
+wrong, which can sweep a legislator who legitimately diverges from party norms. The owner wanted a
+more precise design that works per-ANSWER, verifies each suspicious answer against its OWN cited
+source (not party), and NEVER bulk-deletes a candidate's whole answer set. Built that as a
+detect → AI-verify → targeted-fix loop:
+- **PREFILTER** `answer_audit_detect()` (cheap SQL) enqueues into `answer_source_audit` the
+  individual CITED answers whose L/R direction is opposite the candidate's party — using the EXACT
+  office + hidden_states scope from `score_sanity_detect`. Party-opposite is a suspicion, not a
+  verdict.
+- **AI CHECK** edge fn `audit-answer-sources` asks Gemini whether each answer's cited source tells
+  the same story as the stored value (+ a reachability probe), writing verdict ∈
+  {consistent, contradicts, unverifiable}.
+- **FIX** `answer_audit_fix()` drains ONLY `contradicts` rows: backs up + deletes ONLY those exact
+  `(candidate_id, question_id)` rows, then fires `generate-legislator-answers` for the candidate.
+  Non-contradicting answers are untouched.
+
+**State** (verified / not)
+- New: migration `supabase/migrations/20260620230000_answer_source_audit.sql` (tables + 2 SECURITY
+  DEFINER functions, admin-only RLS with the `::app_role` cast, kill-switch OFF), companion cron
+  `..._230001_answer_source_audit_cron.sql` (split per guardrail #2), edge fn
+  `supabase/functions/audit-answer-sources/index.ts`, pure helpers + tests in
+  `supabase/functions/_shared/answer-source-audit.{ts,test.ts}`. Doc section added to
+  `docs/score-inversion-fix.md`.
+- **OFF by default** via `admin_stats_cache 'answer_audit_enabled' = {"enabled": false}`; every
+  stage no-ops until enabled. **Migrations NOT applied; no kill-switch enabled.**
+- Verified: `bun test` (helper unit tests pass), lint, build — see PR. NOT verified end-to-end: the
+  migration is unapplied and the auditor has never run against prod data; the Gemini verdict quality
+  is unproven on real rows.
+
+**Next**
+Review the migration pair (esp. the targeted-delete fixer + admin RLS) and the edge function, apply
+deliberately, then flip `answer_audit_enabled` on and watch
+`select verdict, count(*) from answer_source_audit group by verdict`.
+
+**Deferred**
+- Surfacing the audit queue in the admin UI (currently SQL-only).
+- Reconciling/retiring the aggregate sweeper once the per-answer auditor proves out.
+
+---
+
 ## 2026-06-20 — Score-sanity sweeper: automate the inversion cleanup (cron + queue, OFF by default)
 
 **What happened & why**

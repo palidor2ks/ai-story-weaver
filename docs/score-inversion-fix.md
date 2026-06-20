@@ -213,6 +213,56 @@ thresholds, batch size, cap, and cooldown are simple constants at the top of the
 > **Not auto-applied.** Per the repo's migration + cron guardrails this migration is shipped for
 > review and applied deliberately; it is not run from a dev session.
 
+## Per-answer source audit (more precise, evidence-grounded)
+
+The aggregate sweeper above works per-CANDIDATE and assumes an inverted trusted-pool average is
+wrong. That is a blunt instrument: a Republican who genuinely opposes a Republican-coded bill, or
+whose voting record legitimately diverges from party norms, can be swept. The owner asked for a
+MORE PRECISE design that (a) works per-ANSWER, (b) does **not** assume party-opposite == wrong, and
+(c) **never** bulk-deletes a candidate's whole answer set. This is that auditor — a
+**detect → AI-verify → targeted-fix** loop (`20260620230000_answer_source_audit.sql` = tables +
+functions; `20260620230001_answer_source_audit_cron.sql` = the pg_cron schedules, split out so the
+apply tooling gates it under `--include-crons` per guardrail #2):
+
+- **PREFILTER — `answer_audit_detect()`** (cron `answer-audit-detect`, `:05,:35`): cheap SQL that
+  enqueues, into `answer_source_audit`, the individual **cited** answers whose L/R direction is
+  *opposite* the candidate's party. Cited = real `source_url` / non-empty `source_urls` element /
+  `evidence_type|source_type = 'voting_record'`. Party-opposite = `(Republican AND value ≤ −3)` or
+  `(Democrat AND value ≥ 3)`. Population scope is the **exact** office + `hidden_states` filter from
+  `score_sanity_detect` (visible-state state/local legislators; federal/President excluded). Bounded
+  to 300/run, idempotent (`ON CONFLICT DO NOTHING`). **Party-opposite is only a suspicion, never a
+  verdict.**
+- **AI CHECK — `audit-answer-sources` edge function** (cron `answer-audit-aicheck`, `:15,:45`, via
+  `pg_net`): takes a bounded batch (≤20) of `pending` rows, joins `questions.text` + the stored
+  `source_description`/`source_url`, and for each asks Gemini (`GOOGLE_AI_API_KEY`, same as
+  generate-legislator-answers) whether the **cited source tells the same story** as the stored
+  `answer_value`, plus a timeout-guarded HEAD/GET reachability probe. Verdict ∈
+  `{consistent, contradicts, unverifiable}`; unreachable AND opposing → `contradicts`, unreachable
+  only → `unverifiable`. The party-opposite predicate and the verdict parser are pure, unit-tested
+  helpers in `supabase/functions/_shared/answer-source-audit.ts`.
+- **FIX — `answer_audit_fix()`** (cron `answer-audit-fix`, `:50`): drains **only** `verdict =
+  'contradicts'` rows, ≤3 candidates/run, 30-min per-candidate cooldown, 3-attempt cap. For each it
+  backs up **only** those specific `(candidate_id, question_id)` rows to
+  `candidate_answers_audit_backup`, DELETEs **only** those rows, then fires
+  `generate-legislator-answers` for the candidate so the guard chain regenerates exactly those
+  questions. **All non-contradicting answers are left in place — it never wipes a candidate's whole
+  set.**
+
+**It is OFF by default** (`admin_stats_cache 'answer_audit_enabled' = {"enabled": false}`). Applying
+the migration starts nothing — every stage no-ops until the switch is flipped on:
+
+```sql
+-- enable
+update admin_stats_cache set stat_value = '{"enabled": true}' where stat_key = 'answer_audit_enabled';
+-- monitor
+select verdict, count(*) from answer_source_audit group by verdict order by verdict;
+-- pause instantly
+update admin_stats_cache set stat_value = '{"enabled": false}' where stat_key = 'answer_audit_enabled';
+```
+
+> **Not auto-applied.** Per the repo's migration + cron guardrails this migration pair is shipped for
+> review and applied deliberately; it is not run from a dev session.
+
 ### Safety net
 
 A full backup of the three candidates' **original** answers was held in
