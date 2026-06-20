@@ -46,26 +46,35 @@ Issues encountered and fixed:
 5. **parse failed on gemini-3.5-flash (maxOutputTokens too low)** — 221 answers × verbose
    JSON ≈ 20k+ tokens, exceeding 8192 and 16384 limits. Fixed in v10: `maxOutputTokens: 65536`.
    Verified: "Abe Jones" got 253/253 answers at 02:47 UTC.
-6. **Batch size reduced to 1** — gemini-3.5-flash takes ~4.8 min/candidate (vs 70s for 2.5
-   Flash), so only 1 candidate safely fits in the 400s wall clock.
+6. **Batch size reduced to 1** — gemini-3.5-flash takes ~3-4 min/candidate, safely under the
+   400s wall clock.
 
-Current run: triggered at ~02:48 UTC with `offset=0, limit=1, selfChain=true` — will self-chain
-through all 293 legislators autonomously (~23 hours total at 4.8 min/candidate).
+Current run: triggered at ~02:48 UTC with `offset=0, limit=1, selfChain=true` — self-chaining
+through all ~293 legislators autonomously.
 
-**State** (verified)
+**State** (verified as of 03:03 UTC 2026-06-20)
 - v10 of `generate-legislator-answers` deployed (prod project `ornnzinjrcyigazecctf`):
-  `gemini-3.5-flash`, `DEFAULT_BATCH_SIZE=5` (but triggered with `limit=1`), `maxOutputTokens=65536`.
-- Cancel flag cleared: `{"cancel": false}`.
-- "Abe Jones" answered 253/253 (confirmed in DB: 36,259 total openstates answers, +253 from session).
-- Full run triggered at ~02:48 UTC; self-chaining in progress.
+  `gemini-3.5-flash`, `maxOutputTokens=65536`, triggered with `limit=1`.
+- Run is healthy: 4 candidates fully answered (344/344 questions each), no errors in edge-function logs.
+- Progress snapshot: offset=4, last="Allen Chesser" (244/244), completedAt=2026-06-20T03:03:19Z.
+- 311 total sub-federal candidates; ~18 in hidden states → ~293 to process; ~289 remaining.
+- Rate: ~3-4 min/candidate → estimated completion ~17:00-21:00 UTC June 20.
+- Cancel flag: `{"cancel": false}`.
 - `la-trigger` relay function still deployed (MCP only, not in git) — delete from dashboard after run.
 - PR #494 branch `claude/stoic-einstein-mpvb5m` has 3 commits from this session.
 
 **Next**
-Monitor the run: check `admin_stats_cache.legislator_answers_progress` every ~30 min to confirm
-the self-chain is advancing (offset should increment, answers count should grow). To cancel:
-`UPDATE admin_stats_cache SET stat_value = '{"cancel":true}' WHERE stat_key = 'legislator_answers_cancel'`.
-To resume from where it stopped: check the `offset` in progress snapshot, then re-trigger via la-trigger.
+Monitor: check `admin_stats_cache.legislator_answers_progress` to confirm offset advances.
+To cancel: `UPDATE admin_stats_cache SET stat_value = '{"cancel":true}' WHERE stat_key = 'legislator_answers_cancel'`.
+To resume from where it stopped: check the `offset` in progress snapshot, then re-trigger via la-trigger relay:
+`SELECT net.http_post(url:='https://ornnzinjrcyigazecctf.supabase.co/functions/v1/la-trigger', body:='{"offset":<N>,"limit":1,"selfChain":true}'::jsonb);`
+
+Monitor SQL:
+```sql
+SELECT stat_value->>'offset', stat_value->>'completedAt',
+       stat_value->'results'->0->>'name', stat_value->'results'->0->>'answered'
+FROM admin_stats_cache WHERE stat_key = 'legislator_answers_progress';
+```
 
 **Deferred**
 - Merge PR #494 once CI is green and the run completes.
