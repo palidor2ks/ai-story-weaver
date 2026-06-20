@@ -1,9 +1,13 @@
 // generate-legislator-answers
-// Fills in missing candidate_answers for state legislators using the Google Gemini API
-// with Search Grounding. One Gemini call per legislator covers ALL missing questions,
-// vs one call per question in the existing get-candidate-answers path.
+// Fills in missing candidate_answers for sub-federal candidates — state legislators,
+// local officials (mayors, county commissioners, city council members, etc.) — using
+// the Google Gemini API with Search Grounding. One Gemini call per candidate covers
+// ALL missing questions vs one call per question in the existing get-candidate-answers path.
 //
-// Cost: ~$0.038/legislator (grounding $0.035 + tokens ~$0.003) = ~$11 for all 286 visible-state legislators.
+// Candidates already at their answer ceiling are skipped immediately (getMissingQuestions
+// returns []), so including local officials that are already complete costs nothing.
+//
+// Cost: ~$0.038/candidate (grounding $0.035 + tokens ~$0.003) = ~$11 for all 286 visible-state legislators.
 //
 // Requires: GOOGLE_AI_API_KEY secret in Supabase Vault.
 // Trigger:  POST /functions/v1/generate-legislator-answers  (admin auth)
@@ -313,11 +317,20 @@ serve(async (req) => {
     const { data: hiddenRows } = await supabase.from('hidden_states').select('state_code');
     const hidden = new Set((hiddenRows ?? []).map((r: { state_code: string }) => r.state_code));
 
-    // Fetch this batch of state legislators
+    // Fetch this batch of sub-federal candidates: state legislators, local officials,
+    // mayors, county commissioners, etc. — everyone who is NOT a federal or
+    // presidential candidate. getMissingQuestions returns [] for already-complete
+    // candidates so they are skipped without any API spend.
+    // Exclusion list matches what get-candidate-answers treats as "federal":
+    //   U.S. House*, U.S. Senate*, President*, plain Representative/Senator
     let query = supabase
       .from('candidates')
       .select('id, name, party, office, state')
-      .or('office.ilike.%State Representative%,office.ilike.%State Senator%,office.ilike.%State Legislator%')
+      .not('office', 'ilike', '%U.S. House%')
+      .not('office', 'ilike', '%U.S. Senate%')
+      .not('office', 'ilike', '%President%')
+      .not('office', 'ilike', 'Representative')
+      .not('office', 'ilike', 'Senator')
       .order('state,name')
       .range(offset, offset + limit - 1);
     if (state) query = query.eq('state', state);
