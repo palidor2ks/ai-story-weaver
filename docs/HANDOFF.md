@@ -27,6 +27,44 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-20 — Candidate names: honorifics/credentials stranded mid-name
+
+**What happened & why**
+Owner reported the candidate list still showed mangled names — "Beth Ellen Ph.D. Adubato",
+"Anthony Bailey Mr. Aguilar" — despite earlier name-format work. Two findings:
+
+1. **PR #495 (merged)** fixed `formatCandidateName` (`src/lib/utils.ts`) to drop honorifics and
+   relocate credentials *wherever* they appear, incl. stranded mid-name in comma-free strings. A
+   real improvement, but it was the wrong function for this screen.
+2. **The actual list bug** was in `toDisplayName` (`src/lib/officeLabel.ts`), used by
+   `CandidateCard`. The list is fed by `useUnifiedCandidates`, which passes `name: src.name`
+   **raw** (no `formatCandidateName`), so `toDisplayName` is the only formatter — and it reordered
+   "LAST, FIRST MIDDLE MR." → "First Middle Mr. Last" without stripping the title. Fixed
+   `toDisplayName` to drop honorifics and move credentials (Ph.D./M.D./Esq.) after the last name,
+   while preserving Jr/Sr/II/III/IV in place (matches `formatCandidateName` convention).
+
+Deliberately did **not** mutate the DB: it stores correct FEC canonical form
+("ADUBATO, BETH ELLEN PH.D.") which the FEC ETL relies on for matching. The bug was purely
+display; denormalizing source-of-truth names would risk ETL joins and violates the guardrails.
+
+**State** (verified)
+- `bun test src/lib/officeLabel.test.ts src/lib/utils.test.ts` → 22 pass (new officeLabel.test.ts
+  covers the two regression cases + Jr/Sr/Mc/O'/mixed-case passthrough).
+- Lint 0 errors, `tsc --noEmit` clean, `vite build` succeeds locally (sitemap prebuild fails only
+  on sandbox network 403 — unrelated).
+- Not yet verified in the live app UI.
+
+**Next**
+Visually confirm the candidate list on polipulseapp.com renders "Beth Ellen Adubato, Ph.D." and
+"Anthony Bailey Aguilar" once this deploys.
+
+**Deferred**
+- Consider routing `useUnifiedCandidates` names through `formatCandidateName` too, so there's one
+  name formatter instead of two parallel ones (`toDisplayName` vs `formatCandidateName`).
+- `contributions` table growth (partition/prune); ward-precise local officials; rotate seed-account passwords.
+
+---
+
 ## 2026-06-19 — Disk expansion to 27 GB (OPEN-WORK #6 closed)
 
 **What happened & why**
