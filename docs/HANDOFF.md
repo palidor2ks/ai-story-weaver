@@ -27,6 +27,50 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-20 — Score-inversion remediation pilot: regen tooling + Branson fixed (`claude/score-verification-rgbv2l`)
+
+**What happened & why**
+Piloted the score-inversion remediation runbook on the three reference legislators. Confirmed the
+inversion signature in the data (all three: positive full-answer average, negative *trusted*
+average → headline score is the wrong sign). Found the documented "delete all + regenerate" step
+doesn't work as written against today's **344-question** quiz, and made `generate-legislator-answers`
+actually able to do the job (3 new commits):
+1. `candidateIds` body param — regenerate an exact reviewed id list, no state-sweep spend.
+2. Chunked Gemini calls (50/call, `maxOutputTokens` 16384) **with per-chunk upsert** — the single
+   all-344 call truncated → 0 answers; and a single final write was lost when the
+   `EdgeRuntime.waitUntil` background task exceeded its wall-clock budget. Per-chunk writes persist
+   and re-runs resume via `getMissingQuestions`.
+3. Shared `isCronAuthorized` (vault `x-cron-secret` / service-role) so it can be triggered
+   server-side via `pg_net`.
+Deployed (prod fn v17) and ran it. **Alan Branson regenerated cleanly: overall_score −7.09 → +1.62
+(L7.09 → R1.62)**, 90 trusted answers, `answers_source='ai_generated'`. Full write-up + the exact
+trigger SQL is in `docs/score-inversion-fix.md` ("Pilot results & operational findings").
+
+**State** (verified)
+- Branson **fixed** in prod (+1.62, verified by direct query). Barlas (−5.00) and Chesser (−4.33)
+  **restored to their original inverted state** — NOT yet regenerated (live invocation blocked by a
+  transient infra window: the legacy anon key 401s at the gateway, and the function's
+  `get_cron_secret()` RPC intermittently 401s under load). No candidate left degraded; a full
+  backup of all three lives in table `candidate_answers_inversion_backup_20260620` (1,032 rows).
+- 14/14 `answer-label-guard` unit tests pass. Edge fn is Deno (not in Vite/eslint), so no local
+  lint/build impact. Prod deploys were done directly via MCP (`deploy_edge_function`), so the
+  branch commits and the running fn match.
+- 4 commits on the branch (candidateIds, cron-auth, chunking, per-chunk upsert) + docs.
+
+**Next**
+Re-run `generate-legislator-answers` for Barlas + Chesser ids (trigger SQL in the runbook) when the
+project is healthy; confirm both `overall_score` go positive, then drop the backup table.
+
+**Deferred**
+- Bulk remediation of the rest of the inversion set (step-2 query) — only the 3 reference
+  candidates were in scope here.
+- `isCronAuthorized`'s dependency on the `get_cron_secret()` RPC is a reliability weak point under
+  load (affects all crons, pre-existing) — not addressed.
+- `updateCandidateScore` still duplicated across `get-candidate-answers` and
+  `generate-legislator-answers` (could hoist to `_shared`).
+
+---
+
 ## 2026-06-20 — Legislator score inversion: ETL root-cause fix (`claude/score-verification-rgbv2l`)
 
 **What happened & why**
