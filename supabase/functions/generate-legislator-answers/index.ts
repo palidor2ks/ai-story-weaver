@@ -14,6 +14,11 @@
 // Body:     { offset?, limit?, state?, dryRun?, selfChain? }
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  demoteUnverifiableVoteClaims,
+  demoteUncitedWebResearch,
+  dropStanceInconsistent,
+} from "../_shared/answer-label-guard.ts";
 
 declare const EdgeRuntime: { waitUntil: (promise: Promise<unknown>) => void };
 
@@ -78,6 +83,7 @@ interface RawAnswer {
   confidence?: unknown;
   source_description?: unknown;
   source_url?: unknown;
+  stance?: unknown;
 }
 
 // ── Core logic ────────────────────────────────────────────────────────────────
@@ -112,6 +118,7 @@ Return ONLY a JSON object with this exact structure — include an entry for EVE
   "answers": [
     {
       "question_id": "<the bracketed id from above>",
+      "stance": "<support | oppose | neutral>",
       "answer_value": <integer>,
       "evidence_type": "<voting_record | public_statement | campaign_position | inferred>",
       "confidence": "<high | medium | low>",
@@ -122,6 +129,11 @@ Return ONLY a JSON object with this exact structure — include an entry for EVE
 }
 
 Rules:
+- "stance" is whether the candidate SUPPORTS or OPPOSES what the question asks.
+- The SIGN of answer_value MUST match stance: stance "support" => POSITIVE answer_value (+3..+10);
+  stance "oppose" => NEGATIVE answer_value (-3..-10); stance "neutral" => 0. Double-check the sign
+  before answering: if your evidence shows the candidate sponsored, voted for, or favors the
+  position, answer_value is POSITIVE — never negative.
 - Use "voting_record" only for a direct vote or bill sponsorship
 - Use "public_statement" for a quote, interview, or press release
 - Use "campaign_position" for campaign website or official platform
@@ -172,7 +184,9 @@ async function processCandidate(
   if (!rawAnswers) return { answered: 0, missing: missing.length, error: 'parse failed' };
 
   const missingIds = new Set(missing.map(q => q.id));
-  const rows = [];
+  // Build candidate-answer objects, carrying `stance` (not a DB column) so the integrity guards
+  // can run before we strip it for the insert.
+  const parsedRows = [];
 
   for (const raw of rawAnswers) {
     const qid = String(raw.question_id ?? '');
@@ -183,7 +197,7 @@ async function processCandidate(
     const sourceUrl = typeof raw.source_url === 'string' && raw.source_url.startsWith('http')
       ? raw.source_url : null;
 
-    rows.push({
+    parsedRows.push({
       candidate_id: candidate.id,
       question_id: qid,
       answer_value: snapToValid(typeof raw.answer_value === 'string'
@@ -196,8 +210,34 @@ async function processCandidate(
       source_url: sourceUrl,
       source_urls: sourceUrl ? [sourceUrl] : [],
       source_titles: [],
+      stance: typeof raw.stance === 'string' ? raw.stance : null,
     });
   }
+
+  // ── Integrity guards (shared with get-candidate-answers) ──────────────────────
+  // 1. Drop answers whose stated stance contradicts the sign of answer_value. This is the
+  //    fix for the 2026-06-20 inverted-score bug: the model emitted "supports X" prose with a
+  //    strongly-negative value, which (URL-cited + high confidence) passed isTrustedForScoring
+  //    and flipped the candidate's overall_score. A self-contradictory answer is untrustworthy.
+  // 2. Demote uncited "voting_record" labels when we hold no real votes for this candidate, and
+  //    uncited "web_research" labels — these self-asserted provenance badges have nothing behind
+  //    them. (See _shared/answer-label-guard.ts.)
+  const { kept, dropped } = dropStanceInconsistent(parsedRows);
+  if (dropped.length > 0) {
+    console.log(`[guard] ${candidate.name}: dropped ${dropped.length} stance-inconsistent answer(s)`);
+  }
+
+  const { count: voteRowCount } = await supabase
+    .from('candidate_votes')
+    .select('id', { count: 'exact', head: true })
+    .eq('candidate_id', candidate.id);
+
+  const guarded = demoteUncitedWebResearch(
+    demoteUnverifiableVoteClaims(kept, (voteRowCount ?? 0) > 0),
+  );
+
+  // Strip the transient `stance` field — it is not a candidate_answers column.
+  const rows = guarded.map(({ stance: _stance, ...row }) => row);
 
   if (rows.length === 0) return { answered: 0, missing: missing.length, error: 'no valid rows parsed' };
 
@@ -209,8 +249,55 @@ async function processCandidate(
 
   if (upsertErr) throw new Error(upsertErr.message);
 
+  // Re-derive the persisted overall_score from TRUSTED answers (matches get-candidate-answers
+  // and the live alignment match in src/lib/scoring.ts), so a candidate's headline score reflects
+  // the guard-filtered data rather than a stale value.
+  await updateCandidateScore(supabase, candidate.id, candidate.name);
+
   console.log(`[done] ${candidate.name}: wrote ${rows.length}/${missing.length}`);
   return { answered: rows.length, missing: missing.length };
+}
+
+// Re-derive candidates.overall_score from TRUSTED answers only (vote-derived or carrying a real
+// source URL), mirroring updateCandidateScore in get-candidate-answers and isTrustedForScoring in
+// src/lib/scoring.ts. Leaves the stored score untouched when there are no trusted answers yet.
+async function updateCandidateScore(
+  supabase: ReturnType<typeof createClient>,
+  candidateId: string,
+  candidateName: string,
+): Promise<void> {
+  const { data: allAnswers } = await supabase
+    .from('candidate_answers')
+    .select('answer_value, evidence_type, source_type, source_url, source_urls')
+    .eq('candidate_id', candidateId);
+
+  if (!allAnswers || allAnswers.length === 0) return;
+
+  const isTrusted = (a: Record<string, unknown>): boolean =>
+    a.evidence_type === 'voting_record' || a.source_type === 'voting_record' ||
+    (typeof a.source_url === 'string' && a.source_url.trim().length > 0) ||
+    (Array.isArray(a.source_urls) && a.source_urls.some((u) => typeof u === 'string' && u.trim().length > 0));
+
+  const trusted = (allAnswers as Array<Record<string, unknown>>).filter(isTrusted);
+  if (trusted.length === 0) {
+    console.log(`[score] No trusted answers for ${candidateName}; leaving overall_score unchanged`);
+    return;
+  }
+
+  const totalScore = trusted.reduce((sum, a) => sum + Number(a.answer_value), 0);
+  const overallScore = Math.round((totalScore / trusted.length) * 100) / 100;
+
+  const { error } = await supabase.from('candidates').update({
+    overall_score: overallScore,
+    last_answers_sync: new Date().toISOString(),
+    answers_source: 'ai_generated',
+  }).eq('id', candidateId);
+
+  if (error) {
+    console.error(`[score] failed to update overall_score for ${candidateName}:`, error.message);
+    return;
+  }
+  console.log(`[score] ${candidateName}: overall_score = ${overallScore} (${trusted.length} trusted)`);
 }
 
 // ── Background batch processor ────────────────────────────────────────────────

@@ -65,6 +65,44 @@ Visually confirm the candidate list on polipulseapp.com renders "Beth Ellen Adub
 
 ---
 
+## 2026-06-20 — Legislator score inversion: ETL root-cause fix (`claude/score-verification-rgbv2l`)
+
+**What happened & why**
+A score-verification request flagged three Republican state legislators rendering as *left*-leaning
+(Branson R NC-59 `L7.09`, Barlas R NJ-40 `L5.00`, Chesser R NC-25 `L4.33`). Investigation traced
+it to `generate-legislator-answers`: Gemini intermittently returns an `answer_value` whose sign
+contradicts its own (URL-cited, high-confidence) evidence prose, and self-asserts `voting_record`
+provenance with no real vote behind it. Those answers count as "trusted" (`isTrustedForScoring`)
+and flip the persisted `candidates.overall_score`. The function also bypassed the existing
+`demoteUnverifiableVoteClaims`/`demoteUncitedWebResearch` guards. Full write-up + remediation
+runbook in `docs/score-inversion-fix.md`.
+
+Fix (ETL-only, per the user's choice): added a unit-tested `dropStanceInconsistent` guard
+(prompt now requires a `stance` field; answers whose stance contradicts the value sign are dropped),
+wired all three guards + an `overall_score` re-derivation into `generate-legislator-answers`, and
+hardened the prompt's sign instruction.
+
+**State** (verified)
+- 14/14 tests pass in `supabase/functions/_shared/answer-label-guard.test.ts` (`bun test`).
+- Edge functions are eslint-ignored (Deno) and not in the Vite build, so frontend lint/build
+  are unaffected by these changes.
+- NOT verified: live Gemini behavior with the new prompt, and the persisted wrong scores are
+  **still wrong** — they only fix on re-generation. No data was mutated and the function was not
+  deployed (both are operator steps in the runbook, requiring API spend + review).
+
+**Next**
+After merge, run `docs/score-inversion-fix.md` runbook: deploy the function, clear the inverted
+answers for the affected ids (step-2 query), re-generate, and confirm Branson/Barlas/Chesser read
+right-leaning.
+
+**Deferred**
+- Frontend low-trusted-count suppression (would also hide thin scores like Barlas's 3-answer one)
+  was intentionally NOT done — user chose the ETL root-cause path only.
+- `updateCandidateScore` is now duplicated in `get-candidate-answers` and
+  `generate-legislator-answers`; could be hoisted to `_shared` later.
+
+---
+
 ## 2026-06-19 — Disk expansion to 27 GB (OPEN-WORK #6 closed)
 
 **What happened & why**
