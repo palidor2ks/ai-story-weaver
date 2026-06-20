@@ -27,6 +27,49 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-20 — sign-convention fix complete, v12 deployed, re-run in progress
+
+**What happened & why**
+Continued from previous session. Root cause confirmed and fully fixed:
+
+- **Sign-convention bug**: `generate-legislator-answers` v11 used "action-support" framing (+10 = supports the action) but the system encodes *ideology* (negative = liberal, positive = conservative). 302 of 344 questions are liberal-coded (YES=-10), so Democrats were being scored as far-right. Abe Jones (NC Democrat) showed R8.21 when he should be ~L7.
+- **Bulk SQL fix applied**: Targeted 2-pass negation on all state-legislator candidate_answers for liberal-coded questions where the party/direction was mismatched. All passes returned empty (clean) — no wrong-direction candidates remain.
+- **Triggers**: All 5 candidate_answers triggers were disabled during the bulk UPDATE (`prevent_politician_score_tampering_trigger`, `trg_prevent_politician_candidate_answer_tampering`, `candidate_answers_topic_scores_sync`, `trg_recalc_coverage_on_answer_update`, `update_candidate_answers_updated_at`) and **re-enabled immediately after**.
+- **v12 deployed**: `generate-legislator-answers` now fetches `question_options(value, text)` per question and shows Gemini the actual -10/+10 option labels. Prompt reframed to "pick the option whose text matches the politician's position" with negative = left-leaning, positive = right-leaning. No more action-support ambiguity.
+- **Re-run triggered** at ~04:08 UTC from offset=0, limit=1, selfChain=true. Cancel flag cleared.
+
+**State** (verified as of ~04:15 UTC 2026-06-20)
+- Abe Jones (NC Democrat): avg_all=-6.90, avg_lib_coded=-8.01 ✓ correctly left-leaning
+- Zero wrong-direction state legislators remain (verified via GROUP BY HAVING query)
+- All 5 triggers re-enabled on candidate_answers
+- v12 deployed (Supabase version 12, active)
+- Cancel flag: `{"cancel": false}`
+- Chain advancing: offset=0 processed Abe Jones (skipped, complete), self-chaining to offset=1
+- 300 of 311 sub-federal candidates still need answers (70,788 total missing)
+- PR #494 branch `claude/stoic-einstein-mpvb5m` now has 5 commits
+- `la-trigger` relay still deployed (MCP only, not in git)
+
+Monitor SQL:
+```sql
+SELECT stat_value->>'offset', stat_value->>'completedAt',
+       stat_value->'results'->0->>'name', stat_value->'results'->0->>'answered',
+       stat_value->'results'->0->>'skipped'
+FROM admin_stats_cache WHERE stat_key = 'legislator_answers_progress';
+```
+To cancel: `UPDATE admin_stats_cache SET stat_value = '{"cancel":true}' WHERE stat_key = 'legislator_answers_cancel';`
+To resume: `SELECT net.http_post(url:='https://ornnzinjrcyigazecctf.supabase.co/functions/v1/la-trigger', body:='{"offset":<N>,"limit":1,"selfChain":true}'::jsonb);`
+
+**Next**
+Spot-check a few candidates after 30-60 min: pick 1-2 NC Democrats and 1-2 NC Republicans from the progress log and verify their lib-coded avg is in the correct direction (Democrat < 0, Republican > 0).
+
+**Deferred**
+- Merge PR #494 once CI is green and the run completes (estimated 24-36 hours)
+- Delete `la-trigger` edge function from Supabase dashboard after run
+- Update OPEN-WORK #15 (phase-2 AI scoring) to reflect scoring is in-flight
+- Long-term: `contributions` table growth still needs partition/prune strategy
+
+---
+
 ## 2026-06-20 — generate-legislator-answers full run (gemini-3.5-flash, v11, in progress)
 
 **What happened & why**
