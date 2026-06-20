@@ -102,8 +102,22 @@ async function callGemini(candidate: Candidate, questions: Question[]): Promise<
 
 Using web search, find their positions based on voting record, public statements, campaign website, interviews, and news.
 
-Answer ALL ${questions.length} policy questions below on a scale from -10 (strongly oppose) to +10 (strongly support).
+Answer ALL ${questions.length} policy questions below using this scale:
+  +10 = the politician STRONGLY SUPPORTS the action described in the question (YES, they want it to happen)
+   0  = neutral / no clear position
+  -10 = the politician STRONGLY OPPOSES the action described in the question (NO, they do not want it to happen)
+
 Preferred values: -10, -7, -5, -3, 0, 3, 5, 7, 10.
+
+CRITICAL sign convention — read every question as: "Does this politician believe [described action] SHOULD happen?"
+  Positive answer_value = YES they support it happening
+  Negative answer_value = NO they oppose it happening
+This applies regardless of whether the question is about federal, state, or local government action.
+
+Examples:
+  "Should the state fund universal pre-K?" + Democrat who supports pre-K → +10
+  "Should local governments expand mental health services?" + progressive Democrat → +10
+  "Should the state cut corporate taxes?" + Democrat who opposes tax cuts → -10
 
 ${list}
 
