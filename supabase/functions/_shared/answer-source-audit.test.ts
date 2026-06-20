@@ -7,6 +7,7 @@ import {
   isPartyOpposite,
   parseVerdict,
   combineReachability,
+  isSafePublicHttpUrl,
 } from './answer-source-audit.ts';
 
 // ── isPartyOpposite ─────────────────────────────────────────────────────────────
@@ -64,9 +65,11 @@ test('is case-insensitive on the verdict keyword and trims the reason', () => {
   expect(out.reason).toBe('multi space');
 });
 
-test('classifies prose when the verdict field is unrecognized', () => {
-  expect(parseVerdict({ verdict: 'maybe', reason: 'the cited vote actually opposes it' }).verdict)
-    .toBe('contradicts');
+test('classifies from the verdict label (object) or full text (string fallback)', () => {
+  // Object form: classify from the LABEL only, never the reason prose (see destructive-safety
+  // test below). A near-miss label like "contradiction" still resolves to 'contradicts'.
+  expect(parseVerdict({ verdict: 'contradiction', reason: 'n/a' }).verdict).toBe('contradicts');
+  // Bare-string fallback (JSON parse failed entirely): scan the whole model text.
   expect(parseVerdict('The source clearly supports the stored position').verdict)
     .toBe('consistent');
 });
@@ -101,4 +104,38 @@ test('unreachable only (AI inconclusive) => unverifiable', () => {
     .toBe('unverifiable');
   expect(combineReachability({ verdict: 'unverifiable', reason: 'idk' }, false).verdict)
     .toBe('unverifiable');
+});
+
+// ── parseVerdict must not let reason prose upgrade to the destructive 'contradicts' ──
+test('reason prose containing "opposition" does NOT upgrade an unverifiable verdict', () => {
+  // Object form with an unrecognized verdict label + opposey reason: must stay non-destructive.
+  expect(parseVerdict({ verdict: 'unknown', reason: 'the source is in opposition but unclear' }).verdict)
+    .toBe('unverifiable');
+});
+test('a near-miss verdict label is still classified from the label itself', () => {
+  expect(parseVerdict({ verdict: 'contradicts.', reason: 'whatever' }).verdict).toBe('contradicts');
+  expect(parseVerdict({ verdict: 'consistent!', reason: 'whatever' }).verdict).toBe('consistent');
+});
+
+// ── isSafePublicHttpUrl (SSRF guard) ─────────────────────────────────────────────
+test('accepts ordinary public http(s) URLs', () => {
+  expect(isSafePublicHttpUrl('https://www.congress.gov/bill/123')).toBe(true);
+  expect(isSafePublicHttpUrl('http://example.com/path?q=1')).toBe(true);
+  expect(isSafePublicHttpUrl('https://8.8.8.8/')).toBe(true);
+});
+test('rejects non-http(s), empty, and unparseable URLs', () => {
+  expect(isSafePublicHttpUrl(null)).toBe(false);
+  expect(isSafePublicHttpUrl('')).toBe(false);
+  expect(isSafePublicHttpUrl('ftp://example.com')).toBe(false);
+  expect(isSafePublicHttpUrl('file:///etc/passwd')).toBe(false);
+  expect(isSafePublicHttpUrl('not a url')).toBe(false);
+});
+test('rejects loopback, link-local, and private ranges (SSRF)', () => {
+  expect(isSafePublicHttpUrl('http://localhost/x')).toBe(false);
+  expect(isSafePublicHttpUrl('http://127.0.0.1/x')).toBe(false);
+  expect(isSafePublicHttpUrl('http://169.254.169.254/latest/meta-data/')).toBe(false);
+  expect(isSafePublicHttpUrl('http://10.0.0.5/x')).toBe(false);
+  expect(isSafePublicHttpUrl('http://172.16.0.1/x')).toBe(false);
+  expect(isSafePublicHttpUrl('http://192.168.1.1/x')).toBe(false);
+  expect(isSafePublicHttpUrl('http://[::1]/x')).toBe(false);
 });

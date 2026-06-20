@@ -22,6 +22,7 @@ import { isCronAuthorized } from "../_shared/cron-auth.ts";
 import {
   parseVerdict,
   combineReachability,
+  isSafePublicHttpUrl,
   type AuditVerdict,
 } from "../_shared/answer-source-audit.ts";
 
@@ -63,7 +64,10 @@ interface JoinedAnswer extends AuditRow {
 // ── Source reachability probe (timeout-guarded) ─────────────────────────────────
 
 async function isReachable(url: string | null): Promise<boolean> {
-  if (!url || !url.startsWith('http')) return false;
+  // SSRF guard: only probe public http(s) hosts — never loopback/link-local/private ranges.
+  // (A blocked URL just reads as "unreachable"; it can only ever yield the non-destructive
+  // 'unverifiable' on its own — 'contradicts' still requires the AI's actual reading.)
+  if (!isSafePublicHttpUrl(url)) return false;
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), REACH_TIMEOUT_MS);
   try {
@@ -226,9 +230,11 @@ serve(async (req) => {
       const { data: { user }, error: authErr } =
         await createClient(SUPABASE_URL, SUPABASE_ANON_KEY).auth.getUser(token);
       if (authErr || !user) return json({ error: 'Unauthorized' }, 401);
-      const { data: profile } = await supabase
-        .from('profiles').select('role').eq('id', user.id).maybeSingle();
-      if (profile?.role !== 'admin') return json({ error: 'Forbidden' }, 403);
+      // Admin check via the repo's single source of truth: user_roles/app_role through the
+      // has_role SECURITY DEFINER RPC (the `profiles` table has no `role` column — checking it
+      // would wrongly 403 every real admin, and would be self-promotable if one were ever added).
+      const { data: isAdmin } = await supabase.rpc('has_role', { _user_id: user.id, _role: 'admin' });
+      if (!isAdmin) return json({ error: 'Forbidden' }, 403);
     }
 
     // Kill-switch (default OFF). No-op silently so a scheduled run is inert until enabled.
