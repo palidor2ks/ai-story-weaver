@@ -68,7 +68,8 @@ const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-interface Question { id: string; topic_id: string; text: string; }
+interface QuestionOption { value: number; text: string; }
+interface Question { id: string; topic_id: string; text: string; question_options: QuestionOption[]; }
 interface Candidate { id: string; name: string; party: string; office: string; state: string; }
 
 interface RawAnswer {
@@ -87,7 +88,7 @@ async function getMissingQuestions(
   candidateId: string,
 ): Promise<Question[]> {
   const [{ data: all }, { data: existing }] = await Promise.all([
-    supabase.from('questions').select('id, topic_id, text').eq('include_in_politician_quiz', true),
+    supabase.from('questions').select('id, topic_id, text, question_options(value, text)').eq('include_in_politician_quiz', true),
     supabase.from('candidate_answers').select('question_id').eq('candidate_id', candidateId),
   ]);
   const answered = new Set((existing ?? []).map((a: { question_id: string }) => a.question_id));
@@ -95,29 +96,28 @@ async function getMissingQuestions(
 }
 
 async function callGemini(candidate: Candidate, questions: Question[]): Promise<RawAnswer[] | null> {
-  const list = questions.map((q, i) => `${i + 1}. [${q.id}] ${q.text}`).join('\n');
+  const list = questions.map((q, i) => {
+    const opts = (q.question_options ?? []).sort((a, b) => a.value - b.value);
+    const libOpt  = opts.find(o => o.value <= -5);
+    const consOpt = opts.find(o => o.value >= 5);
+    const optLines = [
+      libOpt  ? `   ${libOpt.value}: ${libOpt.text}` : '   -10: (liberal / progressive position)',
+      consOpt ? `   +${consOpt.value}: ${consOpt.text}` : '   +10: (conservative position)',
+    ].join('\n');
+    return `${i + 1}. [${q.id}] ${q.text}\n${optLines}`;
+  }).join('\n\n');
 
   const prompt =
 `Research ${candidate.name}, a ${candidate.party} ${candidate.office} from ${candidate.state}.
 
 Using web search, find their positions based on voting record, public statements, campaign website, interviews, and news.
 
-Answer ALL ${questions.length} policy questions below using this scale:
-  +10 = the politician STRONGLY SUPPORTS the action described in the question (YES, they want it to happen)
-   0  = neutral / no clear position
-  -10 = the politician STRONGLY OPPOSES the action described in the question (NO, they do not want it to happen)
+For EACH policy question below, choose the answer_value whose labeled option BEST matches this politician's known or inferred position. Each question shows two labeled options:
+  Negative values (-10 to -3) = the left-leaning / progressive option
+  Positive values (+3 to +10) = the right-leaning / conservative option
+  0 = neutral / no clear position
 
 Preferred values: -10, -7, -5, -3, 0, 3, 5, 7, 10.
-
-CRITICAL sign convention — read every question as: "Does this politician believe [described action] SHOULD happen?"
-  Positive answer_value = YES they support it happening
-  Negative answer_value = NO they oppose it happening
-This applies regardless of whether the question is about federal, state, or local government action.
-
-Examples:
-  "Should the state fund universal pre-K?" + Democrat who supports pre-K → +10
-  "Should local governments expand mental health services?" + progressive Democrat → +10
-  "Should the state cut corporate taxes?" + Democrat who opposes tax cuts → -10
 
 ${list}
 
@@ -126,7 +126,7 @@ Return ONLY a JSON object with this exact structure — include an entry for EVE
   "answers": [
     {
       "question_id": "<the bracketed id from above>",
-      "answer_value": <integer>,
+      "answer_value": <integer matching the chosen option value, or 0>,
       "evidence_type": "<voting_record | public_statement | campaign_position | inferred>",
       "confidence": "<high | medium | low>",
       "source_description": "<evidence summary, or party-alignment reasoning if inferred>",
