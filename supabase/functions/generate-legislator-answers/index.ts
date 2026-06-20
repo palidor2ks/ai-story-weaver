@@ -34,6 +34,12 @@ const GEMINI_MODEL = 'gemini-2.5-flash';
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 const DEFAULT_BATCH_SIZE = 10;
 const DELAY_MS = 2000;
+// Gemini emits one JSON answer object per question. Asking for ALL of a candidate's missing
+// questions in a single call overflows maxOutputTokens once the quiz is large (the 344-question
+// quiz truncated the JSON → unparseable → the candidate wrote 0 answers). Chunk the questions so
+// each call's output stays well within the token budget; results are accumulated and written once.
+const QUESTION_CHUNK_SIZE = 50;
+const CHUNK_DELAY_MS = 1500;
 
 // Match the valid answer values used everywhere else in the app.
 const VALID_VALUES = [-10, -7, -5, -3, 0, 3, 5, 7, 10];
@@ -73,6 +79,12 @@ function evidenceToSourceType(e: string): string {
 }
 
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+function chunk<T>(arr: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -147,7 +159,7 @@ Rules:
   const body = {
     contents: [{ role: 'user', parts: [{ text: prompt }] }],
     tools: [{ googleSearch: {} }],
-    generationConfig: { temperature: 0.2, maxOutputTokens: 8192 },
+    generationConfig: { temperature: 0.2, maxOutputTokens: 16384 },
   };
 
   const res = await fetch(
@@ -175,7 +187,7 @@ async function processCandidate(
   supabase: ReturnType<typeof createClient>,
   candidate: Candidate,
   dryRun: boolean,
-): Promise<{ answered: number; missing: number; skipped?: boolean; error?: string }> {
+): Promise<{ answered: number; missing: number; skipped?: boolean; error?: string; failedChunks?: number }> {
   const missing = await getMissingQuestions(supabase, candidate.id);
   if (missing.length === 0) return { answered: 0, missing: 0, skipped: true };
 
@@ -183,8 +195,24 @@ async function processCandidate(
 
   if (dryRun) return { answered: 0, missing: missing.length };
 
-  const rawAnswers = await callGemini(candidate, missing);
-  if (!rawAnswers) return { answered: 0, missing: missing.length, error: 'parse failed' };
+  // Chunk the questions so each Gemini call's JSON output stays within maxOutputTokens.
+  // Accumulate answers across chunks; a chunk that fails to parse is skipped (the rest still
+  // land) rather than failing the whole candidate.
+  const questionChunks = chunk(missing, QUESTION_CHUNK_SIZE);
+  const rawAnswers: RawAnswer[] = [];
+  let failedChunks = 0;
+  for (let i = 0; i < questionChunks.length; i++) {
+    const part = await callGemini(candidate, questionChunks[i]);
+    if (part) rawAnswers.push(...part);
+    else {
+      failedChunks++;
+      console.error(`[chunk] ${candidate.name}: chunk ${i + 1}/${questionChunks.length} parse failed`);
+    }
+    if (i < questionChunks.length - 1) await delay(CHUNK_DELAY_MS);
+  }
+  if (rawAnswers.length === 0) {
+    return { answered: 0, missing: missing.length, error: 'parse failed' };
+  }
 
   const missingIds = new Set(missing.map(q => q.id));
   // Build candidate-answer objects, carrying `stance` (not a DB column) so the integrity guards
@@ -257,8 +285,8 @@ async function processCandidate(
   // the guard-filtered data rather than a stale value.
   await updateCandidateScore(supabase, candidate.id, candidate.name);
 
-  console.log(`[done] ${candidate.name}: wrote ${rows.length}/${missing.length}`);
-  return { answered: rows.length, missing: missing.length };
+  console.log(`[done] ${candidate.name}: wrote ${rows.length}/${missing.length}${failedChunks ? ` (${failedChunks} chunk(s) failed)` : ''}`);
+  return { answered: rows.length, missing: missing.length, ...(failedChunks ? { failedChunks } : {}) };
 }
 
 // Re-derive candidates.overall_score from TRUSTED answers only (vote-derived or carrying a real
