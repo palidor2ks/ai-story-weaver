@@ -27,6 +27,54 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-20 — generate-legislator-answers full run (gemini-3.5-flash, in progress)
+
+**What happened & why**
+Goal: fill in the ~221 missing policy answers for each of the 293 NJ+NC state legislators
+using `generate-legislator-answers`. The June 19 run (gemini-2.5-flash) wrote ~123/344
+answers per candidate; this session finishes the rest.
+
+Issues encountered and fixed:
+1. **API key invalid** — GOOGLE_AI_API_KEY had expired; owner updated in Supabase Vault.
+2. **parse failed on gemini-2.5-flash** — 2.5 Flash emits `thought: true` thinking parts
+   before the JSON output; `parts[0].text` was the thinking text. Fixed in v7: skip parts
+   where `thought: true`.
+3. **Model switch to gemini-3.5-flash** — user confirmed the model exists (released 2026-05-19;
+   $1.50/$9.00 per MTok). Updated `GEMINI_MODEL` constant and deployed v8.
+4. **Timeout at batch=10** — v8/v9 background jobs timed out before writing progress (10
+   candidates × ~70s ≈ 420s > Supabase's 400s waitUntil wall clock). Reduced to 5, then 1.
+5. **parse failed on gemini-3.5-flash (maxOutputTokens too low)** — 221 answers × verbose
+   JSON ≈ 20k+ tokens, exceeding 8192 and 16384 limits. Fixed in v10: `maxOutputTokens: 65536`.
+   Verified: "Abe Jones" got 253/253 answers at 02:47 UTC.
+6. **Batch size reduced to 1** — gemini-3.5-flash takes ~4.8 min/candidate (vs 70s for 2.5
+   Flash), so only 1 candidate safely fits in the 400s wall clock.
+
+Current run: triggered at ~02:48 UTC with `offset=0, limit=1, selfChain=true` — will self-chain
+through all 293 legislators autonomously (~23 hours total at 4.8 min/candidate).
+
+**State** (verified)
+- v10 of `generate-legislator-answers` deployed (prod project `ornnzinjrcyigazecctf`):
+  `gemini-3.5-flash`, `DEFAULT_BATCH_SIZE=5` (but triggered with `limit=1`), `maxOutputTokens=65536`.
+- Cancel flag cleared: `{"cancel": false}`.
+- "Abe Jones" answered 253/253 (confirmed in DB: 36,259 total openstates answers, +253 from session).
+- Full run triggered at ~02:48 UTC; self-chaining in progress.
+- `la-trigger` relay function still deployed (MCP only, not in git) — delete from dashboard after run.
+- PR #494 branch `claude/stoic-einstein-mpvb5m` has 3 commits from this session.
+
+**Next**
+Monitor the run: check `admin_stats_cache.legislator_answers_progress` every ~30 min to confirm
+the self-chain is advancing (offset should increment, answers count should grow). To cancel:
+`UPDATE admin_stats_cache SET stat_value = '{"cancel":true}' WHERE stat_key = 'legislator_answers_cancel'`.
+To resume from where it stopped: check the `offset` in progress snapshot, then re-trigger via la-trigger.
+
+**Deferred**
+- Merge PR #494 once CI is green and the run completes.
+- Delete `la-trigger` edge function from Supabase dashboard after the full run.
+- Update OPEN-WORK #15 (phase-2 AI scoring) to reflect that scoring is now in-flight.
+- Long-term: `contributions` table growth still needs partition/prune strategy.
+
+---
+
 ## 2026-06-19 — Disk expansion to 27 GB (OPEN-WORK #6 closed)
 
 **What happened & why**
