@@ -117,15 +117,20 @@ voting record should have a congress.gov / state-legislature link.
 ### 12. ☐ Break down oversized files — `AnswerCoveragePanel.tsx` (~3.3k), `CandidateProfile.tsx` (~1.5k),
 and the large/fragile edge fns `fetch-fec-donors`, `get-candidate-answers`.
 ### 13. ☐ Consolidate data access to "one front door" — route new Supabase access through a single layer.
-### 16. ☐ Consolidate the candidate-name formatters into ONE shared module.
+### 16. ✅ Consolidate the candidate-name formatters into ONE shared module — done 2026-06-20
 **What:** Candidate names were being formatted by **five** divergent implementations —
 `formatCandidateName` (`src/lib/utils.ts`), `toDisplayName` (`src/lib/officeLabel.ts`), `formatName`
 in `scripts/generate-candidates-json.ts`, the CDN-path map in `useCandidates`, and an inlined copy in
 the `refresh-candidates-cache` edge function. Divergence caused the same display bug to recur 5×.
 **History:** 2026-06-20 saga (PRs #495/#497/#498/#499/#500). Each fix only patched one formatter.
-**State:** All five now agree, but the logic is duplicated (incl. a hand-synced Deno copy in the edge
-fn). Extract one canonical pure formatter both the frontend and edge functions import, then delete the
-copies. Watch the runtime split (browser vs Deno) when choosing where it lives.
+**Done:** Canonical formatter now lives in `src/lib/candidateName.ts` (pure, no deps); `utils.ts` and
+`officeLabel.ts` (`toDisplayName`) re-export it; the script + `useCandidates` import it. The Deno edge
+runtime can't import frontend files, so it has a byte-identical copy at
+`supabase/functions/_shared/candidateName.ts`, and `src/lib/candidateName.test.ts` runs **both** through
+one fixture table (drift guard — CI fails if they diverge). Superset adds Roman-numeral (II/III/IV) and
+Mac casing that the old `formatCandidateName` lacked.
+**Note:** `tidyName` in `_shared/finance-caption.ts` is a deliberately separate **org-aware** formatter
+(uppercases PAC/LLC acronyms, skips org reorders) for finance captions — not folded in.
 
 ---
 

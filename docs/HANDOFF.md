@@ -27,6 +27,40 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-20 — Consolidated the 5 candidate-name formatters into one (OPEN-WORK #16 ✅)
+
+**What happened & why**
+Follow-up to the name saga: collapse the five divergent formatters so the bug can't fragment again.
+Created `src/lib/candidateName.ts` as the single canonical, dependency-free formatter and pointed
+everything at it:
+- `src/lib/utils.ts` → `export { formatCandidateName } from './candidateName'`.
+- `src/lib/officeLabel.ts` → `export { formatCandidateName as toDisplayName } from './candidateName'`
+  (deleted its bespoke `capWord`/`titleCase`/`SUFFIX_MAP`/`partitionTitles`).
+- `scripts/generate-candidates-json.ts` + `useCandidates` import the canonical (script no longer pulls
+  `clsx`).
+- Edge functions are Deno and can't import frontend files, so `refresh-candidates-cache` now imports a
+  **byte-identical** copy at `supabase/functions/_shared/candidateName.ts` (deleted its inlined copy).
+
+The canonical is a **superset**: it adds Roman-numeral (II/III/IV → upper-case) and Mac casing that the
+old `formatCandidateName` lacked but `toDisplayName` had — so neither call site regresses. Lovable was
+republished by the owner, so the live frontend now runs the merged code.
+
+**State** (verified)
+- `bun run test` (src + `_shared`) = **120 pass**, incl. new `src/lib/candidateName.test.ts` whose
+  drift-guard imports BOTH the frontend and edge copies and asserts identical output across a fixture
+  table (CI fails if they diverge). `tsc --noEmit` clean; lint 0 errors; `vite build` succeeds.
+- NOT done: `tidyName` in `_shared/finance-caption.ts` is a deliberately separate org-aware formatter
+  (PAC/LLC acronyms) — left as-is.
+
+**Next**
+Merge the consolidation PR; nothing else required (no data/edge re-bake needed — behaviour is unchanged
+for the data already live).
+
+**Deferred**
+- Optionally fold `finance-caption.tidyName` in later if its org/acronym rules are reconciled.
+
+---
+
 ## 2026-06-20 — Score-inversion remediation pilot: regen tooling + Branson fixed (`claude/score-verification-rgbv2l`)
 
 **What happened & why**
