@@ -13,6 +13,53 @@
 (template — copy below this block)
 ```
 
+## 2026-06-21 — TX state campaign finance: FULL pipeline live (PR #516, branch claude/crons-job-update-sv9hlg)
+
+**What happened & why**
+Continued the TX (Texas Ethics Commission) build from the recon/schema checkpoint (entry below)
+through all five playbook pieces. TX is the bulk-ZIP model (one ~1 GB ZIP, Range-read by random
+access), unlike NJ/FL's per-entity scrape. End to end now: ingest → cron → matching RPC → UI.
+
+**State** (verified live on prod `ornnzinjrcyigazecctf`)
+- **1 Schema** — `tx_cf_*` tables (migration-safety-reviewer GO; applied).
+- **2 Edge fn `fetch-tx-finance`** — discover (central-directory read → seed shards) + drain
+  (Range-GET one shard, `DecompressionStream('deflate-raw')`, stream-parse CSV, upsert). VERIFIED:
+  discover lists 136 members; drain upserts 25k/pass. Fixes found by testing: ROW_CAP=25k +
+  `rows_done` resume (whole-shard pass OOMs the worker); per-batch dedupe by conflict key
+  (filers.csv repeats filer_ident); filers.csv prioritised so the matching index loads first.
+- **3 Cron + gate + observability** — `check_tx_sync_secret` RPC + `x-sync-secret` gate (401/200
+  verified); `tx-cf-drain` (*/4, maxShards=1 — 4 trips the worker mem limit) + `tx-cf-discover`
+  (weekly) active. observability-cron-reviewer NO-GO→fixed: discover run-log to `tx_cf_sync_runs`,
+  `tx` added to `state_finance_stats` (in-place patch of refresh_admin_stats_cache), `tx` in
+  check-data-accuracy.sh.
+- **4 Matching RPC `tx_legislator_finance`** — name(unaccented full tokens)+legislative-chamber
+  match, district NOT a hard filter (catches chamber-switchers, e.g. Sen. Perry filed STATEREP/83),
+  federal excluded, sums only `contribs_%` (avoid cont_ss/cont_t double-count). VERIFIED: 21/30
+  sampled legislators match, 0 false positives, federal→0; join yields plausible sums
+  (Royce West 625/$544k from cont_ss alone). Accents work (Menéndez→Menendez).
+- **5 UI** — `useTxLegislatorFinance`+`isTxStateLegislator` gate + `TxStateFinanceSection` mounted
+  in CandidateProfile (hides when total<=0). frontend-reviewer GO. Preflight: lint 0 err, build OK,
+  139/139 tests pass.
+- **Backfill is RUNNING** but NOT complete: only `cont_ss` (partial) + `filers.csv` loaded; the 100
+  `contribs_*` shards (millions of rows) drain at ~25k/4min over ~1-2 days, so `total_raised` is
+  near-0 for most legislators until then. TX stays in `hidden_states` (dark) — un-hiding is a
+  separate go-live decision (exposes TX candidates site-wide, like FL/NY).
+
+**Next**
+Let the backfill run; once `contribs_*` are largely drained, spot-check a few TX legislators'
+`total_raised` against the TEC site before any go-live (priority #1: verify vs source).
+
+**Deferred**
+- **Delete the neutered `tx-cf-probe` edge fn** from the Supabase dashboard (recon scaffold; MCP has no delete).
+- `isTxStateLegislator` / RPC `is_state_leg`: tighten the `/repres/` branch so a bare "Representative"
+  mis-tagged `state=TX` can't match (frontend-reviewer nit; low risk — `state==='TX'` + hide-on-0 guard it).
+- Backfill speed: the re-stream+skip resume re-inflates a shard each pass; fine for a 1-time backfill,
+  optimise later (e.g. process more per stream) if weekly full re-drains get heavy.
+- TEC CDN intermittently 403s (rate-limit) — cron self-heals on retry; consider fetch retry/backoff.
+- top_contributors for individuals group by last name only (first name not stored) — coarse; enrich later.
+
+---
+
 ## 2026-06-21 — TX state campaign finance: schema + recon spike (PR #516, branch claude/crons-job-update-sv9hlg)
 
 **What happened & why**
