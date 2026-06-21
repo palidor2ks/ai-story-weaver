@@ -68,6 +68,7 @@ create table if not exists public.tx_cf_shard_progress (
   source_file        text primary key,             -- e.g. 'contribs_07.csv'
   zip_last_modified  text,                          -- Last-Modified of the ZIP this shard came from
   status             text not null default 'pending', -- pending | done | error
+  rows_done          int not null default 0,        -- intra-shard resume cursor (data rows already upserted)
   rows_upserted      int default 0,
   last_run_at        timestamptz,
   error              text

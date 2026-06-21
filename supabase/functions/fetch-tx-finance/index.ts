@@ -20,6 +20,10 @@ const ZIP_URL = "https://prd.tecprd.ethicsefile.com/public/cf/public/TEC_CF_CSV.
 const UA = "Mozilla/5.0 (compatible; PoliPulse/1.0; +https://polipulseapp.com)";
 const TIME_BUDGET_MS = 110_000;
 const UPSERT_BATCH = 1000;
+// Cap data rows processed per shard per invocation — a single shard inflates to
+// 20-120 MB / hundreds of thousands of rows, which exceeds the worker's
+// memory/CPU in one pass. rows_done in tx_cf_shard_progress resumes mid-shard.
+const ROW_CAP = 25_000;
 
 // Member files worth ingesting. filers.csv = the "who"; contribs/cont_ss/cont_t = the "what".
 const WANT = (name: string) =>
@@ -218,10 +222,13 @@ async function discover() {
 // ---------------------------------------------------------------------------
 // drain: process one pending shard (or the one passed in)
 // ---------------------------------------------------------------------------
-async function drainShard(sourceFile: string, lastModified: string): Promise<number> {
+async function drainShard(sourceFile: string, lastModified: string): Promise<{ rows: number; finished: boolean }> {
   const { entries } = await readCentralDirectory();
   const e = entries.find((x) => x.name === sourceFile);
   if (!e) throw new Error(`shard ${sourceFile} not in ZIP`);
+  const { data: prog } = await supabase.from("tx_cf_shard_progress")
+    .select("rows_done").eq("source_file", sourceFile).maybeSingle();
+  const skip = prog?.rows_done ?? 0;
   const { start, end } = await memberDataRange(e);
   const text = inflateToText(await getRangeStream(start, end), e.method);
 
@@ -229,7 +236,9 @@ async function drainShard(sourceFile: string, lastModified: string): Promise<num
   let header: string[] | null = null;
   let map: ((row: string[]) => (k: string) => string | null) | null = null;
   let batch: Record<string, unknown>[] = [];
-  let total = 0;
+  let dataRow = 0;        // data rows seen so far (for skip)
+  let processed = 0;      // rows processed this invocation
+  let finished = true;    // false if we hit ROW_CAP before EOF
 
   const flush = async () => {
     if (!batch.length) return;
@@ -237,12 +246,13 @@ async function drainShard(sourceFile: string, lastModified: string): Promise<num
     const conflict = isFilers ? "filer_ident" : "contribution_info_id";
     const { error } = await supabase.from(table).upsert(batch, { onConflict: conflict });
     if (error) throw new Error(`upsert ${table}: ${error.message}`);
-    total += batch.length;
     batch = [];
   };
 
   for await (const row of csvRecords(text)) {
     if (!header) { header = row; map = rowMapper(header); continue; }
+    if (dataRow < skip) { dataRow++; continue; }  // already-done rows from a prior pass
+    dataRow++; processed++;
     const g = map!(row);
     if (isFilers) {
       const id = g("filerIdent");
@@ -278,14 +288,19 @@ async function drainShard(sourceFile: string, lastModified: string): Promise<num
       });
     }
     if (batch.length >= UPSERT_BATCH) await flush();
+    if (processed >= ROW_CAP) { finished = false; break; }
   }
   await flush();
-
+  const rowsDone = skip + processed;
   await supabase.from("tx_cf_shard_progress").update({
-    status: "done", rows_upserted: total, last_run_at: new Date().toISOString(), error: null,
+    status: finished ? "done" : "pending",
+    rows_done: rowsDone,
+    rows_upserted: rowsDone,
+    last_run_at: new Date().toISOString(),
+    error: null,
     zip_last_modified: lastModified,
   }).eq("source_file", sourceFile);
-  return total;
+  return { rows: processed, finished };
 }
 
 async function drain(maxShards: number) {
@@ -303,9 +318,10 @@ async function drain(maxShards: number) {
         .select("source_file").eq("status", "pending").order("source_file").limit(1).maybeSingle();
       if (!next) break;
       try {
-        const rows = await drainShard(next.source_file, lastModified);
-        contribUpserts += rows;
-        processed.push(next.source_file);
+        const r = await drainShard(next.source_file, lastModified);
+        contribUpserts += r.rows;
+        if (!processed.includes(next.source_file)) processed.push(next.source_file);
+        if (r.rows === 0) break;  // shard exhausted this pass; avoid re-pick spin
       } catch (err) {
         await supabase.from("tx_cf_shard_progress").update({
           status: "error", error: String(err), last_run_at: new Date().toISOString(),
