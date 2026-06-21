@@ -26,6 +26,11 @@ import {
   type AuditVerdict,
 } from "../_shared/answer-source-audit.ts";
 
+// Background-task escape hatch: lets the handler return before the (slow, Gemini-bound) batch
+// finishes, so a caller with a short timeout (pg_net's default is 5s) doesn't abandon/abort the
+// run before any verdict is written. See the handler for why this matters.
+declare const EdgeRuntime: { waitUntil: (promise: Promise<unknown>) => void };
+
 const GOOGLE_AI_KEY = Deno.env.get('GOOGLE_AI_API_KEY');
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -315,15 +320,12 @@ serve(async (req) => {
       });
     }
 
-    const results = await auditBatch(supabase, joined);
-
-    const tally = results.reduce((acc, r) => {
-      const v = r.verdict as string;
-      acc[v] = (acc[v] ?? 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
-
-    return json({ done: true, checked: results.length, tally });
+    // Run the batch in the background and return immediately. Each verdict is written to
+    // answer_source_audit as it completes, so a run that outlives the caller's timeout (the cron
+    // fires this via pg_net with a ~5s default) still persists every row it finished, and the next
+    // scheduled run resumes the remaining 'pending' rows. Mirrors generate-legislator-answers.
+    EdgeRuntime.waitUntil(auditBatch(supabase, joined));
+    return json({ started: true, queued: joined.length });
   } catch (e) {
     console.error('[audit-answer-sources]', e);
     return json({ error: String(e) }, 500);
