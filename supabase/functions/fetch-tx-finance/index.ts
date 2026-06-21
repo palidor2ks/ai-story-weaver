@@ -261,7 +261,11 @@ async function drainShard(sourceFile: string, lastModified: string): Promise<{ r
     if (!batch.length) return;
     const table = isFilers ? "tx_cf_filers" : "tx_cf_contributions";
     const conflict = isFilers ? "filer_ident" : "contribution_info_id";
-    const { error } = await supabase.from(table).upsert(batch, { onConflict: conflict });
+    // Dedupe within the batch by the conflict key: filers.csv repeats filer_ident
+    // across reporting periods, and Postgres upsert rejects the same conflict key
+    // twice in one statement ("cannot affect row a second time"). Keep the last seen.
+    const deduped = [...new Map(batch.map((r) => [String(r[conflict]), r])).values()];
+    const { error } = await supabase.from(table).upsert(deduped, { onConflict: conflict });
     if (error) throw new Error(`upsert ${table}: ${error.message}`);
     batch = [];
   };
@@ -331,8 +335,14 @@ async function drain(maxShards: number) {
   try {
     for (let n = 0; n < maxShards; n++) {
       if (Date.now() - startedAt > TIME_BUDGET_MS) break;
-      const { data: next } = await supabase.from("tx_cf_shard_progress")
-        .select("source_file").eq("status", "pending").order("source_file").limit(1).maybeSingle();
+      // Prioritise filers.csv (the index that legislator matching joins through)
+      // so it lands before the contribs backlog; otherwise pick the next shard.
+      let { data: next } = await supabase.from("tx_cf_shard_progress")
+        .select("source_file").eq("status", "pending").eq("source_file", "filers.csv").maybeSingle();
+      if (!next) {
+        ({ data: next } = await supabase.from("tx_cf_shard_progress")
+          .select("source_file").eq("status", "pending").order("source_file").limit(1).maybeSingle());
+      }
       if (!next) break;
       try {
         const r = await drainShard(next.source_file, lastModified);
@@ -382,7 +392,7 @@ Deno.serve(async (req) => {
       const dr = await drain(body.maxShards ?? 50);
       return Response.json({ ok: true, mode, discover: disc, drain: dr });
     }
-    const dr = await drain(body.maxShards ?? 4);
+    const dr = await drain(body.maxShards ?? 1);
     return Response.json({ ok: true, mode: "drain", ...dr });
   } catch (err) {
     return Response.json({ ok: false, error: String(err) }, { status: 500 });
