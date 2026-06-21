@@ -23,7 +23,7 @@ const UPSERT_BATCH = 1000;
 // Cap data rows processed per shard per invocation — a single shard inflates to
 // 20-120 MB / hundreds of thousands of rows, which exceeds the worker's
 // memory/CPU in one pass. rows_done in tx_cf_shard_progress resumes mid-shard.
-const ROW_CAP = 25_000;
+const ROW_CAP = 10_000;
 
 // Member files worth ingesting. filers.csv = the "who"; contribs/cont_ss/cont_t = the "what".
 const WANT = (name: string) =>
@@ -128,37 +128,51 @@ async function memberDataRange(e: ZipEntry): Promise<{ start: number; end: numbe
 // ---------------------------------------------------------------------------
 // Streaming inflate + CSV parse for one member, flushing upserts in batches.
 // ---------------------------------------------------------------------------
-async function* csvRecords(textStream: ReadableStream<string>): AsyncGenerator<string[]> {
+async function* csvRecords(textStream: ReadableStream<string>, skipDataRows = 0): AsyncGenerator<string[]> {
   let field = "";
   let row: string[] = [];
   let inQuotes = false;
   const reader = textStream.getReader();
-  let pending: string | null = null; // for CRLF handling across the quote state machine
+  let headerDone = false;
+  let dataRowsSeen = 0;
   while (true) {
     const { value, done } = await reader.read();
     if (done) break;
     const chunk = value;
     for (let i = 0; i < chunk.length; i++) {
       const c = chunk[i];
+      const skipping = headerDone && dataRowsSeen < skipDataRows;
       if (inQuotes) {
         if (c === '"') {
-          if (chunk[i + 1] === '"') { field += '"'; i++; }
+          if (chunk[i + 1] === '"') { if (!skipping) field += '"'; i++; }
           else inQuotes = false;
-        } else field += c;
+        } else { if (!skipping) field += c; }
       } else if (c === '"') {
         inQuotes = true;
       } else if (c === ",") {
-        row.push(field); field = "";
+        if (!skipping) { row.push(field); field = ""; }
       } else if (c === "\n" || c === "\r") {
         if (c === "\r" && chunk[i + 1] === "\n") i++;
-        row.push(field); field = "";
-        if (row.length > 1 || row[0] !== "") yield row;
-        row = [];
-      } else field += c;
+        if (!skipping) {
+          row.push(field); field = "";
+          if (row.length > 1 || row[0] !== "") {
+            yield row;
+            if (!headerDone) headerDone = true; else dataRowsSeen++;
+          }
+          row = []; field = "";
+        } else {
+          dataRowsSeen++;
+          field = ""; row = [];
+        }
+      } else {
+        if (!skipping) field += c;
+      }
     }
   }
-  if (field !== "" || row.length) { row.push(field); if (row.length > 1 || row[0] !== "") yield row; }
-  void pending;
+  if (!(headerDone && dataRowsSeen < skipDataRows) && (field !== "" || row.length)) {
+    row.push(field);
+    if (row.length > 1 || row[0] !== "") yield row;
+  }
 }
 
 function inflateToText(bytes: ReadableStream<Uint8Array>, method: number): ReadableStream<string> {
@@ -239,8 +253,7 @@ async function discover() {
 // ---------------------------------------------------------------------------
 // drain: process one pending shard (or the one passed in)
 // ---------------------------------------------------------------------------
-async function drainShard(sourceFile: string, lastModified: string): Promise<{ rows: number; finished: boolean }> {
-  const { entries } = await readCentralDirectory();
+async function drainShard(sourceFile: string, lastModified: string, entries: ZipEntry[]): Promise<{ rows: number; finished: boolean }> {
   const e = entries.find((x) => x.name === sourceFile);
   if (!e) throw new Error(`shard ${sourceFile} not in ZIP`);
   const { data: prog } = await supabase.from("tx_cf_shard_progress")
@@ -253,7 +266,6 @@ async function drainShard(sourceFile: string, lastModified: string): Promise<{ r
   let header: string[] | null = null;
   let map: ((row: string[]) => (k: string) => string | null) | null = null;
   let batch: Record<string, unknown>[] = [];
-  let dataRow = 0;        // data rows seen so far (for skip)
   let processed = 0;      // rows processed this invocation
   let finished = true;    // false if we hit ROW_CAP before EOF
 
@@ -270,10 +282,9 @@ async function drainShard(sourceFile: string, lastModified: string): Promise<{ r
     batch = [];
   };
 
-  for await (const row of csvRecords(text)) {
+  for await (const row of csvRecords(text, skip)) {
     if (!header) { header = row; map = rowMapper(header); continue; }
-    if (dataRow < skip) { dataRow++; continue; }  // already-done rows from a prior pass
-    dataRow++; processed++;
+    processed++;
     const g = map!(row);
     if (isFilers) {
       const id = g("filerIdent");
@@ -325,7 +336,7 @@ async function drainShard(sourceFile: string, lastModified: string): Promise<{ r
 }
 
 async function drain(maxShards: number) {
-  const { lastModified } = await headZip();
+  const { lastModified, entries } = await readCentralDirectory();
   const run = await supabase.from("tx_cf_sync_runs")
     .insert({ status: "running", mode: "drain", zip_last_modified: lastModified }).select("id").single();
   const runId = run.data?.id;
@@ -351,7 +362,7 @@ async function drain(maxShards: number) {
       }
       if (!next) break;
       try {
-        const r = await drainShard(next.source_file, lastModified);
+        const r = await drainShard(next.source_file, lastModified, entries);
         contribUpserts += r.rows;
         if (!processed.includes(next.source_file)) processed.push(next.source_file);
         if (r.rows === 0) break;  // shard exhausted this pass; avoid re-pick spin
