@@ -1448,16 +1448,40 @@ serve(async (req) => {
       );
     }
 
+    // Guard: skip reconciliation if we've already spent > 90s — avoids 504s on candidates
+    // with few pages but slow aggregation queries against the large contributions table.
+    // Rollups update on the next successful sync call.
+    const elapsedBeforeRecon = Date.now() - startTime;
+    if (elapsedBeforeRecon > 90_000) {
+      console.log(`[FEC-DONORS] Skipping reconciliation (${Math.round(elapsedBeforeRecon / 1000)}s elapsed) to avoid 504`);
+      return new Response(JSON.stringify({
+        success: true, imported: totalDonors, contributionsImported: totalContributions, totalRaised,
+        hasMore: globalHasMore, cycle, committeesProcessed: 1, committeesSynced: committeeId,
+        committeesRemaining: remainingCommittees, committees: committees.map(c => ({ id: c.id, name: c.name })),
+        skippedNonContributions, elapsedMs: elapsedBeforeRecon,
+        message: globalHasMore
+          ? `Partial sync; rollups deferred. Call again to continue.`
+          : `Sync complete; rollups deferred. Call again to update.`
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
     // Update rollups for EVERY sync batch (not just when complete)
     // This ensures the dashboard shows accurate dollar amounts during partial syncs
     // CRITICAL: Only store rollups for P/A (campaign) committees with the candidate_id
     // External committees (J/U/B/D) should NOT contribute to candidate totals
     if (!isExternalCommittee) {
-      // Query actual totals from contributions table for accuracy
-      const { data: dbTotals } = await supabase.rpc(
-        'get_contribution_totals_by_committee',
-        { p_committee_id: committeeId, p_cycle: cycle }
-      );
+      // Query actual totals from contributions table for accuracy.
+      // 12s timeout prevents this aggregation scan from consuming the remaining 150s budget;
+      // on timeout the code falls through to the in-memory session-value fallbacks below.
+      const rpcPromise = supabase
+        .rpc('get_contribution_totals_by_committee', { p_committee_id: committeeId, p_cycle: cycle })
+        .then(({ data }) => data)
+        .catch(() => null);
+      const rpcTimeout = new Promise<null>(resolve => setTimeout(() => resolve(null), 12_000));
+      const dbTotals = await Promise.race([rpcPromise, rpcTimeout]);
+      if (dbTotals === null) {
+        console.warn('[FEC-DONORS] Contribution totals RPC timed out — using in-memory session values');
+      }
       
       // Find totals for this specific committee
       const committeeDbTotals = (dbTotals || []).find((t: { committee_id: string }) => t.committee_id === committeeId);
