@@ -83,11 +83,11 @@ else
 fi
 
 # --- 4. State campaign finance (FAIL on any sync errors in the last 7 days) ---
-STATE_ERRS=$(q "select coalesce((stat_value->'nj'->>'errors7d')::int,0)+coalesce((stat_value->'fl'->>'errors7d')::int,0)+coalesce((stat_value->'ny'->>'errors7d')::int,0) from admin_stats_cache where stat_key='state_finance_stats'")
+STATE_ERRS=$(q "select coalesce((stat_value->'nj'->>'errors7d')::int,0)+coalesce((stat_value->'fl'->>'errors7d')::int,0)+coalesce((stat_value->'ny'->>'errors7d')::int,0)+coalesce((stat_value->'tx'->>'errors7d')::int,0) from admin_stats_cache where stat_key='state_finance_stats'")
 if [ "${STATE_ERRS:-0}" -gt 0 ]; then
-  err "state-finance: $STATE_ERRS sync errors across NJ/FL/NY this week"
+  err "state-finance: $STATE_ERRS sync errors across NJ/FL/NY/TX this week"
 else
-  ok "state-finance: NJ/FL/NY syncing clean (0 errors this week)"
+  ok "state-finance: NJ/FL/NY/TX syncing clean (0 errors this week)"
 fi
 
 # --- 5. Candidate answers, VISIBLE states only: URL-sourcing bands (maintainer 2026-06-10) —

@@ -195,28 +195,45 @@ const supabase = createClient(
 // discover: enumerate members, seed shard progress, reset on new dump
 // ---------------------------------------------------------------------------
 async function discover() {
-  const { entries, lastModified } = await readCentralDirectory();
-  const wanted = entries.filter((e) => WANT(e.name));
+  // Run-log row so a failed discover (TEC down, Range/EOCD error, Vault miss) is
+  // visible in tx_cf_sync_runs — not silently swallowed (pg_cron sees the http_post
+  // as "succeeded" even when the function returns 500).
+  const run = await supabase.from("tx_cf_sync_runs")
+    .insert({ status: "running", mode: "discover" }).select("id").single();
+  const runId = run.data?.id;
+  try {
+    const { entries, lastModified } = await readCentralDirectory();
+    const wanted = entries.filter((e) => WANT(e.name));
 
-  // New dump? wipe progress so every shard re-drains against the fresh file.
-  const { data: existing } = await supabase
-    .from("tx_cf_shard_progress").select("zip_last_modified").limit(1).maybeSingle();
-  if (existing && existing.zip_last_modified !== lastModified) {
-    await supabase.from("tx_cf_shard_progress").delete().neq("source_file", "");
-  }
+    // New dump? wipe progress so every shard re-drains against the fresh file.
+    const { data: existing } = await supabase
+      .from("tx_cf_shard_progress").select("zip_last_modified").limit(1).maybeSingle();
+    if (existing && existing.zip_last_modified !== lastModified) {
+      await supabase.from("tx_cf_shard_progress").delete().neq("source_file", "");
+    }
 
-  for (const e of wanted) {
-    await supabase.from("tx_cf_shard_progress").upsert({
-      source_file: e.name,
-      zip_last_modified: lastModified,
-      status: "pending",
-    }, { onConflict: "source_file", ignoreDuplicates: true });
+    for (const e of wanted) {
+      await supabase.from("tx_cf_shard_progress").upsert({
+        source_file: e.name,
+        zip_last_modified: lastModified,
+        status: "pending",
+      }, { onConflict: "source_file", ignoreDuplicates: true });
+    }
+    await supabase.from("tx_cf_sync_runs").update({
+      status: "success", finished_at: new Date().toISOString(), zip_last_modified: lastModified,
+      notes: { members_total: entries.length, shards_seeded: wanted.length },
+    }).eq("id", runId);
+    return {
+      lastModified,
+      members_total: entries.length,
+      wanted: wanted.map((e) => ({ name: e.name, compSize: e.compSize, uncompSize: e.uncompSize, method: e.method })),
+    };
+  } catch (err) {
+    await supabase.from("tx_cf_sync_runs").update({
+      status: "error", finished_at: new Date().toISOString(), error: String(err),
+    }).eq("id", runId);
+    throw err;
   }
-  return {
-    lastModified,
-    members_total: entries.length,
-    wanted: wanted.map((e) => ({ name: e.name, compSize: e.compSize, uncompSize: e.uncompSize, method: e.method })),
-  };
 }
 
 // ---------------------------------------------------------------------------
@@ -344,11 +361,17 @@ async function drain(maxShards: number) {
 }
 
 // ---------------------------------------------------------------------------
-// HTTP entry. verify_jwt gates callers; cron passes the publishable key.
-// (TODO piece 3: add check_tx_sync_secret RPC gate like NJ/FL.)
+// HTTP entry. Two gates: verify_jwt (caller passes the publishable key) AND a
+// shared secret in x-sync-secret, validated against Vault via check_tx_sync_secret
+// (service_role-only RPC) — so only cron, which reads the secret from Vault, can run it.
 // ---------------------------------------------------------------------------
 Deno.serve(async (req) => {
   try {
+    const secret = req.headers.get("x-sync-secret") ?? "";
+    const { data: secretOk } = await supabase.rpc("check_tx_sync_secret", { p_token: secret });
+    if (secretOk !== true) {
+      return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
+    }
     const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
     const mode = body.mode ?? new URL(req.url).searchParams.get("mode") ?? "drain";
     if (mode === "discover") {
