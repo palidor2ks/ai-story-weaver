@@ -13,6 +13,46 @@
 (template — copy below this block)
 ```
 
+## 2026-06-21 — TX go-live + NC recon spike (PR #517 merged; branch claude/crons-job-update-sv9hlg)
+
+**What happened & why**
+Post-merge of the TX pipeline (#516, entry below), took TX "live" and kicked off NC.
+
+*TX go-live:* discovered TX candidates were **already public** — `get_visible_candidates` filters
+`state NOT IN hidden_states` and TX was never hidden (only FL/NY are). The finance feature showed
+nothing for a fixable reason: the drain was grinding the huge `cont_ss` special-session file FIRST
+(~350K rows), which the RPC excludes (re-reported → double-count), so the `contribs_*` data the
+feature actually sums hadn't started. Fixed the drain priority to **filers → contribs_* → special-
+session last** (live + committed) and added TX to the admin Data Accuracy Scoreboard tile. Shipped as
+**PR #517 (merged)**.
+
+*NC recon spike:* NC has no bulk file (S3 = voter data + CF training PDFs only), so it's an app-scrape
+of `cf.ncsbe.gov`. Confirmed via a Deno-fetch probe: (1) a CLEAN per-report receipts CSV via GET —
+`CFOrgLkup/ExportDetailResults/?ReportID=<id>&Type=REC` → text/csv with full donor columns; (2) the
+transaction search `CFTxnLkup/TxnSearchResults/` is a form POST returning server-rendered HTML (fields
+incl. `SelectedOffice`, `SelectedCommittee`, `FirstName/LastName/OrgName`). The gap: committee→ReportID
+enumeration didn't surface from static JS mining (CFOrgLkup is a heavier SPA).
+
+**State** (verified)
+- TX go-live (#517) MERGED; preflight green (lint 0 err, build OK, 139/139 tests); CI green. Drain
+  reprioritised live on prod; backfill now grinding `contribs_*`.
+- **NC: recon only — nothing built.** Probe findings above are verified live; no schema/function/PR yet.
+- **NOT verified:** TX `total_raised` vs the TEC source (backfill still loading `contribs_*`, ~1-2 days);
+  NC committee/report enumeration endpoint (the crux of the clean-CSV path).
+
+**Next**
+Decide NC architecture: **Path B (per-report CSV)** — do one more recon pass to crack the CFOrgLkup
+committee-search + report-list endpoints; if locked down, fall back to **Path A** (POST `TxnSearchResults`
+filtered by `SelectedOffice`, parse the HTML results). Then build the 5-piece pipeline as for TX.
+
+**Deferred**
+- Spot-check TX `total_raised` vs the TEC site once `contribs_*` coverage builds (priority #1 gate before trusting public numbers).
+- **Delete neutered probes `tx-cf-probe` AND `nc-cf-probe`** from the Supabase dashboard (MCP has no delete tool).
+- `isTxStateLegislator` / RPC `is_state_leg`: tighten the `/repres/` branch vs a bare "Representative" mis-tagged `state=TX` (frontend-reviewer nit).
+- Backfill speed (re-stream+skip resume), TEC CDN 403 retry/backoff, top_contributors individual-name granularity — all noted in the entry below.
+
+---
+
 ## 2026-06-21 — TX state campaign finance: FULL pipeline live (PR #516, branch claude/crons-job-update-sv9hlg)
 
 **What happened & why**
