@@ -1,8 +1,12 @@
 -- Scheduled TEC (Texas Ethics Commission) campaign-finance ingestion.
---   tx-cf-drain    : every 4 min, process the next pending shard(s) of the bulk ZIP.
---                    fetch-tx-finance caps rows per shard per call (ROW_CAP) and
+--   tx-cf-drain    : every 4 min, process ONE shard-pass (maxShards=1) of the bulk
+--                    ZIP. fetch-tx-finance caps rows per shard per call (ROW_CAP) and
 --                    resumes via tx_cf_shard_progress.rows_done, so this steadily
 --                    grinds the ~1 GB / millions-of-rows backlog across many runs.
+--                    NOTE: maxShards stays at 1 — processing several shard-passes in
+--                    one invocation accumulates memory (each pass re-streams + inflates
+--                    a shard) and trips the worker's WORKER_RESOURCE_LIMIT. One pass per
+--                    run is the proven-safe unit; throughput comes from the cadence.
 --   tx-cf-discover : weekly, re-read the ZIP's central directory. When TEC publishes
 --                    a new dump (ZIP Last-Modified changes), discover wipes
 --                    tx_cf_shard_progress and re-seeds every shard pending → a full
@@ -31,7 +35,7 @@ select cron.schedule('tx-cf-drain', '*/4 * * * *', $cron$
       'apikey', (select decrypted_secret from vault.decrypted_secrets where name = 'nj_elec_cron_anon_key'),
       'x-sync-secret', (select decrypted_secret from vault.decrypted_secrets where name = 'tx_sync_secret')
     ),
-    body := '{"mode":"drain","maxShards":4}'::jsonb,
+    body := '{"mode":"drain","maxShards":1}'::jsonb,
     timeout_milliseconds := 120000
   );
 $cron$);
