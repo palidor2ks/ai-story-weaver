@@ -27,6 +27,60 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-21 — Enabled the per-answer auditor in prod + visibility-driven discovery (TX)
+
+**What happened & why**
+Turned the per-answer source auditor (built 2026-06-20, #508) from dormant into LIVE, and fixed the
+state-coverage gap it exposed. Three arcs:
+1. **Activated the auditor** (owner asked to enable it). Applied both migrations to prod via MCP,
+   confirmed the edge fn `audit-answer-sources` was deployed, flipped the kill-switch
+   `answer_audit_enabled` ON, and the detect→AI-verify→fix crons now run. Validated end-to-end on
+   real rows: detector seeded 300 party-opposite cited answers (NC+NJ — the only states with data),
+   the AI check produced genuine `contradicts` (e.g. Bergen −10 "oppose oversight" vs evidence
+   "strong commitment to oversight"; a fabricated citation) AND `consistent` (real mavericks left
+   alone), and the fixer regenerated confirmed inversions — Wheatley −10→+7, Murphy −10→+7/+5;
+   Turner stayed +7 (correctly NOT flipped). Earlier in the session also hand-fixed 3 worst
+   inversions (Flynn +7, Azzariti +1.3, Clifton +3.0) via targeted trusted-answer delete+regen.
+2. **Fixed 2 activation bugs** (#509, found only at runtime): (a) `answer_audit_detect()` compared
+   the `party` ENUM with ILIKE → errored on enable; fixed with `::text` cast in a NEW migration
+   `20260620240000`. (b) `audit-answer-sources` processed synchronously and blew past pg_net's 5s
+   timeout (writing nothing); switched to `EdgeRuntime.waitUntil` + per-row writes. Also addressed
+   the security review HIGH (admin fallback used non-existent `profiles.role` → now `has_role` RPC),
+   added an SSRF guard on the source-reachability probe, and stopped reason-prose from upgrading a
+   verdict to the destructive `contradicts`.
+3. **Visibility-driven discovery + TX** (#510). `discover-state-legislators` was hardcoded to NJ+NC
+   while visibility is governed by the `hidden_states` denylist — so TX (visible, not hidden) was
+   never discovered. Replaced the allowlist with the full US map filtered by `hidden_states`
+   (`targetStates`), so unhiding a state auto-enrolls it. Bumped discovery weekly→hourly (renamed
+   the cron). Triggered a run: **184 TX legislators imported** (`pending_research`).
+
+**State** (verified)
+- Auditor is **ON in prod** (`answer_audit_enabled = {"enabled": true}`); crons
+  `answer-audit-detect/aicheck/fix` active; verdicts accumulating (last seen ~600 audited, mix of
+  consistent/contradicts/unverifiable, rest pending). Migrations `20260620230000/230001/240000`
+  applied to prod. Edge fns deployed: `audit-answer-sources` v2, `discover-state-legislators` v8.
+- Discovery is **hourly** (`discover-state-legislators-hourly`, `40 * * * *`). TX: 184 legislators,
+  0 answered yet; NC 171 / NJ 122 fully answered.
+- PRs #508, #509, #510 all merged to main. `bun test` 139 pass + lint clean at last run (pre-merge);
+  esbuild parse clean on the edge fns. **NOT verified:** full drain of the audit queue (in progress,
+  cron-driven), and TX answer generation (queued via batch-populate, not started — no scores yet).
+
+**Next**
+Confirm the `batch-populate-answers` cron starts generating answers for the 184 TX legislators
+(they then get scores AND fall under the auditor automatically).
+
+**Deferred**
+- `get-candidate-answers` (the batch-populate path that will answer TX) still emits no `stance`, so
+  `dropStanceInconsistent` is a no-op there — it can re-introduce the very inversions the auditor
+  then has to catch. Adding stance+guard there is the durable fix.
+- Aggregate score sweeper (#506/#507) is still OFF and now superseded by the per-answer auditor —
+  decide whether to retire it.
+- Audit queue is SQL-only; no admin UI.
+- Hourly discovery re-sweeps every visible state each run (cheap — no AI); if many states are
+  unhidden at once, watch the background wall-clock budget (it's idempotent/resumable).
+
+---
+
 ## 2026-06-20 — Per-answer source audit: evidence-grounded inversion auditor (OFF by default)
 
 **What happened & why**
