@@ -6,7 +6,7 @@
   "scripts": {
     "predev": "bunx tsx scripts/generate-sitemap.ts || echo 'predev: sitemap regen failed (data errors above) — dev continues with last-good sitemap'",
     "dev": "vite",
-    "prebuild": "bunx tsx scripts/generate-sitemap.ts",
+    "prebuild": "bunx tsx scripts/generate-sitemap.ts || echo 'prebuild: sitemap regen failed (data errors above) — build continues with last-good sitemap'",
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
