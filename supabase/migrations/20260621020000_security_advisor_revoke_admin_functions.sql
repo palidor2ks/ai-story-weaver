@@ -43,9 +43,15 @@ REVOKE EXECUTE ON FUNCTION public.check_import_sync_secret(text) FROM anon, auth
 REVOKE EXECUTE ON FUNCTION public.check_nj_sync_secret(text) FROM anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public.check_vote_sync_secret(text) FROM anon, authenticated;
 
--- Job queue management: present in DB types but have no frontend callers.
-REVOKE EXECUTE ON FUNCTION public.cancel_job(uuid) FROM anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.retry_job(uuid) FROM anon, authenticated;
+-- Job queue management: present in production DB and types but were created outside
+-- migrations (no CREATE FUNCTION in repo), so they may not exist in the preview branch.
+-- Guard with exception handling to keep the migration idempotent across environments.
+DO $$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.cancel_job(uuid) FROM anon, authenticated;
+EXCEPTION WHEN undefined_function THEN NULL; END $$;
+DO $$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.retry_job(uuid) FROM anon, authenticated;
+EXCEPTION WHEN undefined_function THEN NULL; END $$;
 
 -- ETL / reconciliation pipeline: called by edge functions via service_role only.
 REVOKE EXECUTE ON FUNCTION public.ie_reconcile_local(text) FROM anon, authenticated;

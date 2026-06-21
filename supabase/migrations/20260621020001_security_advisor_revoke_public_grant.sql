@@ -20,12 +20,17 @@
 -- GROUP A — revoke PUBLIC, authenticated already absent (service_role only)
 REVOKE EXECUTE ON FUNCTION public.answer_audit_detect() FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION public.answer_audit_fix() FROM PUBLIC;
-REVOKE EXECUTE ON FUNCTION public.cancel_job(uuid) FROM PUBLIC;
+-- cancel_job / retry_job may not exist in preview branch (no CREATE FUNCTION in migrations)
+DO $$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.cancel_job(uuid) FROM PUBLIC;
+EXCEPTION WHEN undefined_function THEN NULL; END $$;
 REVOKE EXECUTE ON FUNCTION public.check_ie_sync_secret(text) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION public.ie_reconcile_local(text) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION public.prevent_politician_candidate_answer_tampering() FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION public.reconcile_vote_sync_status() FROM PUBLIC;
-REVOKE EXECUTE ON FUNCTION public.retry_job(uuid) FROM PUBLIC;
+DO $$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.retry_job(uuid) FROM PUBLIC;
+EXCEPTION WHEN undefined_function THEN NULL; END $$;
 REVOKE EXECUTE ON FUNCTION public.sweep_stalled_import_sessions() FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION public.tg_resolve_person_candidates() FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION public.tg_resolve_person_election_candidates() FROM PUBLIC;
