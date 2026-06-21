@@ -64,6 +64,23 @@ day (still can't manually trigger fetch-fec-donors from MCP — admin auth + FEC
 
 ## 🟠 Infrastructure / DB
 
+### 18. ☐ Follow-on: inline role checks for 17 remaining `authenticated_security_definer_function_executable` warnings
+**What:** After PR #514, 17 admin-panel functions (Group B) still carry the Supabase advisor warning
+because `authenticated` can still call them. These are correct-by-design for now (admin UI needs them),
+but the durable fix is to add `IF NOT has_role('admin') THEN RAISE EXCEPTION 'admin only'; END IF;`
+inside each function body, OR route those RPCs through a service_role edge function that checks the
+session's role before forwarding.
+**History:** PR #514 (2026-06-21) explicitly deferred this as follow-on work — the immediate risk
+(anon access) is fixed; auth-access is an advisory-level warning, not a breach.
+**State:** Not started. Low urgency — admin panel already requires login, so no real admin action is
+possible anonymously.
+
+### 19. ☐ Enable "Leaked password protection" in Supabase Auth dashboard
+**What:** Supabase Security Advisor shows a "Leaked password protection" warning. Cannot be fixed via
+SQL migration — requires toggling Authentication → Settings → Password Security in the Supabase dashboard.
+**History:** Surfaced during the PR #514 security audit session (2026-06-21).
+**State:** Not done. Owner action (dashboard toggle).
+
 ### 6. ✅ Supabase disk pressure — resolved 2026-06-19
 **What:** DB was ~15 GB; `refresh-donor-consolidated-daily` OOM'd 2026-06-13 (matview refresh needs ~1.5 GB transient headroom).
 **Done (2026-06-18):** dropped orphaned `_enrich_*` staging (~506 MB) + 9 unused indexes (~1.86 GB). **DB 15 → 13 GB.**

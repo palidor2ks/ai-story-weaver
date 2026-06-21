@@ -27,6 +27,63 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-21 — Security hardening: revoke anon/public EXECUTE on admin SECURITY DEFINER functions (PR #514)
+
+**What happened & why**
+Supabase Security Advisor was showing 123 warnings: "Public Can Execute SECURITY DEFINER Function"
+(`anon_security_definer_function_executable` + `authenticated_security_definer_function_executable`).
+Root cause: Supabase's default-privilege system auto-grants EXECUTE on every `public`-schema function
+to `anon` and `authenticated` via TWO separate mechanisms — (a) explicit per-role ACL entries
+(`anon=X/postgres`, `authenticated=X/postgres`) and (b) a PUBLIC pseudo-role entry (`=X/postgres`)
+on functions whose creating migrations didn't issue `REVOKE ALL FROM public`. Previous per-migration
+`REVOKE ALL FROM public` only removed the PUBLIC pseudo-role entry; the explicit per-role entries
+from the default-privilege system persisted. Both layers needed separate migrations.
+
+Two targeted migrations were written, reviewed (migration-safety-reviewer), and applied directly to
+production via MCP:
+
+- **`20260621020000`** — revokes explicit per-role ACL (`anon`, `authenticated`) from 34 admin
+  functions. Group A (cron/ETL/trigger/sync-secret): revoke from BOTH anon+authenticated.
+  Group B (admin-panel callers via authenticated JWT: `merge_persons`, `auto_merge_obvious_persons`,
+  `cleanup_redundant_ai_candidates`, `undo_donor_import`, etc.): revoke anon ONLY to keep the
+  admin UI working. `cancel_job`/`retry_job` wrapped in DO blocks because they exist in production
+  but have no `CREATE FUNCTION` migration (preview branch replay would 42883 without the guard).
+
+- **`20260621020001`** — revokes the PUBLIC pseudo-role entry (`FROM PUBLIC`) from the 28 of those
+  34 functions that still had it. The remaining 6 already lacked the PUBLIC grant and are omitted.
+
+Verified live via `has_function_privilege('anon', 'public.answer_audit_detect()', 'EXECUTE')` and
+spot-checks of Group B — auth still true, anon false. PR #514 merged by owner.
+
+**State** (verified)
+- Both migrations are on `main` (PR #514 merged). Applied to production (`ornnzinjrcyigazecctf`)
+  and verified live: Group A functions return `anon=false, auth=false`; Group B return
+  `anon=false, auth=true`; publicly-intended RPCs (`get_visible_candidates`, etc.) untouched.
+- **NOT verified:** a clean Build CI run after the fix commit — the second commit's build had a
+  transient HTTP 401 on the `candidates` table (the sitemap prebuild script) that is unrelated to
+  the REVOKE migrations (it's a table REST call, not an RPC). Owner merged before CI finished.
+- 17 admin-panel functions still carry `authenticated_security_definer_function_executable`
+  warnings (Group B) — these are correct by design (admin panel needs them); full fix requires
+  inline `has_role()` guards or service_role routing, which is follow-on work.
+- Auth "leaked password protection" warning: cannot be fixed via SQL migration; requires a toggle
+  in the Supabase Auth dashboard (Authentication → Settings → Password Security).
+
+**Next**
+Enable "Leaked password protection" in the Supabase Auth dashboard (Authentication → Settings →
+Password Security) to clear the remaining Auth-level security advisor warning.
+
+**Deferred**
+- Follow-on for the 17 remaining `authenticated_security_definer_function_executable` warnings:
+  add inline `has_role('admin')` checks inside each admin function body, or route those RPCs
+  through a service_role edge function instead of direct client RPC.
+- Build CI `prebuild` script exits non-zero on transient Supabase 401s; `predev` has a graceful
+  `|| echo '...'` fallback but `prebuild` does not — consider making them consistent.
+- PR #327 (competing name formatter + DB backfill) still open — previous HANDOFF said to close it.
+- Drafts #494/#302 and stale #300 — awaiting owner decision.
+- Fold `finance-caption.tidyName` into canonical formatter (org/acronym rules to reconcile).
+
+---
+
 ## 2026-06-20 — Name-formatter consolidation merged (#504) + open-PR triage
 
 **What happened & why**
