@@ -335,10 +335,16 @@ async function drain(maxShards: number) {
   try {
     for (let n = 0; n < maxShards; n++) {
       if (Date.now() - startedAt > TIME_BUDGET_MS) break;
-      // Prioritise filers.csv (the index that legislator matching joins through)
-      // so it lands before the contribs backlog; otherwise pick the next shard.
+      // Drain priority: filers.csv (the index legislator matching joins through),
+      // then the regular contribs_* shards the finance RPC actually sums, then
+      // everything else (cont_ss/cont_t special-session, excluded by the RPC, drained
+      // last). Keeps the user-facing data loading first regardless of alphabetical order.
       let { data: next } = await supabase.from("tx_cf_shard_progress")
         .select("source_file").eq("status", "pending").eq("source_file", "filers.csv").maybeSingle();
+      if (!next) {
+        ({ data: next } = await supabase.from("tx_cf_shard_progress")
+          .select("source_file").eq("status", "pending").like("source_file", "contribs_%").order("source_file").limit(1).maybeSingle());
+      }
       if (!next) {
         ({ data: next } = await supabase.from("tx_cf_shard_progress")
           .select("source_file").eq("status", "pending").order("source_file").limit(1).maybeSingle());
