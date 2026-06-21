@@ -27,6 +27,31 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-20 — Name-formatter consolidation merged (#504) + open-PR triage
+
+**What happened & why**
+Closed out the candidate-name saga. The consolidation (5 formatters → 1 canonical
+`src/lib/candidateName.ts` + a byte-identical Deno copy in `_shared`, locked by a drift-guard test)
+merged as **#504**. The user-facing bug was already fixed live earlier (CDN re-baked via
+`refresh-candidates-cache`), and Lovable was republished, so the frontend now runs the merged code.
+Then triaged the open PRs at the user's request — no code changed this turn.
+
+**State** (verified)
+- Working tree clean; `main` has #504 merged. No new build/test run this turn (nothing changed since
+  #504, which was green: 120 tests, tsc, lint, build).
+- Open-PR triage: **#327** (Codex name-format + DB backfill) should be **closed** — competing formatter
+  + denormalizes FEC-canonical names; logged as OPEN-WORK #17. #494 (legislator-answers parse fix) and
+  #302 (Substack) are drafts; #300 (Codex SEO compass page) is stale — all await owner decision.
+
+**Next**
+Close PR #327 (or tell me to) — it's the one actively-misleading "name fix" still open.
+
+**Deferred**
+- Fold `finance-caption.tidyName` into the canonical formatter later (org/acronym rules to reconcile).
+- Decide on drafts #494/#302 and stale #300.
+
+---
+
 ## 2026-06-21 — Enabled the per-answer auditor in prod + visibility-driven discovery (TX)
 
 **What happened & why**
