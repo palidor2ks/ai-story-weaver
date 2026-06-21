@@ -1,0 +1,15 @@
+# graphile-worker crontab — replaces the 4 pg_cron schedules below.
+#
+# ?jobKey=<name>           → singleton: skip if already queued/running
+# ?jobKeyMode=preserve_run_at → don't reset the scheduled time on skip
+#
+# Original pg_cron equivalents (to be removed from migrations once Railway is confirmed):
+#   cron.schedule('drain-fec-finance',      '*/10 * * * *', ...)
+#   cron.schedule('fec-candidate-drain',    '*/3 * * * *',  ...)
+#   cron.schedule('drain-research-queue',   '*/30 * * * *', ...)
+#   cron.schedule('nightly-bill-sync',      '10 3 * * *',   ...)
+
+*/10 * * * * drain_fec_finance ?jobKey=drain_fec_finance&jobKeyMode=preserve_run_at
+*/3 * * * * fec_candidate_drain ?jobKey=fec_candidate_drain&jobKeyMode=preserve_run_at
+*/30 * * * * drain_research_queue ?jobKey=drain_research_queue&jobKeyMode=preserve_run_at
+10 3 * * * nightly_bill_sync ?jobKey=nightly_bill_sync&jobKeyMode=preserve_run_at
