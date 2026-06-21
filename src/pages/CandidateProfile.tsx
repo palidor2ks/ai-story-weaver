@@ -30,6 +30,7 @@ import { FundingSourcesBreakdown } from '@/components/FundingSourcesBreakdown';
 import { NjStateFinanceSection } from '@/components/NjStateFinanceSection';
 import { FlStateFinanceSection } from '@/components/FlStateFinanceSection';
 import { NyStateFinanceSection } from '@/components/NyStateFinanceSection';
+import { TxStateFinanceSection } from '@/components/TxStateFinanceSection';
 import { normalizeOfficeName } from '@/lib/officeLabel';
 import { computeFundingBreakdown, groupFundingSources, withPercents } from '@/lib/fundingBreakdown';
 import { CandidateIESection } from '@/components/IndependentExpenditureSections';
@@ -738,6 +739,16 @@ export const CandidateProfile = () => {
         {/* NY state-legislator campaign finance (NYSBOE / data.ny.gov). Renders
             only for NY state legislators that have synced contribution data. */}
         <NyStateFinanceSection
+          name={candidate.name}
+          district={candidate.district}
+          office={candidate.office}
+          state={candidate.state}
+          level={(candidate as { level?: string }).level}
+        />
+
+        {/* TX state-legislator campaign finance (Texas Ethics Commission). Renders
+            only for TX state legislators that have matched/synced contribution data. */}
+        <TxStateFinanceSection
           name={candidate.name}
           district={candidate.district}
           office={candidate.office}

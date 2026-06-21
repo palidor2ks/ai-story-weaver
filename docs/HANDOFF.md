@@ -10,6 +10,94 @@
 ```
 ## YYYY-MM-DD — <session or branch name>
 
+(template — copy below this block)
+```
+
+## 2026-06-21 — TX state campaign finance: FULL pipeline live (PR #516, branch claude/crons-job-update-sv9hlg)
+
+**What happened & why**
+Continued the TX (Texas Ethics Commission) build from the recon/schema checkpoint (entry below)
+through all five playbook pieces. TX is the bulk-ZIP model (one ~1 GB ZIP, Range-read by random
+access), unlike NJ/FL's per-entity scrape. End to end now: ingest → cron → matching RPC → UI.
+
+**State** (verified live on prod `ornnzinjrcyigazecctf`)
+- **1 Schema** — `tx_cf_*` tables (migration-safety-reviewer GO; applied).
+- **2 Edge fn `fetch-tx-finance`** — discover (central-directory read → seed shards) + drain
+  (Range-GET one shard, `DecompressionStream('deflate-raw')`, stream-parse CSV, upsert). VERIFIED:
+  discover lists 136 members; drain upserts 25k/pass. Fixes found by testing: ROW_CAP=25k +
+  `rows_done` resume (whole-shard pass OOMs the worker); per-batch dedupe by conflict key
+  (filers.csv repeats filer_ident); filers.csv prioritised so the matching index loads first.
+- **3 Cron + gate + observability** — `check_tx_sync_secret` RPC + `x-sync-secret` gate (401/200
+  verified); `tx-cf-drain` (*/4, maxShards=1 — 4 trips the worker mem limit) + `tx-cf-discover`
+  (weekly) active. observability-cron-reviewer NO-GO→fixed: discover run-log to `tx_cf_sync_runs`,
+  `tx` added to `state_finance_stats` (in-place patch of refresh_admin_stats_cache), `tx` in
+  check-data-accuracy.sh.
+- **4 Matching RPC `tx_legislator_finance`** — name(unaccented full tokens)+legislative-chamber
+  match, district NOT a hard filter (catches chamber-switchers, e.g. Sen. Perry filed STATEREP/83),
+  federal excluded, sums only `contribs_%` (avoid cont_ss/cont_t double-count). VERIFIED: 21/30
+  sampled legislators match, 0 false positives, federal→0; join yields plausible sums
+  (Royce West 625/$544k from cont_ss alone). Accents work (Menéndez→Menendez).
+- **5 UI** — `useTxLegislatorFinance`+`isTxStateLegislator` gate + `TxStateFinanceSection` mounted
+  in CandidateProfile (hides when total<=0). frontend-reviewer GO. Preflight: lint 0 err, build OK,
+  139/139 tests pass.
+- **Backfill is RUNNING** but NOT complete: only `cont_ss` (partial) + `filers.csv` loaded; the 100
+  `contribs_*` shards (millions of rows) drain at ~25k/4min over ~1-2 days, so `total_raised` is
+  near-0 for most legislators until then. TX stays in `hidden_states` (dark) — un-hiding is a
+  separate go-live decision (exposes TX candidates site-wide, like FL/NY).
+
+**Next**
+Let the backfill run; once `contribs_*` are largely drained, spot-check a few TX legislators'
+`total_raised` against the TEC site before any go-live (priority #1: verify vs source).
+
+**Deferred**
+- **Delete the neutered `tx-cf-probe` edge fn** from the Supabase dashboard (recon scaffold; MCP has no delete).
+- `isTxStateLegislator` / RPC `is_state_leg`: tighten the `/repres/` branch so a bare "Representative"
+  mis-tagged `state=TX` can't match (frontend-reviewer nit; low risk — `state==='TX'` + hide-on-0 guard it).
+- Backfill speed: the re-stream+skip resume re-inflates a shard each pass; fine for a 1-time backfill,
+  optimise later (e.g. process more per stream) if weekly full re-drains get heavy.
+- TEC CDN intermittently 403s (rate-limit) — cron self-heals on retry; consider fetch retry/backoff.
+- top_contributors for individuals group by last name only (first name not stored) — coarse; enrich later.
+
+---
+
+## 2026-06-21 — TX state campaign finance: schema + recon spike (PR #516, branch claude/crons-job-update-sv9hlg)
+
+**What happened & why**
+Started from a "state finance" question: the admin Data Accuracy Scoreboard only shows "State finance (NJ)"
+even though NJ/FL/NY all sync — because the card scopes to visible states and only NJ is un-hidden
+(`hidden_states` holds FL/NY + 50 others). NJ is actually the *smallest* (NJ 91.6K vs FL 270K vs NY 560K
+contribution rows). Owner then asked to add **NC and TX**. Recon flipped my first guess: NC has **no** bulk
+file (S3 bucket is voter data + CF training PDFs only) → it's an NJ/FL-class app-scrape; **TX** publishes a
+single documented bulk ZIP → the cleanest source. Owner chose **TX first, then NC**.
+
+Did a real recon spike (the FL build burned ~6 wrong assumptions by skipping this). Found the widely-cited TX
+ZIP URL is a stale 404; the live file is on a CDN (`prd.tecprd.ethicsefile.com`), **~1.02 GB**, and crucially
+**supports HTTP Range**. That settles the architecture: random-access ZIP reading over Range, draining one
+`contribs_##.csv` shard per cron run — never buffering the 1 GB. Shipped the schema (4 `tx_cf_*` tables) as
+piece 1 of 5.
+
+**State** (verified)
+- `supabase/migrations/20260621030000_tx_cf_state_finance_schema.sql` committed + pushed; **validated on the
+  PR #516 Supabase preview branch (Migrations ✅, all preview deployments green)**. NOT applied to prod (guardrail #1).
+- Recon facts (URL, 1.02 GB size, Range=yes, daily Last-Modified, file manifest, contribution/filer columns)
+  verified live via a throwaway `tx-cf-probe` edge fn (Deno fetch; the `http` PG extension + sandbox both fail
+  on this origin). All captured in `docs/state-campaign-finance.md` (new TX section).
+- `tx-cf-probe` is now **neutered to a 410** — still needs hard-deleting from the Supabase dashboard (no MCP delete tool).
+- Match targets exist: 421 TX legislative candidates already in `candidates` (244 for NC).
+- NOT verified: nothing built beyond schema — no edge fn / cron / RPC / UI yet.
+
+**Next**
+Build `supabase/functions/fetch-tx-finance/index.ts` — the random-access ZIP reader (discover = read central
+directory → seed `tx_cf_shard_progress`; drain = Range-GET one shard, inflate via `DecompressionStream('deflate-raw')`,
+parse CSV, upsert by `contributionInfoId`). Deploy + iterate against the live CDN ZIP.
+
+**Deferred**
+- TX pieces 3-5: Vault-auth cron (drain frequent / discover daily), `tx_legislator_finance` RPC, `TxStateFinanceSection` UI + gate.
+- Then NC (app-scrape of `cf.ncsbe.gov/CFTxnLkup/` export; harder).
+- Delete neutered `tx-cf-probe` from the dashboard.
+- Product decision: FL/NY (and later NC/TX) stay in `hidden_states` until a deliberate go-live; un-hiding exposes those states site-wide, not just the scoreboard card.
+- Migration-safety review of `20260621030000` before it's applied to prod.
+
 **What happened & why**
 <The story, not a file list. WHY did this work happen and what was the intent?
 A future reader can diff the files; they can't recover your reasoning.>
