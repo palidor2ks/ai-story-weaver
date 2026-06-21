@@ -109,6 +109,17 @@ AI quota on the whole body before the directory entries were validated.
 voting record should have a congress.gov / state-legislature link.
 **State:** Not investigated.
 
+### 17. ☐ Close stale name-formatting PR #327 (do NOT merge)
+**What:** Codex PR "Normalize and format person display names" adds a *competing* formatter
+(`src/lib/nameFormat.ts` / `formatPersonName`), rewires the same components, AND ships a DB backfill
+migration that rewrites `candidates.name` / `static_officials.name` / `candidate_overrides.name` /
+`persons.display_name`.
+**Why close:** Superseded by the consolidated `src/lib/candidateName.ts` (#16); the migration
+denormalizes the FEC-canonical names we intentionally keep for ETL matching. From 2026-06-08, so it
+would also conflict heavily.
+**State:** Open. Recommend closing with a note pointing to `candidateName.ts`. (Drafts #494/#302 and
+stale Codex SEO PR #300 also linger — owner's call.)
+
 ---
 
 ## ⚪ Code health (deliberate, when bandwidth allows)
