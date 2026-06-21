@@ -13,6 +13,47 @@
 (template — copy below this block)
 ```
 
+## 2026-06-21 — TX drain OOM fix (PR #519 merged; branch claude/quirky-gauss-x14afq)
+
+**What happened & why**
+Preflight (`/preflight`) found TX state-finance failing the §4 accuracy gate: `state_finance_stats.tx.errors7d=2`.
+Diagnosis via `mcp__Supabase__get_logs` + `tx_cf_sync_runs` query: 38 consecutive drain invocations all stuck
+`status='running'` since ~20:49 UTC — the edge function was being OOM-killed (HTTP 546) before any `catch` block
+ran, leaving rows permanently stuck and `tx_cf_shard_progress` never advancing.
+
+Root cause: `contribs_01.csv` had a skip cursor of 350,000 rows. The `csvRecords()` async generator was doing
+`field += c` char-by-char even during the skip phase — ~700M string allocations — causing Deno GC pressure and
+an isolate kill before JS could catch it.
+
+**Three fixes in `supabase/functions/fetch-tx-finance/index.ts`:**
+1. **Fast-skip in `csvRecords()`**: when `skipDataRows > 0` and in the skip phase, no strings are built — only
+   newlines are counted. Eliminates ~700M allocations for the 350k-row resume.
+2. **Single `readCentralDirectory()` call**: `drain()` was calling `headZip()`, then `drainShard()` was calling
+   `readCentralDirectory()` (which called `headZip()` internally) = 5+ TEC CDN requests per invocation. Now `drain()`
+   calls `readCentralDirectory()` once and passes `ZipEntry[]` into `drainShard()` — 2 CDN requests total.
+3. **`ROW_CAP` reduced to 10,000** (was 25,000) to keep peak memory lower during the 100-file `contribs_*` grind.
+
+**State** (verified)
+- PR #519 MERGED; all 7/7 CI checks green; Supabase preview branch deployed edge functions cleanly.
+- **Production edge function NOT yet redeployed** — fix is on `main` but needs a manual deploy step.
+- ~38 `tx_cf_sync_runs` rows stuck in `status='running'` (cosmetic; no functional impact once drain resumes).
+- TX `total_raised` spot-check still owed (backfill still loading `contribs_*`, now unblocked).
+
+**Next**
+Deploy `fetch-tx-finance` to production (Supabase dashboard → Edge Functions → Redeploy, or trigger
+`deploy-edge-functions.yml` against `main`). Then verify the next cron run completes without HTTP 546 —
+`contribs_01.csv` skip=350k should now fast-skip cleanly and advance the cursor.
+
+**Deferred**
+- Spot-check TX `total_raised` vs TEC site once `contribs_*` backfill builds out (~1-2 days).
+- Optionally UPDATE ~38 stuck `tx_cf_sync_runs` rows from `status='running'` to `'abandoned'` (cosmetic).
+- NC build: recon done (Path B per-report CSV confirmed clean; CFOrgLkup committee-enumeration is the open gap).
+  Either crack the SPA endpoint or fall back to Path A (POST `TxnSearchResults` HTML scrape).
+- **Delete neutered probes `tx-cf-probe` AND `nc-cf-probe`** from Supabase dashboard (MCP has no delete tool).
+- `isTxStateLegislator` / RPC `is_state_leg`: tighten `/repres/` branch vs bare "Representative" mis-tagged `state=TX`.
+
+---
+
 ## 2026-06-21 — TX go-live + NC recon spike (PR #517 merged; branch claude/crons-job-update-sv9hlg)
 
 **What happened & why**
