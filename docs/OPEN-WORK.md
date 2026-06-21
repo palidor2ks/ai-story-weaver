@@ -98,6 +98,24 @@ and has at least one misattribution (Charay Smith NC cited `adamsmith.house.gov`
 
 ## 🟢 State coverage (product expansion)
 
+### 16. ✅ TX state campaign finance (Texas Ethics Commission) — done 2026-06-21
+**What:** Full per-state finance pipeline for TX, the bulk-ZIP model (random-access ZIP-over-Range read
+of TEC's ~1 GB `TEC_CF_CSV.zip`): schema, `fetch-tx-finance` edge fn (discover+drain), cron+secret gate,
+`tx_legislator_finance` matching RPC, and `TxStateFinanceSection` UI.
+**History:** PRs #516 (pipeline) + #517 (go-live: drain priority + scoreboard) merged 2026-06-21. All five
+council reviewers gated; 2 real catches fixed (invisible discover failures; maxShards OOM).
+**State:** Live on prod. `contribs_*` backfill still draining (~1-2 days to broad coverage). TX candidates
+already public (never hidden). **Owed:** spot-check `total_raised` vs the TEC site before trusting numbers.
+
+### 17. ☐ NC state campaign finance (NCSBE) — recon done, build pending
+**What:** Next state after TX. NC is an app-scrape of `cf.ncsbe.gov` (no bulk file). Recon (2026-06-21)
+confirmed a clean per-report receipts CSV (`CFOrgLkup/ExportDetailResults/?ReportID=X&Type=REC`) and an
+HTML transaction search (`CFTxnLkup/TxnSearchResults/`, POST, filter by `SelectedOffice`).
+**History:** Recon spike only; details + the two architecture paths in `docs/HANDOFF.md` (2026-06-21) and
+`docs/state-campaign-finance.md`. 244 NC legislators already in `candidates`.
+**State:** Not built. Open: crack the committee→ReportID enumeration (Path B, clean CSV) or fall back to
+Path A (HTML scrape by office), then build the 5-piece pipeline.
+
 ### 14. ☐ Expand state-legislator ingestion beyond NJ + NC
 **What:** `discover-state-legislators` (OpenStates → `candidates`) currently sweeps only NJ + NC.
 Add more visible states (NY, PA, …) by extending the `STATES` array once NJ+NC looks right in the UI.
@@ -117,6 +135,10 @@ AI quota on the whole body before the directory entries were validated.
 
 ### 8. ☐ Delete inert `enrich-batch-experiment` edge function
 **What/State:** Dead experiment fn in the Supabase dashboard. Owner action (dashboard delete).
+
+### 8b. ☐ Delete neutered recon probes `tx-cf-probe` + `nc-cf-probe`
+**What/State:** Throwaway recon edge fns (now 410 no-ops) from the TX/NC finance work. Owner action
+(dashboard delete — MCP has no delete tool).
 
 ### 9. ☐ Remove 1,129 orphaned `candidate_answers` rows
 **What/State:** Rows whose `candidate_id` isn't in `candidates`. Safe to delete. Not started.
