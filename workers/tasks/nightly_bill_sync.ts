@@ -8,7 +8,7 @@ const task: Task = async (_payload, helpers) => {
   helpers.logger.info("nightly_bill_sync: starting");
 
   // Longer timeout: this sync can take several minutes on a full run.
-  const result = await callEdge("nightly-bill-sync", {}, 300_000);
+  const result = await callEdge("nightly-bill-sync", {}, { timeoutMs: 300_000 });
 
   helpers.logger.info("nightly_bill_sync: complete", { result });
 };
