@@ -1,15 +1,41 @@
-# graphile-worker crontab — replaces the 4 pg_cron schedules below.
+# graphile-worker crontab
 #
-# ?jobKey=<name>           → singleton: skip if already queued/running
-# ?jobKeyMode=preserve_run_at → don't reset the scheduled time on skip
+# ?jobKey=<name>                → singleton: skip if already queued/running
+# ?jobKeyMode=preserve_run_at  → don't reset the scheduled time on skip
 #
-# Original pg_cron equivalents (to be removed from migrations once Railway is confirmed):
-#   cron.schedule('drain-fec-finance',      '*/10 * * * *', ...)
-#   cron.schedule('fec-candidate-drain',    '*/3 * * * *',  ...)
-#   cron.schedule('drain-research-queue',   '*/30 * * * *', ...)
-#   cron.schedule('nightly-bill-sync',      '10 3 * * *',   ...)
+# All entries replace an equivalent pg_cron schedule. See supabase/migrations/
+# 20260622000000_retire_pg_cron_railway_workers.sql and
+# 20260622010000_retire_pg_cron_state_finance.sql for the unschedule migrations.
 
+# ── FEC finance ──────────────────────────────────────────────────────────────
 */10 * * * * drain_fec_finance ?jobKey=drain_fec_finance&jobKeyMode=preserve_run_at
-*/3 * * * * fec_candidate_drain ?jobKey=fec_candidate_drain&jobKeyMode=preserve_run_at
+*/3  * * * * fec_candidate_drain ?jobKey=fec_candidate_drain&jobKeyMode=preserve_run_at
+
+# ── Research queue ───────────────────────────────────────────────────────────
 */30 * * * * drain_research_queue ?jobKey=drain_research_queue&jobKeyMode=preserve_run_at
+
+# ── Bills ────────────────────────────────────────────────────────────────────
 10 3 * * * nightly_bill_sync ?jobKey=nightly_bill_sync&jobKeyMode=preserve_run_at
+
+# ── State campaign finance ───────────────────────────────────────────────────
+# Requires NJ_SYNC_SECRET, FL_SYNC_SECRET, NY_SYNC_SECRET, TX_SYNC_SECRET env vars
+*/3 * * * * nj_elec_drain    ?jobKey=nj_elec_drain&jobKeyMode=preserve_run_at
+0   6 * * 1 nj_elec_discover ?jobKey=nj_elec_discover&jobKeyMode=preserve_run_at
+
+*/3 * * * * fl_drain         ?jobKey=fl_drain&jobKeyMode=preserve_run_at
+30  6 * * 1 fl_discover      ?jobKey=fl_discover&jobKeyMode=preserve_run_at
+
+*/3 * * * * ny_drain         ?jobKey=ny_drain&jobKeyMode=preserve_run_at
+0   7 * * 1 ny_discover      ?jobKey=ny_discover&jobKeyMode=preserve_run_at
+
+*/4 * * * * tx_cf_drain      ?jobKey=tx_cf_drain&jobKeyMode=preserve_run_at
+15 11 * * 0 tx_cf_discover   ?jobKey=tx_cf_discover&jobKeyMode=preserve_run_at
+
+# ── Congress donors ──────────────────────────────────────────────────────────
+# Requires SUPABASE_ANON_KEY env var
+*/10 * * * * congress_donor_backfill ?jobKey=congress_donor_backfill&jobKeyMode=preserve_run_at
+0    7 * * * congress_donor_refresh  ?jobKey=congress_donor_refresh&jobKeyMode=preserve_run_at
+
+# ── Legislative votes ────────────────────────────────────────────────────────
+# Requires VOTE_SYNC_SECRET env var
+*/15 * * * * sync_legislator_votes ?jobKey=sync_legislator_votes&jobKeyMode=preserve_run_at
