@@ -48,10 +48,12 @@ single-beachhead focus.
 
 **Missing (the gaps that matter):**
 
-1. **NC state legislature = 0 rows.** Need ~**170** (120 House + 50 Senate). Both the biggest gap
-   *and* the entire differentiation — nobody else scores these people.
-2. **No NC General Assembly bills/votes corpus.** Load-bearing for a credible state score; fillable
-   via **OpenStates/LegiScan** in ~2–3 edge functions on the existing pattern.
+1. ~~**NC state legislature = 0 rows.**~~ **DONE (2026-06-18).** 120 House + 49 Senate + 2
+   unclassified seeded into `candidates` via `discover-state-legislators` (OpenStates). Roster
+   hygiene owed: Senate 49/50, 2 `State Legislator` stragglers (see `nc-state-votes-pipeline.md`).
+2. **NC General Assembly bills/votes corpus — probe COMPLETE 2026-06-22 → GO.** Votes are richly
+   available via OpenStates v3 (`include=votes`); linkage is name-based (no `voter_id`) but ~99%
+   auto-resolvable. Design: **`docs/nc-state-votes-pipeline.md`**. (WI fallback not triggered.)
 3. **Inconsistent federal office labels** (`Representative` vs `U.S. House NC-11` vs `Senator` vs
    `U.S. Senate (NC)`). Cosmetic but blocks a clean public score.
 4. **NC campaign finance (`nc_*`)** — **deferred**; votes + positions + statements carry v0.
@@ -71,13 +73,17 @@ office-label inconsistency as part of "clean inputs." Gate the result through th
 **Why first:** de-risks the whole bet (legal posture, trust wall, pipeline) on data we already own,
 before spending on ingestion. *(Rubric skeleton below.)*
 
-### 2. Ingest the NC General Assembly — roster, bills, roll-call votes
-Reuse the NJ/FL/NY isolated-state-schema + discover/drain/cron pattern; source from **OpenStates or
-LegiScan**. Seed all ~170 state legislators into `candidates` (the `state`/`district` columns
-already exist), with vote-to-member linkage.
-**Deliverable:** NC state votes synced + legislators present.
+### 2. Ingest the NC General Assembly — roster, bills, roll-call votes  ·  roster ✅ · votes 🟡 (designed)
+Reuse the NJ/FL/NY isolated-state-schema + discover/drain/cron pattern; source from **OpenStates**.
+- **Roster ✅ (2026-06-18):** ~169 state legislators in `candidates` via `discover-state-legislators`.
+- **Votes 🟡:** **spike gate PASSED 2026-06-22** — clean machine-readable NC roll-calls are
+  obtainable (OpenStates v3 `include=votes`); member linkage is name-based (no `voter_id`) but
+  ~99% auto-resolvable. Full design + schema + build sequence:
+  **[`nc-state-votes-pipeline.md`](./nc-state-votes-pipeline.md)**.
+**Deliverable:** NC state votes synced + linked to members.
 **Why second:** biggest gap and the actual moat — the niche no competitor occupies.
-**Spike gate:** if clean machine-readable NC roll-calls are *not* obtainable, fall back to WI.
+**Spike gate:** ~~if clean machine-readable NC roll-calls are *not* obtainable, fall back to WI~~ →
+**cleared; staying with NC.**
 
 ### 3. Compute PoliScore across the full ~186-person NC universe + ship public score pages + trust wall
 Apply the validated rubric to federal + state; build read-only public PoliScore pages with every
