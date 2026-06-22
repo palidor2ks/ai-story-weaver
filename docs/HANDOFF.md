@@ -13,6 +13,38 @@
 (template — copy below this block)
 ```
 
+## 2026-06-22 — FEC Finding A implemented: total-receipts secondary gate
+
+**What happened & why**
+Finding B (Line 14/15 double-count) was confirmed fixed in prod (0 double-count rows, Cassidy delta
+−2.6%). That unblocked Finding A: adding a secondary total-receipts gate to `nightly-finance-reconciliation`.
+
+Changes made:
+- **Edge function v584** (`nightly-finance-reconciliation`): added `else if (totalReceiptsStatus !== null && totalReceiptsStatus !== 'ok') status = 'warning'` after the itemized gate. `ok` now means BOTH itemized donors reconcile AND total receipts ≤10% off. Null total_receipts_status (fec_total_receipts=0/missing) skips the secondary gate.
+- **Retroactive DB update**: 336 rows demoted ok→warning (93 `over` avg 153.8% · 243 `under` avg 58.9%). Executed via MCP `execute_sql` — no migration needed (just a status correction).
+- `docs/DATA-ACCURACY.md` updated: Finding A closed, new visible numbers recorded.
+
+**State** (verified)
+- Visible recon: **ok 292 / warning 81 / error 81 / partial 26** (480 total).
+- check:accuracy gate: error 81 < 100 threshold → **passing**.
+- Overall: ok 1,570 / warning 398 / error 750 / partial 165.
+- Edge function v584 deployed and active.
+
+**Next**
+Investigate visible-state `error` rows (81). The check:accuracy doc says the visible threshold should
+be ratcheted DOWN from 100 as they're fixed. What's in those 81 errors?
+- 24 visible error + total_receipts_status=ok (itemized is wrong, total receipts fine)
+- 8 visible error + total_receipts_status=over
+- 47 visible error + total_receipts_status=under (biggest bucket — likely incomplete backfill)
+- 2 visible error + null
+
+**Deferred**
+- Spot-check TX `total_raised` vs TEC source once `contribs_*` coverage builds.
+- Delete neutered probes `tx-cf-probe` and `nc-cf-probe` from Supabase dashboard.
+- NC campaign finance pipeline (recon only so far — see 2026-06-21 entry).
+
+---
+
 ## 2026-06-22 — Railway pg_cron migration COMPLETE (PRs #524, #525)
 
 **What happened & why**

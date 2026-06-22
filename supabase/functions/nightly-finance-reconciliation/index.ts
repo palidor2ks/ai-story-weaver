@@ -392,8 +392,8 @@ serve(async (req) => {
         const totalReceiptsDeltaPct = fecTotalReceipts > 0
           ? ((localTotalReceipts - fecTotalReceipts) / fecTotalReceipts) * 100
           : null;
-        // Finding A: completeness signal, kept SEPARATE from the itemized-accuracy `status`.
         // 'under' = local < FEC by >10% (missing receipts / coverage gap); 'over' = local > FEC by >10%.
+        // null = fec_total_receipts is zero/missing (no comparison possible — gate skipped).
         const totalReceiptsStatus = totalReceiptsDeltaPct === null ? null
           : Math.abs(totalReceiptsDeltaPct) <= 10 ? 'ok'
           : totalReceiptsDeltaPct < 0 ? 'under' : 'over';
@@ -402,18 +402,21 @@ serve(async (req) => {
         // Use (gross individual + organization) for Line 11A, matching FEC individual_itemized
         const fecComparableItemized = fecItemized + fecPacContributions + fecPartyContributions;
         const localComparableItemized = local11ATotal + localPacContributions + localPartyContributions;
-        
+
         // Overall delta: compare comparable itemized totals
         const deltaAmount = localComparableItemized - fecComparableItemized;
-        const deltaPct = fecComparableItemized > 0 
-          ? Math.round((deltaAmount / fecComparableItemized) * 10000) / 100 
+        const deltaPct = fecComparableItemized > 0
+          ? Math.round((deltaAmount / fecComparableItemized) * 10000) / 100
           : 0;
 
-        // Status based on overall delta
+        // Status: primary gate = comparable-itemized delta; secondary gate = total-receipts (Finding A).
+        // null total_receipts_status means fec_total_receipts is zero/missing — secondary gate skipped.
+        // 'ok' means BOTH itemized donors reconcile AND total receipts are within 10%.
         let status = 'ok';
         if (!fecDataBalanced) status = 'error';
         else if (Math.abs(deltaPct) > 10) status = 'error';
         else if (Math.abs(deltaPct) > varianceThreshold) status = 'warning';
+        else if (totalReceiptsStatus !== null && totalReceiptsStatus !== 'ok') status = 'warning';
 
         // Upsert reconciliation record with category-level data
         await supabase
