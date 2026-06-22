@@ -29,18 +29,18 @@ Files changed: `supabase/config.toml`, `workers/tasks/congress_donor_backfill.ts
 `workers/tasks/congress_donor_refresh.ts`, `workers/lib/call-edge.ts`.
 
 **State** (verified)
-- PR #525 open, CI running, Supabase preview branch deploying.
+- PR #525 **MERGED**. All CI green (Lint, Build, Test, Typecheck, Supabase Preview).
 - **NOT yet done (requires human action):**
   1. **Add `SUPABASE_ANON_KEY`** to Railway env vars (value = `sb_publishable_…` from Supabase dashboard).
-  2. **Merge PR #525** once CI passes.
-  3. **Deploy the edge function** after merge: `supabase functions deploy schedule-congress-donor-sync`
-     so the `verify_jwt=false` config.toml entry takes effect in production.
-  4. **Redeploy Railway** after edge deploy.
-  5. **Apply unschedule migrations** — `20260622000000_retire_pg_cron_railway_workers.sql` and
+  2. **Deploy the edge function** so `verify_jwt=false` takes effect in production:
+     `supabase functions deploy schedule-congress-donor-sync`
+  3. **Redeploy Railway** after edge deploy.
+  4. **Apply unschedule migrations** — `20260622000000_retire_pg_cron_railway_workers.sql` and
      `20260622010000_retire_pg_cron_state_finance.sql` — only after Railway confirmed running cleanly.
 
 **Next**
-Merge PR #525 → deploy edge function → add Railway env var → watch logs for clean runs.
+Deploy edge function (`schedule-congress-donor-sync`) → add Railway `SUPABASE_ANON_KEY` env var →
+redeploy Railway → watch logs for `congress_donor_backfill`/`congress_donor_refresh` firing clean.
 
 ---
 
