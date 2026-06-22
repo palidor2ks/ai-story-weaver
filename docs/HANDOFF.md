@@ -13,41 +13,55 @@
 (template — copy below this block)
 ```
 
-## 2026-06-22 — NC campaign finance: design doc + PR #528 merged
+## 2026-06-22 — NC campaign finance: source probe COMPLETE (+ PRs #528/#529 merged)
 
 **What happened & why**
-PR #528 (FEC recon writer unification + nightly schedule) was merged by palidor2ks
-during this session — all 7 CI checks green, Supabase preview clean.
+PRs #528 (FEC recon writer unification + nightly schedule) and #529 (NC design doc)
+both merged. Then ran the NCSBE source **probe** (the design doc's §8) end-to-end via
+the DB `http` extension on `ornnzinjrcyigazecctf` (`cf.ncsbe.gov` 403s `WebFetch`, but
+the DB proxy reaches it — same trick as FL/TX recon). Every open question is now
+resolved and folded into `docs/nc-campaign-finance-pipeline.md` (status: PROBE COMPLETE).
 
-Wrote the NC campaign finance pipeline design doc (`docs/nc-campaign-finance-pipeline.md`)
-and cross-linked it from `docs/state-campaign-finance.md`. This was the next step after
-palidor2ks chose "design doc first" for the greenfield NC pipeline (no `nc_cf_*` tables
-exist yet).
-
-The doc covers:
-- NCSBE source options (bulk CSV vs. per-filer search API — probe-gated)
-- Schema design mirroring TX (`nc_cf_filers`, `nc_cf_contributions`, `nc_cf_sync_runs`)
-- Edge function modes (discover / drain / full), matching RPC strategy
-- Probe plan (§8.1) using DB `http` extension as proxy — same technique as FL/TX recon
-- Build sequence (5 PRs: schema, secret RPC, edge fn + cron, RPC, UI)
-- Decision matrix: name format + bulk-vs-API shape must be confirmed before coding
+**Verified findings (the design is now de-risked):**
+- **No bulk CSV.** NCSBE = per-committee search API (Option B, like NJ/FL). S3 bucket
+  holds only PDFs + voter files.
+- Two ASP.NET apps on `cf.ncsbe.gov`:
+  - **discover** — `POST /CFOrgLkup/` (`UseCandName=true&Name=<surname>`) → results page
+    embeds inline `var data=[{OrgName,SBoEID,CandName,StatusDesc,OrgGroupID},…]`.
+  - **drain** — `POST /CFTxnLkup/ExportResults/` (single `Params=<JSON>` field) → returns
+    CSV directly, **stateless**. (The grid's `GetPagedResults` is session-bound — 500s
+    without a cookie — so export is the path.)
+- **Drain filter that works = `CommitteeName`** (exact base name). `OfficeType` is
+  **ignored** by the export (NSHS/NCSN/empty byte-identical); `CommitteeIDs`=SBoE-ID
+  is **rejected** (returns HTML). Office codes for reference: NSHS=N.C. House, NCSN=N.C. Senate.
+- **Name format: `CandName` = "FIRST MIDDLE LAST SUFFIX"** → TX-style token match
+  (not NJ "Last, First"). Match on name + chamber (district soft).
+- **No transaction PK** → deterministic hash. **SBoE ID** (`STA-…-C-001`) is committee key.
+- 24-col CSV; header has source typos `Transction Type` + `Date Occured` (match verbatim).
+  `Aggregated Individual Contribution` rows = NC unitemized aggregate (keep). Amendments
+  re-state a period → dedup/exclude to avoid double-count.
+- **Discover is roster-driven** → NC finance depends on beachhead **Task 2** (170 NC
+  legislators in `candidates`). Confirms strategy sequencing (finance after roster/votes).
+- Verified on real data: Pickett committee (STA-Y0293T-C-001) → 80 receipts/2024.
 
 **State** (verified)
-- `docs/nc-campaign-finance-pipeline.md` written and reviewed.
-- `docs/state-campaign-finance.md` updated with NC section (design phase, deferred post-v0).
-- PR #528 merged; all 3 finance-recon status writers now use the shared canonical rule.
-- Railway nightly sweep scheduled (`30 4 * * *`) — will run on next Railway deploy from main.
-- Post-merge recon standing: ok 294 / warning 88 / error 72 / partial 26 (from prior entry).
+- Probe ran read-mostly (HTTP GET/POST via DB proxy); **no prod schema changes made**.
+- `docs/nc-campaign-finance-pipeline.md` rewritten with verified contracts (schema, the
+  CFOrgLkup/ExportResults specifics, hash plan, amendment handling).
+- `docs/state-campaign-finance.md` NC section updated to "PROBE COMPLETE".
+- PR #528 merged → 3 recon writers unified; Railway nightly sweep `30 4 * * *` live on next deploy.
 
 **Next**
-Run the NCSBE probe (§8.1 of the design doc) to fill in the unknowns before building.
-That requires re-enabling the DB `http` extension on `ornnzinjrcyigazecctf`, hitting the
-NCSBE data-download URL, inspecting field names and name format, then dropping the extension.
-Once probe results are in, open the schema + edge function PRs.
+NC finance build is blocked on beachhead **Task 2** (NC legislator roster + votes).
+When that lands, execute the §10 build sequence (schema → secret RPC → edge fn → cron →
+RPC → UI). No NC pipeline code should be written before the roster exists (discover has
+nothing to match against otherwise).
 
 **Deferred** (still owed)
 - TX `total_raised` spot-check — blocked until TX drain coverage > 2% (currently 2/103 shards).
 - Delete `tx-cf-probe` and `nc-cf-probe` edge functions — dashboard-only (no MCP delete tool).
+- Drop the `http` extension on `ornnzinjrcyigazecctf` (pre-existing from TX/FL recon; live
+  drains use Deno `fetch`, not it).
 - Post-first-nightly-sweep recheck of visible error count (first run ~04:30 UTC tonight).
 
 ---
