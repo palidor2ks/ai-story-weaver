@@ -10,7 +10,8 @@ const task: Task = async (_payload, helpers) => {
   const result = await callEdge(
     "schedule-congress-donor-sync",
     { scope: "congress_visible", mode: "refresh", limit: 1, cycle: "2024" },
-    { extraHeaders: { "apikey": ANON_KEY, "Authorization": `Bearer ${ANON_KEY}` } },
+    // verify_jwt=false in config.toml; clear the service-role bearer so keys match (anon+none).
+    { extraHeaders: { "apikey": ANON_KEY, "Authorization": "" } },
   );
   helpers.logger.info("congress_donor_refresh: complete", { result });
 };
