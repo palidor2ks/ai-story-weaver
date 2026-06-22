@@ -1,5 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { isCronAuthorized } from "../_shared/cron-auth.ts";
+import { computeReconStatus, deriveTotalReceiptsStatus } from "../_shared/finance-recon-status.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -61,22 +63,26 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-    // Admin auth check
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-    }
-    const userClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const { data: { user }, error: authError } = await userClient.auth.getUser();
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-    }
-    const adminCheckClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
-    const { data: roleData } = await adminCheckClient.from('user_roles').select('role').eq('user_id', user.id).eq('role', 'admin').maybeSingle();
-    if (!roleData) {
-      return new Response(JSON.stringify({ error: 'Forbidden: admin role required' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    // Two auth paths (same pattern as nightly-bill-sync): the Railway scheduler / admin tooling
+    // sends the service-role bearer (accepted by isCronAuthorized's escape hatch), while humans
+    // hitting the admin UI use their admin JWT. Without the cron path nothing could schedule this.
+    if (!(await isCronAuthorized(req))) {
+      const authHeader = req.headers.get('Authorization');
+      if (!authHeader?.startsWith('Bearer ')) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      const userClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const { data: { user }, error: authError } = await userClient.auth.getUser();
+      if (authError || !user) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      const adminCheckClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+      const { data: roleData } = await adminCheckClient.from('user_roles').select('role').eq('user_id', user.id).eq('role', 'admin').maybeSingle();
+      if (!roleData) {
+        return new Response(JSON.stringify({ error: 'Forbidden: admin role required' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
     }
 
 
@@ -93,14 +99,20 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { 
+    const {
       candidateId,          // Optional: reconcile a specific candidate
       cycle = '2024',
       limit = 50,
       onlyStale = true,      // Only check candidates with stale data (>7 days)
       onlyWithData = true,   // Only check candidates that have donor data
-      varianceThreshold = 5  // % threshold to flag as warning
+      varianceThreshold      // DEPRECATED: ignored — the warning band is fixed at 5% in the shared helper
     } = await req.json().catch(() => ({}));
+
+    // The status band now lives in _shared/finance-recon-status.ts (one rule for all three
+    // recon writers), so a caller-supplied varianceThreshold is no longer honored.
+    if (varianceThreshold !== undefined && varianceThreshold !== 5) {
+      console.warn(`[RECONCILIATION] varianceThreshold=${varianceThreshold} is deprecated and ignored; the warning threshold is fixed at 5% by _shared/finance-recon-status.ts`);
+    }
 
     // NOTE: FEC cycles are 2-year periods ending in even years:
     // - Cycle 2024 = contributions from Jan 1, 2023 - Dec 31, 2024
@@ -392,11 +404,7 @@ serve(async (req) => {
         const totalReceiptsDeltaPct = fecTotalReceipts > 0
           ? ((localTotalReceipts - fecTotalReceipts) / fecTotalReceipts) * 100
           : null;
-        // 'under' = local < FEC by >10% (missing receipts / coverage gap); 'over' = local > FEC by >10%.
-        // null = fec_total_receipts is zero/missing (no comparison possible — gate skipped).
-        const totalReceiptsStatus = totalReceiptsDeltaPct === null ? null
-          : Math.abs(totalReceiptsDeltaPct) <= 10 ? 'ok'
-          : totalReceiptsDeltaPct < 0 ? 'under' : 'over';
+        const totalReceiptsStatus = deriveTotalReceiptsStatus(totalReceiptsDeltaPct);
 
         // Compare local vs FEC at the comparable itemized level
         // Use (gross individual + organization) for Line 11A, matching FEC individual_itemized
@@ -409,14 +417,13 @@ serve(async (req) => {
           ? Math.round((deltaAmount / fecComparableItemized) * 10000) / 100
           : 0;
 
-        // Status: primary gate = comparable-itemized delta; secondary gate = total-receipts (Finding A).
-        // null total_receipts_status means fec_total_receipts is zero/missing — secondary gate skipped.
-        // 'ok' means BOTH itemized donors reconcile AND total receipts are within 10%.
-        let status = 'ok';
-        if (!fecDataBalanced) status = 'error';
-        else if (Math.abs(deltaPct) > 10) status = 'error';
-        else if (Math.abs(deltaPct) > varianceThreshold) status = 'warning';
-        else if (totalReceiptsStatus !== null && totalReceiptsStatus !== 'ok') status = 'warning';
+        // Canonical status (shared by all three recon writers): primary itemized gate +
+        // Finding A total-receipts secondary gate. See _shared/finance-recon-status.ts.
+        const status = computeReconStatus({
+          itemizedDeltaPct: deltaPct,
+          totalReceiptsStatus,
+          fecDataBalanced,
+        });
 
         // Upsert reconciliation record with category-level data
         await supabase

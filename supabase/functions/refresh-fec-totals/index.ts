@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { computeReconStatus, deriveTotalReceiptsStatus } from "../_shared/finance-recon-status.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -413,8 +414,6 @@ serve(async (req) => {
             const pacDeltaAmount = localPac - totalFecPac;
             const pacDeltaPct = totalFecPac > 0 ? (pacDeltaAmount / totalFecPac) * 100 : 0;
 
-            const status = Math.abs(deltaPct) <= 2 ? 'ok' : Math.abs(deltaPct) <= 5 ? 'warning' : 'error';
-
             // Calculate TOTAL RECEIPTS delta (for UI display - matches FEC/Local columns)
             // Local total = locally imported data + FEC-only items (unitemized, candidate self-fund)
             // Use Math.max for Transfers/Loans/Other to fill gaps when local data is incomplete
@@ -423,17 +422,18 @@ serve(async (req) => {
             const effectiveLoans = Math.max(localLoans, totalFecLoans);
             const effectiveOther = Math.max(localOther, totalFecOtherReceipts + totalFecOffsetsToOperatingExpenditures);
             const localTotalReceipts = localItemized + effectiveTransfers + effectiveLoans + effectiveOther + totalFecUnitemized + totalFecCandidateContribution;
-            
-            const totalReceiptsDeltaAmount = totalFecReceipts > 0 
-              ? Math.round(localTotalReceipts - totalFecReceipts) 
+
+            const totalReceiptsDeltaAmount = totalFecReceipts > 0
+              ? Math.round(localTotalReceipts - totalFecReceipts)
               : null;
             const totalReceiptsDeltaPct = totalFecReceipts > 0
               ? ((localTotalReceipts - totalFecReceipts) / totalFecReceipts) * 100
               : null;
-            // Finding A: completeness signal, separate from itemized-accuracy `status`.
-            const totalReceiptsStatus = totalReceiptsDeltaPct === null ? null
-              : Math.abs(totalReceiptsDeltaPct) <= 10 ? 'ok'
-              : totalReceiptsDeltaPct < 0 ? 'under' : 'over';
+            const totalReceiptsStatus = deriveTotalReceiptsStatus(totalReceiptsDeltaPct);
+
+            // Canonical status (shared by all three recon writers): itemized gate + Finding A
+            // total-receipts secondary gate. See _shared/finance-recon-status.ts.
+            const status = computeReconStatus({ itemizedDeltaPct: deltaPct, totalReceiptsStatus });
 
             // Update finance_reconciliation with ALL fields
             await supabase
@@ -723,8 +723,6 @@ serve(async (req) => {
     const pacDeltaAmount = localPac - totalFecPac;
     const pacDeltaPct = totalFecPac > 0 ? (pacDeltaAmount / totalFecPac) * 100 : 0;
 
-    const status = Math.abs(deltaPct) <= 2 ? 'ok' : Math.abs(deltaPct) <= 5 ? 'warning' : 'error';
-
     // Calculate TOTAL RECEIPTS delta (for UI display - matches FEC/Local columns)
     // Local total = locally imported data + FEC-only items (unitemized, candidate self-fund)
     // Use Math.max for Transfers/Loans/Other to fill gaps when local data is incomplete
@@ -733,17 +731,18 @@ serve(async (req) => {
     const effectiveLoans = Math.max(localLoans, totalFecLoans);
     const effectiveOther = Math.max(localOther, totalFecOtherReceipts + totalFecOffsetsToOperatingExpenditures);
     const localTotalReceipts = localItemized + effectiveTransfers + effectiveLoans + effectiveOther + totalFecUnitemized + totalFecCandidateContribution;
-    
-    const totalReceiptsDeltaAmount = totalFecReceipts > 0 
-      ? Math.round(localTotalReceipts - totalFecReceipts) 
+
+    const totalReceiptsDeltaAmount = totalFecReceipts > 0
+      ? Math.round(localTotalReceipts - totalFecReceipts)
       : null;
     const totalReceiptsDeltaPct = totalFecReceipts > 0
       ? ((localTotalReceipts - totalFecReceipts) / totalFecReceipts) * 100
       : null;
-    // Finding A: completeness signal, separate from itemized-accuracy `status`.
-    const totalReceiptsStatus = totalReceiptsDeltaPct === null ? null
-      : Math.abs(totalReceiptsDeltaPct) <= 10 ? 'ok'
-      : totalReceiptsDeltaPct < 0 ? 'under' : 'over';
+    const totalReceiptsStatus = deriveTotalReceiptsStatus(totalReceiptsDeltaPct);
+
+    // Canonical status (shared by all three recon writers): itemized gate + Finding A
+    // total-receipts secondary gate. See _shared/finance-recon-status.ts.
+    const status = computeReconStatus({ itemizedDeltaPct: deltaPct, totalReceiptsStatus });
 
     console.log(`[REFRESH-FEC-TOTALS] ${candidateId}: localGrossInd=$${localGrossIndividual}, localPac=$${localPac}, localParty=$${localParty}, fecInd=$${totalFecItemized}, fecPac=$${totalFecPac}, fecParty=$${totalFecParty}`);
 
