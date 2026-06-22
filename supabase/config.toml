@@ -239,3 +239,5 @@ project_id = "ornnzinjrcyigazecctf"
     verify_jwt = true
   [functions.x-fetch-user-tweets]
     verify_jwt = false
+  [functions.sync-nc-legislator-votes]
+    verify_jwt = false
