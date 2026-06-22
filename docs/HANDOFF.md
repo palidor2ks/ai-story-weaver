@@ -13,6 +13,38 @@
 (template — copy below this block)
 ```
 
+## 2026-06-22 — Railway worker congress donor auth fix (PR #524; branch fix/congress-donor-auth-header)
+
+**What happened & why**
+Codex review on PR #524 caught that clearing `Authorization: ""` for the congress donor Railway tasks
+is wrong when `verify_jwt=true`. `schedule-congress-donor-sync` is absent from `supabase/config.toml`,
+so the Supabase gateway defaults to JWT verification — an empty Authorization header causes a gateway
+401 before the function even runs.
+
+Fixed by sending `Authorization: Bearer <ANON_KEY>` alongside `apikey: ANON_KEY`. This satisfies:
+- Gateway JWT check (`verify_jwt=true` — anon key is a valid JWT)
+- No `UNAUTHORIZED_API_KEY_CONFLICTS` (both headers use matching key)
+- Function's internal `apikey === SUPABASE_ANON_KEY` check
+
+Updated: `workers/tasks/congress_donor_backfill.ts`, `congress_donor_refresh.ts`,
+`workers/lib/call-edge.ts` (doc comment). Replied to Codex thread. PR #524 updated.
+
+**State** (verified)
+- PR #524 pushed and open; review thread replied to.
+- **NOT yet done (requires human action):**
+  1. **Add `SUPABASE_ANON_KEY` to Railway env vars** (value = project anon key from Supabase dashboard).
+  2. **Merge PR #524** once CI passes.
+  3. **Redeploy Railway** after merge.
+  4. **Apply unschedule migrations to prod** — both `20260622000000_retire_pg_cron_railway_workers.sql`
+     and `20260622010000_retire_pg_cron_state_finance.sql` via Supabase SQL editor or MCP, but only
+     after Railway confirmed running cleanly.
+
+**Next**
+Merge PR #524 → add Railway env var → watch logs for `congress_donor_backfill`/`congress_donor_refresh`
+firing clean (no 401, no UNAUTHORIZED_API_KEY_CONFLICTS) → apply the two unschedule migrations.
+
+---
+
 ## 2026-06-21 — TX go-live + NC recon spike (PR #517 merged; branch claude/crons-job-update-sv9hlg)
 
 **What happened & why**
