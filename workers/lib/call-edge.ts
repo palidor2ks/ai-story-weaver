@@ -8,12 +8,11 @@
  * For functions with per-function x-sync-secret auth (NJ/FL/NY/TX/vote sync),
  * pass extraHeaders: { "x-sync-secret": process.env.XYZ_SYNC_SECRET }.
  *
- * For schedule-congress-donor-sync (checks apikey === SUPABASE_ANON_KEY and must
- * NOT receive a service-role bearer — the gateway rejects mixed anon-apikey +
- * service-role-bearer with UNAUTHORIZED_API_KEY_CONFLICTS), override both headers
- * to the anon key so the gateway JWT check also passes:
- *   extraHeaders: { "apikey": ANON_KEY, "Authorization": `Bearer ${ANON_KEY}` }
- * Empty-string values are still stripped before the request is sent.
+ * For schedule-congress-donor-sync (checks apikey === SUPABASE_ANON_KEY, has
+ * verify_jwt=false in config.toml — gateway skips JWT check), pass an empty string
+ * to remove the service-role bearer so the keys don't conflict:
+ *   extraHeaders: { "apikey": ANON_KEY, "Authorization": "" }
+ * Empty-string values are stripped before the request is sent.
  */
 
 const SUPABASE_URL = process.env.SUPABASE_URL;

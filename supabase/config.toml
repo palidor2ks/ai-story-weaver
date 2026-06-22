@@ -125,6 +125,8 @@ project_id = "ornnzinjrcyigazecctf"
     verify_jwt = false
   [functions.scan-evidence-relevance]
     verify_jwt = false
+  [functions.schedule-congress-donor-sync]
+    verify_jwt = false
   [functions.send-claim-notification]
     verify_jwt = false
   [functions.sync-all-donors]
