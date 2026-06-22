@@ -233,22 +233,28 @@ reader above), then cron + `tx_legislator_finance` RPC + `TxStateFinanceSection`
 
 ---
 
-## NC — DESIGN COMPLETE (probe + build deferred to after bills/votes)
+## NC — PROBE COMPLETE (build deferred to after bills/votes)
 
 North Carolina is the product beachhead (see `strategy-nc-beachhead.md`). Campaign
 finance is enrichment — it ships after PoliScore v0 + bills/votes are live.
 
-**Design doc:** `docs/nc-campaign-finance-pipeline.md` — covers NCSBE source format,
-schema mirroring TX (`nc_cf_filers`, `nc_cf_contributions`, `nc_cf_sync_runs`),
-edge function (discover/drain/full), matching RPC, UI gate, and probe plan.
+**Design doc:** `docs/nc-campaign-finance-pipeline.md` — source format **verified
+end-to-end** (2026-06-22 recon via the DB `http` proxy), schema mirroring TX
+(`nc_cf_filers`, `nc_cf_contributions`, `nc_cf_sync_runs`), edge function
+(discover/drain/full), matching RPC, UI gate.
 
-**Key open question before any build**: run the probe in `§8.1` of the design doc
-to determine bulk-CSV vs. per-filer-API and confirm the name format (token-match
-vs. district+surname match), contribution PK, and office codes. Use the DB `http`
-extension as proxy (same approach as FL/TX recon) or a throwaway `nc-cf-probe`
-edge function.
+**Source (verified):** NCSBE has **no bulk CSV** — it's a per-committee search API
+(Option B, like NJ/FL). Two ASP.NET apps on `cf.ncsbe.gov`:
+- **discover** — `POST /CFOrgLkup/` (`UseCandName=true&Name=<surname>`) returns an
+  inline `var data=[…]` JSON array with `SBoEID` + `CandName` ("FIRST … LAST").
+- **drain** — `POST /CFTxnLkup/ExportResults/` (`Params=<JSON>`) returns CSV directly,
+  stateless. Filter by **`CommitteeName`** (the `OfficeType` filter is ignored;
+  `CommitteeIDs`=SBoE-ID is rejected). No transaction PK → deterministic hash.
 
-**Status:** design approved → probe → schema migration → edge fn → cron → RPC → UI.
+**Match:** TX-style token match on `CandName`; name + chamber is the key (district soft).
+**Discover is roster-driven** → depends on the NC legislator roster (beachhead Task 2).
+
+**Status:** probe done → (await Task 2 roster) → schema migration → edge fn → cron → RPC → UI.
 
 ---
 
