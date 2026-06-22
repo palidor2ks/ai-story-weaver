@@ -9,7 +9,8 @@ const task: Task = async (_payload, helpers) => {
   const result = await callEdge(
     "schedule-congress-donor-sync",
     { scope: "congress_visible", mode: "backfill", limit: 1, cycle: "2024" },
-    { extraHeaders: { "apikey": ANON_KEY } },
+    // Clear the service-role bearer: gateway rejects anon apikey + service-role bearer.
+    { extraHeaders: { "apikey": ANON_KEY, "Authorization": "" } },
   );
   helpers.logger.info("congress_donor_backfill: complete", { result });
 };

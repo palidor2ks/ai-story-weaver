@@ -8,8 +8,12 @@
  * For functions with per-function x-sync-secret auth (NJ/FL/NY/TX/vote sync),
  * pass extraHeaders: { "x-sync-secret": process.env.XYZ_SYNC_SECRET }.
  *
- * For schedule-congress-donor-sync (checks apikey === SUPABASE_ANON_KEY),
- * pass extraHeaders: { "apikey": process.env.SUPABASE_ANON_KEY }.
+ * For schedule-congress-donor-sync (checks apikey === SUPABASE_ANON_KEY and must
+ * NOT receive a service-role bearer — the gateway rejects mixed anon-apikey +
+ * service-role-bearer with UNAUTHORIZED_API_KEY_CONFLICTS), pass an empty string
+ * to remove a default header:
+ *   extraHeaders: { "apikey": ANON_KEY, "Authorization": "" }
+ * Empty-string values are stripped before the request is sent.
  */
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -34,9 +38,15 @@ export async function callEdge<T = unknown>(
   const url = `${SUPABASE_URL}/functions/v1/${name}`;
   const signal = AbortSignal.timeout(timeoutMs);
 
+  // Merge then strip empty-string entries so callers can clear a default header.
+  const merged = { ...DEFAULT_HEADERS, ...extraHeaders };
+  const headers = Object.fromEntries(
+    Object.entries(merged).filter(([, v]) => v !== ""),
+  );
+
   const res = await fetch(url, {
     method: "POST",
-    headers: { ...DEFAULT_HEADERS, ...extraHeaders },
+    headers,
     body: JSON.stringify(body),
     signal,
   });
