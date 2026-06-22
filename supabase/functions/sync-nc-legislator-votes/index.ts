@@ -565,6 +565,7 @@ async function processVoteEvent(
         vote_number: 0, // one final-passage vote per member per bill
         action_date: actionDate,
         jurisdiction: 'nc_state',
+        chamber: orgClassification, // 'upper' | 'lower' — disambiguates bicameral bills
       });
     }
   }
