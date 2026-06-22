@@ -31,13 +31,12 @@ thresholds, and current standing: **`docs/DATA-ACCURACY.md`** (checked every pre
 - **Candidate answers/positions** (added 2026-06-10): the alignment quiz's own input —
   VISION's riskiest assumption includes positions, so "sourced with a URL, not just a
   description" is tracked as its own category (`docs/DATA-ACCURACY.md` §Answers).
-- ☐ **Congress donor backfill stall** — 159 `candidate_committees` rows with `has_more=true`
-  are not progressing (observed 3/day actual vs 144/day theoretical at `limit:1`). Likely
-  filtered out by the `congress_visible` scope in `schedule-congress-donor-sync`. Confirm
-  which committees are stalled (`has_more=true AND last_sync_completed_at IS NULL`), whether
-  they belong to visible candidates, and either widen the scope or trigger a manual sync pass.
-  *(found 2026-06-15; the missing `schedule-congress-donor-sync` edge fn was added in PR #409 —
-  re-check whether backfill is now progressing.)*
+- 🟡 **Congress donor backfill** — 161 stalled committees as of 2026-06-22 (118 never-synced,
+  43 refresh-stalled). **103/118 are in hidden states — intentionally skipped by `congress_visible`
+  scope; this is correct.** Only ~15 (TX visible, tier_1) are actively queued. Railway backfill
+  task is running (`most_recent_sync` 11:42 UTC 2026-06-22); TX backfill should clear within ~1
+  day at 1/10min. The "stall" was the hidden-state filter working as designed, not a bug.
+  *(confirmed 2026-06-22)*
 - ☐ **FEC recon: Line 14/15 "other receipts" double-count (Finding B)** — `local_other_receipts`
   can double-count JFC money already booked as `local_transfers` (e.g. Cassidy 2026: $2.55M local
   other vs $0.27M FEC, ~his $2.27M transfers), inflating `total_receipts_delta`. Audit the Line
@@ -52,11 +51,9 @@ thresholds, and current standing: **`docs/DATA-ACCURACY.md`** (checked every pre
 Verified work can't land cleanly while Dev and `main` schemas drift.
 - Keep Dev in sync via `scripts/apply-missing-migrations.sh` (dry-run first — guardrail #1).
 - Resync playbook: `docs/dev-migration-resync.md`.
-- ☐ **Supabase disk pressure** — `refresh-donor-consolidated-daily` hit "No space left on device"
-  on 2026-06-13 (REFRESH MATERIALIZED VIEW spilled temp files). DB is at 15 GB; `contributions`
-  alone is 8.4 GB and growing as FEC finance keeps loading. Check quota in Supabase dashboard
-  and either (a) expand storage add-on or (b) archive/expire old contribution records. Will
-  recur — the materialized view refresh needs 2× temp space. *(found 2026-06-15)*
+- ✅ **Supabase disk pressure** — resolved 2026-06-22. Plan upgraded to 27 GB; 14.68 GB used,
+  ~12 GB free. No immediate action needed. Monitor if/when usage approaches 22 GB (leaves 2×
+  headroom for materialized view refresh temp files). *(OOM hit 2026-06-13 at 15 GB on smaller plan)*
 - **Done =** Dev matches `main` and the app runs clean against a fresh DB.
 
 ### 3. ☐ User-facing features
@@ -93,8 +90,7 @@ X/TikTok posting, Remotion social cards, AI-generated analysis. Deferred until t
 1. **Data accuracy/quality** — the gate on shipping.
 2. **Migration drift (Dev vs main)** — slows landing any verified change.
 3. **No automated tests/CI** — "verified" = lint + build + manual; Phase H starts fixing this.
-4. **Disk pressure** — June 13 OOM on materialized view refresh; 15 GB DB growing; needs
-   quota check + plan before the next disk-full failure. *(added 2026-06-15)*
+4. ~~**Disk pressure**~~ — resolved 2026-06-22 (27 GB plan, 14.68 GB used). Monitor at 22 GB.
 
 ## Out of scope / parked
 - **Social auto-posting (X/TikTok) + Remotion video cards** — parked for v1 per `docs/VISION.md`

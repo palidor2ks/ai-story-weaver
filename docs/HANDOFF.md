@@ -29,14 +29,15 @@ applied, Railway redeployed with Node 22 / Railpack builder (fixed Node 18 EOL b
 **State** (verified)
 - Railway deployment `852c9a9a` running on Node 22 / Railpack.
 - `schedule-congress-donor-sync` v52 deployed, `verify_jwt=false` active.
-- All pg_cron jobs retired: Phase 1 (FEC drain, candidate drain, research queue, nightly bill sync)
-  + Phase 2 (NJ/FL/NY/TX drains+discovers, congress donor backfill/refresh, legislator votes).
-- **NOT yet verified:** Railway logs showing `congress_donor_backfill`/`congress_donor_refresh`
-  firing clean — check within 10 min of redeploy.
+- All pg_cron jobs retired: Phase 1 + Phase 2.
+- Congress donor backfill IS progressing (`most_recent_sync` 11:42 UTC 2026-06-22). 161 stalled
+  committees: 103 are hidden-state (intentionally skipped by `congress_visible` scope — correct),
+  ~15 TX visible are actively queuing. Not a bug.
+- Disk pressure resolved: 27 GB plan, 14.68 GB used. ROADMAP updated.
 
 **Next**
-Watch Railway logs for `congress_donor_backfill: complete` with no 401 errors. That's the final
-smoke-test for the full migration.
+FEC data accuracy — fix the Line 14/15 double-count (Finding B) that inflates `total_receipts`
+for JFC candidates. Details in `docs/DATA-ACCURACY.md` §1 and ROADMAP §1.
 
 **Deferred**
 - Spot-check TX `total_raised` vs TEC source once `contribs_*` coverage builds.
