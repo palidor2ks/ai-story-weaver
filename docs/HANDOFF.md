@@ -13,6 +13,38 @@
 (template — copy below this block)
 ```
 
+## 2026-06-22 — Railway pg_cron migration COMPLETE (PRs #524, #525)
+
+**What happened & why**
+Full migration of all 16 Supabase pg_cron jobs to Railway graphile-worker is done. The final
+hurdle was the congress donor auth — three iterations to get it right:
+1. PR #524: tried `Authorization: Bearer <ANON_KEY>` — wrong, `sb_publishable_…` is not a JWT
+2. PR #525: added `verify_jwt=false` to `config.toml` for `schedule-congress-donor-sync` +
+   restored `Authorization: ""` (correct with verify_jwt=false)
+
+Then deployed everything: edge function v52 with `verify_jwt=false`, both unschedule migrations
+applied, Railway redeployed with Node 22 / Railpack builder (fixed Node 18 EOL build failure),
+`SUPABASE_ANON_KEY` set to `sb_publishable_…` in Railway.
+
+**State** (verified)
+- Railway deployment `852c9a9a` running on Node 22 / Railpack.
+- `schedule-congress-donor-sync` v52 deployed, `verify_jwt=false` active.
+- All pg_cron jobs retired: Phase 1 (FEC drain, candidate drain, research queue, nightly bill sync)
+  + Phase 2 (NJ/FL/NY/TX drains+discovers, congress donor backfill/refresh, legislator votes).
+- **NOT yet verified:** Railway logs showing `congress_donor_backfill`/`congress_donor_refresh`
+  firing clean — check within 10 min of redeploy.
+
+**Next**
+Watch Railway logs for `congress_donor_backfill: complete` with no 401 errors. That's the final
+smoke-test for the full migration.
+
+**Deferred**
+- Spot-check TX `total_raised` vs TEC source once `contribs_*` coverage builds.
+- Delete neutered probes `tx-cf-probe` and `nc-cf-probe` from Supabase dashboard.
+- NC campaign finance pipeline (recon only so far — see 2026-06-21 entry).
+
+---
+
 ## 2026-06-22 — verify_jwt=false for schedule-congress-donor-sync (PR #525; branch claude/blissful-edison-7cvva1)
 
 **What happened & why**
