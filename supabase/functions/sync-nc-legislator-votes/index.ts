@@ -355,8 +355,15 @@ async function runDrain(
     const bills: any[] = data?.results ?? [];
     if (bills.length === 0) break;
 
+    let budgetReached = false;
     for (const bill of bills) {
       await processBill(supabase, bill, nameIndex, stats, unmatchedNames);
+      // Per-bill budget check: a single page can contain bills with hundreds of vote
+      // records each; checking only between pages risks exceeding the wall-clock limit.
+      if (Date.now() - drainStart > BUDGET_MS) {
+        budgetReached = true;
+        break;
+      }
     }
 
     stats.pagesFetched = page;
@@ -372,11 +379,14 @@ async function runDrain(
     }).eq('id', runId);
 
     const maxPage: number = data?.pagination?.max_page ?? 1;
-    if (page >= maxPage) break;
+    if (page >= maxPage || budgetReached) {
+      if (budgetReached) {
+        console.log(`[sync-nc-legislator-votes] budget reached mid-page ${page}; will resume next run`);
+      }
+      break;
+    }
 
-    // Time-budget guard: stop before the edge function wall-clock limit so the
-    // run finishes cleanly with status='success' and the resume cursor is written.
-    // The next cron invocation picks up from the next page.
+    // Time-budget guard between pages (catches the case where budget expired after the last bill)
     if (Date.now() - drainStart > BUDGET_MS) {
       console.log(`[sync-nc-legislator-votes] budget reached at page ${page}; will resume next run`);
       break;
@@ -518,8 +528,13 @@ async function processVoteEvent(
     }
   }
 
-  // 3. Upsert per-legislator vote records
+  // 3. Batch upsert per-legislator vote records (one array call vs. N individual calls)
   const perPersonVotes: any[] = ve.votes ?? [];
+  if (perPersonVotes.length === 0) return;
+
+  const actionDate = startDate ? new Date(startDate).toISOString() : new Date().toISOString();
+  const voteRecordRows: object[] = [];
+  const candidateVoteRows: object[] = [];
 
   for (const pv of perPersonVotes) {
     const voterNameRaw: string = pv.voter_name ?? '';
@@ -527,50 +542,55 @@ async function processVoteEvent(
 
     const { candidateId, method } = matchVoter(voterNameRaw, orgClassification, nameIndex);
 
-    const { error: vrErr } = await supabase.from('nc_leg_vote_records').upsert(
-      {
-        vote_event_id: voteEventId,
-        voter_name_raw: voterNameRaw,
-        candidate_id: candidateId,
-        match_method: method,
-        option: pv.option ?? null,
-      },
-      { onConflict: 'vote_event_id,voter_name_raw' },
-    );
-    if (vrErr) {
-      console.warn(`[sync-nc-legislator-votes] nc_leg_vote_records upsert failed`, vrErr.message);
-      continue;
-    }
-    stats.voteRecordsUpserted++;
+    voteRecordRows.push({
+      vote_event_id: voteEventId,
+      voter_name_raw: voterNameRaw,
+      candidate_id: candidateId,
+      match_method: method,
+      option: pv.option ?? null,
+    });
 
     if (method === 'unmatched') {
       stats.unmatchedCount++;
       unmatchedNames.push(`${voterNameRaw} (${orgClassification})`);
     }
 
-    // 4. Bridge matched final-passage votes into candidate_votes (only if bills bridge succeeded)
+    // 4. Collect matched final-passage bridge rows (only if bills bridge succeeded)
     if (billsBridgeOk && candidateId && method !== 'unmatched') {
-      const position = toPosition(pv.option ?? '');
-      const actionDate = startDate ? new Date(startDate).toISOString() : new Date().toISOString();
+      candidateVoteRows.push({
+        bill_id: billId,
+        candidate_id: candidateId,
+        action_type: 'floor_vote',
+        position: toPosition(pv.option ?? ''),
+        vote_number: 0, // one final-passage vote per member per bill
+        action_date: actionDate,
+        jurisdiction: 'nc_state',
+      });
+    }
+  }
 
-      const { error: cvErr } = await supabase.from('candidate_votes').upsert(
-        {
-          bill_id: billId,
-          candidate_id: candidateId,
-          action_type: 'floor_vote',
-          position,
-          vote_number: 0, // one final-passage vote per member per bill
-          action_date: actionDate,
-          jurisdiction: 'nc_state',
-        },
-        { onConflict: 'bill_id,candidate_id,action_type,vote_number' },
+  if (voteRecordRows.length > 0) {
+    const { error: vrErr } = await supabase.from('nc_leg_vote_records').upsert(
+      voteRecordRows,
+      { onConflict: 'vote_event_id,voter_name_raw' },
+    );
+    if (vrErr) {
+      console.warn(`[sync-nc-legislator-votes] nc_leg_vote_records batch upsert failed for ${voteEventId}`, vrErr.message);
+    } else {
+      stats.voteRecordsUpserted += voteRecordRows.length;
+    }
+  }
+
+  if (candidateVoteRows.length > 0) {
+    const { error: cvErr } = await supabase.from('candidate_votes').upsert(
+      candidateVoteRows,
+      { onConflict: 'bill_id,candidate_id,action_type,vote_number' },
+    );
+    if (cvErr) {
+      console.warn(
+        `[sync-nc-legislator-votes] candidate_votes batch bridge failed for ${billId}`,
+        cvErr.message,
       );
-      if (cvErr) {
-        console.warn(
-          `[sync-nc-legislator-votes] candidate_votes bridge failed for ${candidateId}/${billId}`,
-          cvErr.message,
-        );
-      }
     }
   }
 }
