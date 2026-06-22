@@ -418,7 +418,7 @@ async function processBill(
   const identifier: string = bill.identifier ?? '';
   const title: string = bill.title ?? identifier;
   const chamberOrigin: string = bill.from_organization?.classification ?? null;
-  const latestActionAt: string | null = bill.latest_action?.date ?? null;
+  const latestActionAt: string | null = bill.latest_action_date ?? null;
   const classification: string[] = bill.classification ?? [];
 
   // 1. Upsert into nc_leg_bills
