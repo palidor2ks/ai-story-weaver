@@ -13,6 +13,53 @@
 (template — copy below this block)
 ```
 
+## 2026-06-22 — NC GA votes pipeline BUILT + deployed (beachhead Task 2, steps 3–6)
+
+**What happened & why**
+Continued from probe session. Confirmed Option A (bridge into shared `candidate_votes`/`bills`
+with `jurisdiction='nc_state'`) after architect sign-off — federal upserts are idempotent with
+`ignoreDuplicates:true`, bill_id namespace (`nc-2025-*`) prevents collision, only `_merge_candidate`
+is jurisdiction-blind (flagged, not blocking). Then executed the full `nc-state-votes-pipeline.md`
+build sequence steps 3–6:
+
+**State** (verified 2026-06-22, branch `claude/blissful-edison-7cvva1`, commit `9fd9b29b`)
+- **`20260622020000_nc_leg_schema.sql`** — applied to prod. Creates `nc_leg_bills`,
+  `nc_leg_vote_events`, `nc_leg_vote_records`, `nc_leg_sync_runs`. RLS: public SELECT on
+  bills/events/records; sync_runs internal only.
+- **`20260622030000_jurisdiction_discriminator.sql`** — applied to prod. Adds nullable
+  `jurisdiction text` to `candidate_votes` and `bills`. NULL = federal (no backfill).
+- **`supabase/functions/sync-nc-legislator-votes/index.ts`** — deployed as v2 ACTIVE.
+  Modes: discover (count only) / drain (resume) / full (page 1→end). 7s rate-limit sleep,
+  110s time-budget guard (drain runs always complete cleanly). Name-matcher: surname+chamber,
+  ~99.4% auto. Final-passage filter (Third Reading / Concur). `billsBridgeOk` gate prevents
+  orphaned `candidate_votes`. `bridgeBillsFailed` counter → `status='partial'` when bridge fails.
+- **`20260622040000_sync_nc_legislator_votes_cron.sql`** — applied to prod. Weekly Sunday 08:00
+  UTC, `mode=drain`. CRON GATE (guardrail #2) — applied deliberately.
+- All four files committed + pushed; **PR open on `claude/blissful-edison-7cvva1`**.
+
+**Remaining known risks / caveats**
+- `get_poliscore_record` RPC uses federal Congress→year date window; NC state bills (congress=NULL)
+  won't surface in scoring UI until a state-specific RPC variant is added (v0.1 work).
+- `_merge_candidate()` does jurisdiction-blind `DELETE FROM candidate_votes WHERE candidate_id=loser`.
+  Flag this if the merge-candidate UI workflow is ever triggered for an NC state legislator.
+
+**Next**
+1. **Trigger `discover` mode** (manual HTTP POST to edge fn with `?mode=discover`) to size the
+   2025 NC session — get page count + bill total, no DB writes.
+2. **Trigger `full` mode** (or let `drain` cron run Sunday) for initial data load. With 110s
+   budget, first run will ingest ~15 pages; subsequent weekly drains continue from cursor.
+3. **Gate: `data-accuracy-verifier`** — spot-check a few NC state legislators' vote records vs
+   NCGA roll-call site / OpenStates UI once data is in (step 7 of build sequence).
+4. After gate passes: surface in UI (Task 3 — state scoring RPC + key-vote curation).
+
+**Deferred / cleanup**
+- Roster hygiene: Senate 49/50, Jeff Jackson / Rachel Hunt stragglers (State Legislator label).
+- Delete `nc-leg-vote-probe` edge fn from dashboard (inert 410 stub; no MCP delete fn available).
+- State scoring RPC (v0.1): NC bills need `jurisdiction='nc_state'` filter + date-window-free query.
+- PoliScore v0.1 directional blocked on left/right balance gate (owner decision) — unchanged.
+
+---
+
 ## 2026-06-22 — NC state-legislature VOTES: source probe COMPLETE → GO (beachhead Task 2)
 
 **What happened & why**
