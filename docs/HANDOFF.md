@@ -13,6 +13,63 @@
 (template — copy below this block)
 ```
 
+## 2026-06-22 — NC GA initial data load complete (beachhead Task 2, step 7 pending)
+
+**What happened & why**
+Continued from build session. Triggered initial `mode=full` run — but hit a wall-clock overrun
+on page 1 because the old code did individual per-row upserts (~6000 DB calls/page × 20ms = 120s+,
+exceeding the 150s edge function wall-clock before the page checkpoint could be written). Fixed
+by switching to batch array upserts (2 calls per vote event instead of ~100) and adding a per-bill
+budget check inside the page loop. Deployed as v5, reran `mode=full`. Also fixed a `verify_jwt`
+regression (PR merge caused GitHub integration to redeploy at v3 with `verify_jwt=true`; fixed by
+adding `[functions.sync-nc-legislator-votes] verify_jwt = false` to `supabase/config.toml` and
+deploying v4). Fixed a field-name bug `bill.latest_action?.date` → `bill.latest_action_date`
+(top-level, not nested object), deployed as v6.
+
+**State** (verified 2026-06-22, branch `claude/blissful-edison-7cvva1`, commits up to `19ff1b4c`)
+- **`sync-nc-legislator-votes`** deployed as **v6 ACTIVE** (`verify_jwt=false`).
+  Batch upserts + per-bill budget check confirmed working.
+- **Initial data load (run id=3)**: `status='success'`, 9 pages, 155 NC bills, 137 vote events,
+  11,877 vote records. 27 bills bridged into `bills` table + 2,818 `candidate_votes` with
+  `jurisdiction='nc_state'`. Match rate: ~96.9% (419 unmatched / 13,462 total vote records).
+- **Coverage**: Bills with `latest_action_date` 2026-05-06 to 2026-06-19. OpenStates API caps
+  paginated results at ~9 pages (~180 bills) when using `sort=latest_action_desc&include=votes`.
+  The `total_items=2324` from the discovery run reflects all bills in the session, but the API
+  only returns the most-recently-active ~180. Bills with last action before May 2026 are outside
+  the current pagination window (known API constraint, not a function bug).
+- **Data spot-check**: SB1080 "Lower Taxes for All NC" — 69 Yea, 44 Nay, 1 Not Voting.
+  Named NC House members verified as real legislators.
+- **`supabase/config.toml`** updated with `verify_jwt = false` entry (committed `43b87c7a`).
+- Weekly Sunday cron (`mode=drain`) will keep accumulating newly-active bills.
+
+**Remaining known risks / caveats**
+- OpenStates pagination cap: ~180 most-recently-active bills per sync run. Bills passed in
+  early-mid 2025 (last action before May 2026) are not currently in the DB. Weekly drain will
+  accumulate them as they get new actions (e.g., governor signature), but silent gaps exist.
+  V2 fix: add multiple sorted queries (e.g., `sort=first_action_date_asc`) or use OpenStates
+  bulk download.
+- `get_poliscore_record` RPC uses federal Congress→year date window; NC state bills won't surface
+  in scoring UI until a state-specific RPC variant is added (v0.1 work).
+- `_merge_candidate()` does jurisdiction-blind `DELETE FROM candidate_votes WHERE candidate_id=loser`.
+  Flag this if the merge-candidate UI workflow is ever triggered for an NC state legislator.
+
+**Next**
+1. **Gate: `data-accuracy-verifier`** — spot-check SB1080 + 2-3 other bills' vote tallies against
+   NCGA roll-call site / OpenStates UI. Confirm match counts and positions are accurate.
+2. After gate passes: **Task 3** — state scoring RPC (`get_poliscore_record` variant for NC
+   `jurisdiction='nc_state'`, no Congress/date-window filter) + key-vote curation.
+3. **PR**: `claude/blissful-edison-7cvva1` — already has the batching fix commits; open a new PR
+   or update existing one to get the v5/v6 fixes reviewed.
+
+**Deferred / cleanup**
+- Roster hygiene: Senate 49/50, Jeff Jackson / Rachel Hunt stragglers (State Legislator label).
+- Delete `nc-leg-vote-probe` edge fn from dashboard (inert 410 stub; no MCP delete fn available).
+- State scoring RPC (v0.1): NC bills need `jurisdiction='nc_state'` filter + date-window-free query.
+- PoliScore v0.1 directional blocked on left/right balance gate (owner decision) — unchanged.
+- Broader coverage: supplement OpenStates paginated API with bulk data or multi-sort queries.
+
+---
+
 ## 2026-06-22 — NC GA votes pipeline BUILT + deployed (beachhead Task 2, steps 3–6)
 
 **What happened & why**
