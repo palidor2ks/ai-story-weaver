@@ -10,6 +10,9 @@
 # ── FEC finance ──────────────────────────────────────────────────────────────
 */10 * * * * drain_fec_finance ?jobKey=drain_fec_finance&jobKeyMode=preserve_run_at
 */3  * * * * fec_candidate_drain ?jobKey=fec_candidate_drain&jobKeyMode=preserve_run_at
+# Nightly reconciliation sweep — re-checks the stalest finance_reconciliation rows in one pass
+# (the 10-min drain only keeps a small keep-fresh batch current). Auth: service-role bearer.
+30 4 * * * nightly_finance_reconciliation ?jobKey=nightly_finance_reconciliation&jobKeyMode=preserve_run_at
 
 # ── Research queue ───────────────────────────────────────────────────────────
 */30 * * * * drain_research_queue ?jobKey=drain_research_queue&jobKeyMode=preserve_run_at

@@ -21,6 +21,15 @@
 //     (batch). Oldest/never-checked first, so gaps are prioritized and populated
 //     rows are re-pulled in small batches rather than all at once.
 //
+// Phase ORDER matters for the reconciliation status: Phase A's fetch-fec-donors can
+// only grade the itemized side and reuses the stored total_receipts_status for the
+// Finding A gate (it lacks the FEC loans/transfers/other breakdown). Phase B's
+// refresh-fec-totals does the fuller calc and writes the authoritative
+// total_receipts_status. Keeping A before B means the secondary gate is at most one
+// drain cycle stale before B rewrites it. All three recon writers share one status
+// rule — supabase/functions/_shared/finance-recon-status.ts — so they converge
+// instead of flip-flopping. Do not reorder without preserving that invariant.
+//
 // Cycles: pass `cycle` (single) or `cycles` (array / comma-separated) to target
 // specific cycles; otherwise the function auto-discovers every cycle that has
 // reconciliation data (distinct finance_reconciliation.cycle) so new cycles are

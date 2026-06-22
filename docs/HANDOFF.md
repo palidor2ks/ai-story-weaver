@@ -13,6 +13,53 @@
 (template — copy below this block)
 ```
 
+## 2026-06-22 — FEC recon: unify 3 status writers + schedule nightly sweep
+
+**What happened & why**
+Investigating the 81 visible `error` rows (per the previous entry's "Next") surfaced that
+**Finding A's gate wasn't durable**: three edge functions write `finance_reconciliation.status`
+with *different* rules, and the two that run in the live drain (every 10 min) had no gate, so they
+overwrote the nightly fix and flip-flopped each other's status:
+- `fetch-fec-donors` — err>10/warn>5 on **individual-only**, no gate
+- `refresh-fec-totals` — stricter **ok≤2/warn≤5**, no gate
+- `nightly-finance-reconciliation` — err>10/warn>5 comparable, Finding A gate (and it's **not
+  scheduled** — admin-manual only, so the gate basically never ran in prod)
+
+Fix (this branch):
+1. **New shared helper** `supabase/functions/_shared/finance-recon-status.ts`
+   (`computeReconStatus` + `deriveTotalReceiptsStatus`) — ONE canonical rule: partial if sync
+   incomplete → error if FEC unbalanced or comparable-itemized |Δ|>10% → warning if |Δ|>5% OR
+   total-receipts >10% off → ok. Applied to all three writers.
+   - `fetch-fec-donors` switched to comparable-itemized basis and **reads the stored
+     `total_receipts_status`** for the gate (its own total-receipts calc lacks the FEC
+     loans/transfers/other breakdown).
+2. **Scheduled the nightly sweep**: new Railway task `workers/tasks/nightly_finance_reconciliation.ts`
+   + crontab `30 4 * * *`. Added an `isCronAuthorized` (service-role bearer) path to
+   `nightly-finance-reconciliation` so the scheduler can call it (was admin-JWT-only).
+3. Retroactively reconciled **106 rows** to the unified rule (66 error→warning for ≤10% rows the
+   old strict gate over-flagged, 40 warning→ok for the 2–5% band).
+
+**State** (verified)
+- Preflight green: `bun run lint` 0 errors, `bun run test` 139/139, `bun run build` OK.
+- etl-pipeline-reviewer: **GO**, no blocking issues (2 advisories applied: varianceThreshold
+  deprecation warn-log + drain phase-order comment).
+- Visible recon now: **ok 294 / warning 88 / error 72 / partial 26**. Error 72 < 100 gate → passing.
+- Edge functions deploy on merge to main (deploy-edge-functions.yml deploys the whole set).
+  Railway redeploys from main and picks up the new crontab on startup.
+
+**Next**
+The 72 visible errors are now genuine: ~39 were stale recon (donor backfill ran after last recon —
+the nightly sweep + drain will re-grade them), ~42 are real coverage gaps (local itemized < FEC,
+backfill incomplete for TX/NC). After the first nightly sweep runs, re-check and consider ratcheting
+the check:accuracy visible-error threshold down from 100.
+
+**Deferred** (still want to do "all today" — next up this session)
+- Spot-check TX `total_raised` vs TEC source once `contribs_*` coverage builds.
+- Delete neutered probes `tx-cf-probe` and `nc-cf-probe` from Supabase dashboard.
+- NC campaign finance pipeline (recon only so far — see 2026-06-21 entry).
+
+---
+
 ## 2026-06-22 — FEC Finding A implemented: total-receipts secondary gate
 
 **What happened & why**

@@ -61,9 +61,26 @@
 - **Visible re-baseline (2026-06-16 — what the gate now enforces):** standing **39 error · 1 partial
   · 145 ok** across visible states; threshold **visible error must not exceed 100** (regression guard;
   ratchet down). The whole-DB spot-check below is retained as the methodology/audit reference.
-- **Visible standing (2026-06-22, post Finding A+B):** **ok 292 / warning 81 / error 81 / partial 26**
-  (total 480). Error gate: 81 < 100, passing. `ok` now requires both itemized AND total-receipts within
-  10% — 336 rows demoted from ok→warning by the retroactive Finding A application.
+- **Visible standing (2026-06-22, post Finding A+B + writer unification):** **ok 294 / warning 88 /
+  error 72 / partial 26** (total 480). Error gate: 72 < 100, passing. `ok` requires both itemized
+  (≤5%) AND total-receipts (≤10%) within tolerance.
+- **Writer unification (2026-06-22):** all three functions that write `finance_reconciliation.status`
+  now share **one** rule via `supabase/functions/_shared/finance-recon-status.ts`
+  (`computeReconStatus` + `deriveTotalReceiptsStatus`). Before, each disagreed —
+  `fetch-fec-donors` graded err>10/warn>5 on *individual-only*; `refresh-fec-totals` used a stricter
+  ok≤2/warn≤5; only `nightly-finance-reconciliation` had the Finding A gate — so a candidate's status
+  flip-flopped depending on which ran last (drain calls both `fetch-fec-donors` and
+  `refresh-fec-totals` every 10 min). Canonical rule: **partial** if sync incomplete; **error** if
+  FEC totals don't balance or comparable-itemized |Δ|>10%; **warning** if |Δ|>5% OR total receipts
+  >10% off (Finding A); else **ok**. `fetch-fec-donors` (which lacks the FEC loans/transfers/other
+  breakdown) reuses the authoritative `total_receipts_status` last written by the fuller calc rather
+  than self-assessing. Retroactively reconciled 106 rows to the unified rule (66 error→warning for
+  ≤10% rows the old strict gate over-flagged, 40 warning→ok for the 2–5% band the majority already
+  treated as ok).
+- **Nightly sweep (2026-06-22):** `nightly-finance-reconciliation` is now **scheduled** — a new
+  Railway task (`workers/tasks/nightly_finance_reconciliation.ts`, crontab `30 4 * * *`) calls it
+  with the service-role bearer (accepted by a new `isCronAuthorized` path on the function). It
+  complements the 10-min drain by re-checking the stalest rows in one nightly pass.
 - **Spot-check (2026-06-15, 13 candidate-cycles across AK/AL/FL/LA/CA/MS/AR/NV/TX/MS, House+Senate,
   $0.34M–$8.4M, high-dollar + grassroots):** itemized donor data reconciles to the cached FEC
   category totals **to within dollars** on every `ok` row sampled (Britt, Begich, Moody, Sullivan,
