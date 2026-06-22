@@ -13,6 +13,52 @@
 (template — copy below this block)
 ```
 
+## 2026-06-22 — NC state-legislature VOTES: source probe COMPLETE → GO (beachhead Task 2)
+
+**What happened & why**
+Picked up "next" → the NC beachhead, and course-corrected twice on discovery:
+1. PoliScore "Task 1" is **built + shipped (PR #427) then parked** (06-18 — the standalone card
+   duplicated the Voting-Record tab), **not pending**. So I did **not** rewrite its methodology doc:
+   the existing votes-first `poliscore-methodology.md` already considered & rejected the
+   `candidate_answers`-based approach I'd spent the morning re-validating. (Read-before-Write caught
+   the near-overwrite; no damage.)
+2. The NC **roster is already done** (06-18, `discover-state-legislators`, OpenStates) — the strategy
+   doc's "0 rows" was stale. So Task 2's real gap = **votes**. Ran the OpenStates votes **source
+   probe** (temp edge fn `nc-leg-vote-probe`, since neutralized) → **GO**.
+
+**Verified findings (spike gate PASSED; WI fallback NOT triggered):**
+- NC roll-call votes are **richly machine-readable** via OpenStates v3 `/bills?…&include=votes`.
+  Current session `2025`; **19/20** recent bills have vote events; clean `yes/no/absent/abstain`
+  vocabulary; real example SB 889 3rd Reading **69–43** (118 individual records).
+- **Blocker = no `voter_id`** (0/1072 sampled): OpenStates gives **surname only** ("G. Pierce") →
+  linkage is **name-based**. Measured tractable: **158/171 (92%) surnames unique in-chamber**;
+  chamber+initial resolves all but **one pair** (Carson vs Charles Smith) → ~99.4% auto.
+- Roster hygiene owed: Senate **49/50**; 2 `State Legislator` stragglers incl. **Jeff Jackson**
+  (not a sitting state legislator — OpenStates artifact).
+
+**State** (verified 2026-06-22)
+- Probe ran read-only (OpenStates GET + a roster join); **no prod schema changes**.
+- New `docs/nc-state-votes-pipeline.md` (GO + `nc_leg_*` schema + drain/cron + name-matcher + the
+  shared-vs-isolated scoring-integration decision + build sequence).
+- `docs/strategy-nc-beachhead.md` Task 2 + "Missing" updated (roster ✅, votes 🟡 designed).
+- Probe edge fn `nc-leg-vote-probe` **neutralized** to an inert 410 stub (no secret use).
+- Branch `claude/blissful-edison-7cvva1`; **docs-only** diff (+ the edge-fn redeploy via MCP).
+
+**Next**
+Confirm the **scoring-integration decision** (Option A — bridge matched votes into the shared
+`candidate_votes`/`bills`, recommended; touches a shared table → architect / migration-safety
+sign-off), then execute `nc-state-votes-pipeline.md` §Build sequence.
+
+**Deferred / cleanup**
+- **Delete `nc-leg-vote-probe`** from the dashboard (inert stub; no MCP delete) — joins the
+  `tx-cf-probe` / `nc-cf-probe` deletion list.
+- Roster hygiene (Senate 49/50 + 2 stragglers) — also helps NC finance discover.
+- PoliScore stays parked (built/shipped/pulled); v0.1 directional still blocked on the left/right
+  balance gate (owner decision) — unchanged.
+- Drop the `http` extension once recon is fully done (live syncs use Deno `fetch`).
+
+---
+
 ## 2026-06-22 — NC campaign finance: source probe COMPLETE (+ PRs #528/#529 merged)
 
 **What happened & why**
