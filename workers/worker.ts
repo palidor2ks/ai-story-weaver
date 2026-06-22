@@ -8,7 +8,7 @@
  * into the database. No manual migration needed.
  *
  * Required env vars:
- *   DATABASE_URL              — direct Postgres URL (db.[ref].supabase.co:5432)
+ *   DATABASE_URL or WORKER_DB_URL — direct Postgres URL (db.[ref].supabase.co:5432)
  *   SUPABASE_URL              — project URL (used by call-edge)
  *   SUPABASE_SERVICE_ROLE_KEY — service key (used by call-edge as auth)
  *
@@ -22,9 +22,9 @@ import { dirname, join } from "path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const DATABASE_URL = process.env.DATABASE_URL;
+const DATABASE_URL = process.env.DATABASE_URL ?? process.env.WORKER_DB_URL;
 if (!DATABASE_URL) {
-  console.error("DATABASE_URL is required (direct Postgres connection, not pooler)");
+  console.error("DATABASE_URL or WORKER_DB_URL is required (direct Postgres connection, not pooler)");
   process.exit(1);
 }
 
