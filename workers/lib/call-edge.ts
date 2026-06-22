@@ -10,10 +10,10 @@
  *
  * For schedule-congress-donor-sync (checks apikey === SUPABASE_ANON_KEY and must
  * NOT receive a service-role bearer — the gateway rejects mixed anon-apikey +
- * service-role-bearer with UNAUTHORIZED_API_KEY_CONFLICTS), pass an empty string
- * to remove a default header:
- *   extraHeaders: { "apikey": ANON_KEY, "Authorization": "" }
- * Empty-string values are stripped before the request is sent.
+ * service-role-bearer with UNAUTHORIZED_API_KEY_CONFLICTS), override both headers
+ * to the anon key so the gateway JWT check also passes:
+ *   extraHeaders: { "apikey": ANON_KEY, "Authorization": `Bearer ${ANON_KEY}` }
+ * Empty-string values are still stripped before the request is sent.
  */
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
