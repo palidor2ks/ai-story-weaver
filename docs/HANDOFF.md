@@ -13,6 +13,37 @@
 (template — copy below this block)
 ```
 
+## 2026-06-22 — verify_jwt=false for schedule-congress-donor-sync (PR #525; branch claude/blissful-edison-7cvva1)
+
+**What happened & why**
+PR #524 (merged) fixed congress donor Railway tasks by sending `Authorization: Bearer <ANON_KEY>`, but
+Codex caught that `SUPABASE_ANON_KEY` = `sb_publishable_…` — not a JWT — so a `verify_jwt=true`
+gateway still rejects it. The function was missing from `config.toml` entirely (defaulting to
+`verify_jwt=true`).
+
+Fix (PR #525): Add `[functions.schedule-congress-donor-sync] verify_jwt = false` to
+`supabase/config.toml`. With JWT check skipped by the gateway, the tasks just need to send
+`apikey: ANON_KEY` with `Authorization: ""` (stripped) — no conflicting keys, no JWT needed.
+
+Files changed: `supabase/config.toml`, `workers/tasks/congress_donor_backfill.ts`,
+`workers/tasks/congress_donor_refresh.ts`, `workers/lib/call-edge.ts`.
+
+**State** (verified)
+- PR #525 open, CI running, Supabase preview branch deploying.
+- **NOT yet done (requires human action):**
+  1. **Add `SUPABASE_ANON_KEY`** to Railway env vars (value = `sb_publishable_…` from Supabase dashboard).
+  2. **Merge PR #525** once CI passes.
+  3. **Deploy the edge function** after merge: `supabase functions deploy schedule-congress-donor-sync`
+     so the `verify_jwt=false` config.toml entry takes effect in production.
+  4. **Redeploy Railway** after edge deploy.
+  5. **Apply unschedule migrations** — `20260622000000_retire_pg_cron_railway_workers.sql` and
+     `20260622010000_retire_pg_cron_state_finance.sql` — only after Railway confirmed running cleanly.
+
+**Next**
+Merge PR #525 → deploy edge function → add Railway env var → watch logs for clean runs.
+
+---
+
 ## 2026-06-22 — Railway worker congress donor auth fix (PR #524; branch fix/congress-donor-auth-header)
 
 **What happened & why**
