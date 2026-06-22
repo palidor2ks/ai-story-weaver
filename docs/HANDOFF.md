@@ -13,6 +13,45 @@
 (template — copy below this block)
 ```
 
+## 2026-06-22 — NC campaign finance: design doc + PR #528 merged
+
+**What happened & why**
+PR #528 (FEC recon writer unification + nightly schedule) was merged by palidor2ks
+during this session — all 7 CI checks green, Supabase preview clean.
+
+Wrote the NC campaign finance pipeline design doc (`docs/nc-campaign-finance-pipeline.md`)
+and cross-linked it from `docs/state-campaign-finance.md`. This was the next step after
+palidor2ks chose "design doc first" for the greenfield NC pipeline (no `nc_cf_*` tables
+exist yet).
+
+The doc covers:
+- NCSBE source options (bulk CSV vs. per-filer search API — probe-gated)
+- Schema design mirroring TX (`nc_cf_filers`, `nc_cf_contributions`, `nc_cf_sync_runs`)
+- Edge function modes (discover / drain / full), matching RPC strategy
+- Probe plan (§8.1) using DB `http` extension as proxy — same technique as FL/TX recon
+- Build sequence (5 PRs: schema, secret RPC, edge fn + cron, RPC, UI)
+- Decision matrix: name format + bulk-vs-API shape must be confirmed before coding
+
+**State** (verified)
+- `docs/nc-campaign-finance-pipeline.md` written and reviewed.
+- `docs/state-campaign-finance.md` updated with NC section (design phase, deferred post-v0).
+- PR #528 merged; all 3 finance-recon status writers now use the shared canonical rule.
+- Railway nightly sweep scheduled (`30 4 * * *`) — will run on next Railway deploy from main.
+- Post-merge recon standing: ok 294 / warning 88 / error 72 / partial 26 (from prior entry).
+
+**Next**
+Run the NCSBE probe (§8.1 of the design doc) to fill in the unknowns before building.
+That requires re-enabling the DB `http` extension on `ornnzinjrcyigazecctf`, hitting the
+NCSBE data-download URL, inspecting field names and name format, then dropping the extension.
+Once probe results are in, open the schema + edge function PRs.
+
+**Deferred** (still owed)
+- TX `total_raised` spot-check — blocked until TX drain coverage > 2% (currently 2/103 shards).
+- Delete `tx-cf-probe` and `nc-cf-probe` edge functions — dashboard-only (no MCP delete tool).
+- Post-first-nightly-sweep recheck of visible error count (first run ~04:30 UTC tonight).
+
+---
+
 ## 2026-06-22 — FEC recon: unify 3 status writers + schedule nightly sweep
 
 **What happened & why**

@@ -233,6 +233,25 @@ reader above), then cron + `tx_legislator_finance` RPC + `TxStateFinanceSection`
 
 ---
 
+## NC — DESIGN COMPLETE (probe + build deferred to after bills/votes)
+
+North Carolina is the product beachhead (see `strategy-nc-beachhead.md`). Campaign
+finance is enrichment — it ships after PoliScore v0 + bills/votes are live.
+
+**Design doc:** `docs/nc-campaign-finance-pipeline.md` — covers NCSBE source format,
+schema mirroring TX (`nc_cf_filers`, `nc_cf_contributions`, `nc_cf_sync_runs`),
+edge function (discover/drain/full), matching RPC, UI gate, and probe plan.
+
+**Key open question before any build**: run the probe in `§8.1` of the design doc
+to determine bulk-CSV vs. per-filer-API and confirm the name format (token-match
+vs. district+surname match), contribution PK, and office codes. Use the DB `http`
+extension as proxy (same approach as FL/TX recon) or a throwaway `nc-cf-probe`
+edge function.
+
+**Status:** design approved → probe → schema migration → edge fn → cron → RPC → UI.
+
+---
+
 ## PA — BACKUP (not yet probed)
 
 PA Dept. of State campaign finance: `www.dos.pa.gov` / the PA campaign finance
