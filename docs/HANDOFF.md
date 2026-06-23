@@ -27,6 +27,42 @@ manual check of X". Say what is NOT verified, too.>
 
 ---
 
+## 2026-06-23 — v23 sign-convention regression found and fixed; 23,911 wrong answers deleted; v24 deployed
+
+**What happened & why**
+On resuming, discovered that the **deployed** `generate-legislator-answers` (version 23, deployed 2026-06-21) had **silently regressed the sign-convention fix** from v12. v23 dropped `question_options(value,text)` from `getMissingQuestions` and reverted to "support=positive / oppose=negative" framing — the exact bug v12 fixed. For 87% of questions the left-leaning position IS to support a policy (raise minimum wage, etc.), so Gemini assigned +10 to Democrats and -10 to Republicans throughout the v23 chain run.
+
+**Impact**: 23,911 wrong-signed answers were written to `candidate_answers` for NJ, TX, and NC candidates between 2026-06-21 and 2026-06-23. Many NJ Democrats were displaying R8+ scores on the live site.
+
+**Emergency remediation (done this session)**:
+1. Identified affected rows via creation timestamp (≥ 2026-06-21 00:00:00 UTC)
+2. Nulled `overall_score` immediately for 12 NJ + 2 TX candidates with wrong-direction scores showing live
+3. Bulk-deleted 23,911 rows (`DELETE FROM candidate_answers WHERE created_at >= '2026-06-21' AND candidate_id IN <sub-federal set>`) — verified 0 rows remain
+4. Recomputed `overall_score` from pre-June-21 trusted answers for NJ/TX/NC — NJ Democrats now correctly negative (e.g. Shama Haider −6.67, Joe Cryan −8.46); TX shows NA (no pre-v23 trusted answers, which is correct)
+5. Triggered `refresh-candidates-cache` three times during cleanup; final CDN refresh confirmed HTTP 200 at 14:44:57 UTC
+
+**v24 deployed**: Committed `dd184a04`. Merges v12's sign-correct approach (labeled `question_options` texts in prompt) with v23's improvements: chunking (50 questions/call), `gemini-2.5-flash`, `updateCandidateScore`, integrity guards (`dropStanceInconsistent`, `demoteUnverifiableVoteClaims`), `candidateIds` targeted-remediation mode, `isCronAuthorized`. Also added `StanceFields` + `dropStanceInconsistent` to the committed `_shared/answer-label-guard.ts` (v23 had them deployed but not committed).
+
+**State** (verified as of ~15:00 UTC 2026-06-23)
+- `candidate_answers` v23-era rows fully deleted (SQL verified: 0 rows remain for sub-federal candidates with `created_at >= 2026-06-21`)
+- NJ/TX/NC `overall_score` recomputed from pre-June-21 trusted answers — NJ Democrats showing correct L values
+- CDN cache refreshed (request_id 47760: HTTP 200, no error)
+- `generate-legislator-answers` v24 deployed (Supabase: version 24, status ACTIVE)
+- Code committed and pushed to `claude/stoic-einstein-mpvb5m` — commit `dd184a04`
+- No lint/build/test run this session (no frontend code changed)
+
+**Next**
+Re-run the chain for NJ and TX (both have 0 answers after the deletion): trigger `generate-legislator-answers` with `{ state: "NJ", selfChain: true }` from the admin panel (or via service-key POST), then repeat for TX. NC already had pre-v23 trusted answers for most candidates — verify a spot-check before running NC.
+
+**Deferred**
+- Run `refresh-candidates-cache` once more after the NJ/TX re-run completes (scores will update via `updateCandidateScore` per-candidate in v24, but CDN file won't reflect new entries until refreshed)
+- NC Republicans: a few showed suspicious negative scores (Phil Berger −3.68) — spot-check before deciding whether to re-run NC
+- Merge open PR once CI is green (no new PR created this session — existing PR covers the branch)
+- Delete `la-trigger` edge function from Supabase dashboard (deferred from prior session)
+- Update OPEN-WORK #15 (phase-2 AI scoring) to reflect v24 is live
+
+---
+
 ## 2026-06-20 — list page still showed "C" after score fix; CDN cache regenerated
 
 **What happened & why**
