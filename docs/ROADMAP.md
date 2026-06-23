@@ -37,14 +37,16 @@ thresholds, and current standing: **`docs/DATA-ACCURACY.md`** (checked every pre
   task is running (`most_recent_sync` 11:42 UTC 2026-06-22); TX backfill should clear within ~1
   day at 1/10min. The "stall" was the hidden-state filter working as designed, not a bug.
   *(confirmed 2026-06-22)*
-- ☐ **FEC recon: Line 14/15 "other receipts" double-count (Finding B)** — `local_other_receipts`
-  can double-count JFC money already booked as `local_transfers` (e.g. Cassidy 2026: $2.55M local
-  other vs $0.27M FEC, ~his $2.27M transfers), inflating `total_receipts_delta`. Audit the Line
-  14/15 classification in the FEC importer. *(found 2026-06-15; details DATA-ACCURACY §1)*
-- ☐ **FEC recon: `status` doesn't gate on total receipts (Finding A)** — `ok` checks only
-  comparable-itemized `delta_pct`; 358/1,746 `ok` rows are >10% off on total receipts. Blocked on
-  Finding B (the total metric is too noisy to gate on until the double-count is fixed).
+- ✅ **FEC recon: Line 14/15 "other receipts" double-count (Finding B)** — fixed 2026-06-17
+  (migration `20260615170000`, applied prod as `20260617232826`). `other_total` redefined as
+  `IN ('14','15')` (was catch-all that swept in Line-12 transfers). Double-count signature
+  (`local_other == local_transfers`): 138 → 0 rows. Cassidy delta 31.1% → −2.6%.
   *(found 2026-06-15; details DATA-ACCURACY §1)*
+- ✅ **FEC recon: `status` doesn't gate on total receipts (Finding A)** — fixed 2026-06-22.
+  `nightly-finance-reconciliation` now demotes `ok` → `warning` when total-receipts delta >10%.
+  Writer unification shipped same day (shared `computeReconStatus` + `deriveTotalReceiptsStatus`
+  in `_shared/finance-recon-status.ts`). Visible standing as of 2026-06-22: ok 294 / warning 88
+  / error 72 / partial 26. Error gate 72 < 100, passing. *(found 2026-06-15; details DATA-ACCURACY §1)*
 - **Done =** the data on a given profile/page is confirmed accurate against source.
 
 ### 2. 🟡 Migration / DB stability
@@ -98,6 +100,12 @@ X/TikTok posting, Remotion social cards, AI-generated analysis. Deferred until t
   *(parked 2026-06-09)*
 
 ## Changelog
+- **2026-06-23** — marked Finding A and Finding B as ✅ in Priority #1. Both were fixed in earlier
+  sessions (Finding B: migration `20260615170000`, 2026-06-17; Finding A: writer unification +
+  total-receipts gate, 2026-06-22) and documented in DATA-ACCURACY.md, but ROADMAP markers were
+  never flipped. Visible recon standing: ok 294 / warning 88 / error 72 / partial 26 (error gate
+  passing). Remaining priority #1 work: residual `warning` / `error` rows self-healing as the drain
+  reprocesses each candidate (TX/NC backfill in progress).
 - **2026-06-20** — added individual issue/topic pages (`/issues/:slug`) to Priority #3 as an SEO-driven user-facing feature; all required data hooks already exist, build work is one new page + route + sitemap.
 - **2026-06-15 (cron health audit → two new action items)** — reviewed all 23 cron jobs over
   the last 14 days (2,826+ runs, 1 failure). Found: (1) `refresh-donor-consolidated-daily`
