@@ -57,6 +57,43 @@ NC `candidate_votes` rows have `chamber=NULL` until the weekly cron runs tomorro
 
 ---
 
+## 2026-06-22 — proxy-image: fail fast on unreachable hosts (was 500 + blank share card)
+
+**What happened & why**
+A reported runtime error: `proxy-image` returned a 500 for
+`http://www.njleg.state.nj.us/.../mcclellan_antwan_2020.jpg` with
+`client error (Connect): Connection timed out (os error 110)` and a blank screen.
+Root cause was in the edge function, not the data: it did an **unbounded `fetch()`**
+to the allowlisted upstream, so when a gov photo host silently drops the connection
+the fetch hangs until the kernel's TCP connect timeout (~110s) and then throws into
+the catch-all that returns a generic **500** — logged as a hard `RUNTIME_ERROR`.
+Fixed by wrapping the upstream fetch in an `AbortController` (8s timeout) + a local
+try/catch that returns **504** (our timeout) or **502** (DNS/connect failure) instead
+of a 500. Matches the repo's existing `AbortController` + `setTimeout(abort)` pattern
+(e.g. `fetch-floor-votes`).
+
+**State** (verified 2026-06-22, branch `claude/great-galileo-e2xfys`, commit `93864894`)
+- Edited only `supabase/functions/proxy-image/index.ts` (+57/−32). Outer 500 catch kept
+  as a last-resort safety net.
+- Preflight: **lint 0 errors** (154 pre-existing `any` warnings), **build OK**,
+  **tests 139 pass / 0 fail**, Bun parse-check of the function OK. (`bun install` was
+  needed first — node_modules was incomplete in this fresh container; lockfile unchanged.)
+- No frontend change required: both consumers (`ShareProfileButton`,
+  `useCandidateShareCardData`) already degrade on a non-OK proxy response — they keep the
+  raw image URL / drop the image rather than crashing.
+- **Not yet deployed.** The function change ships when the branch's edge functions are
+  deployed (GitHub integration / Supabase). `verify_jwt=false` for `proxy-image` unchanged.
+
+**Next**
+1. Deploy `proxy-image` (or let the integration redeploy on merge) and confirm a known-bad
+   host now returns 502/504 within ~8s instead of hanging ~110s.
+2. Optional data hygiene: the specific NJ legislator photo URL (Antwan McClellan,
+   `www.njleg.state.nj.us`) appears dead from the edge runtime — worth refreshing that
+   `image_url` from OpenStates if the host stays unreachable. Not blocking; the proxy now
+   degrades gracefully for any such host.
+
+---
+
 ## 2026-06-22 — NC GA initial data load complete (beachhead Task 2, step 7 pending)
 
 **What happened & why**

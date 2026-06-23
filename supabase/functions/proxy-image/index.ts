@@ -76,41 +76,66 @@ Deno.serve(async (req) => {
       });
     }
 
-    const upstream = await fetch(parsed.toString(), {
-      redirect: 'follow',
-      headers: {
-        // Wikimedia requires a descriptive UA with contact info or it returns 400.
-        'User-Agent': 'PolipulseImageProxy/1.0 (https://polipulseapp.com; contact@polipulseapp.com)',
-        'Accept': 'image/*,*/*;q=0.8',
-        'Referer': parsed.origin + '/',
-      },
-    });
-    if (!upstream.ok) {
-      return new Response(JSON.stringify({ error: 'upstream_failed', status: upstream.status }), {
-        status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    // Fail fast on unreachable or slow upstreams. Without this, a blocked host
+    // (e.g. a state-legislature photo server that silently drops the connection)
+    // hangs the fetch until the OS-level TCP connect timeout (~110s) and then
+    // throws, which previously surfaced to the client as a 500 + blank share card.
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    try {
+      const upstream = await fetch(parsed.toString(), {
+        redirect: 'follow',
+        signal: controller.signal,
+        headers: {
+          // Wikimedia requires a descriptive UA with contact info or it returns 400.
+          'User-Agent': 'PolipulseImageProxy/1.0 (https://polipulseapp.com; contact@polipulseapp.com)',
+          'Accept': 'image/*,*/*;q=0.8',
+          'Referer': parsed.origin + '/',
+        },
       });
-    }
-    const ct = upstream.headers.get('content-type') ?? '';
-    if (!ct.startsWith('image/')) {
-      return new Response(JSON.stringify({ error: 'not_an_image', contentType: ct }), {
-        status: 415, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-    const buf = await upstream.arrayBuffer();
-    if (buf.byteLength > MAX_BYTES) {
-      return new Response(JSON.stringify({ error: 'too_large' }), {
-        status: 413, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
+      if (!upstream.ok) {
+        return new Response(JSON.stringify({ error: 'upstream_failed', status: upstream.status }), {
+          status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const ct = upstream.headers.get('content-type') ?? '';
+      if (!ct.startsWith('image/')) {
+        return new Response(JSON.stringify({ error: 'not_an_image', contentType: ct }), {
+          status: 415, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const buf = await upstream.arrayBuffer();
+      if (buf.byteLength > MAX_BYTES) {
+        return new Response(JSON.stringify({ error: 'too_large' }), {
+          status: 413, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
 
-    return new Response(buf, {
-      status: 200,
-      headers: {
-        ...corsHeaders,
-        'Content-Type': ct,
-        'Cache-Control': 'public, max-age=31536000, immutable',
-      },
-    });
+      return new Response(buf, {
+        status: 200,
+        headers: {
+          ...corsHeaders,
+          'Content-Type': ct,
+          'Cache-Control': 'public, max-age=31536000, immutable',
+        },
+      });
+    } catch (err) {
+      // A network failure (DNS, connection refused, connect-timeout) or our own
+      // abort lands here. That's an upstream/gateway problem, not an internal
+      // fault of this proxy, so return 502/504 — never a 500 — so the failure is
+      // logged honestly and the client degrades to the raw image URL instead of
+      // treating it as a hard runtime error.
+      const aborted = (err as Error)?.name === 'AbortError';
+      return new Response(
+        JSON.stringify({ error: aborted ? 'upstream_timeout' : 'upstream_unreachable' }),
+        {
+          status: aborted ? 504 : 502,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        },
+      );
+    } finally {
+      clearTimeout(timeoutId);
+    }
   } catch (e) {
     return new Response(JSON.stringify({ error: (e as Error).message }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
