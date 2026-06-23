@@ -13,6 +13,50 @@
 (template — copy below this block)
 ```
 
+## 2026-06-23 — Worker migration closed out: verify_jwt fix, pg_cron retired + ledger reconciled
+
+**What happened & why**
+Post-go-live cleanup of the Railway worker migration (follow-up to the "fully live" entry below).
+- **#545** — `fetch-tx-finance` was missing from `supabase/config.toml`, so it defaulted to
+  `verify_jwt=true` while its siblings (`fetch-nj-elec/fl/ny-finance`) are `false`. Added it as
+  `verify_jwt=false`. Security-reviewed **GO**: the real gate is the `x-sync-secret` header
+  (Vault-backed, `service_role`-only `check_tx_sync_secret` RPC); the gateway only required the
+  *public* publishable key. Removes a latent trap — it would have 401'd at the gateway if the Railway
+  service key were ever switched to the new `sb_secret_…` format.
+- **pg_cron retirement reconciled** — all 15 Railway-replaced cron jobs were already unscheduled, but
+  the two retire migrations (`20260622000000`, `20260622010000`) weren't recorded in the repo's ledger.
+  GOTCHA: this repo's ledger is **`public.claude_migration_log`** (filename-keyed, written by
+  `scripts/apply-prod-migrations.sh`), NOT `supabase_migrations.schema_migrations`. Migration-safety-reviewed
+  **GO**; ran the idempotent migrations (no-ops — jobs already gone) and recorded both filenames in the ledger.
+
+**State** (verified 2026-06-23)
+- #545 merged; all CI + Supabase preview green. `fetch-tx-finance` `verify_jwt=false` redeploys via
+  `deploy-edge-functions.yml` on merge.
+- `claude_migration_log` now contains both retire-migration filenames (logged ~13:49 UTC); `cron.job`
+  has 0 of the 15 retired jobs.
+- Worker healthy: **1** active instance; `drain_fec_finance`/`fec_candidate_drain`/tx/votes/donor all 200.
+
+**Next**
+Confirm the `fec_candidate_drain` backlog drains over the next hour (see Deferred). Otherwise nothing pending.
+
+**Deferred**
+- 🔐 Rotate secrets pasted in chat during debugging (service_role, cron_secret, 5 sync secrets, DB
+  password, Perplexity/Lovable). **User is intentionally leaving this for now.**
+- **nj/fl/ny-finance 401 flapping in edge logs is NOT the worker.** Ruled out: worker (its
+  graphile-worker job ledger shows those drains succeeding, no 401s), pg_cron (no job calls them),
+  self-fan-out (functions only `fetch()` external state APIs). Only 1 worker instance is live. Source is
+  an unidentified non-worker caller — likely redeploy-window overlap (stale deploys with old/empty sync
+  secrets) and/or probes on the now-public (`verify_jwt=false`) endpoints. **Harmless** — the
+  `x-sync-secret` gate rejects them; real syncs succeed. To fingerprint: add
+  `console.warn('unauthorized', req.headers.get('user-agent'))` on the 401 path of the 3 functions,
+  deploy, read logs.
+- **`fec_candidate_drain` backlog**: 16 queued jobs with stale `"The operation timed out"` errors (6
+  historical lockers from redeploy churn). Should drain (runtime ~137s < the `*/3` 180s interval, and the
+  #542 240s timeout fix is live). Glance to confirm it clears; if it persists, the `*/3` schedule may need
+  to be slower than the per-run runtime to stop overlap from piling up new jobs.
+
+---
+
 ## 2026-06-23 — ROADMAP FEC recon findings marked done; PR #541 merged
 
 **What happened & why**
