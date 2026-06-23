@@ -81,6 +81,23 @@ SQL migration — requires toggling Authentication → Settings → Password Sec
 **History:** Surfaced during the PR #514 security audit session (2026-06-21).
 **State:** Not done. Owner action (dashboard toggle).
 
+### 20. ☐ Rotate secrets exposed during the worker-migration debugging
+**What:** Rotate the prod secrets pasted into the chat transcript while debugging the Railway worker:
+the `service_role` key, `cron_secret`, the 5 `*_sync_secret`s, the DB password, and the Perplexity +
+Lovable API keys. Update Railway env (and Vault) to match after rotating.
+**History:** Worker go-live session 2026-06-23; user intentionally deferred until the worker was stable.
+**State:** Not started — owner action. The DB password + `service_role` key are highest-value.
+
+### 21. ☐ Railway worker — two low-priority post-go-live watch items
+**What:** (a) `fetch-nj/fl/ny-finance` edge logs show 401 flapping from a **non-worker** caller (the
+worker's own drains succeed) — harmless (the `x-sync-secret` gate rejects them). Likely a lingering/
+duplicate Railway deployment, so first confirm only ONE worker runs; to fingerprint the caller, add a
+`console.warn('unauthorized', req.headers.get('user-agent'))` on the 401 path of the 3 fns, deploy, read
+logs. (b) `fec_candidate_drain` had a 16-job backlog of stale "operation timed out" jobs from redeploy
+churn — should self-drain (runtime ~137s < the `*/3` interval; #542's 240s fix is live); glance to confirm.
+**History:** Both uncovered while chasing the 401 in the 2026-06-23 worker session. Details in HANDOFF.
+**State:** Not started — both likely self-resolving; revisit only if they persist.
+
 ### 6. ✅ Supabase disk pressure — resolved 2026-06-19
 **What:** DB was ~15 GB; `refresh-donor-consolidated-daily` OOM'd 2026-06-13 (matview refresh needs ~1.5 GB transient headroom).
 **Done (2026-06-18):** dropped orphaned `_enrich_*` staging (~506 MB) + 9 unused indexes (~1.86 GB). **DB 15 → 13 GB.**
@@ -185,6 +202,14 @@ Mac casing that the old `formatCandidateName` lacked.
 ---
 
 ## ✅ Recently done (prune after ~2 weeks)
+- ✅ **2026-06-23** Railway graphile-worker migration **fully live + cleaned up**. Four stacked
+  failures fixed (PRs #538/#542 + Railway config): `.ts` task loading (graphile-worker's default
+  `fileExtensions` excludes `.ts`), DB connection (transaction pooler `:6543` → session pooler `:5432`
+  + alphanumeric password to dodge the `ECIRCUITBREAKER` URL-parse trap), edge-fn auth (send
+  `x-cron-secret` from `CRON_SECRET` — the service-role bearer no longer matches under the new API-key
+  system), and `fec_candidate_drain` 120→240s timeout. Then #545 (`fetch-tx-finance` `verify_jwt=false`)
+  and retired the 15 Railway-replaced pg_cron jobs (reconciled into `public.claude_migration_log`). All
+  16 worker tasks run green. Follow-ups parked as #20/#21. Full story in HANDOFF 2026-06-23 entries.
 - ✅ **2026-06-18** State-legislator ingestion (PR #455): `discover-state-legislators` edge fn +
   weekly cron + State/Local tab wiring; 293 NJ+NC legislators ingested & verified live (correct
   parties, chamber totals match reality). Directory-first, unscored — see #14/#15 for follow-ups.
