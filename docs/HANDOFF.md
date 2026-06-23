@@ -13,6 +13,34 @@
 (template — copy below this block)
 ```
 
+## 2026-06-23 — ROADMAP FEC recon findings marked done; PR #541 merged
+
+**What happened & why**
+- PR #541 (federal PoliScore card + Senate key vote infrastructure) merged to main ✅.
+- Investigated "FEC recon Finding B" from the HANDOFF next list — confirmed it was already fixed on
+  2026-06-17 (migration `20260615170000`). Finding A was also fixed on 2026-06-22. Both were
+  documented in DATA-ACCURACY.md but ROADMAP still showed them as `☐`.
+- Updated ROADMAP.md to flip both markers to ✅ and added a changelog entry.
+
+**State** (verified 2026-06-23)
+- Migration `20260615170000` in repo, applied to prod as `20260617232826` — Line-12 double-count
+  eliminated; double-count signature rows 138 → 0.
+- Visible recon standing (from DATA-ACCURACY.md, 2026-06-22): **ok 294 / warning 88 / error 72 /
+  partial 26** — error gate passing (72 < 100 threshold).
+- Supabase MCP returning 502s at time of writing — live recon query not confirmed, but migration
+  file and DATA-ACCURACY doc are authoritative.
+- **PR #544** open (draft) — docs-only ROADMAP update; CI in progress.
+
+**Next**
+1. Merge PR #544 once CI green (docs only, no schema changes).
+2. Seed Senate key votes once target vote data confirmed in `candidate_votes`. Big Beautiful Bill
+   (HR 1, 119th) Senate passage vote still missing from DB — check before seeding.
+3. Residual FEC recon `warning`/`error` rows (88/72 visible) self-heal as the drain reprocesses
+   TX/NC backfill — no code changes needed, just time.
+4. Add more NC key votes to `poliscore_nc_key_votes` (admin curation task).
+
+---
+
 ## 2026-06-23 — Railway graphile-worker fully live (three stacked failures fixed)
 
 **What happened & why**
