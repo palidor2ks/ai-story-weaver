@@ -1,9 +1,12 @@
 /**
  * call-edge: invoke a Supabase edge function from Railway.
  *
- * Default auth: Authorization: Bearer <SERVICE_ROLE_KEY> + matching apikey header.
- * This bypasses the cron-secret vault check in cron-auth.ts for functions that
- * support the service-role escape hatch.
+ * Default auth: Authorization: Bearer <SERVICE_ROLE_KEY> + matching apikey header,
+ * plus an x-cron-secret header (from CRON_SECRET). x-cron-secret is the PRIMARY
+ * credential for edge functions gated by cron-auth.ts — the service-role bearer is
+ * only a fallback escape hatch, and it no longer matches under the project's new
+ * API-key system (the function's SUPABASE_SERVICE_ROLE_KEY is the new secret key, not
+ * the legacy JWT the worker holds), so x-cron-secret is what actually authorizes them.
  *
  * For functions with per-function x-sync-secret auth (NJ/FL/NY/TX/vote sync),
  * pass extraHeaders: { "x-sync-secret": process.env.XYZ_SYNC_SECRET }.
@@ -17,6 +20,7 @@
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const CRON_SECRET = process.env.CRON_SECRET ?? "";
 
 if (!SUPABASE_URL || !SERVICE_KEY) {
   throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY env vars");
@@ -26,6 +30,10 @@ const DEFAULT_HEADERS: Record<string, string> = {
   "Content-Type": "application/json",
   "Authorization": `Bearer ${SERVICE_KEY}`,
   "apikey": SERVICE_KEY,
+  // Primary auth for cron-auth.ts-gated functions (drain-fec-finance, drain-research-queue,
+  // nightly-finance-reconciliation). Empty when CRON_SECRET is unset — stripped before the
+  // request below — and harmless for functions that don't read it.
+  "x-cron-secret": CRON_SECRET,
 };
 
 export async function callEdge<T = unknown>(
