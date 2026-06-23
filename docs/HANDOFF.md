@@ -13,6 +13,50 @@
 (template — copy below this block)
 ```
 
+## 2026-06-22 — Chamber discriminator deployed; backfill pending rate-limit reset
+
+**What happened & why**
+data-accuracy-verifier flagged bicameral double-count risk: bills like SB1080 produce two
+`is_final_passage=true` vote events (Senate Third Reading + House Third Reading), both bridged into
+`candidate_votes` under the same `(bill_id, candidate_id)` conflict key → only one row survives
+(House overwrites Senate), so Senate votes are silently dropped. Fix: add nullable `chamber text`
+column (`'upper'`|`'lower'`) to `candidate_votes`; pass `orgClassification` into every NC bridge
+row so the upsert conflict key `(bill_id, candidate_id, action_type, vote_number)` becomes
+per-chamber-distinct. NULL = federal (no backfill of old federal rows).
+
+Migration `20260622050000_candidate_votes_chamber.sql` applied to prod. Edge function deployed as
+**v8** (import map trick to resolve `_shared/cron-auth.ts` via MCP bundler). `mode=full` backfill
+(run id=5) immediately hit the OpenStates 250 req/day rate limit (261 used today). Existing 2,818
+NC `candidate_votes` rows have `chamber=NULL` until the weekly cron runs tomorrow.
+
+**State** (verified 2026-06-22, branch `claude/blissful-edison-7cvva1`, commit `dc6cb937`)
+- **`sync-nc-legislator-votes`** deployed as **v8 ACTIVE** (`verify_jwt=false`).
+  Chamber fix confirmed in deployed bundle; import map at `deno.json` inside source dir.
+- **`candidate_votes.chamber`** column EXISTS in prod (nullable text, no default).
+- **2,818 existing NC rows**: `chamber=NULL` — will be backfilled on next `mode=full` run.
+- **Run id=5**: `status='error'`, error=`"exceeded limit of 250/day: 261"` (OpenStates API).
+  Limit resets daily; next Sunday drain will backfill with correct chamber values.
+- **PR #537** open (draft): `claude/blissful-edison-7cvva1` → `main`.
+
+**Remaining known risks / caveats**
+- `chamber=NULL` on existing NC rows until cron backfills. Any UI query filtering by chamber
+  will miss these rows until then. Tolerable: the column is for future per-chamber aggregation,
+  not currently surfaced in UI.
+- OpenStates 250 req/day free-tier cap. Full re-runs consume ~9 API calls. Drain runs use fewer.
+  Don't trigger repeated `mode=full` runs in the same day.
+- MCP deploy uses `deno.json` import map workaround (not in committed source). If the function
+  is ever redeployed via `supabase functions deploy` CLI (not MCP), the standard directory layout
+  resolves `_shared/` correctly and no import map is needed.
+
+**Next**
+1. **Wait for rate-limit reset** (tomorrow), then trigger `mode=full` to backfill `chamber`.
+   Verify with: `select chamber, count(*) from candidate_votes where jurisdiction='nc_state' group by 1`.
+2. **Merge PR #537** once backfill is confirmed.
+3. **Task 3** — state scoring RPC (`get_poliscore_record` variant for `jurisdiction='nc_state'`,
+   no Congress/date-window filter) + key-vote curation UI.
+
+---
+
 ## 2026-06-22 — proxy-image: fail fast on unreachable hosts (was 500 + blank share card)
 
 **What happened & why**
