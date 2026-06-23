@@ -13,6 +13,44 @@
 (template — copy below this block)
 ```
 
+## 2026-06-23 — Senate bill passage vote ingestion fix; PR #547 open
+
+**What happened & why**
+- Resumed from the Senate vote audit (prior entry): all `VOTE-119-1-XXXXX` PROC entries in
+  `candidate_votes` are nomination/confirmation votes. HR 1 (OBBBA) Senate passage vote is absent.
+- Root cause identified: `fetch-floor-votes` fetched Senate XML but stored ALL votes as PROC
+  placeholders — it read `<document_short_title>` then `<issue>` without checking whether the
+  issue tag contained a real bill reference ("H.R. 1" vs a nominee's name).
+- **Implemented Senate bill passage vote ingestion** in
+  `supabase/functions/fetch-floor-votes/index.ts` (PR #547, draft):
+  1. `extractSenateIssueBillRef(issue)` — regex on `<issue>` tag; returns "HR 1" / "S 2" etc.
+     for bill types, null for nominations and procedural text.
+  2. `fetchSenateVote()` — prefers `<issue>` tag for real bill references over the fallback
+     document title; PROC placeholder only when no bill ref detected.
+  3. `processSenateFloorVotes()` — for non-PROC bill_ids, queries `bills` by
+     `(congress, bill_type, bill_number)` and resolves to the shortest existing `id` (canonical
+     House format "H R 1" — confirmed 7093 candidate_votes vs 1 for "119-HR.1") to avoid
+     duplicate bills rows confusing the PoliScore RPC.
+- DB check: HR 1 (119th Congress) already has two bills rows: "H R 1" (canonical, 7093 votes)
+  and "119-HR.1" (1 vote). Resolution lookup picks shortest → "H R 1". ✓
+- Preflight: lint ✅ (0 errors) · tests 139/139 ✅ · build ✅.
+
+**State** (verified 2026-06-23, prod `ornnzinjrcyigazecctf`)
+- PR #547 open (draft). CI queued at time of writing.
+- The fix is purely in the edge function — no migration needed, no schema change.
+- After merge + deploy, manually trigger `fetch-floor-votes` for a senator who voted on HR 1
+  (119th Congress, Session 1) to verify the passage vote appears in `candidate_votes` with
+  `bill_id = 'H R 1'`.
+
+**Next**
+1. Merge PR #547 after CI goes green.
+2. Manually test: trigger sync for a Republican senator (e.g. John Cornyn, J000473) and confirm
+   HR 1 passage vote appears in `candidate_votes` with `bill_id = 'H R 1'`.
+3. Add HR 1 to `poliscore_federal_key_votes` table so PoliScore surface it as a key vote.
+4. Residual FEC recon warning/error rows (88/72 visible) self-heal as TX/NC drain runs.
+
+---
+
 ## 2026-06-23 — v23 sign-convention regression found and fixed; 23,911 wrong answers deleted; v24 deployed
 
 **What happened & why**
