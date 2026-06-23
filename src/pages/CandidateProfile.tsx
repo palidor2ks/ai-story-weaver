@@ -47,6 +47,7 @@ import { AIExplanation } from '@/components/AIExplanation';
 
 import { AIFeedback, ReportIssueButton } from '@/components/AIFeedback';
 import { ContactInfoCard } from '@/components/ContactInfoCard';
+import { PoliScoreCard } from '@/components/PoliScoreCard';
 import { RelevantNewsFeed } from '@/components/RelevantNewsFeed';
 import { RepresentativeSocialFeed } from '@/components/RepresentativeSocialFeed';
 import { CandidatePositions } from '@/components/CandidatePositions';
@@ -755,6 +756,18 @@ export const CandidateProfile = () => {
           state={candidate.state}
           level={(candidate as { level?: string }).level}
         />
+
+        {/* PoliScore voting record — NC GA state legislators only (v0_nc).
+            Shows per-legislator position on curated key votes from the 2025 session. */}
+        {candidate.id &&
+          candidate.state === 'NC' &&
+          (candidate.office === 'State Senator' || candidate.office === 'State Representative') && (
+          <PoliScoreCard
+            candidateId={candidate.id}
+            candidateName={candidate.name}
+            jurisdiction="nc_state"
+          />
+        )}
 
         {/* Tabs for Donors and Votes */}
         <Tabs defaultValue="donors" className="w-full">

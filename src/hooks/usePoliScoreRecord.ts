@@ -5,13 +5,17 @@ export interface PoliScoreRow {
   key_vote_id: string;
   topic_id: string;
   lean: 'left' | 'right';
-  title: string;
+  title: string | null;
   neutral_description: string;
   source_url: string;
-  congress: number;
-  bill_type: string;
-  bill_number: number;
   vote_position: 'Yea' | 'Nay' | 'Not Voting' | 'Present' | null;
+  // Federal-only (null for NC state rows)
+  congress: number | null;
+  bill_type: string | null;
+  bill_number: number | null;
+  // NC state-only (null for federal rows)
+  bill_id: string | null;
+  session: string | null;
 }
 
 export interface PoliScoreTopic {
@@ -62,7 +66,6 @@ function groupByTopic(rows: PoliScoreRow[]): PoliScoreTopic[] {
       const isSubstantive = v.vote_position === 'Yea' || v.vote_position === 'Nay';
       if (isSubstantive) {
         cast++;
-        // right-aligned = Yea on a right-lean vote, or Nay on a left-lean vote
         if (
           (v.lean === 'right' && v.vote_position === 'Yea') ||
           (v.lean === 'left' && v.vote_position === 'Nay')
@@ -84,21 +87,44 @@ function groupByTopic(rows: PoliScoreRow[]): PoliScoreTopic[] {
   return topics;
 }
 
-export function usePoliScoreRecord(candidateId: string | undefined) {
+type Jurisdiction = 'federal' | 'nc_state';
+
+const rpcCall = (fn: string, args: Record<string, unknown>) =>
+  (supabase.rpc as unknown as (
+    fn: string,
+    args: Record<string, unknown>,
+  ) => Promise<{ data: unknown; error: unknown }>)(fn, args);
+
+export function usePoliScoreRecord(
+  candidateId: string | undefined,
+  jurisdiction: Jurisdiction = 'federal',
+) {
   return useQuery({
-    queryKey: ['poliscore-record', candidateId],
+    queryKey: ['poliscore-record', candidateId, jurisdiction],
     queryFn: async (): Promise<PoliScoreTopic[]> => {
       if (!candidateId) return [];
-      // get_poliscore_record is not yet in the generated Supabase types;
-      // use the untyped escape hatch (same pattern as useNjLegislatorFinance).
-      const { data, error } = await (supabase.rpc as unknown as (
-        fn: string,
-        args: Record<string, unknown>,
-      ) => Promise<{ data: unknown; error: unknown }>)('get_poliscore_record', {
+
+      if (jurisdiction === 'nc_state') {
+        const { data, error } = await rpcCall('get_poliscore_record_nc', {
+          p_candidate_id: candidateId,
+        });
+        if (error) throw error;
+        // NC rows: add null federal fields for type compatibility
+        const rows = ((data ?? []) as Array<Omit<PoliScoreRow, 'congress' | 'bill_type' | 'bill_number'>>).map(
+          (r) => ({ ...r, congress: null, bill_type: null, bill_number: null }),
+        );
+        return groupByTopic(rows as PoliScoreRow[]);
+      }
+
+      const { data, error } = await rpcCall('get_poliscore_record', {
         p_candidate_id: candidateId,
       });
       if (error) throw error;
-      return groupByTopic((data ?? []) as PoliScoreRow[]);
+      // Federal rows: add null NC fields for type compatibility
+      const rows = ((data ?? []) as Array<Omit<PoliScoreRow, 'bill_id' | 'session'>>).map(
+        (r) => ({ ...r, bill_id: null, session: null }),
+      );
+      return groupByTopic(rows as PoliScoreRow[]);
     },
     enabled: !!candidateId,
     staleTime: 1000 * 60 * 30,
