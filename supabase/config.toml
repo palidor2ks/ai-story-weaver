@@ -209,6 +209,8 @@ project_id = "ornnzinjrcyigazecctf"
     verify_jwt = false
   [functions.fetch-relevant-news]
     verify_jwt = false
+  [functions.fetch-tx-finance]
+    verify_jwt = false
   [functions.import-fec-committee]
     verify_jwt = false
   [functions.import-fec-schedule-e-csv]
