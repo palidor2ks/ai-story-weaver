@@ -13,6 +13,40 @@
 (template — copy below this block)
 ```
 
+## 2026-06-23 — PR #547 merged; HR 1 Senate passage vote confirmed in DB ✅
+
+**What happened & why**
+- Rebased `claude/blissful-edison-7cvva1` onto main twice (HANDOFF.md conflicts — multiple
+  sessions writing entries at the same top position). Resolved both with correct newest-first
+  ordering and merged PR #547.
+- Investigated why `bill_id = 'H R 1'` rows weren't appearing after merge:
+  1. SQL trigger via `net.http_post` returned **401** — function requires `x-sync-secret`
+     header (cron path) or admin JWT; bare SQL call is rejected.
+  2. OBBBA votes were already in DB under the old bill_id
+     `"A bill to provide for reconciliation pursuant to title II of H. Con. Res. 14."` —
+     vote_number=335, action_date=2025-06-30 — stored by the pre-fix cron using
+     `document_short_title`. The new function inserts a **new row** (conflict key is
+     `(bill_id, candidate_id, action_type, vote_number)` → different bill_id = no conflict).
+- Waited for the `*/15` cron cycle (`sync-legislator-votes`). Confirmed fix works.
+
+**State** (verified 2026-06-23)
+- `candidate_votes` row confirmed: `bill_id = 'H R 1'`, `candidate_id = 'C001056'` (Cornyn),
+  `position = 'Yea'`, `action_date = 2025-06-30`, `vote_number = 335` ✅
+- Old title-based row (`"A bill to provide for reconciliation..."`) still exists — harmless,
+  PoliScore joins via `bill_id = 'H R 1'` so it's ignored.
+- All other senators will get their HR 1 rows as the cron cycles through the full ~540-member
+  pass (~7h at 20/tick).
+- No code changes this session — PR #547 preflight already passed before merge.
+
+**Next**
+Add HR 1 to `poliscore_federal_key_votes` table so PoliScore surfaces it as a key vote.
+
+**Deferred**
+- Optional cleanup: DELETE old title-based `bill_id` rows for the reconciliation bill once
+  all senators have the correct `bill_id = 'H R 1'` row.
+- NJ/TX `generate-legislator-answers` re-run still in progress (see v26 entry above).
+- NC spot-check before re-running NC answers.
+
 ## 2026-06-23 — v26 deployed (BOOT_ERROR fix); NJ + TX chains re-triggered
 
 **What happened & why**
