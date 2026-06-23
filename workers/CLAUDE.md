@@ -39,9 +39,16 @@ bun run dev          # run with --watch (dev)
 ## Environment variables
 
 See `.env.example`. Critical:
-- `DATABASE_URL` — must be the **direct** Supabase connection (port 5432, not the pooler).
-  graphile-worker uses LISTEN/NOTIFY and advisory locks; the transaction pooler breaks these.
+- `WORKER_DB_URL` (or `DATABASE_URL`) — must support **session**-level features: graphile-worker
+  uses LISTEN/NOTIFY and advisory locks. Use the **direct** connection (`db.<ref>.supabase.co:5432`)
+  or the **session pooler** (`...pooler.supabase.com:5432`). Do **NOT** use the **transaction
+  pooler** (`:6543`) — it breaks graphile-worker (symptom: repeated `Failed to reset locked`). Also
+  **avoid special characters (`@`, `$`) in the DB password** (or percent-encode them): an unescaped
+  `@` mangles the URL and Supavisor then rejects the login with `ECIRCUITBREAKER` (auth lockout).
 - `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` — used by `lib/call-edge.ts`.
+- `CRON_SECRET` — the vault `cron_secret`, sent as `x-cron-secret` to authorize edge functions
+  gated by `_shared/cron-auth.ts`. Required: under the project's new API-key system the service-role
+  bearer no longer matches the functions' injected key, so this is the working cron credential.
 
 ## Removing the pg_cron jobs
 
