@@ -13,6 +13,38 @@
 (template — copy below this block)
 ```
 
+## 2026-06-23 — v26 deployed (BOOT_ERROR fix); NJ + TX chains re-triggered
+
+**What happened & why**
+PR #548 merged and the Supabase GitHub integration auto-deployed v25. v25 failed to boot because `_shared/answer-label-guard.ts` had duplicate declarations of `StanceFields`, `stanceContradictsValue`, and `dropStanceInconsistent` — a stale copy left over from the v23→v24 merge. Deno's TypeScript compiler rejects duplicate declarations at module load time → every request returned 503 BOOT_ERROR.
+
+**Fix**: Removed the duplicate block (lines 98-132 of the old file). The first declaration (lines 53-80) is canonical and unchanged. Committed `a245b107`, pushed, redeployed as **v26** (status ACTIVE).
+
+**Chains triggered** (both HTTP 200 started:true):
+- NJ: `{ state: "NJ", selfChain: true, limit: 10 }` — request_id 47768
+- TX: `{ state: "TX", selfChain: true, limit: 10 }` — request_id 47769
+
+Both states have 0 answers after the June-23 bulk deletion; the self-chaining batches will refill them over the next hour or two.
+
+**State** (as of ~15:30 UTC 2026-06-23)
+- `generate-legislator-answers` v26 deployed, status ACTIVE
+- NJ and TX chains running in background; `selfChain:true` so they continue automatically
+- `answer-label-guard.ts` deduplication fix committed and pushed to `claude/stoic-einstein-mpvb5m`
+
+**Next**
+1. After NJ/TX chains complete, trigger `refresh-candidates-cache` to bake new scores into CDN
+2. NC spot-check: Phil Berger showed −3.68 (suspicious for a Republican) — verify before deciding whether to re-run NC
+3. Delete `la-trigger` edge function from Supabase dashboard (deferred)
+4. Update OPEN-WORK #15 (phase-2 AI scoring) to reflect v26 is live
+
+**Deferred**
+- CDN refresh after NJ/TX complete (scores update per-candidate in v26 via `updateCandidateScore`, but the CDN directory file needs an explicit `refresh-candidates-cache` trigger)
+- NC re-run decision (pending spot-check of NC Republicans)
+- Delete `la-trigger` edge function
+- Update OPEN-WORK #15
+
+---
+
 ## 2026-06-23 — Senate bill passage vote ingestion fix; PR #547 open
 
 **What happened & why**
