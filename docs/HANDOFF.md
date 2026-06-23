@@ -13,6 +13,54 @@
 (template — copy below this block)
 ```
 
+## 2026-06-23 — Railway graphile-worker fully live (three stacked failures fixed)
+
+**What happened & why**
+The Railway worker (`grateful-healing` / production) had been migrated off pg_cron but never
+actually ran a task. Three stacked failures, fixed across two PRs + Railway config:
+1. **Loaded zero tasks.** graphile-worker's default `fileExtensions` is `[.js,.cjs,.mjs]`; the
+   worker runs TypeScript under Bun with no compile step, so every `.ts` task was skipped
+   ("no supported handlers found", empty task list). Fix (**#538**): pass
+   `preset.worker.fileExtensions += ".ts"` to `run()` — it is NOT a top-level `run()` option, it
+   must go through `preset`, or it's silently ignored.
+2. **DB connection.** `WORKER_DB_URL` pointed at the **transaction** pooler (`:6543`), which breaks
+   graphile-worker's LISTEN/NOTIFY + advisory locks → the `Failed to reset locked` error. Then the
+   DB password's `@`/`$` chars mangled the connection URL → Supavisor `ECIRCUITBREAKER` (auth
+   lockout). Fixed Railway-side: **session** pooler (`:5432`) + DB password reset to alphanumeric.
+3. **Edge-function 401s.** The worker authenticated cron functions with the service-role bearer
+   (cron-auth.ts's *fallback* escape hatch). Under the project's **new API-key system** the
+   functions' injected `SUPABASE_SERVICE_ROLE_KEY` is the new secret key, not the legacy JWT the
+   worker holds, so the bearer never matched. Fix (**#542**): send `x-cron-secret` (cron-auth's
+   *primary* path) from a new `CRON_SECRET` env. Also bumped `fec_candidate_drain`'s edge-call
+   timeout 120→240s (the function runs ~137s; the worker was aborting a successful run at 120s and
+   retrying it forever).
+
+**State** (verified 2026-06-23 via Railway worker logs)
+All 16 tasks load and complete `with success`: `drain_fec_finance`, `drain_research_queue`,
+`fec_candidate_drain` (~137s, no timeout), `nj/fl/ny/tx` drains, `sync_legislator_votes`,
+`congress_donor_backfill`. Zero 401s, zero timeouts, no "Failed to reset locked". #538 and #542
+merged to main. Railway env now: `WORKER_DB_URL`=session pooler `:5432` (alphanumeric password);
+`CRON_SECRET`=vault `cron_secret`; `SUPABASE_ANON_KEY`=publishable key; `SUPABASE_SERVICE_ROLE_KEY`
+=legacy JWT (still used as `apikey`, and as the bearer that satisfies `fetch-tx-finance`'s
+`verify_jwt=true` gateway).
+
+**Next**
+Retire the pg_cron jobs now that Railway is confirmed steady. The drain jobs aren't in `cron.job`,
+but the retire migrations `20260622000000` / `20260622010000` are NOT recorded as applied — verify
+and tidy so the source of truth matches reality.
+
+**Deferred**
+- 🔐 **Rotate the secrets pasted into chat during this debugging session**: the `service_role` key,
+  `cron_secret`, the five `*_sync_secret`s, the DB password, and the Perplexity/Lovable API keys.
+- `fetch-tx-finance` is **missing from `supabase/config.toml`** → defaults to `verify_jwt=true`.
+  Works today (the legacy-JWT bearer is a valid JWT at the gateway), but if Railway's
+  `SUPABASE_SERVICE_ROLE_KEY` is ever switched to the new `sb_secret_…` key, TX breaks at the
+  gateway until you add `verify_jwt=false` (matching every sibling) and redeploy it.
+- Some edge 401s come from non-worker callers (`fetch-all-bills`, `enrich-official-photos`) —
+  pre-existing, unrelated to this migration.
+
+---
+
 ## 2026-06-23 — Federal PoliScore card wired; Senate infrastructure added
 
 **What happened & why**
