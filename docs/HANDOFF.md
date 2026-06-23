@@ -92,6 +92,37 @@ Confirm the `fec_candidate_drain` backlog drains over the next hour (see Deferre
 
 ---
 
+## 2026-06-23 — Senate key vote data audit; ROADMAP FEC findings closed; PR #544 merged
+
+**What happened & why**
+- PR #541 merged. PR #544 (ROADMAP docs update) merged.
+- Investigated "FEC recon Finding B" — already fixed 2026-06-17 (migration `20260615170000`).
+  Finding A also fixed 2026-06-22. ROADMAP markers flipped to ✅.
+- Audited whether HR 1 (Big Beautiful Bill) Senate passage vote is in `candidate_votes`:
+  **It is not.** The `VOTE-119-1-XXXXX` PROC bill IDs in `candidate_votes` are Senate
+  **nomination/confirmation votes**, not bill passage votes. Key evidence:
+  - 571 distinct PROC bill IDs, max vote_number 659, 99 distinct senators
+  - Zero votes have the party-line signature (≥45 R Yea + ≤5 R Nay + ≤2 D+I Yea)
+  - Direct sample: vote #11 (52 Yea / 46 Nay overall) breaks down as 27 R Yea + 25 D Yea +
+    24 R Nay + 20 D Nay — confirmation vote pattern, not legislation passage
+  - Prior session conclusion ("no clean party-line splits") confirmed and explained
+
+**State** (verified 2026-06-23, prod `ornnzinjrcyigazecctf`)
+- Visible recon standing: **ok 294 / warning 88 / error 72 / partial 26** (error gate passing).
+- Senate bill passage votes (HR 1 OBBBA and any other legislation) are **not** in
+  `candidate_votes`. To seed Senate key votes, a bill-passage vote sync would be needed first.
+  This is a data pipeline gap, not a schema or code gap.
+
+**Next**
+1. To unblock Senate key votes: investigate whether the vote-sync pipeline (`sync-legislator-votes`
+   or equivalent federal function) can be extended to ingest Senate legislation floor votes
+   (separate from nomination votes). This is non-trivial — nominations and bill votes share the
+   same PROC ID namespace; a new ingestion path or data source would be needed.
+2. Residual FEC recon `warning`/`error` rows (88/72 visible) self-heal as TX/NC drain runs.
+3. Add more NC key votes to `poliscore_nc_key_votes` (admin curation task).
+
+---
+
 ## 2026-06-23 — ROADMAP FEC recon findings marked done; PR #541 merged
 
 **What happened & why**
