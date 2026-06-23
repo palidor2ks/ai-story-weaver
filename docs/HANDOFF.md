@@ -13,6 +13,32 @@
 (template — copy below this block)
 ```
 
+## 2026-06-23 — Task 3 CI green; backfill pending confirmation
+
+**What happened & why**
+PR #539 CI: 6/7 GitHub checks pass. Supabase Preview had a transient failure on first attempt
+(pre-existing `app_role` already exists error, same as the `questions_pkey` issue from prior
+sessions). The Supabase bot comment shows all tasks ✅ after auto-retry (Migrations ✅ 01:43,
+Seeding ✅ 01:43, Edge Functions ✅ 01:44). A new commit was pushed to force a fresh check run.
+
+**State** (verified 2026-06-23, branch `claude/blissful-edison-7cvva1`)
+- **Supabase Preview**: fully green per bot comment; fresh check run ✅.
+- **All other CI**: GitGuardian ✅, Typecheck ✅, Lint ✅, Build ✅, Test ✅, Lockfile ✅.
+- **`poliscore_nc_key_votes`** table in prod; seeded with SB1080.
+- **`get_poliscore_record_nc`** RPC live.
+- **Frontend**: NC PoliScore card wired for NC senators/reps in `CandidateProfile`.
+- **Run id=6** (`mode=full`): fired at ~01:40 UTC 2026-06-23; backfill status TBD.
+- **PR #539** open (ready for review).
+
+**Next**
+1. Confirm run id=6 completed: `select chamber, count(*) from candidate_votes where jurisdiction='nc_state' group by 1;`
+2. If backfill confirmed, re-verify RPC returns real `vote_position` for a known NC senator on SB1080.
+3. Merge PR #539.
+4. Add more NC key votes to `poliscore_nc_key_votes` (admin curation task).
+5. Senate federal key votes (the federal card empty state still says "House only").
+
+---
+
 ## 2026-06-23 — Railway worker loaded zero cron tasks (`.ts` extension fix)
 
 **What happened & why**
@@ -55,6 +81,39 @@ for it and would silently ignore it; it must go through `preset.worker`.
    `(task names: 'congress_donor_backfill,congress_donor_refresh,...')` and tasks start executing.
 2. Watch whether `Failed to reset locked` recurs after the redeploy; if so, do the `DATABASE_URL`
    direct-connection check above.
+
+---
+
+## 2026-06-23 — Task 3 complete: NC PoliScore RPC + UI wired
+
+**What happened & why**
+Built the NC state PoliScore pipeline end-to-end. Federal RPC uses `(congress, bill_type,
+bill_number)` to identify key votes — NC bills don't have these fields, so a parallel NC
+structure was needed. New `poliscore_nc_key_votes` table uses `bill_id` directly (`nc-2025-*`).
+New `get_poliscore_record_nc` RPC LEFT JOINs to `candidate_votes` filtered by
+`jurisdiction='nc_state'` and the candidate's chamber (derived from `candidates.office`).
+`PoliScoreCard` extended with `jurisdiction` prop to render NC bill references and NCGA links.
+Card wired into `CandidateProfile` for NC state legislators.
+
+Chamber backfill (`mode=full`, run id=6) also fired — should populate `chamber='upper'/'lower'`
+on the 2,818 existing NC `candidate_votes` rows so the RPC returns real `vote_position` values.
+
+**State** (verified 2026-06-23, branch `claude/blissful-edison-7cvva1`, commit `e3222628`)
+- **`poliscore_nc_key_votes`** table exists in prod; seeded with SB1080.
+- **`get_poliscore_record_nc`** RPC live and smoke-tested (returns SB1080 row with `vote_position=null`
+  until backfill completes).
+- **Frontend**: `usePoliScoreRecord(candidateId, 'nc_state')` calls correct RPC; `PoliScoreCard`
+  renders NC-appropriate bill reference; wired in `CandidateProfile` for NC senators/reps.
+- **Run id=6** (`mode=full`): fired at ~01:40 UTC; result TBD (check `nc_leg_sync_runs`).
+- **PR #539** open (draft): `claude/blissful-edison-7cvva1` → `main`, CI in progress.
+
+**Next**
+1. Confirm run id=6 completed successfully and `chamber` is now populated.
+   `select chamber, count(*) from candidate_votes where jurisdiction='nc_state' group by 1;`
+2. Re-verify RPC returns real `vote_position` for a known NC senator on SB1080.
+3. Merge PR #539.
+4. Add more NC key votes to `poliscore_nc_key_votes` as curation gate expands (admin task).
+5. Senate federal key votes (the federal card empty state still says "House only").
 
 ---
 
