@@ -13,29 +13,31 @@
 (template — copy below this block)
 ```
 
-## 2026-06-23 — Task 3 CI green; backfill pending confirmation
+## 2026-06-23 — Chamber backfill applied; NC PoliScore fully live for reps
 
 **What happened & why**
-PR #539 CI: 6/7 GitHub checks pass. Supabase Preview had a transient failure on first attempt
-(pre-existing `app_role` already exists error, same as the `questions_pkey` issue from prior
-sessions). The Supabase bot comment shows all tasks ✅ after auto-retry (Migrations ✅ 01:43,
-Seeding ✅ 01:43, Edge Functions ✅ 01:44). A new commit was pushed to force a fresh check run.
+PR #539 merged. Post-merge check: `candidate_votes.chamber` was still null for all 3,095 NC rows
+despite run id=6 completing successfully. Root cause: the edge function's Supabase upsert
+(`INSERT … ON CONFLICT DO UPDATE`) did not update the chamber column on existing rows. Direct SQL
+backfill applied via migration `20260623070000_backfill_candidate_votes_chamber.sql` — derives
+chamber from `candidates.office` (same logic as the RPC).
 
-**State** (verified 2026-06-23, branch `claude/blissful-edison-7cvva1`)
-- **Supabase Preview**: fully green per bot comment; fresh check run ✅.
-- **All other CI**: GitGuardian ✅, Typecheck ✅, Lint ✅, Build ✅, Test ✅, Lockfile ✅.
-- **`poliscore_nc_key_votes`** table in prod; seeded with SB1080.
-- **`get_poliscore_record_nc`** RPC live.
-- **Frontend**: NC PoliScore card wired for NC senators/reps in `CandidateProfile`.
-- **Run id=6** (`mode=full`): fired at ~01:40 UTC 2026-06-23; backfill status TBD.
-- **PR #539** open (ready for review).
+Also discovered: SB1080 has no Senate (upper) vote event in OpenStates — only the House Third
+Reading (concurrence) was captured. NC senators correctly show `vote_position=null` via LEFT JOIN.
+
+**State** (verified 2026-06-23, prod `ornnzinjrcyigazecctf`)
+- **`candidate_votes.chamber`**: 2,164 lower + 931 upper, zero nulls ✅.
+- **RPC smoke test**: `get_poliscore_record_nc` returns `vote_position='Nay'` for Rep. Marcia Morey
+  on SB1080 ✅. NC senators show null (upstream OpenStates data gap, not a bug).
+- **PR #540** open (draft): backfill migration only, CI in progress.
+- **PR #539**: merged to main ✅.
 
 **Next**
-1. Confirm run id=6 completed: `select chamber, count(*) from candidate_votes where jurisdiction='nc_state' group by 1;`
-2. If backfill confirmed, re-verify RPC returns real `vote_position` for a known NC senator on SB1080.
-3. Merge PR #539.
-4. Add more NC key votes to `poliscore_nc_key_votes` (admin curation task).
-5. Senate federal key votes (the federal card empty state still says "House only").
+1. Merge PR #540 once CI green.
+2. Add more NC key votes to `poliscore_nc_key_votes` (admin curation task).
+3. Senate federal key votes (the federal card empty state still says "House only").
+4. If SB1080 Senate vote data becomes available in OpenStates, re-run `sync-nc-legislator-votes`
+   with `mode=full` to capture it (no code changes needed).
 
 ---
 
