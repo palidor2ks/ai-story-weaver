@@ -13,6 +13,51 @@
 (template — copy below this block)
 ```
 
+## 2026-06-23 — Railway worker loaded zero cron tasks (`.ts` extension fix)
+
+**What happened & why**
+The Railway worker (`grateful-healing` / production, deploy `043608c2`) logged
+`Failed to load task '<name>' - no supported handlers found for path: '/app/tasks/<name>.ts'`
+for **all 16 tasks**, then `Worker connected and looking for jobs... (task names: '')`. Empty task
+list = **none** of the cron syncs were running (FEC finance, state finance NJ/FL/NY/TX, bill sync,
+legislator votes, congress donors, research-queue drain — all silently idle).
+
+Root cause: `graphile-worker@0.16.6`'s default `fileExtensions` is `[".js", ".cjs", ".mjs"]`, which
+**excludes `.ts`**. The worker runs under Bun directly from TypeScript source (`startCommand: bun run
+worker.ts`, `tsconfig` is `noEmit` so there are no compiled `.js` files in `tasks/`). So the loader
+skipped every `.ts` file. Confirmed in source: `LoadTaskFromJsPlugin` filters by
+`resolvedPreset.worker.fileExtensions`; the warning is `getTasks.js:101`.
+
+Fix (`workers/worker.ts`): pass `preset: { worker: { fileExtensions: [".js",".cjs",".mjs",".ts"] } }`
+to `run()`. Bun imports `.ts` natively, so the plugin's dynamic `import()` then succeeds. Note:
+`fileExtensions` is **not** a top-level `run()` option — `legacyOptionsToPreset` (lib.js) has no case
+for it and would silently ignore it; it must go through `preset.worker`.
+
+**State** (verified 2026-06-23, branch `claude/tender-goodall-ndc4q8`)
+- `workers/worker.ts` edited; `bunx tsc` (the build command) passes clean.
+- **Reproduced + proved** with a Bun smoke test against the real `workers/tasks/` dir:
+  default options → **0 tasks / 16 warnings** (matches prod); with the fix → **16 tasks / 0 warnings**.
+- Full `bun run worker.ts` boot with a dummy DB URL: all options accepted (no "unknown config
+  option" warning), tasks loaded, fails only at the (expected) Postgres connection.
+- **Not yet deployed** — needs a Railway redeploy of the worker service from this branch.
+
+**Remaining known risks / caveats**
+- **`Failed to reset locked; we'll try again in 568253ms`** (last log line) is a **separate** issue:
+  graphile-worker's `resetLockedAt` maintenance query failed once and self-reschedules (~9.5 min).
+  The underlying error is in the truncated log metadata (not visible in the screenshot). Most likely
+  transient (first run fires within 60 s of connect, while the `graphile_worker` schema auto-migrate
+  settles) — but if it **persists**, expand that log line and verify `DATABASE_URL` is the **direct**
+  `:5432` connection, not the pooler (graphile-worker needs LISTEN/NOTIFY + advisory locks; see
+  `workers/CLAUDE.md`). Not fixable in-repo; it's a Railway env/ops check.
+
+**Next**
+1. **Redeploy the Railway worker** from this branch. Confirm the log now shows a non-empty
+   `(task names: 'congress_donor_backfill,congress_donor_refresh,...')` and tasks start executing.
+2. Watch whether `Failed to reset locked` recurs after the redeploy; if so, do the `DATABASE_URL`
+   direct-connection check above.
+
+---
+
 ## 2026-06-22 — Chamber discriminator deployed; backfill pending rate-limit reset
 
 **What happened & why**
