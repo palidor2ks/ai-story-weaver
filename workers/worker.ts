@@ -39,6 +39,17 @@ const runner = await run({
   pollInterval: 2000,
   taskDirectory: join(__dirname, "tasks"),
   crontabFile: join(__dirname, "crontab"),
+  // We run under Bun (`bun run worker.ts`) and ship tasks as TypeScript source —
+  // there's no compile step (tsconfig is noEmit). graphile-worker's default
+  // fileExtensions are [".js", ".cjs", ".mjs"], so it skips every `.ts` file with
+  // "no supported handlers found" and loads zero tasks. Bun imports `.ts`
+  // natively, so add it to the loader. This must go through `preset.worker` —
+  // `fileExtensions` is not a top-level run() option and would be ignored there.
+  preset: {
+    worker: {
+      fileExtensions: [".js", ".cjs", ".mjs", ".ts"],
+    },
+  },
 });
 
 // runner.promise resolves when the runner stops (SIGTERM / SIGINT).
