@@ -61,6 +61,26 @@
 - **Visible re-baseline (2026-06-16 — what the gate now enforces):** standing **39 error · 1 partial
   · 145 ok** across visible states; threshold **visible error must not exceed 100** (regression guard;
   ratchet down). The whole-DB spot-check below is retained as the methodology/audit reference.
+- **Visible standing (2026-06-22, post Finding A+B + writer unification):** **ok 294 / warning 88 /
+  error 72 / partial 26** (total 480). Error gate: 72 < 100, passing. `ok` requires both itemized
+  (≤5%) AND total-receipts (≤10%) within tolerance.
+- **Writer unification (2026-06-22):** all three functions that write `finance_reconciliation.status`
+  now share **one** rule via `supabase/functions/_shared/finance-recon-status.ts`
+  (`computeReconStatus` + `deriveTotalReceiptsStatus`). Before, each disagreed —
+  `fetch-fec-donors` graded err>10/warn>5 on *individual-only*; `refresh-fec-totals` used a stricter
+  ok≤2/warn≤5; only `nightly-finance-reconciliation` had the Finding A gate — so a candidate's status
+  flip-flopped depending on which ran last (drain calls both `fetch-fec-donors` and
+  `refresh-fec-totals` every 10 min). Canonical rule: **partial** if sync incomplete; **error** if
+  FEC totals don't balance or comparable-itemized |Δ|>10%; **warning** if |Δ|>5% OR total receipts
+  >10% off (Finding A); else **ok**. `fetch-fec-donors` (which lacks the FEC loans/transfers/other
+  breakdown) reuses the authoritative `total_receipts_status` last written by the fuller calc rather
+  than self-assessing. Retroactively reconciled 106 rows to the unified rule (66 error→warning for
+  ≤10% rows the old strict gate over-flagged, 40 warning→ok for the 2–5% band the majority already
+  treated as ok).
+- **Nightly sweep (2026-06-22):** `nightly-finance-reconciliation` is now **scheduled** — a new
+  Railway task (`workers/tasks/nightly_finance_reconciliation.ts`, crontab `30 4 * * *`) calls it
+  with the service-role bearer (accepted by a new `isCronAuthorized` path on the function). It
+  complements the 10-min drain by re-checking the stalest rows in one nightly pass.
 - **Spot-check (2026-06-15, 13 candidate-cycles across AK/AL/FL/LA/CA/MS/AR/NV/TX/MS, House+Senate,
   $0.34M–$8.4M, high-dollar + grassroots):** itemized donor data reconciles to the cached FEC
   category totals **to within dollars** on every `ok` row sampled (Britt, Begich, Moody, Sullivan,
@@ -70,28 +90,22 @@
   genuine sub-threshold itemized gaps, correctly flagged. *Caveat:* this compares local vs the
   cached `fec_*` columns (populated from the FEC API at each recon run), i.e. **source-as-of-last-sync**,
   not a fresh FEC.gov pull (sandbox egress blocks the FEC API at 403 — re-run live from CI/local).
-- **Two findings from that spot-check (open, not yet fixed):**
-  1. **`status` gates only on comparable-itemized `delta_pct`, never on `total_receipts_delta_pct`**
-     (`nightly-finance-reconciliation/index.ts` lines 408-411). So a row can be `ok` while total
-     receipts are far off — e.g. **Bill Cassidy 2026 is `ok` with a +$2.09M / +31% total-receipts
-     delta** because his itemized `delta_pct` is only −4.3%. "ok" means *donors reconcile*, not
-     *total receipts reconcile* — the label is narrower than it reads. Decide whether to add a
-     secondary total-receipts gate (would reclassify an unknown count of `ok` rows) or rename/scope
-     the metric.
-  2. **`local_other_receipts` can be inflated and inflate the total.** Cassidy's `local_other_receipts`
-     is $2.55M vs FEC's $0.27M — ~the size of his $2.27M JFC transfers, which are *also* in
-     `local_transfers`. The total formula's `Math.max(localOther, fecOther)` then adds the inflated
-     figure. Looks like Line 14/15 "other" double-counting joint-fundraising money already counted as
-     a transfer. Does **not** affect donor-facing itemized data. Audit the Line 14/15 classification
-     in the FEC importer before trusting `total_receipts_delta` as a gate.
-  - **Scale (2026-06-15):** of 1,746 `ok` rows, **358 (20.5%) have |total_receipts_delta| > 10%**
-    and 298 > 25%; the average `ok` row is **17.7% off on total receipts**. The over/under split is
-    roughly balanced (25 rows > +$500K, 21 < −$500K), which says `total_receipts_delta` is a **noisy
-    two-sided metric** (over-count from the `Math.max` heuristic à la Cassidy; under-count from
-    missing parent-aggregate records) — likely *why* the original author gated on comparable-itemized
-    instead. **Findings A and B are linked: fix B (Line 14/15 classification + the `Math.max`
-    double-count) before A (gating on total receipts) can be trusted.** The itemized gate remains the
-    sound primary signal.
+- **Two findings from that spot-check:**
+  1. ✅ **FIXED 2026-06-22 (Finding A):** `status` now gates on both comparable-itemized delta AND
+     total-receipts delta. Added secondary gate in `nightly-finance-reconciliation/index.ts` (v584):
+     if `total_receipts_status` is `'over'` or `'under'` (>10% off), the row is demoted from `ok` to
+     `warning`. `null` total_receipts_status (fec_total_receipts=0/missing) skips the gate. Impact:
+     336 ok rows retroactively demoted to warning (93 `over` avg 153.8% · 243 `under` avg 58.9%). New
+     visible-state standing: **ok 292 / warning 81 / error 81 / partial 26** (error gate unaffected:
+     81 < 100 threshold). **`ok` now means: itemized donors reconcile AND total receipts ≤10% off.**
+  2. ✅ **FIXED 2026-06-17 (Finding B):** `local_other_receipts` inflated by Line-12 double-count.
+     Cassidy's `local_other_receipts` was $2.55M (= transfers double-counted as other). Fixed by
+     migration `20260615170000` (applied prod as `20260617232826`). Cassidy delta 31.1% → −2.6%.
+  - **Scale post-fixes (2026-06-22):** of 1,570 ok rows (whole-DB after Finding A gate applied),
+    all have `total_receipts_status='ok'` or `null` — the 336 demoted rows are now in `warning`.
+    Visible: **292 ok** (vs 368 before Finding A). The residual `warning` rows (81 visible) are
+    genuine coverage gaps (backfill in progress for TX/NC) or Math.max heuristic over-fills — will
+    self-heal as the drain reprocesses each candidate.
   - **UPDATE (2026-06-17, Finding B APPLIED + recon corrected):** migration `20260615170000` was
     applied to Dev (recorded under MCP-assigned version `20260617232826`; the repo file is idempotent
     `CREATE OR REPLACE`, so the resync script re-running it is a no-op). The 800 candidates' recon rows
@@ -100,8 +114,7 @@
     total-receipts delta 31.1% → −2.6%**, `local_other_receipts` $2.55M → $274,592 (= FEC). Rows with
     the double-count signature (`local_other == local_transfers`): **138 → 0**. Excess "other":
     **$89.7M → $3.4M**, and that residual is genuine local>FEC diffs (e.g. Thanedar T000250) the
-    double-count was masking — not transfers. **Finding A is now unblocked** (`total_receipts_delta`
-    is trustworthy); a full nightly drain (fresh FEC fetch) will reconfirm. Original fix notes below.
+    double-count was masking — not transfers. Original fix notes below.
   - **(2026-06-15, Finding B fix authored — migration `20260615170000`):**
     root cause found in the `other_total` column of `get_contribution_totals` /
     `get_contribution_totals_by_committee`. It was defined as the catch-all

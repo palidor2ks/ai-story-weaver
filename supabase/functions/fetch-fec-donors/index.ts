@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { crypto } from "https://deno.land/std@0.177.0/crypto/mod.ts";
 import { encode as hexEncode } from "https://deno.land/std@0.177.0/encoding/hex.ts";
 import { isKnownConduitOrg, shouldCountDonorLine } from "../_shared/conduits.ts";
+import { computeReconStatus } from "../_shared/finance-recon-status.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -1448,16 +1449,40 @@ serve(async (req) => {
       );
     }
 
+    // Guard: skip reconciliation if we've already spent > 90s — avoids 504s on candidates
+    // with few pages but slow aggregation queries against the large contributions table.
+    // Rollups update on the next successful sync call.
+    const elapsedBeforeRecon = Date.now() - startTime;
+    if (elapsedBeforeRecon > 90_000) {
+      console.log(`[FEC-DONORS] Skipping reconciliation (${Math.round(elapsedBeforeRecon / 1000)}s elapsed) to avoid 504`);
+      return new Response(JSON.stringify({
+        success: true, imported: totalDonors, contributionsImported: totalContributions, totalRaised,
+        hasMore: globalHasMore, cycle, committeesProcessed: 1, committeesSynced: committeeId,
+        committeesRemaining: remainingCommittees, committees: committees.map(c => ({ id: c.id, name: c.name })),
+        skippedNonContributions, elapsedMs: elapsedBeforeRecon,
+        message: globalHasMore
+          ? `Partial sync; rollups deferred. Call again to continue.`
+          : `Sync complete; rollups deferred. Call again to update.`
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
     // Update rollups for EVERY sync batch (not just when complete)
     // This ensures the dashboard shows accurate dollar amounts during partial syncs
     // CRITICAL: Only store rollups for P/A (campaign) committees with the candidate_id
     // External committees (J/U/B/D) should NOT contribute to candidate totals
     if (!isExternalCommittee) {
-      // Query actual totals from contributions table for accuracy
-      const { data: dbTotals } = await supabase.rpc(
-        'get_contribution_totals_by_committee',
-        { p_committee_id: committeeId, p_cycle: cycle }
-      );
+      // Query actual totals from contributions table for accuracy.
+      // 12s timeout prevents this aggregation scan from consuming the remaining 150s budget;
+      // on timeout the code falls through to the in-memory session-value fallbacks below.
+      const rpcPromise = supabase
+        .rpc('get_contribution_totals_by_committee', { p_committee_id: committeeId, p_cycle: cycle })
+        .then(({ data }) => data)
+        .catch(() => null);
+      const rpcTimeout = new Promise<null>(resolve => setTimeout(() => resolve(null), 12_000));
+      const dbTotals = await Promise.race([rpcPromise, rpcTimeout]);
+      if (dbTotals === null) {
+        console.warn('[FEC-DONORS] Contribution totals RPC timed out — using in-memory session values');
+      }
       
       // Find totals for this specific committee
       const committeeDbTotals = (dbTotals || []).find((t: { committee_id: string }) => t.committee_id === committeeId);
@@ -1674,9 +1699,15 @@ serve(async (req) => {
       ? Math.round((pacDeltaAmount / totalFecPacContributions) * 10000) / 100 
       : 0;
     
-    // Overall status based on individual comparison (apples-to-apples)
-    const deltaAmount = individualDeltaAmount; // Use individual delta for status
-    const deltaPct = individualDeltaPct;
+    // Overall status uses the comparable-itemized basis (individual + PAC + party) so this
+    // fast path agrees with refresh-fec-totals / nightly-finance-reconciliation. (Previously
+    // it gated on individual-only, which disagreed with the other two writers.)
+    const localComparableItemized = totalLocalIndividualItemized + totalLocalPacContributions + totalLocalPartyContributions;
+    const fecComparableItemized = totalFecItemized + totalFecPacContributions + totalFecPartyContributions;
+    const deltaAmount = localComparableItemized - fecComparableItemized;
+    const deltaPct = fecComparableItemized > 0
+      ? Math.round((deltaAmount / fecComparableItemized) * 10000) / 100
+      : 0;
 
     // Total receipts delta — compare local total (including FEC-only unitemized) vs FEC total receipts.
     // We don't have FEC transfers/loans/other breakdown in this function, so we fall back to local values
@@ -1689,10 +1720,25 @@ serve(async (req) => {
       ? ((localTotalReceiptsForDelta - totalFecReceipts) / totalFecReceipts) * 100
       : null;
 
-    let status = 'ok';
-    if (Math.abs(deltaPct) > 10) status = 'error';
-    else if (Math.abs(deltaPct) > 5) status = 'warning';
-    if (globalHasMore) status = 'partial'; // Mark as partial if sync incomplete
+    // Finding A secondary gate. This function's own total-receipts delta is rough (no FEC
+    // loans/transfers/other breakdown), so it does NOT self-assess total_receipts_status —
+    // it reuses the authoritative one last written by refresh-fec-totals / nightly. This keeps
+    // the displayed status from flip-flopping between this fast path and the fuller calc; a null
+    // (no prior row yet) simply skips the gate until the next drain's keep-fresh pass.
+    const { data: priorRecon } = await supabase
+      .from('finance_reconciliation')
+      .select('total_receipts_status')
+      .eq('candidate_id', candidateId)
+      .eq('cycle', cycle)
+      .maybeSingle();
+    const priorTotalReceiptsStatus = (priorRecon?.total_receipts_status ?? null) as 'ok' | 'over' | 'under' | null;
+
+    // Canonical status (shared by all three recon writers). See _shared/finance-recon-status.ts.
+    const status = computeReconStatus({
+      itemizedDeltaPct: deltaPct,
+      totalReceiptsStatus: priorTotalReceiptsStatus,
+      isPartial: globalHasMore, // incomplete sync → 'partial'
+    });
     
     await supabase
       .from('finance_reconciliation')

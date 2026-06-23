@@ -64,6 +64,40 @@ day (still can't manually trigger fetch-fec-donors from MCP — admin auth + FEC
 
 ## 🟠 Infrastructure / DB
 
+### 18. ☐ Follow-on: inline role checks for 17 remaining `authenticated_security_definer_function_executable` warnings
+**What:** After PR #514, 17 admin-panel functions (Group B) still carry the Supabase advisor warning
+because `authenticated` can still call them. These are correct-by-design for now (admin UI needs them),
+but the durable fix is to add `IF NOT has_role('admin') THEN RAISE EXCEPTION 'admin only'; END IF;`
+inside each function body, OR route those RPCs through a service_role edge function that checks the
+session's role before forwarding.
+**History:** PR #514 (2026-06-21) explicitly deferred this as follow-on work — the immediate risk
+(anon access) is fixed; auth-access is an advisory-level warning, not a breach.
+**State:** Not started. Low urgency — admin panel already requires login, so no real admin action is
+possible anonymously.
+
+### 19. ☐ Enable "Leaked password protection" in Supabase Auth dashboard
+**What:** Supabase Security Advisor shows a "Leaked password protection" warning. Cannot be fixed via
+SQL migration — requires toggling Authentication → Settings → Password Security in the Supabase dashboard.
+**History:** Surfaced during the PR #514 security audit session (2026-06-21).
+**State:** Not done. Owner action (dashboard toggle).
+
+### 20. ☐ Rotate secrets exposed during the worker-migration debugging
+**What:** Rotate the prod secrets pasted into the chat transcript while debugging the Railway worker:
+the `service_role` key, `cron_secret`, the 5 `*_sync_secret`s, the DB password, and the Perplexity +
+Lovable API keys. Update Railway env (and Vault) to match after rotating.
+**History:** Worker go-live session 2026-06-23; user intentionally deferred until the worker was stable.
+**State:** Not started — owner action. The DB password + `service_role` key are highest-value.
+
+### 21. ☐ Railway worker — two low-priority post-go-live watch items
+**What:** (a) `fetch-nj/fl/ny-finance` edge logs show 401 flapping from a **non-worker** caller (the
+worker's own drains succeed) — harmless (the `x-sync-secret` gate rejects them). Likely a lingering/
+duplicate Railway deployment, so first confirm only ONE worker runs; to fingerprint the caller, add a
+`console.warn('unauthorized', req.headers.get('user-agent'))` on the 401 path of the 3 fns, deploy, read
+logs. (b) `fec_candidate_drain` had a 16-job backlog of stale "operation timed out" jobs from redeploy
+churn — should self-drain (runtime ~137s < the `*/3` interval; #542's 240s fix is live); glance to confirm.
+**History:** Both uncovered while chasing the 401 in the 2026-06-23 worker session. Details in HANDOFF.
+**State:** Not started — both likely self-resolving; revisit only if they persist.
+
 ### 6. ✅ Supabase disk pressure — resolved 2026-06-19
 **What:** DB was ~15 GB; `refresh-donor-consolidated-daily` OOM'd 2026-06-13 (matview refresh needs ~1.5 GB transient headroom).
 **Done (2026-06-18):** dropped orphaned `_enrich_*` staging (~506 MB) + 9 unused indexes (~1.86 GB). **DB 15 → 13 GB.**
@@ -80,6 +114,24 @@ and has at least one misattribution (Charay Smith NC cited `adamsmith.house.gov`
 ---
 
 ## 🟢 State coverage (product expansion)
+
+### 16. ✅ TX state campaign finance (Texas Ethics Commission) — done 2026-06-21
+**What:** Full per-state finance pipeline for TX, the bulk-ZIP model (random-access ZIP-over-Range read
+of TEC's ~1 GB `TEC_CF_CSV.zip`): schema, `fetch-tx-finance` edge fn (discover+drain), cron+secret gate,
+`tx_legislator_finance` matching RPC, and `TxStateFinanceSection` UI.
+**History:** PRs #516 (pipeline) + #517 (go-live: drain priority + scoreboard) merged 2026-06-21. All five
+council reviewers gated; 2 real catches fixed (invisible discover failures; maxShards OOM).
+**State:** Live on prod. `contribs_*` backfill still draining (~1-2 days to broad coverage). TX candidates
+already public (never hidden). **Owed:** spot-check `total_raised` vs the TEC site before trusting numbers.
+
+### 17. ☐ NC state campaign finance (NCSBE) — recon done, build pending
+**What:** Next state after TX. NC is an app-scrape of `cf.ncsbe.gov` (no bulk file). Recon (2026-06-21)
+confirmed a clean per-report receipts CSV (`CFOrgLkup/ExportDetailResults/?ReportID=X&Type=REC`) and an
+HTML transaction search (`CFTxnLkup/TxnSearchResults/`, POST, filter by `SelectedOffice`).
+**History:** Recon spike only; details + the two architecture paths in `docs/HANDOFF.md` (2026-06-21) and
+`docs/state-campaign-finance.md`. 244 NC legislators already in `candidates`.
+**State:** Not built. Open: crack the committee→ReportID enumeration (Path B, clean CSV) or fall back to
+Path A (HTML scrape by office), then build the 5-piece pipeline.
 
 ### 14. ☐ Expand state-legislator ingestion beyond NJ + NC
 **What:** `discover-state-legislators` (OpenStates → `candidates`) currently sweeps only NJ + NC.
@@ -101,6 +153,10 @@ AI quota on the whole body before the directory entries were validated.
 ### 8. ☐ Delete inert `enrich-batch-experiment` edge function
 **What/State:** Dead experiment fn in the Supabase dashboard. Owner action (dashboard delete).
 
+### 8b. ☐ Delete neutered recon probes `tx-cf-probe` + `nc-cf-probe`
+**What/State:** Throwaway recon edge fns (now 410 no-ops) from the TX/NC finance work. Owner action
+(dashboard delete — MCP has no delete tool).
+
 ### 9. ☐ Remove 1,129 orphaned `candidate_answers` rows
 **What/State:** Rows whose `candidate_id` isn't in `candidates`. Safe to delete. Not started.
 
@@ -108,6 +164,17 @@ AI quota on the whole body before the directory entries were validated.
 **What:** `isTrustedForScoring` trusts `voting_record` regardless of URL, so these score — but a real
 voting record should have a congress.gov / state-legislature link.
 **State:** Not investigated.
+
+### 17. ☐ Close stale name-formatting PR #327 (do NOT merge)
+**What:** Codex PR "Normalize and format person display names" adds a *competing* formatter
+(`src/lib/nameFormat.ts` / `formatPersonName`), rewires the same components, AND ships a DB backfill
+migration that rewrites `candidates.name` / `static_officials.name` / `candidate_overrides.name` /
+`persons.display_name`.
+**Why close:** Superseded by the consolidated `src/lib/candidateName.ts` (#16); the migration
+denormalizes the FEC-canonical names we intentionally keep for ETL matching. From 2026-06-08, so it
+would also conflict heavily.
+**State:** Open. Recommend closing with a note pointing to `candidateName.ts`. (Drafts #494/#302 and
+stale Codex SEO PR #300 also linger — owner's call.)
 
 ---
 
@@ -117,10 +184,32 @@ voting record should have a congress.gov / state-legislature link.
 ### 12. ☐ Break down oversized files — `AnswerCoveragePanel.tsx` (~3.3k), `CandidateProfile.tsx` (~1.5k),
 and the large/fragile edge fns `fetch-fec-donors`, `get-candidate-answers`.
 ### 13. ☐ Consolidate data access to "one front door" — route new Supabase access through a single layer.
+### 16. ✅ Consolidate the candidate-name formatters into ONE shared module — done 2026-06-20
+**What:** Candidate names were being formatted by **five** divergent implementations —
+`formatCandidateName` (`src/lib/utils.ts`), `toDisplayName` (`src/lib/officeLabel.ts`), `formatName`
+in `scripts/generate-candidates-json.ts`, the CDN-path map in `useCandidates`, and an inlined copy in
+the `refresh-candidates-cache` edge function. Divergence caused the same display bug to recur 5×.
+**History:** 2026-06-20 saga (PRs #495/#497/#498/#499/#500). Each fix only patched one formatter.
+**Done:** Canonical formatter now lives in `src/lib/candidateName.ts` (pure, no deps); `utils.ts` and
+`officeLabel.ts` (`toDisplayName`) re-export it; the script + `useCandidates` import it. The Deno edge
+runtime can't import frontend files, so it has a byte-identical copy at
+`supabase/functions/_shared/candidateName.ts`, and `src/lib/candidateName.test.ts` runs **both** through
+one fixture table (drift guard — CI fails if they diverge). Superset adds Roman-numeral (II/III/IV) and
+Mac casing that the old `formatCandidateName` lacked.
+**Note:** `tidyName` in `_shared/finance-caption.ts` is a deliberately separate **org-aware** formatter
+(uppercases PAC/LLC acronyms, skips org reorders) for finance captions — not folded in.
 
 ---
 
 ## ✅ Recently done (prune after ~2 weeks)
+- ✅ **2026-06-23** Railway graphile-worker migration **fully live + cleaned up**. Four stacked
+  failures fixed (PRs #538/#542 + Railway config): `.ts` task loading (graphile-worker's default
+  `fileExtensions` excludes `.ts`), DB connection (transaction pooler `:6543` → session pooler `:5432`
+  + alphanumeric password to dodge the `ECIRCUITBREAKER` URL-parse trap), edge-fn auth (send
+  `x-cron-secret` from `CRON_SECRET` — the service-role bearer no longer matches under the new API-key
+  system), and `fec_candidate_drain` 120→240s timeout. Then #545 (`fetch-tx-finance` `verify_jwt=false`)
+  and retired the 15 Railway-replaced pg_cron jobs (reconciled into `public.claude_migration_log`). All
+  16 worker tasks run green. Follow-ups parked as #20/#21. Full story in HANDOFF 2026-06-23 entries.
 - ✅ **2026-06-18** State-legislator ingestion (PR #455): `discover-state-legislators` edge fn +
   weekly cron + State/Local tab wiring; 293 NJ+NC legislators ingested & verified live (correct
   parties, chamber totals match reality). Directory-first, unscored — see #14/#15 for follow-ups.

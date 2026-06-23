@@ -10,22 +10,8 @@
 ```
 ## YYYY-MM-DD — <session or branch name>
 
-**What happened & why**
-<The story, not a file list. WHY did this work happen and what was the intent?
-A future reader can diff the files; they can't recover your reasoning.>
-
-**State** (verified)
-<What is actually true right now and how you know — e.g. "lint passes, build succeeds,
-manual check of X". Say what is NOT verified, too.>
-
-**Next**
-<ONE concrete next step — the very next action someone should take.>
-
-**Deferred**
-<Parked items / things intentionally not done, so they aren't silently forgotten.>
+(template — copy below this block)
 ```
-
----
 
 ## 2026-06-23 — v23 sign-convention regression found and fixed; 23,911 wrong answers deleted; v24 deployed
 
@@ -57,147 +43,1363 @@ Re-run the chain for NJ and TX (both have 0 answers after the deletion): trigger
 **Deferred**
 - Run `refresh-candidates-cache` once more after the NJ/TX re-run completes (scores will update via `updateCandidateScore` per-candidate in v24, but CDN file won't reflect new entries until refreshed)
 - NC Republicans: a few showed suspicious negative scores (Phil Berger −3.68) — spot-check before deciding whether to re-run NC
-- Merge open PR once CI is green (no new PR created this session — existing PR covers the branch)
 - Delete `la-trigger` edge function from Supabase dashboard (deferred from prior session)
 - Update OPEN-WORK #15 (phase-2 AI scoring) to reflect v24 is live
 
 ---
 
-## 2026-06-20 — list page still showed "C" after score fix; CDN cache regenerated
+## 2026-06-23 — Worker migration closed out: verify_jwt fix, pg_cron retired + ledger reconciled
 
 **What happened & why**
-After the sign-convention fix and bulk `overall_score` update (~4 AM UTC), the politicians
-list page still showed "C" for Abe Jones even after a hard refresh. Root cause: `useCandidates`
-has a CDN-first fetch path that serves a pre-built JSON from Supabase Storage
-(`data-cache/candidates-directory.json`) with up to 26-hour TTL — React Query cache expiry
-is irrelevant when the CDN file itself is stale.
+Post-go-live cleanup of the Railway worker migration (follow-up to the "fully live" entry below).
+- **#545** — `fetch-tx-finance` was missing from `supabase/config.toml`, so it defaulted to
+  `verify_jwt=true` while its siblings (`fetch-nj-elec/fl/ny-finance`) are `false`. Added it as
+  `verify_jwt=false`. Security-reviewed **GO**: the real gate is the `x-sync-secret` header
+  (Vault-backed, `service_role`-only `check_tx_sync_secret` RPC); the gateway only required the
+  *public* publishable key. Removes a latent trap — it would have 401'd at the gateway if the Railway
+  service key were ever switched to the new `sb_secret_…` format.
+- **pg_cron retirement reconciled** — all 15 Railway-replaced cron jobs were already unscheduled, but
+  the two retire migrations (`20260622000000`, `20260622010000`) weren't recorded in the repo's ledger.
+  GOTCHA: this repo's ledger is **`public.claude_migration_log`** (filename-keyed, written by
+  `scripts/apply-prod-migrations.sh`), NOT `supabase_migrations.schema_migrations`. Migration-safety-reviewed
+  **GO**; ran the idempotent migrations (no-ops — jobs already gone) and recorded both filenames in the ledger.
 
-Two fixes applied:
-1. **`UPDATE candidates.overall_score`** for all 290 sub-federal candidates with trusted
-   answers, from the live trusted-answer average (voting_record or URL-sourced). Abe Jones
-   went from 0.00 → -8.58.
-2. **`refresh-candidates-cache` triggered** (HTTP 200, 534ms) to regenerate the Supabase
-   Storage CDN file with the new scores. After a page refresh, Abe Jones should show L8.58.
-
-No code was changed in this session beyond what was already committed.
-
-**State** (verified as of ~10:30 UTC 2026-06-20)
-- `candidates.overall_score` for all state/local legislators updated (SQL verified)
-- `refresh-candidates-cache` returned 200 — CDN file is fresh
-- `generate-legislator-answers` v12 chain still running (self-chaining, cancel=false)
-- All 5 candidate_answers triggers remain enabled
-- No lint/build/test run this session (no code changed)
+**State** (verified 2026-06-23)
+- #545 merged; all CI + Supabase preview green. `fetch-tx-finance` `verify_jwt=false` redeploys via
+  `deploy-edge-functions.yml` on merge.
+- `claude_migration_log` now contains both retire-migration filenames (logged ~13:49 UTC); `cron.job`
+  has 0 of the 15 retired jobs.
+- Worker healthy: **1** active instance; `drain_fec_finance`/`fec_candidate_drain`/tx/votes/donor all 200.
 
 **Next**
-Spot-check 2-3 NC/NJ candidates on the live site after a fresh page load to confirm
-L/R scores are correct on the list (not just the profile). Then monitor the v12 chain
-until it completes and merge PR #494.
+Confirm the `fec_candidate_drain` backlog drains over the next hour (see Deferred). Otherwise nothing pending.
 
 **Deferred**
-- `overall_score` will drift again as v12 chain adds new trusted answers; run
-  `refresh-candidates-cache` once more after the full run completes (~24-36h from 04:08 UTC)
-- Merge PR #494 once CI is green and run completes
-- Delete `la-trigger` edge function from Supabase dashboard after run
-- Update OPEN-WORK #15 (phase-2 AI scoring) to reflect scoring is live
-- `contributions` table growth still needs partition/prune strategy (OPEN-WORK #6)
+- 🔐 Rotate secrets pasted in chat during debugging (service_role, cron_secret, 5 sync secrets, DB
+  password, Perplexity/Lovable). **User is intentionally leaving this for now.**
+- **nj/fl/ny-finance 401 flapping in edge logs is NOT the worker.** Ruled out: worker (its
+  graphile-worker job ledger shows those drains succeeding, no 401s), pg_cron (no job calls them),
+  self-fan-out (functions only `fetch()` external state APIs). Only 1 worker instance is live. Source is
+  an unidentified non-worker caller — likely redeploy-window overlap (stale deploys with old/empty sync
+  secrets) and/or probes on the now-public (`verify_jwt=false`) endpoints. **Harmless** — the
+  `x-sync-secret` gate rejects them; real syncs succeed. To fingerprint: add
+  `console.warn('unauthorized', req.headers.get('user-agent'))` on the 401 path of the 3 functions,
+  deploy, read logs.
+- **`fec_candidate_drain` backlog**: 16 queued jobs with stale `"The operation timed out"` errors (6
+  historical lockers from redeploy churn). Should drain (runtime ~137s < the `*/3` 180s interval, and the
+  #542 240s timeout fix is live). Glance to confirm it clears; if it persists, the `*/3` schedule may need
+  to be slower than the per-run runtime to stop overlap from piling up new jobs.
 
 ---
 
-## 2026-06-20 — sign-convention fix complete, v12 deployed, re-run in progress
+## 2026-06-23 — ROADMAP FEC recon findings marked done; PR #541 merged
 
 **What happened & why**
-Continued from previous session. Root cause confirmed and fully fixed:
+- PR #541 (federal PoliScore card + Senate key vote infrastructure) merged to main ✅.
+- Investigated "FEC recon Finding B" from the HANDOFF next list — confirmed it was already fixed on
+  2026-06-17 (migration `20260615170000`). Finding A was also fixed on 2026-06-22. Both were
+  documented in DATA-ACCURACY.md but ROADMAP still showed them as `☐`.
+- Updated ROADMAP.md to flip both markers to ✅ and added a changelog entry.
 
-- **Sign-convention bug**: `generate-legislator-answers` v11 used "action-support" framing (+10 = supports the action) but the system encodes *ideology* (negative = liberal, positive = conservative). 302 of 344 questions are liberal-coded (YES=-10), so Democrats were being scored as far-right. Abe Jones (NC Democrat) showed R8.21 when he should be ~L7.
-- **Bulk SQL fix applied**: Targeted 2-pass negation on all state-legislator candidate_answers for liberal-coded questions where the party/direction was mismatched. All passes returned empty (clean) — no wrong-direction candidates remain.
-- **Triggers**: All 5 candidate_answers triggers were disabled during the bulk UPDATE (`prevent_politician_score_tampering_trigger`, `trg_prevent_politician_candidate_answer_tampering`, `candidate_answers_topic_scores_sync`, `trg_recalc_coverage_on_answer_update`, `update_candidate_answers_updated_at`) and **re-enabled immediately after**.
-- **v12 deployed**: `generate-legislator-answers` now fetches `question_options(value, text)` per question and shows Gemini the actual -10/+10 option labels. Prompt reframed to "pick the option whose text matches the politician's position" with negative = left-leaning, positive = right-leaning. No more action-support ambiguity.
-- **Re-run triggered** at ~04:08 UTC from offset=0, limit=1, selfChain=true. Cancel flag cleared.
-
-**State** (verified as of ~04:15 UTC 2026-06-20)
-- Abe Jones (NC Democrat): avg_all=-6.90, avg_lib_coded=-8.01 ✓ correctly left-leaning
-- Zero wrong-direction state legislators remain (verified via GROUP BY HAVING query)
-- All 5 triggers re-enabled on candidate_answers
-- v12 deployed (Supabase version 12, active)
-- Cancel flag: `{"cancel": false}`
-- Chain advancing: offset=0 processed Abe Jones (skipped, complete), self-chaining to offset=1
-- 300 of 311 sub-federal candidates still need answers (70,788 total missing)
-- PR #494 branch `claude/stoic-einstein-mpvb5m` now has 5 commits
-- `la-trigger` relay still deployed (MCP only, not in git)
-
-Monitor SQL:
-```sql
-SELECT stat_value->>'offset', stat_value->>'completedAt',
-       stat_value->'results'->0->>'name', stat_value->'results'->0->>'answered',
-       stat_value->'results'->0->>'skipped'
-FROM admin_stats_cache WHERE stat_key = 'legislator_answers_progress';
-```
-To cancel: `UPDATE admin_stats_cache SET stat_value = '{"cancel":true}' WHERE stat_key = 'legislator_answers_cancel';`
-To resume: `SELECT net.http_post(url:='https://ornnzinjrcyigazecctf.supabase.co/functions/v1/la-trigger', body:='{"offset":<N>,"limit":1,"selfChain":true}'::jsonb);`
+**State** (verified 2026-06-23)
+- Migration `20260615170000` in repo, applied to prod as `20260617232826` — Line-12 double-count
+  eliminated; double-count signature rows 138 → 0.
+- Visible recon standing (from DATA-ACCURACY.md, 2026-06-22): **ok 294 / warning 88 / error 72 /
+  partial 26** — error gate passing (72 < 100 threshold).
+- Supabase MCP returning 502s at time of writing — live recon query not confirmed, but migration
+  file and DATA-ACCURACY doc are authoritative.
+- **PR #544** open (draft) — docs-only ROADMAP update; CI in progress.
 
 **Next**
-Spot-check a few candidates after 30-60 min: pick 1-2 NC Democrats and 1-2 NC Republicans from the progress log and verify their lib-coded avg is in the correct direction (Democrat < 0, Republican > 0).
-
-**Deferred**
-- Merge PR #494 once CI is green and the run completes (estimated 24-36 hours)
-- Delete `la-trigger` edge function from Supabase dashboard after run
-- Update OPEN-WORK #15 (phase-2 AI scoring) to reflect scoring is in-flight
-- Long-term: `contributions` table growth still needs partition/prune strategy
+1. Merge PR #544 once CI green (docs only, no schema changes).
+2. Seed Senate key votes once target vote data confirmed in `candidate_votes`. Big Beautiful Bill
+   (HR 1, 119th) Senate passage vote still missing from DB — check before seeding.
+3. Residual FEC recon `warning`/`error` rows (88/72 visible) self-heal as the drain reprocesses
+   TX/NC backfill — no code changes needed, just time.
+4. Add more NC key votes to `poliscore_nc_key_votes` (admin curation task).
 
 ---
 
-## 2026-06-20 — generate-legislator-answers full run (gemini-3.5-flash, v11, in progress)
+## 2026-06-23 — Railway graphile-worker fully live (three stacked failures fixed)
 
 **What happened & why**
-Goal: fill in the ~221 missing policy answers for each of the 293 NJ+NC state legislators
-using `generate-legislator-answers`. Multiple rounds of fixes were needed:
+The Railway worker (`grateful-healing` / production) had been migrated off pg_cron but never
+actually ran a task. Three stacked failures, fixed across two PRs + Railway config:
+1. **Loaded zero tasks.** graphile-worker's default `fileExtensions` is `[.js,.cjs,.mjs]`; the
+   worker runs TypeScript under Bun with no compile step, so every `.ts` task was skipped
+   ("no supported handlers found", empty task list). Fix (**#538**): pass
+   `preset.worker.fileExtensions += ".ts"` to `run()` — it is NOT a top-level `run()` option, it
+   must go through `preset`, or it's silently ignored.
+2. **DB connection.** `WORKER_DB_URL` pointed at the **transaction** pooler (`:6543`), which breaks
+   graphile-worker's LISTEN/NOTIFY + advisory locks → the `Failed to reset locked` error. Then the
+   DB password's `@`/`$` chars mangled the connection URL → Supavisor `ECIRCUITBREAKER` (auth
+   lockout). Fixed Railway-side: **session** pooler (`:5432`) + DB password reset to alphanumeric.
+3. **Edge-function 401s.** The worker authenticated cron functions with the service-role bearer
+   (cron-auth.ts's *fallback* escape hatch). Under the project's **new API-key system** the
+   functions' injected `SUPABASE_SERVICE_ROLE_KEY` is the new secret key, not the legacy JWT the
+   worker holds, so the bearer never matched. Fix (**#542**): send `x-cron-secret` (cron-auth's
+   *primary* path) from a new `CRON_SECRET` env. Also bumped `fec_candidate_drain`'s edge-call
+   timeout 120→240s (the function runs ~137s; the worker was aborting a successful run at 120s and
+   retrying it forever).
 
-1. **API key invalid** — GOOGLE_AI_API_KEY had expired; owner updated in Supabase Vault.
-2. **parse failed on gemini-2.5-flash** — thinking parts emitted before JSON output; fixed in v7.
-3. **Model switch to gemini-3.5-flash** — deployed v8.
-4. **Timeout at batch=10** — reduced to limit=1 per batch.
-5. **maxOutputTokens too low** — 221 answers × verbose JSON needs 65536 tokens; fixed in v10.
-6. **Sign inversion on Local topic questions** (critical, caught at 03:15 UTC) — Gemini correctly
-   researched positions but returned negative values for all Local questions (e.g., NC Democrat
-   Amos Quick who co-sponsored affordable housing bills got -10 on "Should the state invest more
-   in public housing?"). Root cause: the prompt said "-10 (strongly oppose) to +10 (strongly
-   support)" without clarifying that support/oppose refers to the described action happening.
-   Fix in v11: added a CRITICAL sign convention block with explicit examples showing
-   "Should the state fund universal pre-K?" + Democrat → +10.
-   900 inverted Local answers for 9 processed candidates were deleted before re-run.
-
-Current run: re-triggered at ~03:27 UTC with `offset=0, limit=1, selfChain=true` using v11.
-
-**State** (verified as of 03:33 UTC 2026-06-20)
-- v11 of `generate-legislator-answers` deployed (prod `ornnzinjrcyigazecctf`):
-  `gemini-3.5-flash`, `maxOutputTokens=65536`, explicit sign convention examples in prompt.
-- Sign fix verified: Abe Jones (Democrat, NC) Local answers now overwhelmingly positive
-  (Local Cost of Living: 13×+10, Local Housing: 10×+10, Local Public Health: 16×+10, etc.)
-- Progress: offset=0, last="Abe Jones" (100/100 Local answers), completedAt=03:33:55Z.
-- Chain is self-advancing; ~293 candidates to process; ~292 remaining.
-- Rate: ~4-5 min/candidate for 100-question Local-only batches (first 9 candidates);
-  ~12-15 min/candidate for ~221-question full batches (candidates 9+).
-- Estimated completion: ~24-36 hours from trigger (due to full batches for 284 candidates).
-- Cancel flag: `{"cancel": false}`.
-- `la-trigger` relay function still deployed (MCP only, not in git) — delete after run.
-- PR #494 branch `claude/stoic-einstein-mpvb5m` has 4 commits; preview branch green.
+**State** (verified 2026-06-23 via Railway worker logs)
+All 16 tasks load and complete `with success`: `drain_fec_finance`, `drain_research_queue`,
+`fec_candidate_drain` (~137s, no timeout), `nj/fl/ny/tx` drains, `sync_legislator_votes`,
+`congress_donor_backfill`. Zero 401s, zero timeouts, no "Failed to reset locked". #538 and #542
+merged to main. Railway env now: `WORKER_DB_URL`=session pooler `:5432` (alphanumeric password);
+`CRON_SECRET`=vault `cron_secret`; `SUPABASE_ANON_KEY`=publishable key; `SUPABASE_SERVICE_ROLE_KEY`
+=legacy JWT (still used as `apikey`, and as the bearer that satisfies `fetch-tx-finance`'s
+`verify_jwt=true` gateway).
 
 **Next**
-Monitor: confirm offset advances and spot-check a few candidates for correct Local answer signs.
-Monitor SQL:
-```sql
-SELECT stat_value->>'offset', stat_value->>'completedAt',
-       stat_value->'results'->0->>'name', stat_value->'results'->0->>'answered'
-FROM admin_stats_cache WHERE stat_key = 'legislator_answers_progress';
-```
-To cancel: `UPDATE admin_stats_cache SET stat_value = '{"cancel":true}' WHERE stat_key = 'legislator_answers_cancel'`.
-To resume: `SELECT net.http_post(url:='https://ornnzinjrcyigazecctf.supabase.co/functions/v1/la-trigger', body:='{"offset":<N>,"limit":1,"selfChain":true}'::jsonb);`
+Retire the pg_cron jobs now that Railway is confirmed steady. The drain jobs aren't in `cron.job`,
+but the retire migrations `20260622000000` / `20260622010000` are NOT recorded as applied — verify
+and tidy so the source of truth matches reality.
 
 **Deferred**
-- Merge PR #494 once CI is green and the run completes.
-- Delete `la-trigger` edge function from Supabase dashboard after the full run.
-- Update OPEN-WORK #15 (phase-2 AI scoring) to reflect that scoring is now in-flight.
-- Long-term: `contributions` table growth still needs partition/prune strategy.
+- 🔐 **Rotate the secrets pasted into chat during this debugging session**: the `service_role` key,
+  `cron_secret`, the five `*_sync_secret`s, the DB password, and the Perplexity/Lovable API keys.
+- `fetch-tx-finance` is **missing from `supabase/config.toml`** → defaults to `verify_jwt=true`.
+  Works today (the legacy-JWT bearer is a valid JWT at the gateway), but if Railway's
+  `SUPABASE_SERVICE_ROLE_KEY` is ever switched to the new `sb_secret_…` key, TX breaks at the
+  gateway until you add `verify_jwt=false` (matching every sibling) and redeploy it.
+- Some edge 401s come from non-worker callers (`fetch-all-bills`, `enrich-official-photos`) —
+  pre-existing, unrelated to this migration.
+
+---
+
+## 2026-06-23 — Federal PoliScore card wired; Senate infrastructure added
+
+**What happened & why**
+Research session to add Senate federal key votes. Key findings:
+- Senate votes in `candidate_votes` use `PROC` pseudo-bill IDs (`VOTE-119-1-XXXXX`), not the
+  `congress/bill_type/bill_number` scheme that House votes use — the existing RPC can't find them.
+- The One Big Beautiful Bill (HR 1, 119th Congress) Senate passage vote is **not in `candidate_votes`**.
+- Senate PROC votes don't have clean party-line splits in the current dataset, making `lean`
+  derivation hard. No Senate key votes seeded yet.
+
+What was shipped (PR #541):
+- Added `senate_vote_id text` column to `poliscore_key_votes` — stores the PROC bill_id for Senate
+  key votes so the RPC can join them directly without the bills table lookup.
+- Updated `get_poliscore_record` RPC with a UNION ALL for the two paths (backward-compatible).
+- Wired `PoliScoreCard` into `CandidateProfile.tsx` for `Representative` and `Senator` office
+  types — federal reps now see their 28 key vote scores; senators see a tailored empty state.
+- Added `office` prop to `PoliScoreCard` so senators get "Senate key votes being curated" message.
+
+**State** (verified 2026-06-23, prod `ornnzinjrcyigazecctf`)
+- Migration `20260623080000_poliscore_senate_key_votes.sql` applied ✅
+- RPC smoke: `get_poliscore_record('A000370')` (NC Rep Alma Adams) → 5 rows ✅
+- RPC smoke: `get_poliscore_record('B001305')` (NC Sen Ted Budd) → 0 rows (correct, no seeds) ✅
+- Build + lint + tests pass ✅
+- **PR #541** open (draft), CI in progress.
+
+**Next**
+1. Merge PR #541 once CI green.
+2. Seed Senate key votes once target vote data confirmed in `candidate_votes`. The Big Beautiful Bill
+   (HR 1, 119th) Senate passage (July 1 2025, 51-50) is the top candidate but its final passage vote
+   is missing from the DB. Check if a data sync has captured it before seeding.
+3. Add more NC key votes to `poliscore_nc_key_votes` (admin curation task).
+4. FEC recon Finding B (line 14/15 "other receipts" double-count) — roadmap priority #1.
+
+---
+
+## 2026-06-23 — Chamber backfill applied; NC PoliScore fully live for reps
+
+**What happened & why**
+PR #539 merged. Post-merge check: `candidate_votes.chamber` was still null for all 3,095 NC rows
+despite run id=6 completing successfully. Root cause: the edge function's Supabase upsert
+(`INSERT … ON CONFLICT DO UPDATE`) did not update the chamber column on existing rows. Direct SQL
+backfill applied via migration `20260623070000_backfill_candidate_votes_chamber.sql` — derives
+chamber from `candidates.office` (same logic as the RPC).
+
+Also discovered: SB1080 has no Senate (upper) vote event in OpenStates — only the House Third
+Reading (concurrence) was captured. NC senators correctly show `vote_position=null` via LEFT JOIN.
+
+**State** (verified 2026-06-23, prod `ornnzinjrcyigazecctf`)
+- **`candidate_votes.chamber`**: 2,164 lower + 931 upper, zero nulls ✅.
+- **RPC smoke test**: `get_poliscore_record_nc` returns `vote_position='Nay'` for Rep. Marcia Morey
+  on SB1080 ✅. NC senators show null (upstream OpenStates data gap, not a bug).
+- **PR #540** open (draft): backfill migration only, CI in progress.
+- **PR #539**: merged to main ✅.
+
+**Next**
+1. Merge PR #540 once CI green.
+2. Add more NC key votes to `poliscore_nc_key_votes` (admin curation task).
+3. Senate federal key votes (the federal card empty state still says "House only").
+4. If SB1080 Senate vote data becomes available in OpenStates, re-run `sync-nc-legislator-votes`
+   with `mode=full` to capture it (no code changes needed).
+
+---
+
+## 2026-06-23 — Railway worker loaded zero cron tasks (`.ts` extension fix)
+
+**What happened & why**
+The Railway worker (`grateful-healing` / production, deploy `043608c2`) logged
+`Failed to load task '<name>' - no supported handlers found for path: '/app/tasks/<name>.ts'`
+for **all 16 tasks**, then `Worker connected and looking for jobs... (task names: '')`. Empty task
+list = **none** of the cron syncs were running (FEC finance, state finance NJ/FL/NY/TX, bill sync,
+legislator votes, congress donors, research-queue drain — all silently idle).
+
+Root cause: `graphile-worker@0.16.6`'s default `fileExtensions` is `[".js", ".cjs", ".mjs"]`, which
+**excludes `.ts`**. The worker runs under Bun directly from TypeScript source (`startCommand: bun run
+worker.ts`, `tsconfig` is `noEmit` so there are no compiled `.js` files in `tasks/`). So the loader
+skipped every `.ts` file. Confirmed in source: `LoadTaskFromJsPlugin` filters by
+`resolvedPreset.worker.fileExtensions`; the warning is `getTasks.js:101`.
+
+Fix (`workers/worker.ts`): pass `preset: { worker: { fileExtensions: [".js",".cjs",".mjs",".ts"] } }`
+to `run()`. Bun imports `.ts` natively, so the plugin's dynamic `import()` then succeeds. Note:
+`fileExtensions` is **not** a top-level `run()` option — `legacyOptionsToPreset` (lib.js) has no case
+for it and would silently ignore it; it must go through `preset.worker`.
+
+**State** (verified 2026-06-23, branch `claude/tender-goodall-ndc4q8`)
+- `workers/worker.ts` edited; `bunx tsc` (the build command) passes clean.
+- **Reproduced + proved** with a Bun smoke test against the real `workers/tasks/` dir:
+  default options → **0 tasks / 16 warnings** (matches prod); with the fix → **16 tasks / 0 warnings**.
+- Full `bun run worker.ts` boot with a dummy DB URL: all options accepted (no "unknown config
+  option" warning), tasks loaded, fails only at the (expected) Postgres connection.
+- **Not yet deployed** — needs a Railway redeploy of the worker service from this branch.
+
+**Remaining known risks / caveats**
+- **`Failed to reset locked; we'll try again in 568253ms`** (last log line) is a **separate** issue:
+  graphile-worker's `resetLockedAt` maintenance query failed once and self-reschedules (~9.5 min).
+  The underlying error is in the truncated log metadata (not visible in the screenshot). Most likely
+  transient (first run fires within 60 s of connect, while the `graphile_worker` schema auto-migrate
+  settles) — but if it **persists**, expand that log line and verify `DATABASE_URL` is the **direct**
+  `:5432` connection, not the pooler (graphile-worker needs LISTEN/NOTIFY + advisory locks; see
+  `workers/CLAUDE.md`). Not fixable in-repo; it's a Railway env/ops check.
+
+**Next**
+1. **Redeploy the Railway worker** from this branch. Confirm the log now shows a non-empty
+   `(task names: 'congress_donor_backfill,congress_donor_refresh,...')` and tasks start executing.
+2. Watch whether `Failed to reset locked` recurs after the redeploy; if so, do the `DATABASE_URL`
+   direct-connection check above.
+
+---
+
+## 2026-06-23 — Task 3 complete: NC PoliScore RPC + UI wired
+
+**What happened & why**
+Built the NC state PoliScore pipeline end-to-end. Federal RPC uses `(congress, bill_type,
+bill_number)` to identify key votes — NC bills don't have these fields, so a parallel NC
+structure was needed. New `poliscore_nc_key_votes` table uses `bill_id` directly (`nc-2025-*`).
+New `get_poliscore_record_nc` RPC LEFT JOINs to `candidate_votes` filtered by
+`jurisdiction='nc_state'` and the candidate's chamber (derived from `candidates.office`).
+`PoliScoreCard` extended with `jurisdiction` prop to render NC bill references and NCGA links.
+Card wired into `CandidateProfile` for NC state legislators.
+
+Chamber backfill (`mode=full`, run id=6) also fired — should populate `chamber='upper'/'lower'`
+on the 2,818 existing NC `candidate_votes` rows so the RPC returns real `vote_position` values.
+
+**State** (verified 2026-06-23, branch `claude/blissful-edison-7cvva1`, commit `e3222628`)
+- **`poliscore_nc_key_votes`** table exists in prod; seeded with SB1080.
+- **`get_poliscore_record_nc`** RPC live and smoke-tested (returns SB1080 row with `vote_position=null`
+  until backfill completes).
+- **Frontend**: `usePoliScoreRecord(candidateId, 'nc_state')` calls correct RPC; `PoliScoreCard`
+  renders NC-appropriate bill reference; wired in `CandidateProfile` for NC senators/reps.
+- **Run id=6** (`mode=full`): fired at ~01:40 UTC; result TBD (check `nc_leg_sync_runs`).
+- **PR #539** open (draft): `claude/blissful-edison-7cvva1` → `main`, CI in progress.
+
+**Next**
+1. Confirm run id=6 completed successfully and `chamber` is now populated.
+   `select chamber, count(*) from candidate_votes where jurisdiction='nc_state' group by 1;`
+2. Re-verify RPC returns real `vote_position` for a known NC senator on SB1080.
+3. Merge PR #539.
+4. Add more NC key votes to `poliscore_nc_key_votes` as curation gate expands (admin task).
+5. Senate federal key votes (the federal card empty state still says "House only").
+
+---
+
+## 2026-06-22 — Chamber discriminator deployed; backfill pending rate-limit reset
+
+**What happened & why**
+data-accuracy-verifier flagged bicameral double-count risk: bills like SB1080 produce two
+`is_final_passage=true` vote events (Senate Third Reading + House Third Reading), both bridged into
+`candidate_votes` under the same `(bill_id, candidate_id)` conflict key → only one row survives
+(House overwrites Senate), so Senate votes are silently dropped. Fix: add nullable `chamber text`
+column (`'upper'`|`'lower'`) to `candidate_votes`; pass `orgClassification` into every NC bridge
+row so the upsert conflict key `(bill_id, candidate_id, action_type, vote_number)` becomes
+per-chamber-distinct. NULL = federal (no backfill of old federal rows).
+
+Migration `20260622050000_candidate_votes_chamber.sql` applied to prod. Edge function deployed as
+**v8** (import map trick to resolve `_shared/cron-auth.ts` via MCP bundler). `mode=full` backfill
+(run id=5) immediately hit the OpenStates 250 req/day rate limit (261 used today). Existing 2,818
+NC `candidate_votes` rows have `chamber=NULL` until the weekly cron runs tomorrow.
+
+**State** (verified 2026-06-22, branch `claude/blissful-edison-7cvva1`, commit `dc6cb937`)
+- **`sync-nc-legislator-votes`** deployed as **v8 ACTIVE** (`verify_jwt=false`).
+  Chamber fix confirmed in deployed bundle; import map at `deno.json` inside source dir.
+- **`candidate_votes.chamber`** column EXISTS in prod (nullable text, no default).
+- **2,818 existing NC rows**: `chamber=NULL` — will be backfilled on next `mode=full` run.
+- **Run id=5**: `status='error'`, error=`"exceeded limit of 250/day: 261"` (OpenStates API).
+  Limit resets daily; next Sunday drain will backfill with correct chamber values.
+- **PR #537** open (draft): `claude/blissful-edison-7cvva1` → `main`.
+
+**Remaining known risks / caveats**
+- `chamber=NULL` on existing NC rows until cron backfills. Any UI query filtering by chamber
+  will miss these rows until then. Tolerable: the column is for future per-chamber aggregation,
+  not currently surfaced in UI.
+- OpenStates 250 req/day free-tier cap. Full re-runs consume ~9 API calls. Drain runs use fewer.
+  Don't trigger repeated `mode=full` runs in the same day.
+- MCP deploy uses `deno.json` import map workaround (not in committed source). If the function
+  is ever redeployed via `supabase functions deploy` CLI (not MCP), the standard directory layout
+  resolves `_shared/` correctly and no import map is needed.
+
+**Next**
+1. **Wait for rate-limit reset** (tomorrow), then trigger `mode=full` to backfill `chamber`.
+   Verify with: `select chamber, count(*) from candidate_votes where jurisdiction='nc_state' group by 1`.
+2. **Merge PR #537** once backfill is confirmed.
+3. **Task 3** — state scoring RPC (`get_poliscore_record` variant for `jurisdiction='nc_state'`,
+   no Congress/date-window filter) + key-vote curation UI.
+
+---
+
+## 2026-06-22 — proxy-image: fail fast on unreachable hosts (was 500 + blank share card)
+
+**What happened & why**
+A reported runtime error: `proxy-image` returned a 500 for
+`http://www.njleg.state.nj.us/.../mcclellan_antwan_2020.jpg` with
+`client error (Connect): Connection timed out (os error 110)` and a blank screen.
+Root cause was in the edge function, not the data: it did an **unbounded `fetch()`**
+to the allowlisted upstream, so when a gov photo host silently drops the connection
+the fetch hangs until the kernel's TCP connect timeout (~110s) and then throws into
+the catch-all that returns a generic **500** — logged as a hard `RUNTIME_ERROR`.
+Fixed by wrapping the upstream fetch in an `AbortController` (8s timeout) + a local
+try/catch that returns **504** (our timeout) or **502** (DNS/connect failure) instead
+of a 500. Matches the repo's existing `AbortController` + `setTimeout(abort)` pattern
+(e.g. `fetch-floor-votes`).
+
+**State** (verified 2026-06-22, branch `claude/great-galileo-e2xfys`, commit `93864894`)
+- Edited only `supabase/functions/proxy-image/index.ts` (+57/−32). Outer 500 catch kept
+  as a last-resort safety net.
+- Preflight: **lint 0 errors** (154 pre-existing `any` warnings), **build OK**,
+  **tests 139 pass / 0 fail**, Bun parse-check of the function OK. (`bun install` was
+  needed first — node_modules was incomplete in this fresh container; lockfile unchanged.)
+- No frontend change required: both consumers (`ShareProfileButton`,
+  `useCandidateShareCardData`) already degrade on a non-OK proxy response — they keep the
+  raw image URL / drop the image rather than crashing.
+- **Not yet deployed.** The function change ships when the branch's edge functions are
+  deployed (GitHub integration / Supabase). `verify_jwt=false` for `proxy-image` unchanged.
+
+**Next**
+1. Deploy `proxy-image` (or let the integration redeploy on merge) and confirm a known-bad
+   host now returns 502/504 within ~8s instead of hanging ~110s.
+2. Optional data hygiene: the specific NJ legislator photo URL (Antwan McClellan,
+   `www.njleg.state.nj.us`) appears dead from the edge runtime — worth refreshing that
+   `image_url` from OpenStates if the host stays unreachable. Not blocking; the proxy now
+   degrades gracefully for any such host.
+
+---
+
+## 2026-06-22 — NC GA initial data load complete (beachhead Task 2, step 7 pending)
+
+**What happened & why**
+Continued from build session. Triggered initial `mode=full` run — but hit a wall-clock overrun
+on page 1 because the old code did individual per-row upserts (~6000 DB calls/page × 20ms = 120s+,
+exceeding the 150s edge function wall-clock before the page checkpoint could be written). Fixed
+by switching to batch array upserts (2 calls per vote event instead of ~100) and adding a per-bill
+budget check inside the page loop. Deployed as v5, reran `mode=full`. Also fixed a `verify_jwt`
+regression (PR merge caused GitHub integration to redeploy at v3 with `verify_jwt=true`; fixed by
+adding `[functions.sync-nc-legislator-votes] verify_jwt = false` to `supabase/config.toml` and
+deploying v4). Fixed a field-name bug `bill.latest_action?.date` → `bill.latest_action_date`
+(top-level, not nested object), deployed as v6.
+
+**State** (verified 2026-06-22, branch `claude/blissful-edison-7cvva1`, commits up to `19ff1b4c`)
+- **`sync-nc-legislator-votes`** deployed as **v6 ACTIVE** (`verify_jwt=false`).
+  Batch upserts + per-bill budget check confirmed working.
+- **Initial data load (run id=3)**: `status='success'`, 9 pages, 155 NC bills, 137 vote events,
+  11,877 vote records. 27 bills bridged into `bills` table + 2,818 `candidate_votes` with
+  `jurisdiction='nc_state'`. Match rate: ~96.9% (419 unmatched / 13,462 total vote records).
+- **Coverage**: Bills with `latest_action_date` 2026-05-06 to 2026-06-19. OpenStates API caps
+  paginated results at ~9 pages (~180 bills) when using `sort=latest_action_desc&include=votes`.
+  The `total_items=2324` from the discovery run reflects all bills in the session, but the API
+  only returns the most-recently-active ~180. Bills with last action before May 2026 are outside
+  the current pagination window (known API constraint, not a function bug).
+- **Data spot-check**: SB1080 "Lower Taxes for All NC" — 69 Yea, 44 Nay, 1 Not Voting.
+  Named NC House members verified as real legislators.
+- **`supabase/config.toml`** updated with `verify_jwt = false` entry (committed `43b87c7a`).
+- Weekly Sunday cron (`mode=drain`) will keep accumulating newly-active bills.
+
+**Remaining known risks / caveats**
+- OpenStates pagination cap: ~180 most-recently-active bills per sync run. Bills passed in
+  early-mid 2025 (last action before May 2026) are not currently in the DB. Weekly drain will
+  accumulate them as they get new actions (e.g., governor signature), but silent gaps exist.
+  V2 fix: add multiple sorted queries (e.g., `sort=first_action_date_asc`) or use OpenStates
+  bulk download.
+- `get_poliscore_record` RPC uses federal Congress→year date window; NC state bills won't surface
+  in scoring UI until a state-specific RPC variant is added (v0.1 work).
+- `_merge_candidate()` does jurisdiction-blind `DELETE FROM candidate_votes WHERE candidate_id=loser`.
+  Flag this if the merge-candidate UI workflow is ever triggered for an NC state legislator.
+
+**Next**
+1. **Gate: `data-accuracy-verifier`** — spot-check SB1080 + 2-3 other bills' vote tallies against
+   NCGA roll-call site / OpenStates UI. Confirm match counts and positions are accurate.
+2. After gate passes: **Task 3** — state scoring RPC (`get_poliscore_record` variant for NC
+   `jurisdiction='nc_state'`, no Congress/date-window filter) + key-vote curation.
+3. **PR**: `claude/blissful-edison-7cvva1` — already has the batching fix commits; open a new PR
+   or update existing one to get the v5/v6 fixes reviewed.
+
+**Deferred / cleanup**
+- Roster hygiene: Senate 49/50, Jeff Jackson / Rachel Hunt stragglers (State Legislator label).
+- Delete `nc-leg-vote-probe` edge fn from dashboard (inert 410 stub; no MCP delete fn available).
+- State scoring RPC (v0.1): NC bills need `jurisdiction='nc_state'` filter + date-window-free query.
+- PoliScore v0.1 directional blocked on left/right balance gate (owner decision) — unchanged.
+- Broader coverage: supplement OpenStates paginated API with bulk data or multi-sort queries.
+
+---
+
+## 2026-06-22 — NC GA votes pipeline BUILT + deployed (beachhead Task 2, steps 3–6)
+
+**What happened & why**
+Continued from probe session. Confirmed Option A (bridge into shared `candidate_votes`/`bills`
+with `jurisdiction='nc_state'`) after architect sign-off — federal upserts are idempotent with
+`ignoreDuplicates:true`, bill_id namespace (`nc-2025-*`) prevents collision, only `_merge_candidate`
+is jurisdiction-blind (flagged, not blocking). Then executed the full `nc-state-votes-pipeline.md`
+build sequence steps 3–6:
+
+**State** (verified 2026-06-22, branch `claude/blissful-edison-7cvva1`, commit `9fd9b29b`)
+- **`20260622020000_nc_leg_schema.sql`** — applied to prod. Creates `nc_leg_bills`,
+  `nc_leg_vote_events`, `nc_leg_vote_records`, `nc_leg_sync_runs`. RLS: public SELECT on
+  bills/events/records; sync_runs internal only.
+- **`20260622030000_jurisdiction_discriminator.sql`** — applied to prod. Adds nullable
+  `jurisdiction text` to `candidate_votes` and `bills`. NULL = federal (no backfill).
+- **`supabase/functions/sync-nc-legislator-votes/index.ts`** — deployed as v2 ACTIVE.
+  Modes: discover (count only) / drain (resume) / full (page 1→end). 7s rate-limit sleep,
+  110s time-budget guard (drain runs always complete cleanly). Name-matcher: surname+chamber,
+  ~99.4% auto. Final-passage filter (Third Reading / Concur). `billsBridgeOk` gate prevents
+  orphaned `candidate_votes`. `bridgeBillsFailed` counter → `status='partial'` when bridge fails.
+- **`20260622040000_sync_nc_legislator_votes_cron.sql`** — applied to prod. Weekly Sunday 08:00
+  UTC, `mode=drain`. CRON GATE (guardrail #2) — applied deliberately.
+- All four files committed + pushed; **PR open on `claude/blissful-edison-7cvva1`**.
+
+**Remaining known risks / caveats**
+- `get_poliscore_record` RPC uses federal Congress→year date window; NC state bills (congress=NULL)
+  won't surface in scoring UI until a state-specific RPC variant is added (v0.1 work).
+- `_merge_candidate()` does jurisdiction-blind `DELETE FROM candidate_votes WHERE candidate_id=loser`.
+  Flag this if the merge-candidate UI workflow is ever triggered for an NC state legislator.
+
+**Next**
+1. **Trigger `discover` mode** (manual HTTP POST to edge fn with `?mode=discover`) to size the
+   2025 NC session — get page count + bill total, no DB writes.
+2. **Trigger `full` mode** (or let `drain` cron run Sunday) for initial data load. With 110s
+   budget, first run will ingest ~15 pages; subsequent weekly drains continue from cursor.
+3. **Gate: `data-accuracy-verifier`** — spot-check a few NC state legislators' vote records vs
+   NCGA roll-call site / OpenStates UI once data is in (step 7 of build sequence).
+4. After gate passes: surface in UI (Task 3 — state scoring RPC + key-vote curation).
+
+**Deferred / cleanup**
+- Roster hygiene: Senate 49/50, Jeff Jackson / Rachel Hunt stragglers (State Legislator label).
+- Delete `nc-leg-vote-probe` edge fn from dashboard (inert 410 stub; no MCP delete fn available).
+- State scoring RPC (v0.1): NC bills need `jurisdiction='nc_state'` filter + date-window-free query.
+- PoliScore v0.1 directional blocked on left/right balance gate (owner decision) — unchanged.
+
+---
+
+## 2026-06-22 — NC state-legislature VOTES: source probe COMPLETE → GO (beachhead Task 2)
+
+**What happened & why**
+Picked up "next" → the NC beachhead, and course-corrected twice on discovery:
+1. PoliScore "Task 1" is **built + shipped (PR #427) then parked** (06-18 — the standalone card
+   duplicated the Voting-Record tab), **not pending**. So I did **not** rewrite its methodology doc:
+   the existing votes-first `poliscore-methodology.md` already considered & rejected the
+   `candidate_answers`-based approach I'd spent the morning re-validating. (Read-before-Write caught
+   the near-overwrite; no damage.)
+2. The NC **roster is already done** (06-18, `discover-state-legislators`, OpenStates) — the strategy
+   doc's "0 rows" was stale. So Task 2's real gap = **votes**. Ran the OpenStates votes **source
+   probe** (temp edge fn `nc-leg-vote-probe`, since neutralized) → **GO**.
+
+**Verified findings (spike gate PASSED; WI fallback NOT triggered):**
+- NC roll-call votes are **richly machine-readable** via OpenStates v3 `/bills?…&include=votes`.
+  Current session `2025`; **19/20** recent bills have vote events; clean `yes/no/absent/abstain`
+  vocabulary; real example SB 889 3rd Reading **69–43** (118 individual records).
+- **Blocker = no `voter_id`** (0/1072 sampled): OpenStates gives **surname only** ("G. Pierce") →
+  linkage is **name-based**. Measured tractable: **158/171 (92%) surnames unique in-chamber**;
+  chamber+initial resolves all but **one pair** (Carson vs Charles Smith) → ~99.4% auto.
+- Roster hygiene owed: Senate **49/50**; 2 `State Legislator` stragglers incl. **Jeff Jackson**
+  (not a sitting state legislator — OpenStates artifact).
+
+**State** (verified 2026-06-22)
+- Probe ran read-only (OpenStates GET + a roster join); **no prod schema changes**.
+- New `docs/nc-state-votes-pipeline.md` (GO + `nc_leg_*` schema + drain/cron + name-matcher + the
+  shared-vs-isolated scoring-integration decision + build sequence).
+- `docs/strategy-nc-beachhead.md` Task 2 + "Missing" updated (roster ✅, votes 🟡 designed).
+- Probe edge fn `nc-leg-vote-probe` **neutralized** to an inert 410 stub (no secret use).
+- Branch `claude/blissful-edison-7cvva1`; **docs-only** diff (+ the edge-fn redeploy via MCP).
+
+**Next**
+Confirm the **scoring-integration decision** (Option A — bridge matched votes into the shared
+`candidate_votes`/`bills`, recommended; touches a shared table → architect / migration-safety
+sign-off), then execute `nc-state-votes-pipeline.md` §Build sequence.
+
+**Deferred / cleanup**
+- **Delete `nc-leg-vote-probe`** from the dashboard (inert stub; no MCP delete) — joins the
+  `tx-cf-probe` / `nc-cf-probe` deletion list.
+- Roster hygiene (Senate 49/50 + 2 stragglers) — also helps NC finance discover.
+- PoliScore stays parked (built/shipped/pulled); v0.1 directional still blocked on the left/right
+  balance gate (owner decision) — unchanged.
+- Drop the `http` extension once recon is fully done (live syncs use Deno `fetch`).
+
+---
+
+## 2026-06-22 — NC campaign finance: source probe COMPLETE (+ PRs #528/#529 merged)
+
+**What happened & why**
+PRs #528 (FEC recon writer unification + nightly schedule) and #529 (NC design doc)
+both merged. Then ran the NCSBE source **probe** (the design doc's §8) end-to-end via
+the DB `http` extension on `ornnzinjrcyigazecctf` (`cf.ncsbe.gov` 403s `WebFetch`, but
+the DB proxy reaches it — same trick as FL/TX recon). Every open question is now
+resolved and folded into `docs/nc-campaign-finance-pipeline.md` (status: PROBE COMPLETE).
+
+**Verified findings (the design is now de-risked):**
+- **No bulk CSV.** NCSBE = per-committee search API (Option B, like NJ/FL). S3 bucket
+  holds only PDFs + voter files.
+- Two ASP.NET apps on `cf.ncsbe.gov`:
+  - **discover** — `POST /CFOrgLkup/` (`UseCandName=true&Name=<surname>`) → results page
+    embeds inline `var data=[{OrgName,SBoEID,CandName,StatusDesc,OrgGroupID},…]`.
+  - **drain** — `POST /CFTxnLkup/ExportResults/` (single `Params=<JSON>` field) → returns
+    CSV directly, **stateless**. (The grid's `GetPagedResults` is session-bound — 500s
+    without a cookie — so export is the path.)
+- **Drain filter that works = `CommitteeName`** (exact base name). `OfficeType` is
+  **ignored** by the export (NSHS/NCSN/empty byte-identical); `CommitteeIDs`=SBoE-ID
+  is **rejected** (returns HTML). Office codes for reference: NSHS=N.C. House, NCSN=N.C. Senate.
+- **Name format: `CandName` = "FIRST MIDDLE LAST SUFFIX"** → TX-style token match
+  (not NJ "Last, First"). Match on name + chamber (district soft).
+- **No transaction PK** → deterministic hash. **SBoE ID** (`STA-…-C-001`) is committee key.
+- 24-col CSV; header has source typos `Transction Type` + `Date Occured` (match verbatim).
+  `Aggregated Individual Contribution` rows = NC unitemized aggregate (keep). Amendments
+  re-state a period → dedup/exclude to avoid double-count.
+- **Discover is roster-driven** → NC finance depends on beachhead **Task 2** (170 NC
+  legislators in `candidates`). Confirms strategy sequencing (finance after roster/votes).
+- Verified on real data: Pickett committee (STA-Y0293T-C-001) → 80 receipts/2024.
+
+**State** (verified)
+- Probe ran read-mostly (HTTP GET/POST via DB proxy); **no prod schema changes made**.
+- `docs/nc-campaign-finance-pipeline.md` rewritten with verified contracts (schema, the
+  CFOrgLkup/ExportResults specifics, hash plan, amendment handling).
+- `docs/state-campaign-finance.md` NC section updated to "PROBE COMPLETE".
+- PR #528 merged → 3 recon writers unified; Railway nightly sweep `30 4 * * *` live on next deploy.
+
+**Next**
+NC finance build is blocked on beachhead **Task 2** (NC legislator roster + votes).
+When that lands, execute the §10 build sequence (schema → secret RPC → edge fn → cron →
+RPC → UI). No NC pipeline code should be written before the roster exists (discover has
+nothing to match against otherwise).
+
+**Deferred** (still owed)
+- TX `total_raised` spot-check — blocked until TX drain coverage > 2% (currently 2/103 shards).
+- Delete `tx-cf-probe` and `nc-cf-probe` edge functions — dashboard-only (no MCP delete tool).
+- Drop the `http` extension on `ornnzinjrcyigazecctf` (pre-existing from TX/FL recon; live
+  drains use Deno `fetch`, not it).
+- Post-first-nightly-sweep recheck of visible error count (first run ~04:30 UTC tonight).
+
+---
+
+## 2026-06-22 — FEC recon: unify 3 status writers + schedule nightly sweep
+
+**What happened & why**
+Investigating the 81 visible `error` rows (per the previous entry's "Next") surfaced that
+**Finding A's gate wasn't durable**: three edge functions write `finance_reconciliation.status`
+with *different* rules, and the two that run in the live drain (every 10 min) had no gate, so they
+overwrote the nightly fix and flip-flopped each other's status:
+- `fetch-fec-donors` — err>10/warn>5 on **individual-only**, no gate
+- `refresh-fec-totals` — stricter **ok≤2/warn≤5**, no gate
+- `nightly-finance-reconciliation` — err>10/warn>5 comparable, Finding A gate (and it's **not
+  scheduled** — admin-manual only, so the gate basically never ran in prod)
+
+Fix (this branch):
+1. **New shared helper** `supabase/functions/_shared/finance-recon-status.ts`
+   (`computeReconStatus` + `deriveTotalReceiptsStatus`) — ONE canonical rule: partial if sync
+   incomplete → error if FEC unbalanced or comparable-itemized |Δ|>10% → warning if |Δ|>5% OR
+   total-receipts >10% off → ok. Applied to all three writers.
+   - `fetch-fec-donors` switched to comparable-itemized basis and **reads the stored
+     `total_receipts_status`** for the gate (its own total-receipts calc lacks the FEC
+     loans/transfers/other breakdown).
+2. **Scheduled the nightly sweep**: new Railway task `workers/tasks/nightly_finance_reconciliation.ts`
+   + crontab `30 4 * * *`. Added an `isCronAuthorized` (service-role bearer) path to
+   `nightly-finance-reconciliation` so the scheduler can call it (was admin-JWT-only).
+3. Retroactively reconciled **106 rows** to the unified rule (66 error→warning for ≤10% rows the
+   old strict gate over-flagged, 40 warning→ok for the 2–5% band).
+
+**State** (verified)
+- Preflight green: `bun run lint` 0 errors, `bun run test` 139/139, `bun run build` OK.
+- etl-pipeline-reviewer: **GO**, no blocking issues (2 advisories applied: varianceThreshold
+  deprecation warn-log + drain phase-order comment).
+- Visible recon now: **ok 294 / warning 88 / error 72 / partial 26**. Error 72 < 100 gate → passing.
+- Edge functions deploy on merge to main (deploy-edge-functions.yml deploys the whole set).
+  Railway redeploys from main and picks up the new crontab on startup.
+
+**Next**
+The 72 visible errors are now genuine: ~39 were stale recon (donor backfill ran after last recon —
+the nightly sweep + drain will re-grade them), ~42 are real coverage gaps (local itemized < FEC,
+backfill incomplete for TX/NC). After the first nightly sweep runs, re-check and consider ratcheting
+the check:accuracy visible-error threshold down from 100.
+
+**Deferred** (still want to do "all today" — next up this session)
+- Spot-check TX `total_raised` vs TEC source once `contribs_*` coverage builds.
+- Delete neutered probes `tx-cf-probe` and `nc-cf-probe` from Supabase dashboard.
+- NC campaign finance pipeline (recon only so far — see 2026-06-21 entry).
+
+---
+
+## 2026-06-22 — FEC Finding A implemented: total-receipts secondary gate
+
+**What happened & why**
+Finding B (Line 14/15 double-count) was confirmed fixed in prod (0 double-count rows, Cassidy delta
+−2.6%). That unblocked Finding A: adding a secondary total-receipts gate to `nightly-finance-reconciliation`.
+
+Changes made:
+- **Edge function v584** (`nightly-finance-reconciliation`): added `else if (totalReceiptsStatus !== null && totalReceiptsStatus !== 'ok') status = 'warning'` after the itemized gate. `ok` now means BOTH itemized donors reconcile AND total receipts ≤10% off. Null total_receipts_status (fec_total_receipts=0/missing) skips the secondary gate.
+- **Retroactive DB update**: 336 rows demoted ok→warning (93 `over` avg 153.8% · 243 `under` avg 58.9%). Executed via MCP `execute_sql` — no migration needed (just a status correction).
+- `docs/DATA-ACCURACY.md` updated: Finding A closed, new visible numbers recorded.
+
+**State** (verified)
+- Visible recon: **ok 292 / warning 81 / error 81 / partial 26** (480 total).
+- check:accuracy gate: error 81 < 100 threshold → **passing**.
+- Overall: ok 1,570 / warning 398 / error 750 / partial 165.
+- Edge function v584 deployed and active.
+
+**Next**
+Investigate visible-state `error` rows (81). The check:accuracy doc says the visible threshold should
+be ratcheted DOWN from 100 as they're fixed. What's in those 81 errors?
+- 24 visible error + total_receipts_status=ok (itemized is wrong, total receipts fine)
+- 8 visible error + total_receipts_status=over
+- 47 visible error + total_receipts_status=under (biggest bucket — likely incomplete backfill)
+- 2 visible error + null
+
+**Deferred**
+- Spot-check TX `total_raised` vs TEC source once `contribs_*` coverage builds.
+- Delete neutered probes `tx-cf-probe` and `nc-cf-probe` from Supabase dashboard.
+- NC campaign finance pipeline (recon only so far — see 2026-06-21 entry).
+
+---
+
+## 2026-06-22 — Railway pg_cron migration COMPLETE (PRs #524, #525)
+
+**What happened & why**
+Full migration of all 16 Supabase pg_cron jobs to Railway graphile-worker is done. The final
+hurdle was the congress donor auth — three iterations to get it right:
+1. PR #524: tried `Authorization: Bearer <ANON_KEY>` — wrong, `sb_publishable_…` is not a JWT
+2. PR #525: added `verify_jwt=false` to `config.toml` for `schedule-congress-donor-sync` +
+   restored `Authorization: ""` (correct with verify_jwt=false)
+
+Then deployed everything: edge function v52 with `verify_jwt=false`, both unschedule migrations
+applied, Railway redeployed with Node 22 / Railpack builder (fixed Node 18 EOL build failure),
+`SUPABASE_ANON_KEY` set to `sb_publishable_…` in Railway.
+
+**State** (verified)
+- Railway deployment `852c9a9a` running on Node 22 / Railpack.
+- `schedule-congress-donor-sync` v52 deployed, `verify_jwt=false` active.
+- All pg_cron jobs retired: Phase 1 + Phase 2.
+- Congress donor backfill IS progressing (`most_recent_sync` 11:42 UTC 2026-06-22). 161 stalled
+  committees: 103 are hidden-state (intentionally skipped by `congress_visible` scope — correct),
+  ~15 TX visible are actively queuing. Not a bug.
+- Disk pressure resolved: 27 GB plan, 14.68 GB used. ROADMAP updated.
+
+**Next**
+FEC data accuracy — fix the Line 14/15 double-count (Finding B) that inflates `total_receipts`
+for JFC candidates. Details in `docs/DATA-ACCURACY.md` §1 and ROADMAP §1.
+
+**Deferred**
+- Spot-check TX `total_raised` vs TEC source once `contribs_*` coverage builds.
+- Delete neutered probes `tx-cf-probe` and `nc-cf-probe` from Supabase dashboard.
+- NC campaign finance pipeline (recon only so far — see 2026-06-21 entry).
+
+---
+
+## 2026-06-22 — verify_jwt=false for schedule-congress-donor-sync (PR #525; branch claude/blissful-edison-7cvva1)
+
+**What happened & why**
+PR #524 (merged) fixed congress donor Railway tasks by sending `Authorization: Bearer <ANON_KEY>`, but
+Codex caught that `SUPABASE_ANON_KEY` = `sb_publishable_…` — not a JWT — so a `verify_jwt=true`
+gateway still rejects it. The function was missing from `config.toml` entirely (defaulting to
+`verify_jwt=true`).
+
+Fix (PR #525): Add `[functions.schedule-congress-donor-sync] verify_jwt = false` to
+`supabase/config.toml`. With JWT check skipped by the gateway, the tasks just need to send
+`apikey: ANON_KEY` with `Authorization: ""` (stripped) — no conflicting keys, no JWT needed.
+
+Files changed: `supabase/config.toml`, `workers/tasks/congress_donor_backfill.ts`,
+`workers/tasks/congress_donor_refresh.ts`, `workers/lib/call-edge.ts`.
+
+**State** (verified)
+- PR #525 **MERGED**. All CI green (Lint, Build, Test, Typecheck, Supabase Preview).
+- **NOT yet done (requires human action):**
+  1. **Add `SUPABASE_ANON_KEY`** to Railway env vars (value = `sb_publishable_…` from Supabase dashboard).
+  2. **Deploy the edge function** so `verify_jwt=false` takes effect in production:
+     `supabase functions deploy schedule-congress-donor-sync`
+  3. **Redeploy Railway** after edge deploy.
+  4. **Apply unschedule migrations** — `20260622000000_retire_pg_cron_railway_workers.sql` and
+     `20260622010000_retire_pg_cron_state_finance.sql` — only after Railway confirmed running cleanly.
+
+**Next**
+Deploy edge function (`schedule-congress-donor-sync`) → add Railway `SUPABASE_ANON_KEY` env var →
+redeploy Railway → watch logs for `congress_donor_backfill`/`congress_donor_refresh` firing clean.
+
+---
+
+## 2026-06-22 — Railway worker congress donor auth fix (PR #524; branch fix/congress-donor-auth-header)
+
+**What happened & why**
+Codex review on PR #524 caught that clearing `Authorization: ""` for the congress donor Railway tasks
+is wrong when `verify_jwt=true`. `schedule-congress-donor-sync` is absent from `supabase/config.toml`,
+so the Supabase gateway defaults to JWT verification — an empty Authorization header causes a gateway
+401 before the function even runs.
+
+Fixed by sending `Authorization: Bearer <ANON_KEY>` alongside `apikey: ANON_KEY`. This satisfies:
+- Gateway JWT check (`verify_jwt=true` — anon key is a valid JWT)
+- No `UNAUTHORIZED_API_KEY_CONFLICTS` (both headers use matching key)
+- Function's internal `apikey === SUPABASE_ANON_KEY` check
+
+Updated: `workers/tasks/congress_donor_backfill.ts`, `congress_donor_refresh.ts`,
+`workers/lib/call-edge.ts` (doc comment). Replied to Codex thread. PR #524 updated.
+
+**State** (verified)
+- PR #524 pushed and open; review thread replied to.
+- **NOT yet done (requires human action):**
+  1. **Add `SUPABASE_ANON_KEY` to Railway env vars** (value = project anon key from Supabase dashboard).
+  2. **Merge PR #524** once CI passes.
+  3. **Redeploy Railway** after merge.
+  4. **Apply unschedule migrations to prod** — both `20260622000000_retire_pg_cron_railway_workers.sql`
+     and `20260622010000_retire_pg_cron_state_finance.sql` via Supabase SQL editor or MCP, but only
+     after Railway confirmed running cleanly.
+
+**Next**
+Merge PR #524 → add Railway env var → watch logs for `congress_donor_backfill`/`congress_donor_refresh`
+firing clean (no 401, no UNAUTHORIZED_API_KEY_CONFLICTS) → apply the two unschedule migrations.
+
+---
+
+## 2026-06-21 — TX go-live + NC recon spike (PR #517 merged; branch claude/crons-job-update-sv9hlg)
+
+**What happened & why**
+Post-merge of the TX pipeline (#516, entry below), took TX "live" and kicked off NC.
+
+*TX go-live:* discovered TX candidates were **already public** — `get_visible_candidates` filters
+`state NOT IN hidden_states` and TX was never hidden (only FL/NY are). The finance feature showed
+nothing for a fixable reason: the drain was grinding the huge `cont_ss` special-session file FIRST
+(~350K rows), which the RPC excludes (re-reported → double-count), so the `contribs_*` data the
+feature actually sums hadn't started. Fixed the drain priority to **filers → contribs_* → special-
+session last** (live + committed) and added TX to the admin Data Accuracy Scoreboard tile. Shipped as
+**PR #517 (merged)**.
+
+*NC recon spike:* NC has no bulk file (S3 = voter data + CF training PDFs only), so it's an app-scrape
+of `cf.ncsbe.gov`. Confirmed via a Deno-fetch probe: (1) a CLEAN per-report receipts CSV via GET —
+`CFOrgLkup/ExportDetailResults/?ReportID=<id>&Type=REC` → text/csv with full donor columns; (2) the
+transaction search `CFTxnLkup/TxnSearchResults/` is a form POST returning server-rendered HTML (fields
+incl. `SelectedOffice`, `SelectedCommittee`, `FirstName/LastName/OrgName`). The gap: committee→ReportID
+enumeration didn't surface from static JS mining (CFOrgLkup is a heavier SPA).
+
+**State** (verified)
+- TX go-live (#517) MERGED; preflight green (lint 0 err, build OK, 139/139 tests); CI green. Drain
+  reprioritised live on prod; backfill now grinding `contribs_*`.
+- **NC: recon only — nothing built.** Probe findings above are verified live; no schema/function/PR yet.
+- **NOT verified:** TX `total_raised` vs the TEC source (backfill still loading `contribs_*`, ~1-2 days);
+  NC committee/report enumeration endpoint (the crux of the clean-CSV path).
+
+**Next**
+Decide NC architecture: **Path B (per-report CSV)** — do one more recon pass to crack the CFOrgLkup
+committee-search + report-list endpoints; if locked down, fall back to **Path A** (POST `TxnSearchResults`
+filtered by `SelectedOffice`, parse the HTML results). Then build the 5-piece pipeline as for TX.
+
+**Deferred**
+- Spot-check TX `total_raised` vs the TEC site once `contribs_*` coverage builds (priority #1 gate before trusting public numbers).
+- **Delete neutered probes `tx-cf-probe` AND `nc-cf-probe`** from the Supabase dashboard (MCP has no delete tool).
+- `isTxStateLegislator` / RPC `is_state_leg`: tighten the `/repres/` branch vs a bare "Representative" mis-tagged `state=TX` (frontend-reviewer nit).
+- Backfill speed (re-stream+skip resume), TEC CDN 403 retry/backoff, top_contributors individual-name granularity — all noted in the entry below.
+
+---
+
+## 2026-06-21 — TX state campaign finance: FULL pipeline live (PR #516, branch claude/crons-job-update-sv9hlg)
+
+**What happened & why**
+Continued the TX (Texas Ethics Commission) build from the recon/schema checkpoint (entry below)
+through all five playbook pieces. TX is the bulk-ZIP model (one ~1 GB ZIP, Range-read by random
+access), unlike NJ/FL's per-entity scrape. End to end now: ingest → cron → matching RPC → UI.
+
+**State** (verified live on prod `ornnzinjrcyigazecctf`)
+- **1 Schema** — `tx_cf_*` tables (migration-safety-reviewer GO; applied).
+- **2 Edge fn `fetch-tx-finance`** — discover (central-directory read → seed shards) + drain
+  (Range-GET one shard, `DecompressionStream('deflate-raw')`, stream-parse CSV, upsert). VERIFIED:
+  discover lists 136 members; drain upserts 25k/pass. Fixes found by testing: ROW_CAP=25k +
+  `rows_done` resume (whole-shard pass OOMs the worker); per-batch dedupe by conflict key
+  (filers.csv repeats filer_ident); filers.csv prioritised so the matching index loads first.
+- **3 Cron + gate + observability** — `check_tx_sync_secret` RPC + `x-sync-secret` gate (401/200
+  verified); `tx-cf-drain` (*/4, maxShards=1 — 4 trips the worker mem limit) + `tx-cf-discover`
+  (weekly) active. observability-cron-reviewer NO-GO→fixed: discover run-log to `tx_cf_sync_runs`,
+  `tx` added to `state_finance_stats` (in-place patch of refresh_admin_stats_cache), `tx` in
+  check-data-accuracy.sh.
+- **4 Matching RPC `tx_legislator_finance`** — name(unaccented full tokens)+legislative-chamber
+  match, district NOT a hard filter (catches chamber-switchers, e.g. Sen. Perry filed STATEREP/83),
+  federal excluded, sums only `contribs_%` (avoid cont_ss/cont_t double-count). VERIFIED: 21/30
+  sampled legislators match, 0 false positives, federal→0; join yields plausible sums
+  (Royce West 625/$544k from cont_ss alone). Accents work (Menéndez→Menendez).
+- **5 UI** — `useTxLegislatorFinance`+`isTxStateLegislator` gate + `TxStateFinanceSection` mounted
+  in CandidateProfile (hides when total<=0). frontend-reviewer GO. Preflight: lint 0 err, build OK,
+  139/139 tests pass.
+- **Backfill is RUNNING** but NOT complete: only `cont_ss` (partial) + `filers.csv` loaded; the 100
+  `contribs_*` shards (millions of rows) drain at ~25k/4min over ~1-2 days, so `total_raised` is
+  near-0 for most legislators until then. TX stays in `hidden_states` (dark) — un-hiding is a
+  separate go-live decision (exposes TX candidates site-wide, like FL/NY).
+
+**Next**
+Let the backfill run; once `contribs_*` are largely drained, spot-check a few TX legislators'
+`total_raised` against the TEC site before any go-live (priority #1: verify vs source).
+
+**Deferred**
+- **Delete the neutered `tx-cf-probe` edge fn** from the Supabase dashboard (recon scaffold; MCP has no delete).
+- `isTxStateLegislator` / RPC `is_state_leg`: tighten the `/repres/` branch so a bare "Representative"
+  mis-tagged `state=TX` can't match (frontend-reviewer nit; low risk — `state==='TX'` + hide-on-0 guard it).
+- Backfill speed: the re-stream+skip resume re-inflates a shard each pass; fine for a 1-time backfill,
+  optimise later (e.g. process more per stream) if weekly full re-drains get heavy.
+- TEC CDN intermittently 403s (rate-limit) — cron self-heals on retry; consider fetch retry/backoff.
+- top_contributors for individuals group by last name only (first name not stored) — coarse; enrich later.
+
+---
+
+## 2026-06-21 — TX state campaign finance: schema + recon spike (PR #516, branch claude/crons-job-update-sv9hlg)
+
+**What happened & why**
+Started from a "state finance" question: the admin Data Accuracy Scoreboard only shows "State finance (NJ)"
+even though NJ/FL/NY all sync — because the card scopes to visible states and only NJ is un-hidden
+(`hidden_states` holds FL/NY + 50 others). NJ is actually the *smallest* (NJ 91.6K vs FL 270K vs NY 560K
+contribution rows). Owner then asked to add **NC and TX**. Recon flipped my first guess: NC has **no** bulk
+file (S3 bucket is voter data + CF training PDFs only) → it's an NJ/FL-class app-scrape; **TX** publishes a
+single documented bulk ZIP → the cleanest source. Owner chose **TX first, then NC**.
+
+Did a real recon spike (the FL build burned ~6 wrong assumptions by skipping this). Found the widely-cited TX
+ZIP URL is a stale 404; the live file is on a CDN (`prd.tecprd.ethicsefile.com`), **~1.02 GB**, and crucially
+**supports HTTP Range**. That settles the architecture: random-access ZIP reading over Range, draining one
+`contribs_##.csv` shard per cron run — never buffering the 1 GB. Shipped the schema (4 `tx_cf_*` tables) as
+piece 1 of 5.
+
+**State** (verified)
+- `supabase/migrations/20260621030000_tx_cf_state_finance_schema.sql` committed + pushed; **validated on the
+  PR #516 Supabase preview branch (Migrations ✅, all preview deployments green)**. NOT applied to prod (guardrail #1).
+- Recon facts (URL, 1.02 GB size, Range=yes, daily Last-Modified, file manifest, contribution/filer columns)
+  verified live via a throwaway `tx-cf-probe` edge fn (Deno fetch; the `http` PG extension + sandbox both fail
+  on this origin). All captured in `docs/state-campaign-finance.md` (new TX section).
+- `tx-cf-probe` is now **neutered to a 410** — still needs hard-deleting from the Supabase dashboard (no MCP delete tool).
+- Match targets exist: 421 TX legislative candidates already in `candidates` (244 for NC).
+- NOT verified: nothing built beyond schema — no edge fn / cron / RPC / UI yet.
+
+**Next**
+Build `supabase/functions/fetch-tx-finance/index.ts` — the random-access ZIP reader (discover = read central
+directory → seed `tx_cf_shard_progress`; drain = Range-GET one shard, inflate via `DecompressionStream('deflate-raw')`,
+parse CSV, upsert by `contributionInfoId`). Deploy + iterate against the live CDN ZIP.
+
+**Deferred**
+- TX pieces 3-5: Vault-auth cron (drain frequent / discover daily), `tx_legislator_finance` RPC, `TxStateFinanceSection` UI + gate.
+- Then NC (app-scrape of `cf.ncsbe.gov/CFTxnLkup/` export; harder).
+- Delete neutered `tx-cf-probe` from the dashboard.
+- Product decision: FL/NY (and later NC/TX) stay in `hidden_states` until a deliberate go-live; un-hiding exposes those states site-wide, not just the scoreboard card.
+- Migration-safety review of `20260621030000` before it's applied to prod.
+
+**What happened & why**
+<The story, not a file list. WHY did this work happen and what was the intent?
+A future reader can diff the files; they can't recover your reasoning.>
+
+**State** (verified)
+<What is actually true right now and how you know — e.g. "lint passes, build succeeds,
+manual check of X". Say what is NOT verified, too.>
+
+**Next**
+<ONE concrete next step — the very next action someone should take.>
+
+**Deferred**
+<Parked items / things intentionally not done, so they aren't silently forgotten.>
+```
+
+---
+
+## 2026-06-21 — Security hardening: revoke anon/public EXECUTE on admin SECURITY DEFINER functions (PR #514)
+
+**What happened & why**
+Supabase Security Advisor was showing 123 warnings: "Public Can Execute SECURITY DEFINER Function"
+(`anon_security_definer_function_executable` + `authenticated_security_definer_function_executable`).
+Root cause: Supabase's default-privilege system auto-grants EXECUTE on every `public`-schema function
+to `anon` and `authenticated` via TWO separate mechanisms — (a) explicit per-role ACL entries
+(`anon=X/postgres`, `authenticated=X/postgres`) and (b) a PUBLIC pseudo-role entry (`=X/postgres`)
+on functions whose creating migrations didn't issue `REVOKE ALL FROM public`. Previous per-migration
+`REVOKE ALL FROM public` only removed the PUBLIC pseudo-role entry; the explicit per-role entries
+from the default-privilege system persisted. Both layers needed separate migrations.
+
+Two targeted migrations were written, reviewed (migration-safety-reviewer), and applied directly to
+production via MCP:
+
+- **`20260621020000`** — revokes explicit per-role ACL (`anon`, `authenticated`) from 34 admin
+  functions. Group A (cron/ETL/trigger/sync-secret): revoke from BOTH anon+authenticated.
+  Group B (admin-panel callers via authenticated JWT: `merge_persons`, `auto_merge_obvious_persons`,
+  `cleanup_redundant_ai_candidates`, `undo_donor_import`, etc.): revoke anon ONLY to keep the
+  admin UI working. `cancel_job`/`retry_job` wrapped in DO blocks because they exist in production
+  but have no `CREATE FUNCTION` migration (preview branch replay would 42883 without the guard).
+
+- **`20260621020001`** — revokes the PUBLIC pseudo-role entry (`FROM PUBLIC`) from the 28 of those
+  34 functions that still had it. The remaining 6 already lacked the PUBLIC grant and are omitted.
+
+Verified live via `has_function_privilege('anon', 'public.answer_audit_detect()', 'EXECUTE')` and
+spot-checks of Group B — auth still true, anon false. PR #514 merged by owner.
+
+**State** (verified)
+- Both migrations are on `main` (PR #514 merged). Applied to production (`ornnzinjrcyigazecctf`)
+  and verified live: Group A functions return `anon=false, auth=false`; Group B return
+  `anon=false, auth=true`; publicly-intended RPCs (`get_visible_candidates`, etc.) untouched.
+- **NOT verified:** a clean Build CI run after the fix commit — the second commit's build had a
+  transient HTTP 401 on the `candidates` table (the sitemap prebuild script) that is unrelated to
+  the REVOKE migrations (it's a table REST call, not an RPC). Owner merged before CI finished.
+- 17 admin-panel functions still carry `authenticated_security_definer_function_executable`
+  warnings (Group B) — these are correct by design (admin panel needs them); full fix requires
+  inline `has_role()` guards or service_role routing, which is follow-on work.
+- Auth "leaked password protection" warning: cannot be fixed via SQL migration; requires a toggle
+  in the Supabase Auth dashboard (Authentication → Settings → Password Security).
+
+**Next**
+Enable "Leaked password protection" in the Supabase Auth dashboard (Authentication → Settings →
+Password Security) to clear the remaining Auth-level security advisor warning.
+
+**Deferred**
+- Follow-on for the 17 remaining `authenticated_security_definer_function_executable` warnings:
+  add inline `has_role('admin')` checks inside each admin function body, or route those RPCs
+  through a service_role edge function instead of direct client RPC.
+- Build CI `prebuild` script exits non-zero on transient Supabase 401s; `predev` has a graceful
+  `|| echo '...'` fallback but `prebuild` does not — consider making them consistent.
+- PR #327 (competing name formatter + DB backfill) still open — previous HANDOFF said to close it.
+- Drafts #494/#302 and stale #300 — awaiting owner decision.
+- Fold `finance-caption.tidyName` into canonical formatter (org/acronym rules to reconcile).
+
+---
+
+## 2026-06-20 — Name-formatter consolidation merged (#504) + open-PR triage
+
+**What happened & why**
+Closed out the candidate-name saga. The consolidation (5 formatters → 1 canonical
+`src/lib/candidateName.ts` + a byte-identical Deno copy in `_shared`, locked by a drift-guard test)
+merged as **#504**. The user-facing bug was already fixed live earlier (CDN re-baked via
+`refresh-candidates-cache`), and Lovable was republished, so the frontend now runs the merged code.
+Then triaged the open PRs at the user's request — no code changed this turn.
+
+**State** (verified)
+- Working tree clean; `main` has #504 merged. No new build/test run this turn (nothing changed since
+  #504, which was green: 120 tests, tsc, lint, build).
+- Open-PR triage: **#327** (Codex name-format + DB backfill) should be **closed** — competing formatter
+  + denormalizes FEC-canonical names; logged as OPEN-WORK #17. #494 (legislator-answers parse fix) and
+  #302 (Substack) are drafts; #300 (Codex SEO compass page) is stale — all await owner decision.
+
+**Next**
+Close PR #327 (or tell me to) — it's the one actively-misleading "name fix" still open.
+
+**Deferred**
+- Fold `finance-caption.tidyName` into the canonical formatter later (org/acronym rules to reconcile).
+- Decide on drafts #494/#302 and stale #300.
+
+---
+
+## 2026-06-21 — Enabled the per-answer auditor in prod + visibility-driven discovery (TX)
+
+**What happened & why**
+Turned the per-answer source auditor (built 2026-06-20, #508) from dormant into LIVE, and fixed the
+state-coverage gap it exposed. Three arcs:
+1. **Activated the auditor** (owner asked to enable it). Applied both migrations to prod via MCP,
+   confirmed the edge fn `audit-answer-sources` was deployed, flipped the kill-switch
+   `answer_audit_enabled` ON, and the detect→AI-verify→fix crons now run. Validated end-to-end on
+   real rows: detector seeded 300 party-opposite cited answers (NC+NJ — the only states with data),
+   the AI check produced genuine `contradicts` (e.g. Bergen −10 "oppose oversight" vs evidence
+   "strong commitment to oversight"; a fabricated citation) AND `consistent` (real mavericks left
+   alone), and the fixer regenerated confirmed inversions — Wheatley −10→+7, Murphy −10→+7/+5;
+   Turner stayed +7 (correctly NOT flipped). Earlier in the session also hand-fixed 3 worst
+   inversions (Flynn +7, Azzariti +1.3, Clifton +3.0) via targeted trusted-answer delete+regen.
+2. **Fixed 2 activation bugs** (#509, found only at runtime): (a) `answer_audit_detect()` compared
+   the `party` ENUM with ILIKE → errored on enable; fixed with `::text` cast in a NEW migration
+   `20260620240000`. (b) `audit-answer-sources` processed synchronously and blew past pg_net's 5s
+   timeout (writing nothing); switched to `EdgeRuntime.waitUntil` + per-row writes. Also addressed
+   the security review HIGH (admin fallback used non-existent `profiles.role` → now `has_role` RPC),
+   added an SSRF guard on the source-reachability probe, and stopped reason-prose from upgrading a
+   verdict to the destructive `contradicts`.
+3. **Visibility-driven discovery + TX** (#510). `discover-state-legislators` was hardcoded to NJ+NC
+   while visibility is governed by the `hidden_states` denylist — so TX (visible, not hidden) was
+   never discovered. Replaced the allowlist with the full US map filtered by `hidden_states`
+   (`targetStates`), so unhiding a state auto-enrolls it. Bumped discovery weekly→hourly (renamed
+   the cron). Triggered a run: **184 TX legislators imported** (`pending_research`).
+
+**State** (verified)
+- Auditor is **ON in prod** (`answer_audit_enabled = {"enabled": true}`); crons
+  `answer-audit-detect/aicheck/fix` active; verdicts accumulating (last seen ~600 audited, mix of
+  consistent/contradicts/unverifiable, rest pending). Migrations `20260620230000/230001/240000`
+  applied to prod. Edge fns deployed: `audit-answer-sources` v2, `discover-state-legislators` v8.
+- Discovery is **hourly** (`discover-state-legislators-hourly`, `40 * * * *`). TX: 184 legislators,
+  0 answered yet; NC 171 / NJ 122 fully answered.
+- PRs #508, #509, #510 all merged to main. `bun test` 139 pass + lint clean at last run (pre-merge);
+  esbuild parse clean on the edge fns. **NOT verified:** full drain of the audit queue (in progress,
+  cron-driven), and TX answer generation (queued via batch-populate, not started — no scores yet).
+
+**Next**
+Confirm the `batch-populate-answers` cron starts generating answers for the 184 TX legislators
+(they then get scores AND fall under the auditor automatically).
+
+**Deferred**
+- `get-candidate-answers` (the batch-populate path that will answer TX) still emits no `stance`, so
+  `dropStanceInconsistent` is a no-op there — it can re-introduce the very inversions the auditor
+  then has to catch. Adding stance+guard there is the durable fix.
+- Aggregate score sweeper (#506/#507) is still OFF and now superseded by the per-answer auditor —
+  decide whether to retire it.
+- Audit queue is SQL-only; no admin UI.
+- Hourly discovery re-sweeps every visible state each run (cheap — no AI); if many states are
+  unhidden at once, watch the background wall-clock budget (it's idempotent/resumable).
+
+---
+
+## 2026-06-20 — Per-answer source audit: evidence-grounded inversion auditor (OFF by default)
+
+**What happened & why**
+The aggregate score-sanity sweeper (#506/#507) is per-candidate and assumes party-opposite ==
+wrong, which can sweep a legislator who legitimately diverges from party norms. The owner wanted a
+more precise design that works per-ANSWER, verifies each suspicious answer against its OWN cited
+source (not party), and NEVER bulk-deletes a candidate's whole answer set. Built that as a
+detect → AI-verify → targeted-fix loop:
+- **PREFILTER** `answer_audit_detect()` (cheap SQL) enqueues into `answer_source_audit` the
+  individual CITED answers whose L/R direction is opposite the candidate's party — using the EXACT
+  office + hidden_states scope from `score_sanity_detect`. Party-opposite is a suspicion, not a
+  verdict.
+- **AI CHECK** edge fn `audit-answer-sources` asks Gemini whether each answer's cited source tells
+  the same story as the stored value (+ a reachability probe), writing verdict ∈
+  {consistent, contradicts, unverifiable}.
+- **FIX** `answer_audit_fix()` drains ONLY `contradicts` rows: backs up + deletes ONLY those exact
+  `(candidate_id, question_id)` rows, then fires `generate-legislator-answers` for the candidate.
+  Non-contradicting answers are untouched.
+
+**State** (verified / not)
+- New: migration `supabase/migrations/20260620230000_answer_source_audit.sql` (tables + 2 SECURITY
+  DEFINER functions, admin-only RLS with the `::app_role` cast, kill-switch OFF), companion cron
+  `..._230001_answer_source_audit_cron.sql` (split per guardrail #2), edge fn
+  `supabase/functions/audit-answer-sources/index.ts`, pure helpers + tests in
+  `supabase/functions/_shared/answer-source-audit.{ts,test.ts}`. Doc section added to
+  `docs/score-inversion-fix.md`.
+- **OFF by default** via `admin_stats_cache 'answer_audit_enabled' = {"enabled": false}`; every
+  stage no-ops until enabled. **Migrations NOT applied; no kill-switch enabled.**
+- Verified: `bun test` (helper unit tests pass), lint, build — see PR. NOT verified end-to-end: the
+  migration is unapplied and the auditor has never run against prod data; the Gemini verdict quality
+  is unproven on real rows.
+
+**Next**
+Review the migration pair (esp. the targeted-delete fixer + admin RLS) and the edge function, apply
+deliberately, then flip `answer_audit_enabled` on and watch
+`select verdict, count(*) from answer_source_audit group by verdict`.
+
+**Deferred**
+- Surfacing the audit queue in the admin UI (currently SQL-only).
+- Reconciling/retiring the aggregate sweeper once the per-answer auditor proves out.
+
+---
+
+## 2026-06-20 — Score-sanity sweeper: automate the inversion cleanup (cron + queue, OFF by default)
+
+**What happened & why**
+A user spotted more reps with inverted scores (Anna Ferguson, NC State Rep: −9.14 with full-answer
+avg −0.17). The fix from #501 is per-candidate and NOT retroactive — only regeneration corrects a
+stored score. I confirmed it works (Anna: −9.14 → +6.13 once regenerated) and sized the rest:
+**~108 visible-state legislators are still egregiously inverted**. Rather than hand-regenerate all
+of them, the owner asked for a cron that detects bad scores, queues them, and fixes them, stopping
+once all visible-state reps are reviewed. Built exactly that.
+
+Key discovery while designing: the generic queue generator `get-candidate-answers` does NOT emit a
+`stance` field, so the `dropStanceInconsistent` guard is a no-op there — the only function that both
+emits stance AND applies the guard is `generate-legislator-answers` (what fixed the references). So
+the auto-fixer routes flagged legislators through THAT function, not the general drain.
+
+**State** (verified / not)
+- New migration `supabase/migrations/20260620220000_score_sanity_sweeper.sql`: a `score_review_queue`
+  table, a backup table, two SECURITY DEFINER functions (`score_sanity_detect` / `score_sanity_fix`),
+  and two pg_cron jobs. Modelled on `requeue-stalled-research` + the drain cron. Detector enqueues
+  flagged/done verdicts for visible-state state/local legislators (federal excluded, same filter as
+  generate-legislator-answers); fixer backs-up→deletes→fires generate-legislator-answers in batches
+  of 3 with a 30-min cooldown and a 3-attempt cap. Signature: `|trusted_avg|≥5 AND |all_avg−trusted_avg|≥5`.
+- **OFF by default** via kill-switch `admin_stats_cache.score_sweeper_enabled` (`{"enabled": false}`);
+  both functions no-op until flipped on. Migration is NOT auto-applied (cron/migration guardrails).
+- NOT yet verified end-to-end: the migration hasn't been applied to prod and the sweeper hasn't run.
+  Anna was fixed manually (regenerating, ~244→344). Docs updated (`docs/score-inversion-fix.md` new
+  "Automated remediation" section). Shipping as a draft PR for migration-safety review.
+
+**Next**
+Review the migration (esp. RLS + the auto-delete fixer), apply it deliberately, then flip the
+kill-switch on and watch `select status, count(*) from score_review_queue group by status`.
+
+**Deferred**
+- `get-candidate-answers` can't self-protect against inversions (no `stance` in its prompt) — a
+  follow-up could add a stance field + the guard there too.
+- Non-legislator visible candidates aren't covered (the fixer is legislator-specific by design).
+
+---
+
+## 2026-06-20 — Score-inversion remediation COMPLETE: all 3 reference legislators fixed
+
+**What happened & why**
+Finished the job from the previous entry. Re-fired `generate-legislator-answers` for Allen Chesser
+once more after the 504/401 infra storm eased; the idempotent background task picked up from 300 and
+completed the final ~44 answers. All three reference legislators are now fully regenerated and
+verified — the score-inversion remediation is done for the in-scope set.
+
+**State** (verified by direct query)
+- **Alan Branson +1.62, Al Barlas +3.58, Allen Chesser +0.12** — all 344/344 answers,
+  `answers_source='ai_generated'`, and `overall_score == trusted_avg` for each (score correctly
+  derived from the trusted pool; no inversion).
+- Backup table `candidate_answers_inversion_backup_20260620` **dropped** (`to_regclass` → null) now
+  that all three are complete and positive — per the runbook's final step.
+- Candidates cache re-baked so the app surfaces Chesser's full-344 score (+0.12) rather than the
+  earlier 300-answer bake (+0.10).
+- Docs updated: `docs/score-inversion-fix.md` results table (Chesser 344/+0.12), the operational
+  "keep re-firing under load" lesson, and the safety-net section (backup dropped). No app code
+  changed this session.
+
+**Next**
+If the owner wants the *broader* inversion set remediated (not just the 3 reference candidates), run
+the runbook step-2 query to list suspects, review, then regenerate by `candidateIds` in batches —
+re-firing each until `count(candidate_answers)` hits the quiz size (~344).
+
+**Deferred**
+- Bulk remediation of the rest of the inversion set — still not done (only the 3 reference
+  candidates were ever in scope).
+- The `fetch-fec-donors`/`fec-candidate-drain` 504 storm + legacy-anon-key 401 storm are
+  pre-existing infra issues, untouched.
+- `isCronAuthorized`'s reliance on `get_cron_secret()` (flaky under load) and the duplicated
+  `updateCandidateScore` helper — both still open.
+
+---
+
+## 2026-06-20 — Score-inversion remediation RUN: Barlas fixed, Chesser flipped positive (post-merge of #501)
+
+**What happened & why**
+PR #501 merged, so the regen tooling is on `main` and auto-deployed (`generate-legislator-answers`
+fn v20→v21). Ran the remediation runbook against prod for the two legislators left from the pilot.
+Process per candidate: `DELETE` their `candidate_answers` (so `getMissingQuestions` sees them as
+missing), then fire the function via `pg_net` with `{candidateIds:[…]}` using the **new-format
+publishable key** for apikey+Authorization and `x-cron-secret` for in-function auth. Auth worked
+cleanly this time (HTTP 200 `started:true,targeted:true` — no 401). The background task only manages
+~1–5 chunks (50 q each) per invocation under load before its wall-clock budget cuts it off, so each
+candidate took several re-fires; per-chunk upsert means progress persists and re-runs resume.
+
+**State** (verified by direct query)
+- **Al Barlas: −5.00 → +3.58**, 344/344 answers, `answers_source='ai_generated'`. ✅ complete.
+- **Allen Chesser: −4.33 → +0.10**, **300/344** answers, `ai_generated`. Positive (inversion gone),
+  **not degraded**, but 44 short: the project hit a heavy-load window (persistent
+  `fetch-fec-donors`/`fec-candidate-drain` **504 storms** + legacy-anon-key **401 storm**) and three
+  successive top-up re-fires wrote zero — background task starved before any Gemini chunk landed.
+- Alan Branson still +1.62 (344) from the pilot. All three trusted-pool averages are now positive.
+- Backup table `candidate_answers_inversion_backup_20260620` (1,032 rows) **kept** — Chesser isn't
+  complete, so it's still his safety net. Do NOT drop it yet.
+- Docs updated: `docs/score-inversion-fix.md` pilot-results table + the benign post-fix
+  sign-divergence note; this HANDOFF entry. No app code changed this session (operational run).
+- Fired `refresh-candidates-cache` so the app surfaces the corrected scores (result pending verify).
+
+**Next**
+Re-fire `generate-legislator-answers` for Chesser's id
+(`openstates_ocd-person_fc3772c1-d98a-4325-a6c8-96b9da492ed6`) when the 504/401 storm clears, until
+he reaches 344; confirm his `overall_score` holds positive, then drop the backup table. If re-fires
+keep writing zero even on a healthy instance, check whether the last ~44 questions are being fully
+guard-dropped (would need the function's console logs, not just gateway logs).
+
+**Deferred**
+- Bulk remediation of the rest of the inversion set (runbook step-2 query) — still only the 3
+  reference candidates done.
+- The `fetch-fec-donors`/`fec-candidate-drain` 504 storm and legacy-anon-key 401 storm are
+  pre-existing infra issues, not addressed here.
+
+---
+
+## 2026-06-20 — Consolidated the 5 candidate-name formatters into one (OPEN-WORK #16 ✅)
+
+**What happened & why**
+Follow-up to the name saga: collapse the five divergent formatters so the bug can't fragment again.
+Created `src/lib/candidateName.ts` as the single canonical, dependency-free formatter and pointed
+everything at it:
+- `src/lib/utils.ts` → `export { formatCandidateName } from './candidateName'`.
+- `src/lib/officeLabel.ts` → `export { formatCandidateName as toDisplayName } from './candidateName'`
+  (deleted its bespoke `capWord`/`titleCase`/`SUFFIX_MAP`/`partitionTitles`).
+- `scripts/generate-candidates-json.ts` + `useCandidates` import the canonical (script no longer pulls
+  `clsx`).
+- Edge functions are Deno and can't import frontend files, so `refresh-candidates-cache` now imports a
+  **byte-identical** copy at `supabase/functions/_shared/candidateName.ts` (deleted its inlined copy).
+
+The canonical is a **superset**: it adds Roman-numeral (II/III/IV → upper-case) and Mac casing that the
+old `formatCandidateName` lacked but `toDisplayName` had — so neither call site regresses. Lovable was
+republished by the owner, so the live frontend now runs the merged code.
+
+**State** (verified)
+- `bun run test` (src + `_shared`) = **120 pass**, incl. new `src/lib/candidateName.test.ts` whose
+  drift-guard imports BOTH the frontend and edge copies and asserts identical output across a fixture
+  table (CI fails if they diverge). `tsc --noEmit` clean; lint 0 errors; `vite build` succeeds.
+- NOT done: `tidyName` in `_shared/finance-caption.ts` is a deliberately separate org-aware formatter
+  (PAC/LLC acronyms) — left as-is.
+
+**Next**
+Merge the consolidation PR; nothing else required (no data/edge re-bake needed — behaviour is unchanged
+for the data already live).
+
+**Deferred**
+- Optionally fold `finance-caption.tidyName` in later if its org/acronym rules are reconciled.
+
+---
+
+## 2026-06-20 — Score-inversion remediation pilot: regen tooling + Branson fixed (`claude/score-verification-rgbv2l`)
+
+**What happened & why**
+Piloted the score-inversion remediation runbook on the three reference legislators. Confirmed the
+inversion signature in the data (all three: positive full-answer average, negative *trusted*
+average → headline score is the wrong sign). Found the documented "delete all + regenerate" step
+doesn't work as written against today's **344-question** quiz, and made `generate-legislator-answers`
+actually able to do the job (3 new commits):
+1. `candidateIds` body param — regenerate an exact reviewed id list, no state-sweep spend.
+2. Chunked Gemini calls (50/call, `maxOutputTokens` 16384) **with per-chunk upsert** — the single
+   all-344 call truncated → 0 answers; and a single final write was lost when the
+   `EdgeRuntime.waitUntil` background task exceeded its wall-clock budget. Per-chunk writes persist
+   and re-runs resume via `getMissingQuestions`.
+3. Shared `isCronAuthorized` (vault `x-cron-secret` / service-role) so it can be triggered
+   server-side via `pg_net`.
+Deployed (prod fn v17) and ran it. **Alan Branson regenerated cleanly: overall_score −7.09 → +1.62
+(L7.09 → R1.62)**, 90 trusted answers, `answers_source='ai_generated'`. Full write-up + the exact
+trigger SQL is in `docs/score-inversion-fix.md` ("Pilot results & operational findings").
+
+**State** (verified)
+- Branson **fixed** in prod (+1.62, verified by direct query). Barlas (−5.00) and Chesser (−4.33)
+  **restored to their original inverted state** — NOT yet regenerated (live invocation blocked by a
+  transient infra window: the legacy anon key 401s at the gateway, and the function's
+  `get_cron_secret()` RPC intermittently 401s under load). No candidate left degraded; a full
+  backup of all three lives in table `candidate_answers_inversion_backup_20260620` (1,032 rows).
+- 14/14 `answer-label-guard` unit tests pass. Edge fn is Deno (not in Vite/eslint), so no local
+  lint/build impact. Prod deploys were done directly via MCP (`deploy_edge_function`), so the
+  branch commits and the running fn match.
+- 4 commits on the branch (candidateIds, cron-auth, chunking, per-chunk upsert) + docs.
+
+**Next**
+Re-run `generate-legislator-answers` for Barlas + Chesser ids (trigger SQL in the runbook) when the
+project is healthy; confirm both `overall_score` go positive, then drop the backup table.
+
+**Deferred**
+- Bulk remediation of the rest of the inversion set (step-2 query) — only the 3 reference
+  candidates were in scope here.
+- `isCronAuthorized`'s dependency on the `get_cron_secret()` RPC is a reliability weak point under
+  load (affects all crons, pre-existing) — not addressed.
+- `updateCandidateScore` still duplicated across `get-candidate-answers` and
+  `generate-legislator-answers` (could hoist to `_shared`).
+
+---
+
+## 2026-06-20 — Candidate-name saga RESOLVED: live CDN baker was the culprit (PRs #495/#497/#498/#499/#500)
+
+**What happened & why**
+Owner kept reporting mangled directory names ("Beth Ellen Ph.D. Adubato", "Anthony Bailey Mr.
+Aguilar") that earlier fixes didn't resolve. Root cause turned out to be **five divergent name
+formatters** plus a deploy blind spot:
+
+1. `formatCandidateName` (`src/lib/utils.ts`) — **#495** taught it to drop honorifics / relocate
+   credentials wherever they sit (incl. mid-name in comma-free strings).
+2. `toDisplayName` (`src/lib/officeLabel.ts`, used by `CandidateCard`) — **#497** same fix.
+3. `formatName` in `scripts/generate-candidates-json.ts` (manual CDN bake) — **#498** routed through
+   `formatCandidateName`.
+4. `useCandidates` **CDN path** returned the baked JSON unformatted (only the Supabase fallback
+   formatted) — **#499** maps CDN names through `formatCandidateName` so the list matches the profile.
+5. **The real production culprit:** the live `candidates-directory.json` is baked by the
+   **`refresh-candidates-cache` edge function**, which only trimmed whitespace → baked raw FEC
+   strings. **#500** inlined a Deno `formatCandidateName` there. Edge functions auto-deploy
+   (`deploy-edge-functions.yml`); the **frontend does NOT** (Lovable hosts it), which is why #497/#499
+   never reached the live site.
+
+After #500 deployed (confirmed: function version 13 contains the formatter), **re-baked the live CDN**
+by invoking the function via `pg_net` from SQL (anon JWT, `verify_jwt: true`).
+
+**State** (verified)
+- All five PRs merged to `main`. Local `bun test src` = 48 pass; lint 0 errors; `tsc --noEmit` clean;
+  `vite build` succeeds (across the relevant PRs).
+- Deployed edge fn `refresh-candidates-cache` v13 contains `formatCandidateName` (read via MCP).
+- Re-bake invoked → HTTP 200, `ok:true`, 476 candidates / 537 congress members; `storage.objects`
+  shows `candidates-directory.json` updated 2026-06-20 18:41:45Z, 408 KB.
+- NOT verified: the live mobile UI (CDN edge cache `max-age=3600` can linger ~1h). Could not fetch the
+  408 KB CDN body via `pg_net` (response-size cap) to eyeball names — relied on the bake result +
+  unit-verified formatter instead.
+
+**Next**
+Confirm the live directory on polipulseapp.com renders "Beth Ellen Adubato, Ph.D." /
+"Anthony Bailey Aguilar" after a hard refresh (allow up to ~1h for CDN edge cache).
+
+**Deferred**
+- **Republish the frontend via Lovable** to actually ship #497/#499 (live site runs an old bundle;
+  it renders the now-clean CDN data fine, so this is defense-in-depth, not urgent).
+- **Consolidate the 5 name formatters into one shared module** (real cleanup — see OPEN-WORK).
+- DB stores FEC canonical form ("ADUBATO, BETH ELLEN PH.D.") intentionally (ETL matching) — left
+  untouched; all formatting is display-side.
+
+---
+
+## 2026-06-20 — Candidate names: honorifics/credentials stranded mid-name
+
+**What happened & why**
+Owner reported the candidate list still showed mangled names — "Beth Ellen Ph.D. Adubato",
+"Anthony Bailey Mr. Aguilar" — despite earlier name-format work. Two findings:
+
+1. **PR #495 (merged)** fixed `formatCandidateName` (`src/lib/utils.ts`) to drop honorifics and
+   relocate credentials *wherever* they appear, incl. stranded mid-name in comma-free strings. A
+   real improvement, but it was the wrong function for this screen.
+2. **The actual list bug** was in `toDisplayName` (`src/lib/officeLabel.ts`), used by
+   `CandidateCard`. The list is fed by `useUnifiedCandidates`, which passes `name: src.name`
+   **raw** (no `formatCandidateName`), so `toDisplayName` is the only formatter — and it reordered
+   "LAST, FIRST MIDDLE MR." → "First Middle Mr. Last" without stripping the title. Fixed
+   `toDisplayName` to drop honorifics and move credentials (Ph.D./M.D./Esq.) after the last name,
+   while preserving Jr/Sr/II/III/IV in place (matches `formatCandidateName` convention).
+
+Deliberately did **not** mutate the DB: it stores correct FEC canonical form
+("ADUBATO, BETH ELLEN PH.D.") which the FEC ETL relies on for matching. The bug was purely
+display; denormalizing source-of-truth names would risk ETL joins and violates the guardrails.
+
+**State** (verified)
+- `bun test src/lib/officeLabel.test.ts src/lib/utils.test.ts` → 22 pass (new officeLabel.test.ts
+  covers the two regression cases + Jr/Sr/Mc/O'/mixed-case passthrough).
+- Lint 0 errors, `tsc --noEmit` clean, `vite build` succeeds locally (sitemap prebuild fails only
+  on sandbox network 403 — unrelated).
+- Not yet verified in the live app UI.
+
+**Next**
+Visually confirm the candidate list on polipulseapp.com renders "Beth Ellen Adubato, Ph.D." and
+"Anthony Bailey Aguilar" once this deploys.
+
+**Deferred**
+- Consider routing `useUnifiedCandidates` names through `formatCandidateName` too, so there's one
+  name formatter instead of two parallel ones (`toDisplayName` vs `formatCandidateName`).
+- `contributions` table growth (partition/prune); ward-precise local officials; rotate seed-account passwords.
+
+---
+
+## 2026-06-20 — Legislator score inversion: ETL root-cause fix (`claude/score-verification-rgbv2l`)
+
+**What happened & why**
+A score-verification request flagged three Republican state legislators rendering as *left*-leaning
+(Branson R NC-59 `L7.09`, Barlas R NJ-40 `L5.00`, Chesser R NC-25 `L4.33`). Investigation traced
+it to `generate-legislator-answers`: Gemini intermittently returns an `answer_value` whose sign
+contradicts its own (URL-cited, high-confidence) evidence prose, and self-asserts `voting_record`
+provenance with no real vote behind it. Those answers count as "trusted" (`isTrustedForScoring`)
+and flip the persisted `candidates.overall_score`. The function also bypassed the existing
+`demoteUnverifiableVoteClaims`/`demoteUncitedWebResearch` guards. Full write-up + remediation
+runbook in `docs/score-inversion-fix.md`.
+
+Fix (ETL-only, per the user's choice): added a unit-tested `dropStanceInconsistent` guard
+(prompt now requires a `stance` field; answers whose stance contradicts the value sign are dropped),
+wired all three guards + an `overall_score` re-derivation into `generate-legislator-answers`, and
+hardened the prompt's sign instruction.
+
+**State** (verified)
+- 14/14 tests pass in `supabase/functions/_shared/answer-label-guard.test.ts` (`bun test`).
+- Edge functions are eslint-ignored (Deno) and not in the Vite build, so frontend lint/build
+  are unaffected by these changes.
+- NOT verified: live Gemini behavior with the new prompt, and the persisted wrong scores are
+  **still wrong** — they only fix on re-generation. No data was mutated and the function was not
+  deployed (both are operator steps in the runbook, requiring API spend + review).
+
+**Next**
+After merge, run `docs/score-inversion-fix.md` runbook: deploy the function, clear the inverted
+answers for the affected ids (step-2 query), re-generate, and confirm Branson/Barlas/Chesser read
+right-leaning.
+
+**Deferred**
+- Frontend low-trusted-count suppression (would also hide thin scores like Barlas's 3-answer one)
+  was intentionally NOT done — user chose the ETL root-cause path only.
+- `updateCandidateScore` is now duplicated in `get-candidate-answers` and
+  `generate-legislator-answers`; could be hoisted to `_shared` later.
 
 ---
 

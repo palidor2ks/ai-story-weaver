@@ -99,12 +99,23 @@ Deno.serve(async (req) => {
     .maybeSingle()
 
   if (updateError) {
-    console.error('Failed to mark token as used', { error: updateError, token })
+    console.error('Failed to mark token as used', {
+      error: updateError,
+      token_prefix: token ? `${token.slice(0, 8)}…` : null,
+    })
     return jsonResponse({ error: 'Failed to process unsubscribe' }, 500)
   }
 
   if (!updated) {
     return jsonResponse({ success: false, reason: 'already_unsubscribed' })
+  }
+
+  const maskEmail = (email: string | null | undefined): string => {
+    if (!email) return '<none>'
+    const [user, domain] = email.split('@')
+    if (!domain) return '<invalid>'
+    const maskedUser = user.length <= 2 ? '*'.repeat(user.length) : `${user[0]}***${user[user.length - 1]}`
+    return `${maskedUser}@${domain}`
   }
 
   // Add email to suppressed list (upsert to handle duplicates)
@@ -118,7 +129,7 @@ Deno.serve(async (req) => {
   if (suppressError) {
     console.error('Failed to suppress email', {
       error: suppressError,
-      email: tokenRecord.email,
+      email_redacted: maskEmail(tokenRecord.email),
     })
     return jsonResponse({ error: 'Failed to process unsubscribe' }, 500)
   }

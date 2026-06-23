@@ -63,6 +63,7 @@ export interface StateFinanceStats {
   nj: StateFinanceEntry;
   fl: StateFinanceEntry;
   ny: StateFinanceEntry;
+  tx: StateFinanceEntry;
 }
 
 export interface FinanceReconStats {

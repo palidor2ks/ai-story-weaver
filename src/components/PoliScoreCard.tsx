@@ -2,11 +2,16 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ExternalLink, ShieldCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { usePoliScoreRecord, topicDisplayName } from '@/hooks/usePoliScoreRecord';
+import { usePoliScoreRecord, topicDisplayName, type PoliScoreRow } from '@/hooks/usePoliScoreRecord';
+
+type Jurisdiction = 'federal' | 'nc_state';
 
 interface PoliScoreCardProps {
   candidateId: string;
   candidateName: string;
+  jurisdiction?: Jurisdiction;
+  /** 'Senator' | 'Representative' — used to tailor the empty state message. */
+  office?: string;
 }
 
 const VOTE_LABEL: Record<string, string> = {
@@ -32,8 +37,52 @@ function VoteBadge({ position }: { position: string | null }) {
   );
 }
 
-export function PoliScoreCard({ candidateId, candidateName }: PoliScoreCardProps) {
-  const { data: topics = [], isLoading, error } = usePoliScoreRecord(candidateId);
+function BillReference({ vote, jurisdiction }: { vote: PoliScoreRow; jurisdiction: Jurisdiction }) {
+  if (jurisdiction === 'nc_state' && vote.bill_id) {
+    // e.g. "nc-2025-SB1080" → "SB 1080 (NC 2025 Session)"
+    const shortId = vote.bill_id.replace(/^nc-\d+-/, '').replace(/([A-Za-z]+)(\d+)/, '$1 $2');
+    return (
+      <p className="text-xs text-muted-foreground">
+        {shortId} (NC {vote.session ?? '2025'} Session) —{' '}
+        <span className="italic">{vote.title}</span>
+      </p>
+    );
+  }
+  if (vote.congress && vote.bill_type && vote.bill_number) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        {vote.bill_type.toUpperCase()}
+        {vote.bill_number} ({vote.congress}th Congress) —{' '}
+        <span className="italic">{vote.title}</span>
+      </p>
+    );
+  }
+  return null;
+}
+
+function SourceLink({ vote, jurisdiction }: { vote: PoliScoreRow; jurisdiction: Jurisdiction }) {
+  const label = jurisdiction === 'nc_state' ? 'View on NCGA' : 'View on Congress.gov';
+  return (
+    <a
+      href={vote.source_url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+      aria-label={label}
+    >
+      {label}
+      <ExternalLink className="w-3 h-3" />
+    </a>
+  );
+}
+
+export function PoliScoreCard({
+  candidateId,
+  candidateName,
+  jurisdiction = 'federal',
+  office,
+}: PoliScoreCardProps) {
+  const { data: topics = [], isLoading, error } = usePoliScoreRecord(candidateId, jurisdiction);
 
   if (isLoading) {
     return (
@@ -72,6 +121,13 @@ export function PoliScoreCard({ candidateId, candidateName }: PoliScoreCardProps
 
   const isEmpty = topics.length === 0;
 
+  const emptyText =
+    jurisdiction === 'nc_state'
+      ? `NC PoliScore coverage is being built out — key votes will appear here as they are curated.`
+      : office === 'Senator'
+      ? `Senate key votes for PoliScore v0 are being curated — ${candidateName}'s record will appear here soon.`
+      : `Not yet scored — ${candidateName}'s record will appear here as key votes are curated.`;
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -80,13 +136,11 @@ export function PoliScoreCard({ candidateId, candidateName }: PoliScoreCardProps
           PoliScore — Voting Record
         </CardTitle>
 
-        {/* Trust line */}
         <p className="text-xs text-muted-foreground leading-relaxed mt-1">
           This score is free and can never be bought. It is computed only from public roll-call
           votes, each linked to its source.
         </p>
 
-        {/* Neutrality disclaimer */}
         <p className="text-xs text-muted-foreground/80 italic mt-1">
           Left/Right describes the policy direction of a vote on a disclosed axis, not a
           judgment of which direction is correct.
@@ -95,14 +149,10 @@ export function PoliScoreCard({ candidateId, candidateName }: PoliScoreCardProps
 
       <CardContent className="space-y-6">
         {isEmpty ? (
-          <p className="text-sm text-muted-foreground py-2">
-            Not yet scored — v0 covers House votes only. {candidateName}&apos;s record will
-            appear here when Senate key votes are added.
-          </p>
+          <p className="text-sm text-muted-foreground py-2">{emptyText}</p>
         ) : (
           topics.map((topic) => (
             <div key={topic.topic_id}>
-              {/* Topic header */}
               <div className="flex items-center justify-between mb-2">
                 <h3 className="font-semibold text-sm text-foreground">
                   {topicDisplayName(topic.topic_id)}
@@ -112,38 +162,21 @@ export function PoliScoreCard({ candidateId, candidateName }: PoliScoreCardProps
                 </span>
               </div>
 
-              {/* Vote list */}
               <div className="space-y-3">
                 {topic.votes.map((vote) => (
                   <div
                     key={vote.key_vote_id}
                     className="rounded-lg border border-border bg-card p-3 space-y-1.5"
                   >
-                    {/* Neutral description — primary text */}
                     <p className="text-sm text-foreground leading-snug">
                       {vote.neutral_description}
                     </p>
 
-                    {/* Bill reference — secondary */}
-                    <p className="text-xs text-muted-foreground">
-                      {vote.bill_type.toUpperCase()}
-                      {vote.bill_number} ({vote.congress}th Congress) —{' '}
-                      <span className="italic">{vote.title}</span>
-                    </p>
+                    <BillReference vote={vote} jurisdiction={jurisdiction} />
 
-                    {/* Vote + source link */}
                     <div className="flex items-center justify-between gap-2 pt-0.5">
                       <VoteBadge position={vote.vote_position} />
-                      <a
-                        href={vote.source_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                        aria-label={`View ${vote.bill_type.toUpperCase()}${vote.bill_number} on Congress.gov`}
-                      >
-                        View on Congress.gov
-                        <ExternalLink className="w-3 h-3" />
-                      </a>
+                      <SourceLink vote={vote} jurisdiction={jurisdiction} />
                     </div>
                   </div>
                 ))}

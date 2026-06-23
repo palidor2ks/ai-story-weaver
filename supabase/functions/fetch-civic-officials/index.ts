@@ -390,7 +390,7 @@ async function fetchOpenStatesOfficials(
     return { legislators: [], governors: [] };
   }
 
-  console.log(`[Open States] Fetching officials for state: ${state}, lat: ${lat}, lng: ${lng}`);
+  console.log(`[Open States] Fetching officials for state: ${state}, has_coords: ${!!(lat && lng)}`);
   console.log(`[Open States] Federal legislator names to exclude: ${federalLegislatorNames?.size || 0}`);
   
   const headers = {

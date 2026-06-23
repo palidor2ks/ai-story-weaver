@@ -30,6 +30,7 @@ import { FundingSourcesBreakdown } from '@/components/FundingSourcesBreakdown';
 import { NjStateFinanceSection } from '@/components/NjStateFinanceSection';
 import { FlStateFinanceSection } from '@/components/FlStateFinanceSection';
 import { NyStateFinanceSection } from '@/components/NyStateFinanceSection';
+import { TxStateFinanceSection } from '@/components/TxStateFinanceSection';
 import { normalizeOfficeName } from '@/lib/officeLabel';
 import { computeFundingBreakdown, groupFundingSources, withPercents } from '@/lib/fundingBreakdown';
 import { CandidateIESection } from '@/components/IndependentExpenditureSections';
@@ -46,6 +47,7 @@ import { AIExplanation } from '@/components/AIExplanation';
 
 import { AIFeedback, ReportIssueButton } from '@/components/AIFeedback';
 import { ContactInfoCard } from '@/components/ContactInfoCard';
+import { PoliScoreCard } from '@/components/PoliScoreCard';
 import { RelevantNewsFeed } from '@/components/RelevantNewsFeed';
 import { RepresentativeSocialFeed } from '@/components/RepresentativeSocialFeed';
 import { CandidatePositions } from '@/components/CandidatePositions';
@@ -744,6 +746,39 @@ export const CandidateProfile = () => {
           state={candidate.state}
           level={(candidate as { level?: string }).level}
         />
+
+        {/* TX state-legislator campaign finance (Texas Ethics Commission). Renders
+            only for TX state legislators that have matched/synced contribution data. */}
+        <TxStateFinanceSection
+          name={candidate.name}
+          district={candidate.district}
+          office={candidate.office}
+          state={candidate.state}
+          level={(candidate as { level?: string }).level}
+        />
+
+        {/* PoliScore voting record — NC GA state legislators only (v0_nc).
+            Shows per-legislator position on curated key votes from the 2025 session. */}
+        {candidate.id &&
+          candidate.state === 'NC' &&
+          (candidate.office === 'State Senator' || candidate.office === 'State Representative') && (
+          <PoliScoreCard
+            candidateId={candidate.id}
+            candidateName={candidate.name}
+            jurisdiction="nc_state"
+          />
+        )}
+
+        {/* PoliScore voting record — federal Representatives and Senators.
+            v0 covers 28 curated House key votes; Senate key votes are being added. */}
+        {candidate.id &&
+          (candidate.office === 'Representative' || candidate.office === 'Senator') && (
+          <PoliScoreCard
+            candidateId={candidate.id}
+            candidateName={candidate.name}
+            office={candidate.office}
+          />
+        )}
 
         {/* Tabs for Donors and Votes */}
         <Tabs defaultValue="donors" className="w-full">

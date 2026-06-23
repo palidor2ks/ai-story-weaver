@@ -65,6 +65,8 @@ Enable them deliberately:
 - `20260604060000_auto_post_due_social_cron`
 - `20260605120100_cron_pipeline_health_rpcs`
 - `20260604012956_*`, `20260604013138_*`
+- `20260620220001_score_sanity_sweeper_cron` (score-inversion auto-remediation — calls
+  generate-legislator-answers; gated by the `score_sweeper_enabled` kill-switch, default OFF)
 
 ## Landmine (never auto-applied)
 

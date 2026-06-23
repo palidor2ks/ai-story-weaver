@@ -71,7 +71,7 @@ serve(async (req) => {
       );
     }
 
-    console.log('Fetching autocomplete for input:', input);
+    console.log('Fetching autocomplete, input_len:', input.length);
 
     // Use the new Places API (New) endpoint
     const requestBody: Record<string, unknown> = {

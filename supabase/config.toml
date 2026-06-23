@@ -125,6 +125,8 @@ project_id = "ornnzinjrcyigazecctf"
     verify_jwt = false
   [functions.scan-evidence-relevance]
     verify_jwt = false
+  [functions.schedule-congress-donor-sync]
+    verify_jwt = false
   [functions.send-claim-notification]
     verify_jwt = false
   [functions.sync-all-donors]
@@ -207,6 +209,8 @@ project_id = "ornnzinjrcyigazecctf"
     verify_jwt = false
   [functions.fetch-relevant-news]
     verify_jwt = false
+  [functions.fetch-tx-finance]
+    verify_jwt = false
   [functions.import-fec-committee]
     verify_jwt = false
   [functions.import-fec-schedule-e-csv]
@@ -236,4 +240,6 @@ project_id = "ornnzinjrcyigazecctf"
   [functions.refresh-donor-mv]
     verify_jwt = true
   [functions.x-fetch-user-tweets]
+    verify_jwt = false
+  [functions.sync-nc-legislator-votes]
     verify_jwt = false

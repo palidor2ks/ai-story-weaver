@@ -74,7 +74,7 @@ serve(async (req) => {
       }
     }
 
-    console.log('[Geocode] Cache MISS — calling Census for:', normalized);
+    console.log('[Geocode] Cache MISS — calling Census (address_len=%d)', normalized.length);
 
     const encodedAddress = encodeURIComponent(trimmed);
     const url = `https://geocoding.geo.census.gov/geocoder/geographies/onelineaddress?address=${encodedAddress}&benchmark=Public_AR_Current&vintage=Current_Current&layers=all&format=json`;
@@ -147,7 +147,7 @@ serve(async (req) => {
       }
     }
 
-    console.log(`[Geocode] State: ${state}, City: ${city}, District: ${district}, lat/lng: ${lat}/${lng}`);
+    console.log(`[Geocode] State: ${state}, District: ${district}, has_coords: ${!!(lat && lng)}`);
 
     // Write back to cache (best-effort, don't block the response on errors)
     try {

@@ -119,6 +119,9 @@ Deno.serve(async (req) => {
           method: "POST",
           headers: callHeaders,
           body: JSON.stringify({ candidateId: c.id, fecCandidateId: c.fec_candidate_id, cycle }),
+          // 45s is slightly longer than fetch-fec-donors' own 25s pagination guard + flush time,
+          // so a normal run always completes; only a runaway (pre-fix) call gets aborted.
+          signal: AbortSignal.timeout(45_000),
         });
         if (r.ok) {
           synced++; syncOk = true;

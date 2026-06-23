@@ -104,17 +104,18 @@ export function DataAccuracyScoreboard({ visible }: { visible?: CoverageDashboar
         : "green"
     : "muted";
 
-  // State finance aggregates three per-state import trackers; scope it to visible states only
-  // (the cache already breaks NJ/FL/NY out separately, so this needs no SQL change). Today NJ is
-  // visible and FL/NY are hidden, so the card shows NJ alone and relabels accordingly.
+  // State finance aggregates the per-state import trackers; scope it to visible states only
+  // (the cache breaks NJ/FL/NY/TX out separately, so this needs no SQL change). NJ and TX are
+  // visible while FL/NY are hidden, so the card sums those and relabels accordingly.
   const visibleStateFinance: Array<{ code: string; data: StateFinanceEntry }> = statesData
     ? (
         [
           { code: "NJ", data: statesData.nj },
           { code: "FL", data: statesData.fl },
           { code: "NY", data: statesData.ny },
+          { code: "TX", data: statesData.tx },
         ] as Array<{ code: string; data: StateFinanceEntry }>
-      ).filter((e) => !isHidden(e.code))
+      ).filter((e) => e.data && !isHidden(e.code))
     : [];
   const stateRows = visibleStateFinance.reduce((s, e) => s + e.data.contributions, 0);
   const stateErrors = visibleStateFinance.reduce((s, e) => s + e.data.errors7d, 0);

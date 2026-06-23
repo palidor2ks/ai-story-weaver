@@ -14,6 +14,7 @@
  */
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { formatCandidateName } from "../_shared/candidateName.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -77,7 +78,7 @@ serve(async (req) => {
       const o: any = overrideMap.get(c.id);
       return {
         id: c.id,
-        name: (o?.name ?? c.name ?? '').replace(/\s+/g, ' ').trim(),
+        name: formatCandidateName(o?.name ?? c.name),
         party: normalizeParty(o?.party ?? c.party ?? 'Other'),
         office: o?.office ?? c.office,
         state: o?.state ?? c.state,
@@ -106,7 +107,7 @@ serve(async (req) => {
     const congressMembers = (congressRes.data ?? []).map((m: any) => ({
       id: m.bioguide_id,
       bioguide_id: m.bioguide_id,
-      name: (m.name ?? '').replace(/\s+/g, ' ').trim(),
+      name: formatCandidateName(m.name),
       party: normalizeParty(m.party ?? 'Other'),
       office: m.office,
       state: m.state,

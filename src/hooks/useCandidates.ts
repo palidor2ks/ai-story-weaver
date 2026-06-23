@@ -120,7 +120,15 @@ export const useCandidates = () => {
           const age = Date.now() - new Date(json.generatedAt).getTime();
           if (age < CDN_MAX_AGE_MS && Array.isArray(json.candidates) && json.candidates.length > 0) {
             console.log(`[CDN] candidates: ${json.candidates.length} (age ${Math.round(age / 60000)}m)`);
-            return json.candidates;
+            // The baked JSON can carry raw FEC names ("ADUBATO, BETH ELLEN PH.D.")
+            // depending on when it was generated. Normalize here so the directory
+            // list matches the profile page (which formats via useCandidate) and
+            // never depends on a fresh CDN bake. formatCandidateName is a no-op on
+            // already-clean names.
+            return json.candidates.map((c) => ({
+              ...c,
+              name: formatCandidateName(c.name),
+            }));
           }
         }
       } catch {

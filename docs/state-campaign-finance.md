@@ -175,6 +175,89 @@ the `rowlimit` overflow, not an IP/TLS block). Don't assume Cloudflare = blocked
 
 ---
 
+## TX — IN PROGRESS (recon done; bulk-ZIP model)
+
+Texas Ethics Commission (TEC). **Different shape from NJ/FL** — TEC publishes ONE
+bulk ZIP of all e-filed reports since 2000-07-01, not a per-entity search app.
+So the ingest unit is the CSV **shard** inside the ZIP, not a discovered entity.
+
+**Confirmed by recon (2026-06-21, via a throwaway `tx-cf-probe` edge fn using Deno
+`fetch` — the agent sandbox + `http` PG extension both fail on this origin):**
+- **Real download URL is a CDN:** `https://prd.tecprd.ethicsefile.com/public/cf/public/TEC_CF_CSV.zip`.
+  The widely-cited `https://www.ethics.state.tx.us/data/search/cf/TEC_CF_CSV.zip`
+  is a **stale 404**; the live link is surfaced on `…/search/cf/` as the CDN URL.
+  `www.ethics.texas.gov` (newer domain) **401s** non-browser UAs — avoid it.
+- **Size ≈ 1.02 GB** (`1,021,573,405` bytes), `Content-Type: application/zip`,
+  multipart ETag (S3/CloudFront, 122 parts). **Too big to buffer in an edge fn.**
+- **HTTP Range IS supported** (`Accept-Ranges: bytes`; ranged GET → `206` +
+  `Content-Range: …/1021573405`). This is the load-bearing fact.
+- **Freshness:** `Last-Modified` updates ~daily (was same-day on probe).
+- **Record layout:** `https://www.ethics.state.tx.us/data/search/cf/CFS-ReadMe.txt`
+  (GET works via `http` extension — 140 KB). Codes: `…/CFS-Codes.txt`. Office-code
+  map for matching: `…/CTA_Office_Sought.xlsx` (+ `.pdf`).
+
+**Files in the ZIP (from the ReadMe manifest):**
+- `filers.csv` — FilerData: `filerIdent` (PK/join), `filerName`, `filerTypeCd`,
+  and the **CTA office-sought** fields `ctaSeekOfficeCd` / `ctaSeekOfficeDistrict`
+  / `ctaSeekOfficeDescr` → the join path to our TX legislative candidates.
+- `contribs_##.csv` — **pre-sharded** ContributionData (Schedules A/C). Key fields:
+  `contributionInfoId` (**stable PK → idempotent upsert**), `reportInfoIdent`,
+  `filerIdent`, `filerName`, `contributionDt`, `contributionAmount`,
+  `contributorPersentTypeCd` (INDIVIDUAL|ENTITY), `contributorNameOrganization`,
+  `contributorNameLast`, `itemizeFlag`.
+- `cont_ss.csv` / `cont_t.csv` — special-session / pre-election contributions, kept
+  **separate to avoid double-counting** (re-reported on the next regular report).
+  Track the origin file in `tx_cf_contributions.source_file`.
+
+**Decided architecture — random-access ZIP over HTTP Range** (no whole-file download,
+no Storage staging needed):
+1. `discover`: Range-read the End-of-Central-Directory + central directory → list
+   members + local-header offsets + compressed sizes. Seed `tx_cf_shard_progress`
+   (one row per `contribs_*.csv`/`filers.csv`), stamping the ZIP `Last-Modified`.
+   If `Last-Modified` changed since last run, reset progress (new dump).
+2. `drain`: pick the next `pending` shard, Range-GET just its bytes, inflate
+   (ZIP entries are raw DEFLATE → Deno `DecompressionStream('deflate-raw')`),
+   parse CSV, batch-upsert by `contributionInfoId`, mark shard `done`.
+   Time-budgeted (~110s) and idempotent so cron resumes across runs.
+3. Lock down with a shared secret (`check_tx_sync_secret` RPC vs Vault), Vault-auth
+   cron (drain frequent, discover ~daily since the dump refreshes daily).
+
+**Schema:** shipped in `supabase/migrations/20260621030000_tx_cf_state_finance_schema.sql`
+(`tx_cf_filers`, `tx_cf_contributions`, `tx_cf_shard_progress`, `tx_cf_sync_runs`;
+public-read RLS, internal run/progress tables service-role only). Validated on the
+PR #516 Supabase preview branch (Migrations ✅). **Not yet applied to prod** (guardrail #1).
+
+**Next:** build `supabase/functions/fetch-tx-finance/index.ts` (the random-access ZIP
+reader above), then cron + `tx_legislator_finance` RPC + `TxStateFinanceSection` UI/gate.
+**Cleanup owed:** delete the neutered `tx-cf-probe` edge fn from the dashboard.
+
+---
+
+## NC — PROBE COMPLETE (build deferred to after bills/votes)
+
+North Carolina is the product beachhead (see `strategy-nc-beachhead.md`). Campaign
+finance is enrichment — it ships after PoliScore v0 + bills/votes are live.
+
+**Design doc:** `docs/nc-campaign-finance-pipeline.md` — source format **verified
+end-to-end** (2026-06-22 recon via the DB `http` proxy), schema mirroring TX
+(`nc_cf_filers`, `nc_cf_contributions`, `nc_cf_sync_runs`), edge function
+(discover/drain/full), matching RPC, UI gate.
+
+**Source (verified):** NCSBE has **no bulk CSV** — it's a per-committee search API
+(Option B, like NJ/FL). Two ASP.NET apps on `cf.ncsbe.gov`:
+- **discover** — `POST /CFOrgLkup/` (`UseCandName=true&Name=<surname>`) returns an
+  inline `var data=[…]` JSON array with `SBoEID` + `CandName` ("FIRST … LAST").
+- **drain** — `POST /CFTxnLkup/ExportResults/` (`Params=<JSON>`) returns CSV directly,
+  stateless. Filter by **`CommitteeName`** (the `OfficeType` filter is ignored;
+  `CommitteeIDs`=SBoE-ID is rejected). No transaction PK → deterministic hash.
+
+**Match:** TX-style token match on `CandName`; name + chamber is the key (district soft).
+**Discover is roster-driven** → depends on the NC legislator roster (beachhead Task 2).
+
+**Status:** probe done → (await Task 2 roster) → schema migration → edge fn → cron → RPC → UI.
+
+---
+
 ## PA — BACKUP (not yet probed)
 
 PA Dept. of State campaign finance: `www.dos.pa.gov` / the PA campaign finance

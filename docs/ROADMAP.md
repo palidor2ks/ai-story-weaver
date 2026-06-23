@@ -31,38 +31,46 @@ thresholds, and current standing: **`docs/DATA-ACCURACY.md`** (checked every pre
 - **Candidate answers/positions** (added 2026-06-10): the alignment quiz's own input —
   VISION's riskiest assumption includes positions, so "sourced with a URL, not just a
   description" is tracked as its own category (`docs/DATA-ACCURACY.md` §Answers).
-- ☐ **Congress donor backfill stall** — 159 `candidate_committees` rows with `has_more=true`
-  are not progressing (observed 3/day actual vs 144/day theoretical at `limit:1`). Likely
-  filtered out by the `congress_visible` scope in `schedule-congress-donor-sync`. Confirm
-  which committees are stalled (`has_more=true AND last_sync_completed_at IS NULL`), whether
-  they belong to visible candidates, and either widen the scope or trigger a manual sync pass.
-  *(found 2026-06-15; the missing `schedule-congress-donor-sync` edge fn was added in PR #409 —
-  re-check whether backfill is now progressing.)*
-- ☐ **FEC recon: Line 14/15 "other receipts" double-count (Finding B)** — `local_other_receipts`
-  can double-count JFC money already booked as `local_transfers` (e.g. Cassidy 2026: $2.55M local
-  other vs $0.27M FEC, ~his $2.27M transfers), inflating `total_receipts_delta`. Audit the Line
-  14/15 classification in the FEC importer. *(found 2026-06-15; details DATA-ACCURACY §1)*
-- ☐ **FEC recon: `status` doesn't gate on total receipts (Finding A)** — `ok` checks only
-  comparable-itemized `delta_pct`; 358/1,746 `ok` rows are >10% off on total receipts. Blocked on
-  Finding B (the total metric is too noisy to gate on until the double-count is fixed).
+- 🟡 **Congress donor backfill** — 161 stalled committees as of 2026-06-22 (118 never-synced,
+  43 refresh-stalled). **103/118 are in hidden states — intentionally skipped by `congress_visible`
+  scope; this is correct.** Only ~15 (TX visible, tier_1) are actively queued. Railway backfill
+  task is running (`most_recent_sync` 11:42 UTC 2026-06-22); TX backfill should clear within ~1
+  day at 1/10min. The "stall" was the hidden-state filter working as designed, not a bug.
+  *(confirmed 2026-06-22)*
+- ✅ **FEC recon: Line 14/15 "other receipts" double-count (Finding B)** — fixed 2026-06-17
+  (migration `20260615170000`, applied prod as `20260617232826`). `other_total` redefined as
+  `IN ('14','15')` (was catch-all that swept in Line-12 transfers). Double-count signature
+  (`local_other == local_transfers`): 138 → 0 rows. Cassidy delta 31.1% → −2.6%.
   *(found 2026-06-15; details DATA-ACCURACY §1)*
+- ✅ **FEC recon: `status` doesn't gate on total receipts (Finding A)** — fixed 2026-06-22.
+  `nightly-finance-reconciliation` now demotes `ok` → `warning` when total-receipts delta >10%.
+  Writer unification shipped same day (shared `computeReconStatus` + `deriveTotalReceiptsStatus`
+  in `_shared/finance-recon-status.ts`). Visible standing as of 2026-06-22: ok 294 / warning 88
+  / error 72 / partial 26. Error gate 72 < 100, passing. *(found 2026-06-15; details DATA-ACCURACY §1)*
 - **Done =** the data on a given profile/page is confirmed accurate against source.
 
 ### 2. 🟡 Migration / DB stability
 Verified work can't land cleanly while Dev and `main` schemas drift.
 - Keep Dev in sync via `scripts/apply-missing-migrations.sh` (dry-run first — guardrail #1).
 - Resync playbook: `docs/dev-migration-resync.md`.
-- ☐ **Supabase disk pressure** — `refresh-donor-consolidated-daily` hit "No space left on device"
-  on 2026-06-13 (REFRESH MATERIALIZED VIEW spilled temp files). DB is at 15 GB; `contributions`
-  alone is 8.4 GB and growing as FEC finance keeps loading. Check quota in Supabase dashboard
-  and either (a) expand storage add-on or (b) archive/expire old contribution records. Will
-  recur — the materialized view refresh needs 2× temp space. *(found 2026-06-15)*
+- ✅ **Supabase disk pressure** — resolved 2026-06-22. Plan upgraded to 27 GB; 14.68 GB used,
+  ~12 GB free. No immediate action needed. Monitor if/when usage approaches 22 GB (leaves 2×
+  headroom for materialized view refresh temp files). *(OOM hit 2026-06-13 at 15 GB on smaller plan)*
 - **Done =** Dev matches `main` and the app runs clean against a fresh DB.
 
 ### 3. ☐ User-facing features
 Candidates, **the alignment quiz** (the core job), donor & party profiles, race cards, public
 share pages — built on top of data that's already verified (don't ship features over unverified
 data).
+
+- ☐ **Individual issue/topic pages (`/issues/:slug`)** — the SEO unlock: one crawlable page per
+  policy topic (e.g. `/issues/healthcare`, `/issues/immigration`) showing a plain-English summary,
+  where parties stand (score bars), active polls for that topic, candidate positions, and a topic-
+  specific FAQ section with JSON-LD. Mirrors the iSideWith model for capturing "[issue] political
+  positions" search intent. The `/issues` directory index and all required data hooks already exist
+  (`TOPIC_DESCRIPTIONS`, `useAllCandidateTopicScores`, `usePartyMatchScores`, polls filtered by
+  `topic_id`); build work is 1 new page component + route + sitemap extension + per-topic FAQ copy.
+  *(added 2026-06-20)*
 
 ### 4. ⏳ Social / AI content — *parked for v1 (see Out of scope)*
 X/TikTok posting, Remotion social cards, AI-generated analysis. Deferred until the core
@@ -84,8 +92,7 @@ X/TikTok posting, Remotion social cards, AI-generated analysis. Deferred until t
 1. **Data accuracy/quality** — the gate on shipping.
 2. **Migration drift (Dev vs main)** — slows landing any verified change.
 3. **No automated tests/CI** — "verified" = lint + build + manual; Phase H starts fixing this.
-4. **Disk pressure** — June 13 OOM on materialized view refresh; 15 GB DB growing; needs
-   quota check + plan before the next disk-full failure. *(added 2026-06-15)*
+4. ~~**Disk pressure**~~ — resolved 2026-06-22 (27 GB plan, 14.68 GB used). Monitor at 22 GB.
 
 ## Out of scope / parked
 - **Social auto-posting (X/TikTok) + Remotion video cards** — parked for v1 per `docs/VISION.md`
@@ -93,6 +100,13 @@ X/TikTok posting, Remotion social cards, AI-generated analysis. Deferred until t
   *(parked 2026-06-09)*
 
 ## Changelog
+- **2026-06-23** — marked Finding A and Finding B as ✅ in Priority #1. Both were fixed in earlier
+  sessions (Finding B: migration `20260615170000`, 2026-06-17; Finding A: writer unification +
+  total-receipts gate, 2026-06-22) and documented in DATA-ACCURACY.md, but ROADMAP markers were
+  never flipped. Visible recon standing: ok 294 / warning 88 / error 72 / partial 26 (error gate
+  passing). Remaining priority #1 work: residual `warning` / `error` rows self-healing as the drain
+  reprocesses each candidate (TX/NC backfill in progress).
+- **2026-06-20** — added individual issue/topic pages (`/issues/:slug`) to Priority #3 as an SEO-driven user-facing feature; all required data hooks already exist, build work is one new page + route + sitemap.
 - **2026-06-15 (cron health audit → two new action items)** — reviewed all 23 cron jobs over
   the last 14 days (2,826+ runs, 1 failure). Found: (1) `refresh-donor-consolidated-daily`
   hit a disk-full error on 2026-06-13 (DB is at 15 GB, `contributions` alone 8.4 GB and

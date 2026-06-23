@@ -49,6 +49,17 @@ test('formatCandidateName: strips leading honorific from comma-free names', () =
   expect(formatCandidateName('DR. ALICE JONES')).toBe('Alice Jones');
 });
 
+test('formatCandidateName: strips honorific stranded mid-name (no comma)', () => {
+  // Already-rearranged mixed-case names with the title left in the middle.
+  expect(formatCandidateName('Anthony Bailey Mr. Aguilar')).toBe('Anthony Bailey Aguilar');
+  expect(formatCandidateName('John Dr. Smith')).toBe('John Smith');
+});
+
+test('formatCandidateName: moves credential stranded mid-name to end (no comma)', () => {
+  expect(formatCandidateName('Beth Ellen Ph.D. Adubato')).toBe('Beth Ellen Adubato, Ph.D.');
+  expect(formatCandidateName('Alice M.D. Smith')).toBe('Alice Smith, M.D.');
+});
+
 test('formatCandidateName: suffixes (JR/SR) are preserved, not stripped', () => {
   expect(formatCandidateName('ADAMS-FALCONER, THOMAS MICHAEL JR.')).toBe('Thomas Michael Jr. Adams-Falconer');
   expect(formatCandidateName('JOHNSON, JAMES SR.')).toBe('James Sr. Johnson');
