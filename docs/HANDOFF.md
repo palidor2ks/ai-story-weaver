@@ -13,6 +13,32 @@
 (template — copy below this block)
 ```
 
+## 2026-06-23 — Task 3 CI green; backfill pending confirmation
+
+**What happened & why**
+PR #539 CI: 6/7 GitHub checks pass. Supabase Preview had a transient failure on first attempt
+(pre-existing `app_role` already exists error, same as the `questions_pkey` issue from prior
+sessions). The Supabase bot comment shows all tasks ✅ after auto-retry (Migrations ✅ 01:43,
+Seeding ✅ 01:43, Edge Functions ✅ 01:44). A new commit was pushed to force a fresh check run.
+
+**State** (verified 2026-06-23, branch `claude/blissful-edison-7cvva1`)
+- **Supabase Preview**: fully green per bot comment; awaiting fresh GitHub check run.
+- **All other CI**: GitGuardian ✅, Typecheck ✅, Lint ✅, Build ✅, Test ✅, Lockfile ✅.
+- **`poliscore_nc_key_votes`** table in prod; seeded with SB1080.
+- **`get_poliscore_record_nc`** RPC live.
+- **Frontend**: NC PoliScore card wired for NC senators/reps in `CandidateProfile`.
+- **Run id=6** (`mode=full`): fired at ~01:40 UTC 2026-06-23; backfill status TBD.
+- **PR #539** open (draft).
+
+**Next**
+1. Confirm run id=6 completed: `select chamber, count(*) from candidate_votes where jurisdiction='nc_state' group by 1;`
+2. If backfill confirmed, re-verify RPC returns real `vote_position` for a known NC senator on SB1080.
+3. Mark PR #539 ready and merge.
+4. Add more NC key votes to `poliscore_nc_key_votes` (admin curation task).
+5. Senate federal key votes (the federal card empty state still says "House only").
+
+---
+
 ## 2026-06-23 — Task 3 complete: NC PoliScore RPC + UI wired
 
 **What happened & why**
