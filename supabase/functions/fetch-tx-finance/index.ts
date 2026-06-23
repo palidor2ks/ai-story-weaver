@@ -388,9 +388,11 @@ async function drain(maxShards: number) {
 }
 
 // ---------------------------------------------------------------------------
-// HTTP entry. Two gates: verify_jwt (caller passes the publishable key) AND a
-// shared secret in x-sync-secret, validated against Vault via check_tx_sync_secret
-// (service_role-only RPC) — so only cron, which reads the secret from Vault, can run it.
+// HTTP entry. Auth gate: the x-sync-secret header, validated against Vault via
+// check_tx_sync_secret (service_role-only RPC) — so only cron, which reads the secret from
+// Vault, can run it. verify_jwt=false in config.toml (matching the sibling state-finance
+// functions); the gateway only required the public publishable key, so x-sync-secret is the
+// real protection.
 // ---------------------------------------------------------------------------
 Deno.serve(async (req) => {
   try {
