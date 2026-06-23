@@ -26,16 +26,13 @@ PR #548 merged and the Supabase GitHub integration auto-deployed v25. v25 failed
 
 Both states have 0 answers after the June-23 bulk deletion; the self-chaining batches will refill them over the next hour or two.
 
-**State** (as of ~15:30 UTC 2026-06-23)
-- `generate-legislator-answers` v26 deployed, status ACTIVE
+**State** (as of ~16:00 UTC 2026-06-23)
+- `generate-legislator-answers` v26 deployed, status ACTIVE; **PR #550 merged** → GitHub integration will deploy v27 from main (same code, fix included)
 - NJ and TX chains running in background; `selfChain:true` so they continue automatically
-- `answer-label-guard.ts` deduplication fix committed and pushed to `claude/stoic-einstein-mpvb5m`
+- `answer-label-guard.ts` deduplication fix is now on main
 
 **Next**
-1. After NJ/TX chains complete, trigger `refresh-candidates-cache` to bake new scores into CDN
-2. NC spot-check: Phil Berger showed −3.68 (suspicious for a Republican) — verify before deciding whether to re-run NC
-3. Delete `la-trigger` edge function from Supabase dashboard (deferred)
-4. Update OPEN-WORK #15 (phase-2 AI scoring) to reflect v26 is live
+Trigger `refresh-candidates-cache` once NJ/TX chains finish so CDN directory bakes in new scores.
 
 **Deferred**
 - CDN refresh after NJ/TX complete (scores update per-candidate in v26 via `updateCandidateScore`, but the CDN directory file needs an explicit `refresh-candidates-cache` trigger)

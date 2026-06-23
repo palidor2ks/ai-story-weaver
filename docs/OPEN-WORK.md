@@ -139,12 +139,15 @@ Add more visible states (NY, PA, …) by extending the `STATES` array once NJ+NC
 **History:** Shipped 2026-06-18 (PR #455) directory-first; 293 NJ+NC legislators ingested + verified.
 **State:** Not started. Each new state is just an array entry; the cron + dedup funnel already handle it.
 
-### 15. ☐ Phase-2 AI scoring for state legislators
+### 15. 🟡 Phase-2 AI scoring for state legislators
 **What:** The 293 ingested legislators are `tier_3` / `pending_research` (browseable, unscored). Enroll
 them in the research/scoring queue so they get alignment scores like federal candidates.
 **History:** Deliberately deferred at ingestion (directory-first decision, PR #455) to avoid burning
 AI quota on the whole body before the directory entries were validated.
-**State:** Not started. Enroll via the existing research-queue drainer when coverage warrants.
+**State:** 🟡 In progress. `generate-legislator-answers` v26 deployed (2026-06-23); NJ + TX chains
+re-triggered after v23 sign-regression emergency (23,911 wrong answers deleted, v24→v26 fix). PR #550
+merged — dedup bug in `answer-label-guard.ts` (v25 BOOT_ERROR) resolved. NJ+TX filling now; NC pending
+spot-check (Phil Berger −3.68 suspicious). After chains complete, trigger `refresh-candidates-cache`.
 
 ---
 
