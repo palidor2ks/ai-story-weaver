@@ -10,6 +10,8 @@ interface PoliScoreCardProps {
   candidateId: string;
   candidateName: string;
   jurisdiction?: Jurisdiction;
+  /** 'Senator' | 'Representative' — used to tailor the empty state message. */
+  office?: string;
 }
 
 const VOTE_LABEL: Record<string, string> = {
@@ -78,6 +80,7 @@ export function PoliScoreCard({
   candidateId,
   candidateName,
   jurisdiction = 'federal',
+  office,
 }: PoliScoreCardProps) {
   const { data: topics = [], isLoading, error } = usePoliScoreRecord(candidateId, jurisdiction);
 
@@ -121,7 +124,9 @@ export function PoliScoreCard({
   const emptyText =
     jurisdiction === 'nc_state'
       ? `NC PoliScore coverage is being built out — key votes will appear here as they are curated.`
-      : `Not yet scored — v0 covers House votes only. ${candidateName}'s record will appear here when Senate key votes are added.`;
+      : office === 'Senator'
+      ? `Senate key votes for PoliScore v0 are being curated — ${candidateName}'s record will appear here soon.`
+      : `Not yet scored — ${candidateName}'s record will appear here as key votes are curated.`;
 
   return (
     <Card>
