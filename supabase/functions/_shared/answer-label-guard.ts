@@ -52,3 +52,39 @@ export function demoteUncitedWebResearch<T extends VoteLabelFields>(answers: T[]
     return { ...a, evidence_type: 'inferred', source_type: 'other' };
   });
 }
+
+// Guard against answers whose stated stance contradicts their numeric value. When the
+// model emits stance="support" but answer_value<0 (or vice versa), the answer is
+// internally self-contradictory and cannot be trusted — drop it rather than guess
+// which half is correct. A null/neutral/absent stance is NOT a contradiction and is kept.
+// This is a safety net for the labeled-option prompt: if the model correctly picks the
+// labeled option value the stance field (if any) should be absent, but we keep the guard
+// for defence-in-depth.
+
+export interface StanceFields {
+  answer_value?: number | null;
+  stance?: string | null;
+}
+
+function stanceContradictsValue(a: StanceFields): boolean {
+  const v = typeof a.answer_value === 'number' ? a.answer_value : null;
+  if (v === null || v === 0) return false;
+  const stance = typeof a.stance === 'string' ? a.stance.trim().toLowerCase() : '';
+  if (stance === 'support' || stance === 'supports') return v < 0;
+  if (stance === 'oppose' || stance === 'opposes') return v > 0;
+  return false;
+}
+
+/**
+ * Split answers into kept and dropped, where the model's stated `stance` disagrees
+ * with the sign of `answer_value`. Returns new arrays; never mutates the input.
+ */
+export function dropStanceInconsistent<T extends StanceFields>(answers: T[]): { kept: T[]; dropped: T[] } {
+  const kept: T[] = [];
+  const dropped: T[] = [];
+  for (const a of answers) {
+    if (stanceContradictsValue(a)) dropped.push(a);
+    else kept.push(a);
+  }
+  return { kept, dropped };
+}
