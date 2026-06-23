@@ -7,10 +7,15 @@
 // Candidates already at their answer ceiling are skipped immediately (getMissingQuestions
 // returns []), so including local officials that are already complete costs nothing.
 //
-// Cost: ~$0.038/candidate (grounding $0.035 + tokens ~$0.003) = ~$11 for all 286 visible-state legislators.
+// Sign convention: in this system -10 = far LEFT (liberal/progressive) and +10 = far RIGHT
+// (conservative). Each question shows its two labeled option texts so Gemini can pick the
+// correct value without ambiguity — "support/oppose" framing is NOT used because for most
+// questions the left-leaning option is to SUPPORT a policy (e.g. raise minimum wage = -10).
+//
+// Cost: ~$0.038/candidate (grounding $0.035 + tokens ~$0.003)
 //
 // Requires: GOOGLE_AI_API_KEY secret in Supabase Vault.
-// Trigger:  POST /functions/v1/generate-legislator-answers  (admin auth)
+// Trigger:  POST /functions/v1/generate-legislator-answers  (admin auth or cron-secret)
 // Body:     { offset?, limit?, state?, dryRun?, selfChain?, candidateIds? }
 //           candidateIds: regenerate exactly these candidates (targeted remediation); bypasses
 //           the office/state/offset batch filter and self-chaining.
@@ -34,10 +39,9 @@ const GEMINI_MODEL = 'gemini-2.5-flash';
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 const DEFAULT_BATCH_SIZE = 10;
 const DELAY_MS = 2000;
-// Gemini emits one JSON answer object per question. Asking for ALL of a candidate's missing
-// questions in a single call overflows maxOutputTokens once the quiz is large (the 344-question
-// quiz truncated the JSON → unparseable → the candidate wrote 0 answers). Chunk the questions so
-// each call's output stays well within the token budget; results are accumulated and written once.
+// Chunk questions so each Gemini call's JSON output stays within maxOutputTokens.
+// Asking for all 344 questions in one call can overflow → unparseable response → 0 answers.
+// Each chunk is accumulated and written immediately (idempotent resume on re-run).
 const QUESTION_CHUNK_SIZE = 50;
 
 // Match the valid answer values used everywhere else in the app.
@@ -87,7 +91,8 @@ function chunk<T>(arr: T[], size: number): T[][] {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-interface Question { id: string; topic_id: string; text: string; }
+interface QuestionOption { value: number; text: string; }
+interface Question { id: string; topic_id: string; text: string; question_options: QuestionOption[]; }
 interface Candidate { id: string; name: string; party: string; office: string; state: string; }
 
 interface RawAnswer {
@@ -107,7 +112,7 @@ async function getMissingQuestions(
   candidateId: string,
 ): Promise<Question[]> {
   const [{ data: all }, { data: existing }] = await Promise.all([
-    supabase.from('questions').select('id, topic_id, text').eq('include_in_politician_quiz', true),
+    supabase.from('questions').select('id, topic_id, text, question_options(value, text)').eq('include_in_politician_quiz', true),
     supabase.from('candidate_answers').select('question_id').eq('candidate_id', candidateId),
   ]);
   const answered = new Set((existing ?? []).map((a: { question_id: string }) => a.question_id));
@@ -115,14 +120,31 @@ async function getMissingQuestions(
 }
 
 async function callGemini(candidate: Candidate, questions: Question[]): Promise<RawAnswer[] | null> {
-  const list = questions.map((q, i) => `${i + 1}. [${q.id}] ${q.text}`).join('\n');
+  // Show Gemini the actual labeled option texts for each question so it picks the
+  // correct value rather than mapping "support" → positive (which is wrong for 87% of
+  // questions where the LEFT-leaning action is to support a policy, e.g. raise minimum
+  // wage = -10, not +10). The two extremes are shown; Gemini interpolates within the range.
+  const list = questions.map((q, i) => {
+    const opts = (q.question_options ?? []).sort((a, b) => a.value - b.value);
+    const libOpt  = opts.find(o => o.value <= -5);
+    const consOpt = opts.find(o => o.value >= 5);
+    const optLines = [
+      libOpt  ? `   ${libOpt.value}: ${libOpt.text}` : '   -10: (liberal / progressive position)',
+      consOpt ? `   +${consOpt.value}: ${consOpt.text}` : '   +10: (conservative position)',
+    ].join('\n');
+    return `${i + 1}. [${q.id}] ${q.text}\n${optLines}`;
+  }).join('\n\n');
 
   const prompt =
 `Research ${candidate.name}, a ${candidate.party} ${candidate.office} from ${candidate.state}.
 
 Using web search, find their positions based on voting record, public statements, campaign website, interviews, and news.
 
-Answer ALL ${questions.length} policy questions below on a scale from -10 (strongly oppose) to +10 (strongly support).
+For EACH policy question below, choose the answer_value whose labeled option BEST matches this politician's known or inferred position. Each question shows two labeled options:
+  Negative values (-10 to -3) = the left-leaning / progressive option
+  Positive values (+3 to +10) = the right-leaning / conservative option
+  0 = neutral / no clear position
+
 Preferred values: -10, -7, -5, -3, 0, 3, 5, 7, 10.
 
 ${list}
@@ -132,8 +154,7 @@ Return ONLY a JSON object with this exact structure — include an entry for EVE
   "answers": [
     {
       "question_id": "<the bracketed id from above>",
-      "stance": "<support | oppose | neutral>",
-      "answer_value": <integer>,
+      "answer_value": <integer matching the chosen option value, or 0>,
       "evidence_type": "<voting_record | public_statement | campaign_position | inferred>",
       "confidence": "<high | medium | low>",
       "source_description": "<evidence summary, or party-alignment reasoning if inferred>",
@@ -143,11 +164,6 @@ Return ONLY a JSON object with this exact structure — include an entry for EVE
 }
 
 Rules:
-- "stance" is whether the candidate SUPPORTS or OPPOSES what the question asks.
-- The SIGN of answer_value MUST match stance: stance "support" => POSITIVE answer_value (+3..+10);
-  stance "oppose" => NEGATIVE answer_value (-3..-10); stance "neutral" => 0. Double-check the sign
-  before answering: if your evidence shows the candidate sponsored, voted for, or favors the
-  position, answer_value is POSITIVE — never negative.
 - Use "voting_record" only for a direct vote or bill sponsorship
 - Use "public_statement" for a quote, interview, or press release
 - Use "campaign_position" for campaign website or official platform
@@ -158,7 +174,7 @@ Rules:
   const body = {
     contents: [{ role: 'user', parts: [{ text: prompt }] }],
     tools: [{ googleSearch: {} }],
-    generationConfig: { temperature: 0.2, maxOutputTokens: 16384 },
+    generationConfig: { temperature: 0.2, maxOutputTokens: 65536 },
   };
 
   const res = await fetch(
@@ -172,12 +188,19 @@ Rules:
   }
 
   const data = await res.json();
-  const text: string = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+  // Gemini 2.5 Flash emits thinking parts (thought: true) before the actual output;
+  // find the first non-thinking part that contains text.
+  const parts: Array<{ thought?: boolean; text?: string }> =
+    data?.candidates?.[0]?.content?.parts ?? [];
+  const outputPart = parts.find(p => !p.thought && p.text) ?? parts[0];
+  const text: string = outputPart?.text ?? '';
   const parsed = extractJson(text);
 
   if (!parsed || !Array.isArray(parsed.answers)) {
-    console.error('[Gemini] Unparseable response:', text.slice(0, 600));
-    return null;
+    const finishReason = data?.candidates?.[0]?.finishReason ?? 'unknown';
+    const snippet = text.slice(0, 400);
+    console.error('[Gemini] Unparseable response. finishReason:', finishReason, 'text:', snippet);
+    throw new Error(`parse_failed[${finishReason}]: ${snippet}`);
   }
   return parsed.answers as RawAnswer[];
 }
@@ -197,33 +220,34 @@ async function processCandidate(
   const missingIds = new Set(missing.map(q => q.id));
 
   // Whether we hold real votes for this candidate — needed by demoteUnverifiableVoteClaims.
-  // Queried once up front so it isn't repeated per chunk.
   const { count: voteRowCount } = await supabase
     .from('candidate_votes')
     .select('id', { count: 'exact', head: true })
     .eq('candidate_id', candidate.id);
   const hasVotes = (voteRowCount ?? 0) > 0;
 
-  // Chunk the questions so each Gemini call's JSON output stays within maxOutputTokens, and
-  // UPSERT EACH CHUNK as it comes back. The background task (EdgeRuntime.waitUntil) has a bounded
-  // wall-clock budget; a multi-chunk candidate can exceed it and be terminated before a single
-  // final write. Writing per chunk means completed chunks always persist, and a re-run resumes
-  // via getMissingQuestions (idempotent), so repeated invocations converge.
+  // Chunk questions so each Gemini call's JSON stays within the output token budget.
+  // Write each chunk immediately (idempotent — re-runs resume via getMissingQuestions).
   const questionChunks = chunk(missing, QUESTION_CHUNK_SIZE);
   let answered = 0;
   let totalDropped = 0;
   let failedChunks = 0;
 
   for (let i = 0; i < questionChunks.length; i++) {
-    const part = await callGemini(candidate, questionChunks[i]);
+    let part: RawAnswer[] | null;
+    try {
+      part = await callGemini(candidate, questionChunks[i]);
+    } catch (e) {
+      failedChunks++;
+      console.error(`[chunk] ${candidate.name}: chunk ${i + 1}/${questionChunks.length} failed:`, e);
+      continue;
+    }
     if (!part) {
       failedChunks++;
       console.error(`[chunk] ${candidate.name}: chunk ${i + 1}/${questionChunks.length} parse failed`);
       continue;
     }
 
-    // Build candidate-answer objects, carrying `stance` (not a DB column) so the integrity
-    // guards can run before we strip it for the insert.
     const parsedRows = [];
     for (const raw of part) {
       const qid = String(raw.question_id ?? '');
@@ -247,25 +271,26 @@ async function processCandidate(
         source_url: sourceUrl,
         source_urls: sourceUrl ? [sourceUrl] : [],
         source_titles: [],
+        // `stance` is not in the labeled-option prompt but is kept as an optional safety
+        // net for the dropStanceInconsistent guard (null stance → guard is a no-op).
         stance: typeof raw.stance === 'string' ? raw.stance : null,
       });
     }
 
-    // ── Integrity guards (shared with get-candidate-answers) ──────────────────────
-    // 1. Drop answers whose stated stance contradicts the sign of answer_value (the 2026-06-20
-    //    inverted-score bug: "supports X" prose with a strongly-negative, URL-cited value that
-    //    passed isTrustedForScoring and flipped overall_score). Self-contradictory => untrusted.
-    // 2. Demote uncited "voting_record" labels when we hold no real votes, and uncited
-    //    "web_research" labels — provenance badges with nothing behind them.
+    // Integrity guards (shared with get-candidate-answers):
+    // 1. Drop any answer where stated stance contradicts sign of answer_value.
+    // 2. Demote uncited voting_record claims for candidates with no vote data.
+    // 3. Demote web_research labels with no citation.
     const { kept, dropped } = dropStanceInconsistent(parsedRows);
     totalDropped += dropped.length;
 
     const guarded = demoteUncitedWebResearch(demoteUnverifiableVoteClaims(kept, hasVotes));
-    // Strip the transient `stance` field — it is not a candidate_answers column.
+    // Strip the transient `stance` field — not a candidate_answers column.
     const rows = guarded.map(({ stance: _stance, ...row }) => row);
     if (rows.length === 0) continue;
 
     // ignoreDuplicates: true — never overwrite higher-quality existing answers.
+    // (getMissingQuestions pre-filters so conflicts only happen on race conditions.)
     const { error: upsertErr } = await supabase
       .from('candidate_answers')
       .upsert(rows, { onConflict: 'candidate_id,question_id', ignoreDuplicates: true });
@@ -276,22 +301,21 @@ async function processCandidate(
   if (totalDropped > 0) {
     console.log(`[guard] ${candidate.name}: dropped ${totalDropped} stance-inconsistent answer(s)`);
   }
+
   if (answered === 0) {
-    return { answered: 0, missing: missing.length, error: 'parse failed', ...(failedChunks ? { failedChunks } : {}) };
+    return { answered: 0, missing: missing.length, error: 'no valid rows parsed', ...(failedChunks ? { failedChunks } : {}) };
   }
 
-  // Re-derive the persisted overall_score from TRUSTED answers (matches get-candidate-answers
-  // and the live alignment match in src/lib/scoring.ts), so a candidate's headline score reflects
-  // the guard-filtered data rather than a stale value.
+  // Re-derive persisted overall_score from TRUSTED answers only, so the headline score
+  // always reflects the guard-filtered data (mirrors isTrustedForScoring in src/lib/scoring.ts).
   await updateCandidateScore(supabase, candidate.id, candidate.name);
 
   console.log(`[done] ${candidate.name}: wrote ${answered}/${missing.length}${failedChunks ? ` (${failedChunks} chunk(s) failed)` : ''}`);
   return { answered, missing: missing.length, ...(failedChunks ? { failedChunks } : {}) };
 }
 
-// Re-derive candidates.overall_score from TRUSTED answers only (vote-derived or carrying a real
-// source URL), mirroring updateCandidateScore in get-candidate-answers and isTrustedForScoring in
-// src/lib/scoring.ts. Leaves the stored score untouched when there are no trusted answers yet.
+// Re-derive candidates.overall_score from TRUSTED answers only (vote-derived or carrying
+// a real source URL), mirroring isTrustedForScoring in src/lib/scoring.ts.
 async function updateCandidateScore(
   supabase: ReturnType<typeof createClient>,
   candidateId: string,
@@ -382,7 +406,7 @@ async function runBatch(params: {
     updated_at: new Date().toISOString(),
   }, { onConflict: 'stat_key' });
 
-  // Self-chain: if this batch was full, there may be more
+  // Self-chain: if this batch was full, there may be more candidates
   if (selfChain && !dryRun && candidates.length === limit) {
     const nextOffset = offset + limit;
     console.log(`[chain] continuing from offset ${nextOffset}`);
@@ -409,9 +433,7 @@ serve(async (req) => {
     });
 
   try {
-    // Auth: trusted server (service-role bearer or vault x-cron-secret, via the shared
-    // cron-auth helper) OR an admin user profile. The cron/service path lets this remediation
-    // run be triggered server-side (pg_net / cron) the same way the other ingestion functions are.
+    // Auth: service-role bearer or cron-secret (via shared helper) OR admin user profile.
     const token = (req.headers.get('Authorization') ?? '').replace('Bearer ', '');
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
@@ -429,9 +451,8 @@ serve(async (req) => {
     const limit = Number(body.limit ?? DEFAULT_BATCH_SIZE);
     const state = typeof body.state === 'string' ? body.state.toUpperCase() : null;
     const dryRun = body.dryRun === true;
-    // candidateIds: targeted remediation — regenerate exactly these candidates and nothing else
-    // (the score-inversion runbook's "scope to reviewed ids" step). When set, the office/state/
-    // offset batch filter and self-chaining are bypassed so spend is bounded to the listed ids.
+    // candidateIds: targeted remediation — regenerate exactly these candidates (bounded spend,
+    // bypasses office/state/offset filter and self-chaining).
     const candidateIds = Array.isArray(body.candidateIds)
       ? (body.candidateIds as unknown[]).filter((x): x is string => typeof x === 'string' && x.length > 0)
       : null;
@@ -444,17 +465,12 @@ serve(async (req) => {
     const { data: hiddenRows } = await supabase.from('hidden_states').select('state_code');
     const hidden = new Set((hiddenRows ?? []).map((r: { state_code: string }) => r.state_code));
 
-    // Fetch this batch of sub-federal candidates: state legislators, local officials,
-    // mayors, county commissioners, etc. — everyone who is NOT a federal or
-    // presidential candidate. getMissingQuestions returns [] for already-complete
-    // candidates so they are skipped without any API spend.
-    // Exclusion list matches what get-candidate-answers treats as "federal":
-    //   U.S. House*, U.S. Senate*, President*, plain Representative/Senator
+    // Fetch this batch of sub-federal candidates. getMissingQuestions returns [] for
+    // already-complete candidates so they are skipped without any API spend.
     let query = supabase
       .from('candidates')
       .select('id, name, party, office, state');
     if (targeted) {
-      // Exact-id remediation: take the operator's reviewed list as-is, no batch windowing.
       query = query.in('id', candidateIds!);
     } else {
       query = query
@@ -471,7 +487,7 @@ serve(async (req) => {
     const { data: raw, error: qErr } = await query;
     if (qErr) return json({ error: qErr.message }, 500);
 
-    // A targeted run honours the operator's explicit id list even for hidden states;
+    // Targeted runs honour the operator's explicit list even for hidden states;
     // the batch sweep still skips hidden states.
     const candidates: Candidate[] = targeted
       ? (raw ?? [])
