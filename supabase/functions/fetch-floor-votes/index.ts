@@ -171,6 +171,16 @@ function parseBillId(billId: string): { type: string; number: number } | null {
   return null;
 }
 
+// Detects a real bill reference from a Senate LIS XML <issue> tag.
+// Returns null for nominations, procedural text, or unrecognized formats.
+function extractSenateIssueBillRef(issue: string): string | null {
+  if (!issue) return null;
+  const m = issue.trim().match(/^(H\.?\s*R\.?|S\.|H\.J\.Res\.|S\.J\.Res\.|H\.Con\.Res\.|S\.Con\.Res\.|H\.Res\.|S\.Res\.)\s*(\d+)/i);
+  if (!m) return null;
+  const type = m[1].replace(/[\s.]+/g, '').toUpperCase(); // "H.R." → "HR", "S." → "S"
+  return `${type} ${m[2]}`; // e.g., "HR 1", "S 2", "HJRES 100"
+}
+
 // Simple XML tag extraction (no external library needed)
 function extractTag(xml: string, tag: string): string | null {
   const regex = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, 'i');
@@ -444,8 +454,15 @@ async function fetchSenateVote(
     const voteResult = extractTag(xml, 'vote_result') || '';
     
     // Extract document info for bill ID
-    const docNum = extractTag(xml, 'document_short_title') || extractTag(xml, 'issue') || '';
-    const billId = docNum || `VOTE-${congress}-${session}-${voteNumber}`;
+    // Prefer <issue> tag which contains the canonical bill reference (e.g., "H.R. 1") for passage votes.
+    // Nominations and procedural votes will still produce a PROC placeholder.
+    const issueTag = extractTag(xml, 'issue') || '';
+    const billRef = extractSenateIssueBillRef(issueTag);
+    const docNum = extractTag(xml, 'document_short_title') || '';
+    const billId = billRef ?? (docNum || `VOTE-${congress}-${session}-${voteNumber}`);
+    if (billRef) {
+      console.log(`[Senate] Vote ${voteNumber}: bill reference detected → ${billRef}`);
+    }
     const billName = voteTitle || voteQuestion;
     
     // Find member by lis_member_id
@@ -755,9 +772,30 @@ async function processSenateFloorVotes(
         const { vote } = await fetchSenateVote(congress, session, voteNum, lisId, bioguideId);
         
         if (vote) {
+          // For bill passage votes, resolve to the canonical bills row to avoid duplicate bill entries.
+          // House sync and Senate may produce different id strings for the same bill
+          // (e.g., "H R 1" from House Clerk XML vs "HR 1" from Senate issue tag).
+          if (!vote.bill_id.startsWith('VOTE-')) {
+            const parsed = parseBillId(vote.bill_id);
+            if (parsed) {
+              const { data: existing } = await supabase
+                .from('bills')
+                .select('id')
+                .eq('congress', vote.congress)
+                .eq('bill_type', parsed.type)
+                .eq('bill_number', parsed.number);
+              if (existing && existing.length > 0) {
+                // Prefer shorter id — the canonical House format ("H R 1") is shortest
+                const best = (existing as { id: string }[]).sort((a, b) => a.id.length - b.id.length)[0];
+                console.log(`[Senate] Vote ${voteNum}: resolved bill_id ${vote.bill_id} → ${best.id}`);
+                vote.bill_id = best.id;
+              }
+            }
+          }
+
           pendingVotes.push(vote);
           foundInSession++;
-          
+
           if (!lastVoteDate || vote.date > lastVoteDate) {
             lastVoteDate = vote.date;
           }
