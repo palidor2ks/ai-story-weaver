@@ -13,6 +13,41 @@
 (template — copy below this block)
 ```
 
+## 2026-06-23 — Federal PoliScore card wired; Senate infrastructure added
+
+**What happened & why**
+Research session to add Senate federal key votes. Key findings:
+- Senate votes in `candidate_votes` use `PROC` pseudo-bill IDs (`VOTE-119-1-XXXXX`), not the
+  `congress/bill_type/bill_number` scheme that House votes use — the existing RPC can't find them.
+- The One Big Beautiful Bill (HR 1, 119th Congress) Senate passage vote is **not in `candidate_votes`**.
+- Senate PROC votes don't have clean party-line splits in the current dataset, making `lean`
+  derivation hard. No Senate key votes seeded yet.
+
+What was shipped (PR #541):
+- Added `senate_vote_id text` column to `poliscore_key_votes` — stores the PROC bill_id for Senate
+  key votes so the RPC can join them directly without the bills table lookup.
+- Updated `get_poliscore_record` RPC with a UNION ALL for the two paths (backward-compatible).
+- Wired `PoliScoreCard` into `CandidateProfile.tsx` for `Representative` and `Senator` office
+  types — federal reps now see their 28 key vote scores; senators see a tailored empty state.
+- Added `office` prop to `PoliScoreCard` so senators get "Senate key votes being curated" message.
+
+**State** (verified 2026-06-23, prod `ornnzinjrcyigazecctf`)
+- Migration `20260623080000_poliscore_senate_key_votes.sql` applied ✅
+- RPC smoke: `get_poliscore_record('A000370')` (NC Rep Alma Adams) → 5 rows ✅
+- RPC smoke: `get_poliscore_record('B001305')` (NC Sen Ted Budd) → 0 rows (correct, no seeds) ✅
+- Build + lint + tests pass ✅
+- **PR #541** open (draft), CI in progress.
+
+**Next**
+1. Merge PR #541 once CI green.
+2. Seed Senate key votes once target vote data confirmed in `candidate_votes`. The Big Beautiful Bill
+   (HR 1, 119th) Senate passage (July 1 2025, 51-50) is the top candidate but its final passage vote
+   is missing from the DB. Check if a data sync has captured it before seeding.
+3. Add more NC key votes to `poliscore_nc_key_votes` (admin curation task).
+4. FEC recon Finding B (line 14/15 "other receipts" double-count) — roadmap priority #1.
+
+---
+
 ## 2026-06-23 — Chamber backfill applied; NC PoliScore fully live for reps
 
 **What happened & why**

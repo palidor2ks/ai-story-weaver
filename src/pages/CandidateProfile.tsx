@@ -769,6 +769,17 @@ export const CandidateProfile = () => {
           />
         )}
 
+        {/* PoliScore voting record — federal Representatives and Senators.
+            v0 covers 28 curated House key votes; Senate key votes are being added. */}
+        {candidate.id &&
+          (candidate.office === 'Representative' || candidate.office === 'Senator') && (
+          <PoliScoreCard
+            candidateId={candidate.id}
+            candidateName={candidate.name}
+            office={candidate.office}
+          />
+        )}
+
         {/* Tabs for Donors and Votes */}
         <Tabs defaultValue="donors" className="w-full">
           <TabsList className="mb-6">
