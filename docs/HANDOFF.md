@@ -13,6 +13,39 @@
 (template — copy below this block)
 ```
 
+## 2026-06-23 — Task 3 complete: NC PoliScore RPC + UI wired
+
+**What happened & why**
+Built the NC state PoliScore pipeline end-to-end. Federal RPC uses `(congress, bill_type,
+bill_number)` to identify key votes — NC bills don't have these fields, so a parallel NC
+structure was needed. New `poliscore_nc_key_votes` table uses `bill_id` directly (`nc-2025-*`).
+New `get_poliscore_record_nc` RPC LEFT JOINs to `candidate_votes` filtered by
+`jurisdiction='nc_state'` and the candidate's chamber (derived from `candidates.office`).
+`PoliScoreCard` extended with `jurisdiction` prop to render NC bill references and NCGA links.
+Card wired into `CandidateProfile` for NC state legislators.
+
+Chamber backfill (`mode=full`, run id=6) also fired — should populate `chamber='upper'/'lower'`
+on the 2,818 existing NC `candidate_votes` rows so the RPC returns real `vote_position` values.
+
+**State** (verified 2026-06-23, branch `claude/blissful-edison-7cvva1`, commit `e3222628`)
+- **`poliscore_nc_key_votes`** table exists in prod; seeded with SB1080.
+- **`get_poliscore_record_nc`** RPC live and smoke-tested (returns SB1080 row with `vote_position=null`
+  until backfill completes).
+- **Frontend**: `usePoliScoreRecord(candidateId, 'nc_state')` calls correct RPC; `PoliScoreCard`
+  renders NC-appropriate bill reference; wired in `CandidateProfile` for NC senators/reps.
+- **Run id=6** (`mode=full`): fired at ~01:40 UTC; result TBD (check `nc_leg_sync_runs`).
+- **PR #539** open (draft): `claude/blissful-edison-7cvva1` → `main`, CI in progress.
+
+**Next**
+1. Confirm run id=6 completed successfully and `chamber` is now populated.
+   `select chamber, count(*) from candidate_votes where jurisdiction='nc_state' group by 1;`
+2. Re-verify RPC returns real `vote_position` for a known NC senator on SB1080.
+3. Merge PR #539.
+4. Add more NC key votes to `poliscore_nc_key_votes` as curation gate expands (admin task).
+5. Senate federal key votes (the federal card empty state still says "House only").
+
+---
+
 ## 2026-06-22 — Chamber discriminator deployed; backfill pending rate-limit reset
 
 **What happened & why**
