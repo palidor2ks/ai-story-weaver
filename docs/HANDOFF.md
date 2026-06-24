@@ -13,6 +13,48 @@
 (template — copy below this block)
 ```
 
+## 2026-06-24 — NC finance data source investigation — DATA SOURCE BLOCKED
+
+**What happened & why**
+Continued from prior session (PR #558 merged). Executed the post-merge operational steps:
+1. ✅ `nc_sync_secret` already in Vault (from prior session)
+2. ✅ `fetch-nc-finance` deployed to production (v4, ACTIVE)
+3. ✅ `discover` mode ran — seeded `nc_sync_progress` for years 2016–2026
+4. 🔴 **drain produced 0 rows** — investigated root cause across 21 probe iterations
+
+**Root cause (definitive, 2026-06-24):**
+NCSBE does not publish bulk contribution CSVs anywhere accessible from cloud IPs:
+- `cf.ncsbe.gov` portal: blocks automated requests from cloud/datacenter IP ranges.
+  Returns identical 14,667-byte empty-results template for ALL search queries regardless
+  of parameters. Confirmed across sessions: date-only, OfficeType filter, LastName=Smith,
+  correct form field names, browser-like headers — all return same empty page.
+- `dl.ncsbe.gov` S3 bucket: contains PDFs and training docs only. No bulk contribution
+  CSVs at any path (`campaign-finance/year/`, `Campaign_Finance/`, `/Campaign_Finance/`,
+  `cf/`, `campaign_finance/`, etc.). All exhaustively enumerated.
+- `www.ncsbe.gov/campaign-finance`: Drupal 10 page (200 OK) but no download sub-paths.
+
+**Code updated:**
+- `supabase/functions/fetch-nc-finance/index.ts`: Added `DATA_SOURCE_BLOCKED` header comment
+  and updated `fetchQuarterCSV` to throw a `DATA_SOURCE_BLOCKED:` error with explanation
+  instead of silently succeeding with 0 rows.
+- `nc-finance-probe` edge function (temporary diagnostic): deployed to production only,
+  not committed. Safe to delete: `supabase functions delete nc-finance-probe`.
+
+**State** (verified 2026-06-24)
+nc_sync_progress seeded for 2016–2026 (all `pending`). nc_contributions has 0 rows.
+All DB schema (tables, indexes, RPC) correct. Edge function deployed but data source blocked.
+
+**Next**
+Options to unblock NC data:
+1. **Run from residential IP**: Call `fetch-nc-finance` from a non-cloud machine (home/office
+   PC) — the portal likely works from a residential IP. Set `mode=drain` one year at a time.
+2. **Public records request**: Submit to NCSBE (https://www.ncsbe.gov/about) asking for bulk
+   contribution CSV for each year.
+3. **Third-party source**: OpenSecrets or FollowTheMoney have NC data; requires API key/subscription.
+4. Cleanup: `supabase functions delete nc-finance-probe` (diagnostic function, not needed).
+
+---
+
 ## 2026-06-24 — Fix share-card "Render failed: undefined" — PR #559 (MERGED)
 
 **What happened & why**

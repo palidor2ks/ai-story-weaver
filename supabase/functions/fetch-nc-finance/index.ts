@@ -3,13 +3,23 @@
 // CF Reporting portal (cf.ncsbe.gov) into the nc_* tables.
 // State Senate + NC House of Representatives candidates only.
 //
-// Data source: NCSBE CF Transaction Search export API
+// DATA SOURCE STATUS (investigated 2026-06-24 — blocked):
+//   The cf.ncsbe.gov portal blocks automated requests from cloud/datacenter IP ranges.
+//   All search queries return a consistent empty-results template (14 KB) regardless
+//   of search parameters — confirmed across 21 probe iterations.
+//   dl.ncsbe.gov S3 bucket contains only PDFs/training documents, no bulk CSVs.
+//   NC bulk contribution data is NOT accessible from Supabase edge functions.
+//
+//   Options to unblock:
+//     1. Run this function from a residential/non-datacenter IP via a proxy or local runner
+//     2. Submit a public records request to NCSBE (https://www.ncsbe.gov/about)
+//     3. Use a third-party aggregator (OpenSecrets, FollowTheMoney) — requires API key
+//   The DB schema (nc_contributions, nc_sync_progress, nc_sync_runs, nc_legislator_finance
+//   RPC) is complete and will ingest data correctly once a working source is found.
+//
+// Original intended data source: NCSBE CF Transaction Search export API
 //   POST https://cf.ncsbe.gov/CFTxnLkup/ExportResults/
 //   with form-encoded Params JSON (year date range, all office types)
-//
-// The export returns a CSV; we filter for SEN/REP offices in code.
-// Quarterly chunking keeps each request manageable and lets us resume within a year.
-// Per-year/quarter progress is tracked in nc_sync_progress for resumability.
 //
 // Modes (param `mode`): discover | drain | full (default).
 // Other params: only_year(int), max_years(int), row_cap(=10000), skip_years_before(=2016).
@@ -58,7 +68,16 @@ async function fetchQuarterCSV(dateFrom: string, dateTo: string): Promise<string
   });
   if (!r.ok) throw new Error(`ExportResults ${dateFrom}–${dateTo} -> ${r.status}`);
   const text = await r.text();
-  if (!text || text.trim().length < 5) throw new Error(`Empty CSV for ${dateFrom}–${dateTo}`);
+  // The cf.ncsbe.gov portal blocks automated requests from cloud/datacenter IPs.
+  // An empty CSV (2 bytes: \r\n) means the portal returned no data — this is the
+  // expected failure mode when running from Supabase edge functions. See file header.
+  if (!text || text.trim().length < 5) {
+    throw new Error(
+      `DATA_SOURCE_BLOCKED: cf.ncsbe.gov returned empty CSV for ${dateFrom}–${dateTo}. ` +
+      `The NCSBE portal blocks automated requests from cloud IPs. ` +
+      `Run from a residential IP or use a public records request to obtain bulk data.`
+    );
+  }
   return text;
 }
 
