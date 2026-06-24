@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/context/AuthContext';
 import { useAdminRole } from '@/hooks/useAdminRole';
 import { usePoliticianRole } from '@/hooks/usePoliticianProfile';
-import { User, Menu, X, BookOpen, HelpCircle, Users, Shield, Building2, FileText, Newspaper, LogIn, type LucideIcon } from 'lucide-react';
+import { User, Menu, X, BookOpen, HelpCircle, Users, Shield, FileText, Newspaper, LogIn, type LucideIcon } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import logoImg from '@/assets/logo.png';
@@ -20,8 +20,6 @@ export const Header = () => {
 
   const navItems: { path: string; label: string; icon: LucideIcon; requiresAuth: boolean; adminOnly?: boolean }[] = [
     { path: '/candidates', label: 'Candidates', icon: Users, requiresAuth: false },
-    { path: '/parties', label: 'Parties', icon: Building2, requiresAuth: false },
-    { path: '/how-scoring-works', label: 'How it works', icon: HelpCircle, requiresAuth: false },
     { path: '/quiz-library', label: 'Quizzes', icon: BookOpen, requiresAuth: true },
     { path: '/blog', label: 'Blog', icon: Newspaper, requiresAuth: false },
     { path: '/profile', label: 'Profile', icon: User, requiresAuth: true },
@@ -96,7 +94,17 @@ export const Header = () => {
         </nav>
 
         {/* User Info */}
-        <div className="hidden lg:flex items-center gap-3 shrink-0">
+        <div className="hidden lg:flex items-center gap-2 shrink-0">
+          <Link to="/how-scoring-works" title="How it works" aria-label="How it works">
+            <Button
+              variant={isActive('/how-scoring-works') ? "secondary" : "ghost"}
+              size="icon"
+              className="w-8 h-8"
+              aria-label="How it works"
+            >
+              <HelpCircle className="w-4 h-4" />
+            </Button>
+          </Link>
           {user && (
             <div className="flex items-center gap-2 lg:px-1.5 xl:px-3 lg:py-1 xl:py-1.5 rounded-full lg:bg-transparent xl:bg-secondary">
               <div className="w-7 h-7 xl:w-6 xl:h-6 rounded-full bg-primary flex items-center justify-center">
@@ -164,6 +172,18 @@ export const Header = () => {
                 </Button>
               </Link>
             )}
+            <Link
+              to="/how-scoring-works"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              <Button
+                variant={isActive('/how-scoring-works') ? "secondary" : "ghost"}
+                className="w-full justify-start gap-3"
+              >
+                <HelpCircle className="w-5 h-5" />
+                How it works
+              </Button>
+            </Link>
             {!authLoading && !user && (
               <Link
                 to="/auth"
