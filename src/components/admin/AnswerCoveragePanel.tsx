@@ -18,6 +18,7 @@ import { useTxLegislatorFinance } from "@/hooks/useTxLegislatorFinance";
 import { useFlLegislatorFinance } from "@/hooks/useFlLegislatorFinance";
 import { useNjLegislatorFinance } from "@/hooks/useNjLegislatorFinance";
 import { useNyLegislatorFinance } from "@/hooks/useNyLegislatorFinance";
+import { useNcLegislatorFinance } from "@/hooks/useNcLegislatorFinance";
 import { useFinanceCycles } from "@/hooks/useFinanceCycles";
 import { useCoverageDashboardStats } from "@/hooks/useCoverageDashboardStats";
 import { usePopulateCandidateAnswers } from "@/hooks/usePopulateCandidateAnswers";
@@ -87,6 +88,7 @@ const STATE_FINANCE_SOURCES: Record<string, string> = {
   FL: 'FDLE',
   NJ: 'ELEC',
   NY: 'NYSBOE',
+  NC: 'NCSBE',
 };
 
 interface StateFinanceCellProps {
@@ -105,11 +107,12 @@ function StateFinanceCell({ name, state, office, level, district }: StateFinance
   const fl = useFlLegislatorFinance(params);
   const nj = useNjLegislatorFinance(params);
   const ny = useNyLegislatorFinance(params);
+  const nc = useNcLegislatorFinance(params);
 
   if (isFederal) return <span className="text-muted-foreground/40 text-[10px]">—</span>;
 
-  const isLoading = tx.isLoading || fl.isLoading || nj.isLoading || ny.isLoading;
-  const data = tx.data ?? fl.data ?? nj.data ?? ny.data ?? null;
+  const isLoading = tx.isLoading || fl.isLoading || nj.isLoading || ny.isLoading || nc.isLoading;
+  const data = tx.data ?? fl.data ?? nj.data ?? ny.data ?? nc.data ?? null;
   const sourceLabel = STATE_FINANCE_SOURCES[state] ?? null;
 
   if (isLoading) {
