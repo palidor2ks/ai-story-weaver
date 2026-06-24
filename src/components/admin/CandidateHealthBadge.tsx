@@ -24,8 +24,7 @@ export function CandidateHealthBadge({
 }: CandidateHealthBadgeProps) {
   const isFederalCandidate = !level || level === 'federal_legislative' || level === 'federal_executive';
 
-  // State/local candidates: FEC metrics (committee, donor sync, finance reconciliation)
-  // are not applicable — show a neutral indicator rather than a misleading red warning.
+  // State/local candidates: FEC metrics don't apply — show neutral N/A instead of red warning.
   if (!isFederalCandidate) {
     return (
       <TooltipProvider>

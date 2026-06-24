@@ -75,6 +75,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useBackgroundProcessing } from "@/context/BackgroundProcessingContext";
 
+
 function fmtStateFinance(n: number): string {
   const abs = Math.abs(n);
   const sign = n < 0 ? '-' : '';
@@ -146,6 +147,7 @@ function StateFinanceCell({ name, state, office, level, district }: StateFinance
     </TooltipProvider>
   );
 }
+
 
 const PARTIES = ['all', 'Democrat', 'Republican', 'Independent', 'Other'] as const;
 
@@ -2423,33 +2425,13 @@ export function AnswerCoveragePanel() {
                   <TableHead className="text-center w-[70px] px-2 py-2">Answers</TableHead>
                   <TableHead className="w-[55px] px-2 py-2">Score</TableHead>
                   <TableHead className="w-[52px] px-2 py-2">Tier</TableHead>
-                  <TableHead className="w-[72px] px-2 py-2 text-right">
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger className="flex items-center gap-1 cursor-help justify-end w-full">
-                          St. $
-                          <HelpCircle className="h-3 w-3 text-muted-foreground" />
-                        </TooltipTrigger>
-                        <TooltipContent side="top" className="max-w-[260px]">
-                          <p className="font-medium mb-1">State Campaign Finance</p>
-                          <p className="text-xs text-muted-foreground">
-                            Total raised from state disclosure sources (TX: TEC, FL: FDLE, NJ: ELEC, NY: NYSBOE).
-                            Federal candidates use the FEC columns instead.
-                          </p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </TableHead>
                   <TableHead className="w-[44px] px-2 py-2">
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger className="cursor-help">
                           <FileText className="h-3.5 w-3.5 text-muted-foreground" />
                         </TooltipTrigger>
-                        <TooltipContent className="max-w-[200px]">
-                          <p className="font-medium">Legislative Actions</p>
-                          <p className="text-xs text-muted-foreground">Sponsored/cosponsored bills — federal/Congress.gov only. State legislative activity visible on the candidate profile.</p>
-                        </TooltipContent>
+                        <TooltipContent>Legislative Actions (Sponsored/Cosponsored)</TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
                   </TableHead>
@@ -2459,10 +2441,7 @@ export function AnswerCoveragePanel() {
                         <TooltipTrigger className="cursor-help">
                           <Vote className="h-3.5 w-3.5 text-muted-foreground" />
                         </TooltipTrigger>
-                        <TooltipContent className="max-w-[200px]">
-                          <p className="font-medium">Floor Votes</p>
-                          <p className="text-xs text-muted-foreground">Yea/Nay/Present roll-call votes — federal/Congress.gov only. State voting records visible on the candidate profile.</p>
-                        </TooltipContent>
+                        <TooltipContent>Floor Votes (Yea/Nay/Present)</TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
                   </TableHead>
@@ -2490,22 +2469,7 @@ export function AnswerCoveragePanel() {
                   <TableHead className="w-[55px] px-2 py-2">
                     <DollarSign className="h-3.5 w-3.5" />
                   </TableHead>
-                  <TableHead className="w-[72px] px-2 py-2 text-right">
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger className="flex items-center gap-1 cursor-help justify-end">
-                          FEC
-                          <HelpCircle className="h-3 w-3 text-muted-foreground" />
-                        </TooltipTrigger>
-                        <TooltipContent side="top" className="max-w-[240px]">
-                          <p className="font-medium mb-1">FEC Total Receipts</p>
-                          <p className="text-xs text-muted-foreground">
-                            Federal candidates only. Total receipts as reported to the FEC for the selected cycle.
-                          </p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </TableHead>
+                  <TableHead className="w-[72px] px-2 py-2 text-right">FEC</TableHead>
                   <TableHead className="w-[72px] px-2 py-2 text-right">
                     <TooltipProvider>
                       <Tooltip>
@@ -2516,9 +2480,9 @@ export function AnswerCoveragePanel() {
                         <TooltipContent side="top" className="max-w-[280px]">
                           <p className="font-medium mb-1">Local + Non-Itemized Receipts</p>
                           <p className="text-xs text-muted-foreground">
-                            Federal candidates only. Imported itemized contributions + FEC-reported unitemized + other receipts
-                            (loans, transfers, candidate contributions).
-                            Provides an apples-to-apples comparison with FEC Total.
+                            Imported itemized contributions + FEC-reported unitemized + other receipts 
+                            (loans, transfers, candidate contributions). 
+                            This provides an apples-to-apples comparison with FEC Total.
                           </p>
                         </TooltipContent>
                       </Tooltip>
@@ -2668,16 +2632,6 @@ export function AnswerCoveragePanel() {
                           <TableCell className="px-2 py-2">
                             <CoverageTierBadge tier={candidate.coverageTier} showTooltip={false} compact />
                           </TableCell>
-                          {/* State Finance Column */}
-                          <TableCell className="text-right px-2 py-2 whitespace-nowrap">
-                            <StateFinanceCell
-                              name={candidate.name}
-                              state={candidate.state}
-                              office={candidate.office}
-                              level={candidate.level}
-                              district={candidate.district}
-                            />
-                          </TableCell>
                           {/* Legislative Actions Column */}
                           <TableCell className="text-center px-2 py-2">
                             {candidate.id.match(/^[A-Z][0-9]{6}$/) ? (
@@ -2813,16 +2767,7 @@ export function AnswerCoveragePanel() {
                                 )}
                               </Popover>
                             ) : (
-                              <TooltipProvider>
-                                <Tooltip delayDuration={300}>
-                                  <TooltipTrigger asChild>
-                                    <span className="text-muted-foreground/50 text-[10px] cursor-help">—</span>
-                                  </TooltipTrigger>
-                                  <TooltipContent side="left" className="text-xs max-w-[180px]">
-                                    FEC committees apply to federal candidates only.
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
+                              <span className="text-muted-foreground text-[10px]">—</span>
                             )}
                           </TableCell>
                           <TableCell className="px-2 py-2">

@@ -45,6 +45,43 @@ GitGuardian passed. TypeScript clean locally (`bunx tsc --noEmit` → 0 errors).
 
 ---
 
+## 2026-06-24 — PR #557: fix Gemini redirect URL bug in corroborate-answers; pilot batch fired
+
+**What happened & why**
+PR #556 (previous session) switched `corroborate-answers` from Perplexity sonar to Gemini 2.5
+Flash with Search Grounding. A post-merge test revealed a bug: `source_url` was being set to
+ephemeral `vertexaisearch.cloud.google.com/grounding-api-redirect/…` URLs that passed all three
+anti-fabrication checks but are useless as citations.
+
+Three-part fix (PR #557, branch `claude/eager-gauss-q8fs5k`, deployed as function v20):
+1. Added `vertexaisearch.cloud.google.com` to `BLOCKED_DOMAINS` so redirect URLs fail `urlValid`
+2. Dropped `inCitations` from the `corroborated` gate (Gemini's grounding chunk URIs are always
+   redirects — they never match the real article URL the model extracts; `inCitations` now
+   informational-only, retained in the row for diagnostics)
+3. Updated prompt to explicitly instruct the model to return the canonical article URL, not
+   search redirect URLs
+
+PR #557 CI: all 7 checks green (GitGuardian, Lockfile, Test, Lint, Build, Typecheck, Supabase
+Preview). Awaiting merge.
+
+**Pilot batch** (`run_label: corr-gemini-pilot-2026-06-24`, 6 TX candidates × 25 answers):
+- 150 rows processed; 36 supports (24%), 18 corroborated (12% total / 50% of supports)
+- 6 redirect URLs still stored in `source_url` (model occasionally ignores the prompt), but
+  ALL correctly blocked: `corroborated=false`, `url_valid=false` — guard is working.
+- H6TX35087 is an outlier (1 supports, 0 corroborated / 24 insufficient) — very thin public record.
+
+**Next**
+1. Merge PR #557 (CI all green, no review comments).
+2. Scale OPEN-WORK #1: fire `corr-gemini-pilot-2026-06-24` over more candidates — the pg_net
+   pattern works (see previous session for the `net.http_post` SQL template); use the
+   `sb_publishable_*` key from Supabase dashboard + `x-cron-secret`. After a reasonable sample,
+   gate-apply `corroborated=true` rows to
+   `candidate_answers` via the SQL step (see table `_answer_corroboration`).
+3. Owner action: remove `PERPLEXITY_API_KEY` from Supabase Vault (no consumers remain).
+4. Owner action: OPEN-WORK #20 — rotate service_role key, DB password, cron_secret, sync_secrets.
+
+---
+
 ## 2026-06-24 — Reviewed the 5 open PRs; all already resolved (no code change)
 
 **What happened & why**
