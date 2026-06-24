@@ -38,16 +38,18 @@ per-issue numbers are **not accurate** — they fail guardrail #8 (verify agains
   fix), and one-time purges the 895 orphans. Idempotent; no cron; no images. **Reviewed GO by
   migration-safety-reviewer.**
 - **Display fix** (`useCandidateShareCardData.ts` + `templates/types.ts` + `PolicyPositionsCard.tsx`,
-  commit 944f686d) — coerce stored `overall_score` 0 → null; fall back to topic-average headline
-  labeled honestly ("Estimated ideology"/"Based on stated positions"); after the migration purges
-  orphans this yields "Not yet scored" for candidates like Lambert.
+  commits 944f686d → a4d83c89) — coerce stored `overall_score` 0 → null so an unset default no
+  longer renders as a fake "C / Moderate"; with no canonical (vote/override/trusted-answer) score the
+  card shows **"Not yet scored"**. Per the decision on #562 we **do NOT** synthesize a headline from
+  topic scores (the earlier "Estimated ideology" approach in 944f686d was reverted) — promoting
+  AI-estimated/orphaned topic rows into the headline would surface unverified data. The orphaned
+  per-issue dots are removed at the source by the migration.
 
 **State** (verified 2026-06-24)
-Lint 0 errors / 154 pre-existing `any` warnings; build OK; `bun test src` 52 pass / 0 fail. PR #562
-pushed (head 118b3d4f) and **left DRAFT**. **Migration is NOT applied** — DB work is gated and
-guardrail #1 says apply deliberately. Display fix is committed but its full value only lands once the
-migration runs (until then orphaned candidates still get an "Estimated" headline + dots, which is
-strictly better than the old fake "C/Moderate").
+Lint 0 errors / 154 pre-existing `any` warnings; build OK; `bunx tsc --noEmit` clean; `bun test src`
+52 pass / 0 fail. PR #562 pushed (head a4d83c89) and **left DRAFT**. **Migration is NOT applied** —
+DB work is gated and guardrail #1 says apply deliberately. The display fix already shows "Not yet
+scored" for unscored candidates; the orphaned per-issue dots disappear once the migration runs.
 
 **Next**
 - Apply `20260624130000_purge_orphaned_topic_scores.sql` deliberately (with `SUPABASE_DB_URL` set or
