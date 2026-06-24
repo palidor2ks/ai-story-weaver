@@ -13,6 +13,50 @@
 (template — copy below this block)
 ```
 
+## 2026-06-24 — Fix share-card "Render failed: undefined" — PR #559 (MERGED)
+
+**What happened & why**
+The Social Posts admin "Render image" action failed with the opaque toast **"Render failed:
+undefined"** (reported for *Bobby Guerra — State Representative, TX*). Root cause: the share card
+is rasterized offscreen by `html-to-image`, which must **inline every `<img>`** as it draws.
+`useCandidateShareCardData` resolves the candidate photo to a base64 `data:` URL for exactly this
+reason — but on a failed `proxy-image` fetch it **fell back to the raw cross-origin URL**. A raw
+URL renders fine in a normal `<img>` but makes `html-to-image` reject with a **bare DOM `Event`**
+(no `.message`), so the caller's `(e as Error).message` produced literally `undefined`. State/local
+candidates (like Bobby Guerra) have photos on hosts the proxy can't fetch — the same dead-host
+timeout this doc records for NJ legislator portraits (see the `proxy-image` AbortController entry) —
+so base64 conversion returned `null` and the raw URL leaked into the card.
+
+> **Corrects a prior assumption in this log:** the `proxy-image` timeout entry claimed both
+> consumers "degrade gracefully … keep the raw image URL / drop the image rather than crashing."
+> For `useCandidateShareCardData` that was the bug — *keeping* the raw URL is what crashed the
+> rasterizer. Keep-raw is safe for on-screen `<img>` display, NOT for html-to-image capture.
+
+Fix (PR #559, branch `claude/picture-rendering-issue-5d559q`, +28/−6, 2 files):
+- `src/hooks/useCandidateShareCardData.ts` — when no source embeds, **drop the photo to `null`**
+  (the card already has an initials-avatar fallback) instead of leaking a raw URL. Also clears the
+  image while resolving so a stale candidate's photo isn't shown mid-switch. Matches the documented
+  intent (`StatCardRender` comments call the image "already-inlined").
+- `src/lib/shareImage.ts` (`nodeToBlob`) — wrap the `toPng`/`toBlob` calls and **normalize
+  html-to-image's non-`Error` rejection into a real `Error`** with a descriptive message, so any
+  future inline failure (image or webfont) is legible instead of `undefined`. Benefits every
+  share-card caller (download, copy-to-clipboard, share modal).
+
+**State** (verified 2026-06-24)
+**PR #559 MERGED to main.** Preflight green locally (lint 0 errors / 154 pre-existing `any`
+warnings; build OK; 139 tests pass / 0 fail) and all CI checks green (Lint/Typecheck/Build/Test/
+Lockfile; GitGuardian ✅; Supabase Preview skipped — no `supabase/` changes). No migrations, no
+edge-function changes. Branch was 0 commits behind main, merged cleanly (no conflicts).
+
+**Next**
+- Optional live verification after deploy: open Social Posts → a state/local candidate whose photo
+  host the proxy can't reach (e.g. Bobby Guerra, TX) → "Render image" should now succeed showing
+  the **initials-avatar fallback** instead of erroring.
+- Data hygiene (non-blocking, carried from the proxy-image entry): candidates with dead `image_url`
+  hosts now degrade to the avatar; refreshing those URLs from the source would restore real photos.
+
+---
+
 ## 2026-06-24 — NC (NCSBE) campaign-finance full pipeline — PR #558
 
 **What happened & why**
