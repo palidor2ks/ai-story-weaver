@@ -46,8 +46,11 @@ All DB schema (tables, indexes, RPC) correct. Edge function deployed but data so
 
 **Next**
 Options to unblock NC data:
-1. **Run from residential IP**: Call `fetch-nc-finance` from a non-cloud machine (home/office
-   PC) — the portal likely works from a residential IP. Set `mode=drain` one year at a time.
+1. **Run the fetch logic locally**: The Supabase edge function always executes on cloud IPs
+   regardless of where it's triggered; calling it from a home PC doesn't change the outbound IP.
+   Instead, run the fetch code locally — e.g. `supabase functions serve fetch-nc-finance` on a
+   residential/non-datacenter machine, then POST to `http://localhost:54321/functions/v1/fetch-nc-finance`
+   with the sync secret. The portal likely works from a residential IP.
 2. **Public records request**: Submit to NCSBE (https://www.ncsbe.gov/about) asking for bulk
    contribution CSV for each year.
 3. **Third-party source**: OpenSecrets or FollowTheMoney have NC data; requires API key/subscription.

@@ -11,7 +11,9 @@
 //   NC bulk contribution data is NOT accessible from Supabase edge functions.
 //
 //   Options to unblock:
-//     1. Run this function from a residential/non-datacenter IP via a proxy or local runner
+//     1. Run the fetch logic locally — NOT the deployed edge function (it always uses cloud IPs
+//        regardless of where it's called from). Use `supabase functions serve fetch-nc-finance`
+//        on a residential machine, then POST to localhost with the sync secret.
 //     2. Submit a public records request to NCSBE (https://www.ncsbe.gov/about)
 //     3. Use a third-party aggregator (OpenSecrets, FollowTheMoney) — requires API key
 //   The DB schema (nc_contributions, nc_sync_progress, nc_sync_runs, nc_legislator_finance
