@@ -13,6 +13,35 @@
 (template — copy below this block)
 ```
 
+## 2026-06-24 — Reviewed the 5 open PRs; all already resolved (no code change)
+
+**What happened & why**
+User asked whether the 5 then-open PRs should merge or archive. Reviewed each via live GitHub
+data and gave a merge-vs-archive call. By the time the calls were recorded the team had already
+resolved all five — and the recommendations matched every outcome:
+- **#547** (Senate votes, HR 1) → recommended merge → **MERGED.** `fetch-floor-votes` now detects
+  bill-passage votes; HR 1 resolves onto the canonical `H R 1` bills row. (See entry below.)
+- **#494** (generate-legislator-answers thinking-parts fix) → recommended archive → **CLOSED.**
+  Superseded — `main`'s function was reworked far past it (50-q chunking, integrity guards, v24/v26
+  sign fixes). If the `parts[0].text` thinking-parts bug is ever seen live, port just that one line.
+- **#327** (normalize person names + DB backfill) → recommended archive → **CLOSED.** Was
+  unmergeable anyway: migration failed to parse (`syntax error at "trailing"`) and the backfill
+  corrupted valid names (`De La Vega`→`D. L. Vega`, `HwaJeong`→`Hwajeong`, `J.P.`→`J.P`) plus a
+  `persons_name_state_office_uq` collision. If name formatting is wanted, redo as a UI-only util
+  with tests — no destructive backfill.
+- **#302** (Substack digest) → product call → **CLOSED** (not pursued).
+- **#300** (compass-test landing page) → fix-or-archive → **CLOSED** (typecheck red + CTA-routing bug).
+
+**State** (verified 2026-06-24 via GitHub MCP)
+All 5 resolved (1 merged, 4 closed). No code changed this session. LESSON: the first draft of this
+entry was committed to a branch ~20 commits behind `main` — the stale-clone trap CLAUDE.md warns
+about. `git fetch origin` BEFORE committing, not just before reviewing.
+
+**Next**
+Nothing pending on those 5 PRs — decisions are made. (If revisiting name formatting, see #327 note.)
+
+---
+
 ## 2026-06-23 — PR #547 merged; HR 1 Senate passage vote confirmed in DB ✅
 
 **What happened & why**
