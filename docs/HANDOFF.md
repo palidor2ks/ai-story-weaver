@@ -13,6 +13,41 @@
 (template — copy below this block)
 ```
 
+## 2026-06-23 — fix refresh-admin-stats-cache statement timeout (PR #551 merged)
+
+**What happened & why**
+The `refresh-admin-stats-cache` pg_cron job (runs every 15 min) was timing out with a
+statement-timeout error. Root cause: `refresh_admin_stats_cache()` built the
+`state_finance_stats` block with `count(*)` on four large contribution tables —
+`nj_elec_contributions`, `fl_contributions`, `ny_contributions`, `tx_cf_contributions` —
+full sequential scans that exceeded the statement timeout at scale.
+
+**Fix**: Migration `20260623130000_admin_stats_fast_row_estimate.sql` replaces all four
+`count(*)` subqueries with `pg_stat_user_tables.n_live_tup` (O(1), autovacuum-maintained
+estimate). Also absorbs the TX patch from `20260621060000` so the function is readable in
+one file. Applied directly to Pulse Dev via Supabase MCP before opening the PR.
+
+PR #551 opened on `claude/dreamy-planck-f72pbw` — all 7 CI checks passed, Supabase
+preview branch fully green — and merged by `palidor2ks`.
+
+**State** (as of ~19:20 UTC 2026-06-23)
+- Migration live on Pulse Dev and in `main`
+- Cron next tick should complete cleanly; failure count should stay at 1 (historical)
+- NJ/TX answer chains still running in background from prior session (v26 active)
+- `/preflight` not run this session (no frontend/TS changes; SQL-only migration)
+
+**Next**
+Confirm the next `refresh-admin-stats-cache` tick completed without error in the Supabase
+cron log (failure count should remain at 1).
+
+**Deferred** (carried from prior session)
+- CDN refresh: trigger `refresh-candidates-cache` after NJ/TX chains complete
+- NC spot-check: Phil Berger showed −3.68 — verify before deciding NC re-run
+- Delete `la-trigger` edge function from Supabase dashboard
+- Update OPEN-WORK #15 (phase-2 AI scoring) to reflect v26 is live
+
+---
+
 ## 2026-06-23 — v26 deployed (BOOT_ERROR fix); NJ + TX chains re-triggered
 
 **What happened & why**
