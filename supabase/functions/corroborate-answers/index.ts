@@ -33,6 +33,9 @@ const BLOCKED_DOMAINS = [
   'republicanviews.org', 'democraticviews.org', 'conservapedia.com', 'rationalwiki.org',
   'youtube.com', 'youtu.be', 'vimeo.com', 'dailymotion.com', 'tiktok.com',
   'facebook.com', 'instagram.com', 'twitter.com', 'x.com',
+  // Gemini Search Grounding returns ephemeral redirect URLs for citations; block them so we
+  // only accept the canonical article URL the model extracts from the source.
+  'vertexaisearch.cloud.google.com',
 ];
 
 function isBlockedDomain(url: string): boolean {
@@ -130,8 +133,9 @@ async function corroborateOne(ctx: string, q: QRow): Promise<any> {
     { role: 'user', content:
       `Candidate: ${ctx}.\nQuestion: "${q.text}"\nRecorded stance: ${stanceLine(q.answer_value)}.\n` +
       `Search for this candidate's ACTUAL documented position on this question. Then return ONLY JSON:\n` +
-      `{"verdict":"supports|contradicts|insufficient","source_url":"<a URL you found, or empty>","source_title":"...","quote":"<short direct quote/finding>","source_value":<integer -10..10 reflecting what the source shows, or null>}\n` +
-      `"supports" = a source documents the candidate holding this same-direction stance. "contradicts" = a source shows the opposite. "insufficient" = no clear source found.` },
+      `{"verdict":"supports|contradicts|insufficient","source_url":"<the canonical article URL, NOT a search-redirect URL>","source_title":"...","quote":"<short direct quote/finding>","source_value":<integer -10..10 reflecting what the source shows, or null>}\n` +
+      `"supports" = a source documents the candidate holding this same-direction stance. "contradicts" = a source shows the opposite. "insufficient" = no clear source found.\n` +
+      `IMPORTANT: source_url must be the real article/page URL (e.g. https://www.congress.gov/... or https://apnews.com/...). Do NOT return vertexaisearch.cloud.google.com redirect URLs or other search intermediary URLs.` },
   ]);
   const ms = Date.now() - t0;
   if (!res) return { verdict: 'error', call_ms: ms, total_tokens: null };
@@ -142,12 +146,14 @@ async function corroborateOne(ctx: string, q: QRow): Promise<any> {
 
   const verdict = ['supports', 'contradicts', 'insufficient'].includes(p.verdict) ? p.verdict : 'insufficient';
   const url: string = typeof p.source_url === 'string' ? p.source_url.trim() : '';
-  // Anti-fabrication: only trust a URL the search actually retrieved.
+  // inCitations: the grounding chunks contain ephemeral vertexaisearch redirect URLs, not the
+  // real article URLs the model returns in JSON — so inCitations is informational only and is
+  // NOT required for corroborated. We rely on urlValid (reachable + deep path + not blocked).
   const inCitations = url !== '' && res.citations.some((c) => c === url || c.includes(url) || url.includes(c));
-  // url_valid now also requires a deep path: a homepage root is reachable but doesn't point at
-  // the evidence, so it shouldn't count as a usable citation (see hasDeepPath).
+  // url_valid requires a deep path: a homepage root is reachable but doesn't point at the
+  // evidence, so it shouldn't count as a usable citation (see hasDeepPath).
   const urlValid = url !== '' && !isBlockedDomain(url) && hasDeepPath(url) && await validateUrl(url);
-  const corroborated = verdict === 'supports' && inCitations && urlValid;
+  const corroborated = verdict === 'supports' && urlValid;
 
   return {
     verdict,

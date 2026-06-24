@@ -13,11 +13,7 @@ import {
 } from "@/components/ui/pagination";
 
 const PAGE_SIZE = 20;
-import { useCandidatesAnswerCoverageProgressive, useUniqueStates, useUniqueDistricts, useRecalculateCoverageTiers, CandidateAnswerCoverage, GovernmentLevel } from "@/hooks/useCandidatesAnswerCoverage";
-import { useTxLegislatorFinance } from "@/hooks/useTxLegislatorFinance";
-import { useFlLegislatorFinance } from "@/hooks/useFlLegislatorFinance";
-import { useNjLegislatorFinance } from "@/hooks/useNjLegislatorFinance";
-import { useNyLegislatorFinance } from "@/hooks/useNyLegislatorFinance";
+import { useCandidatesAnswerCoverageProgressive, useUniqueStates, useUniqueDistricts, useRecalculateCoverageTiers, CandidateAnswerCoverage } from "@/hooks/useCandidatesAnswerCoverage";
 import { useFinanceCycles } from "@/hooks/useFinanceCycles";
 import { useCoverageDashboardStats } from "@/hooks/useCoverageDashboardStats";
 import { usePopulateCandidateAnswers } from "@/hooks/usePopulateCandidateAnswers";
@@ -73,76 +69,6 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useBackgroundProcessing } from "@/context/BackgroundProcessingContext";
-
-function fmtStateFinance(n: number): string {
-  const abs = Math.abs(n);
-  const sign = n < 0 ? '-' : '';
-  if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
-  if (abs >= 1_000) return `${sign}$${Math.round(abs / 1_000)}K`;
-  return `${sign}$${Math.round(abs)}`;
-}
-
-const STATE_FINANCE_SOURCES: Record<string, string> = {
-  TX: 'TEC',
-  FL: 'FDLE',
-  NJ: 'ELEC',
-  NY: 'NYSBOE',
-};
-
-interface StateFinanceCellProps {
-  name: string;
-  state: string;
-  office: string;
-  level: GovernmentLevel;
-  district: string | null;
-}
-
-function StateFinanceCell({ name, state, office, level, district }: StateFinanceCellProps) {
-  const isFederal = level === 'federal_legislative' || level === 'federal_executive';
-  const params = { name, state, office, level, district };
-
-  const tx = useTxLegislatorFinance(params);
-  const fl = useFlLegislatorFinance(params);
-  const nj = useNjLegislatorFinance(params);
-  const ny = useNyLegislatorFinance(params);
-
-  if (isFederal) return <span className="text-muted-foreground/40 text-[10px]">—</span>;
-
-  const isLoading = tx.isLoading || fl.isLoading || nj.isLoading || ny.isLoading;
-  const data = tx.data ?? fl.data ?? nj.data ?? ny.data ?? null;
-  const sourceLabel = STATE_FINANCE_SOURCES[state] ?? null;
-
-  if (isLoading) {
-    return <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />;
-  }
-  if (!data || (data.total_raised ?? 0) <= 0) {
-    return <span className="text-muted-foreground/50 text-[10px]">—</span>;
-  }
-
-  return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span className="text-xs font-medium tabular-nums cursor-help">
-            {fmtStateFinance(data.total_raised)}
-          </span>
-        </TooltipTrigger>
-        <TooltipContent side="left" className="max-w-[220px]">
-          <p className="font-medium text-sm">{fmtStateFinance(data.total_raised)} raised</p>
-          <p className="text-xs text-muted-foreground">
-            {data.contribution_count.toLocaleString()} contributions
-            {sourceLabel ? ` · ${sourceLabel}` : ''}
-          </p>
-          {(data.election_years ?? []).length > 0 && (
-            <p className="text-xs text-muted-foreground">
-              Years: {data.election_years.slice(0, 5).join(', ')}
-            </p>
-          )}
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  );
-}
 
 const PARTIES = ['all', 'Democrat', 'Republican', 'Independent', 'Other'] as const;
 
@@ -2420,33 +2346,13 @@ export function AnswerCoveragePanel() {
                   <TableHead className="text-center w-[70px] px-2 py-2">Answers</TableHead>
                   <TableHead className="w-[55px] px-2 py-2">Score</TableHead>
                   <TableHead className="w-[52px] px-2 py-2">Tier</TableHead>
-                  <TableHead className="w-[72px] px-2 py-2 text-right">
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger className="flex items-center gap-1 cursor-help justify-end w-full">
-                          St. $
-                          <HelpCircle className="h-3 w-3 text-muted-foreground" />
-                        </TooltipTrigger>
-                        <TooltipContent side="top" className="max-w-[260px]">
-                          <p className="font-medium mb-1">State Campaign Finance</p>
-                          <p className="text-xs text-muted-foreground">
-                            Total raised from state disclosure sources (TX: TEC, FL: FDLE, NJ: ELEC, NY: NYSBOE).
-                            Federal candidates use the FEC columns instead.
-                          </p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </TableHead>
                   <TableHead className="w-[44px] px-2 py-2">
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger className="cursor-help">
                           <FileText className="h-3.5 w-3.5 text-muted-foreground" />
                         </TooltipTrigger>
-                        <TooltipContent className="max-w-[200px]">
-                          <p className="font-medium">Legislative Actions</p>
-                          <p className="text-xs text-muted-foreground">Sponsored/cosponsored bills — federal/Congress.gov only. State legislative activity visible on the candidate profile.</p>
-                        </TooltipContent>
+                        <TooltipContent>Legislative Actions (Sponsored/Cosponsored)</TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
                   </TableHead>
@@ -2456,10 +2362,7 @@ export function AnswerCoveragePanel() {
                         <TooltipTrigger className="cursor-help">
                           <Vote className="h-3.5 w-3.5 text-muted-foreground" />
                         </TooltipTrigger>
-                        <TooltipContent className="max-w-[200px]">
-                          <p className="font-medium">Floor Votes</p>
-                          <p className="text-xs text-muted-foreground">Yea/Nay/Present roll-call votes — federal/Congress.gov only. State voting records visible on the candidate profile.</p>
-                        </TooltipContent>
+                        <TooltipContent>Floor Votes (Yea/Nay/Present)</TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
                   </TableHead>
@@ -2487,22 +2390,7 @@ export function AnswerCoveragePanel() {
                   <TableHead className="w-[55px] px-2 py-2">
                     <DollarSign className="h-3.5 w-3.5" />
                   </TableHead>
-                  <TableHead className="w-[72px] px-2 py-2 text-right">
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger className="flex items-center gap-1 cursor-help justify-end">
-                          FEC
-                          <HelpCircle className="h-3 w-3 text-muted-foreground" />
-                        </TooltipTrigger>
-                        <TooltipContent side="top" className="max-w-[240px]">
-                          <p className="font-medium mb-1">FEC Total Receipts</p>
-                          <p className="text-xs text-muted-foreground">
-                            Federal candidates only. Total receipts as reported to the FEC for the selected cycle.
-                          </p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </TableHead>
+                  <TableHead className="w-[72px] px-2 py-2 text-right">FEC</TableHead>
                   <TableHead className="w-[72px] px-2 py-2 text-right">
                     <TooltipProvider>
                       <Tooltip>
@@ -2513,9 +2401,9 @@ export function AnswerCoveragePanel() {
                         <TooltipContent side="top" className="max-w-[280px]">
                           <p className="font-medium mb-1">Local + Non-Itemized Receipts</p>
                           <p className="text-xs text-muted-foreground">
-                            Federal candidates only. Imported itemized contributions + FEC-reported unitemized + other receipts
-                            (loans, transfers, candidate contributions).
-                            Provides an apples-to-apples comparison with FEC Total.
+                            Imported itemized contributions + FEC-reported unitemized + other receipts 
+                            (loans, transfers, candidate contributions). 
+                            This provides an apples-to-apples comparison with FEC Total.
                           </p>
                         </TooltipContent>
                       </Tooltip>
@@ -2553,7 +2441,6 @@ export function AnswerCoveragePanel() {
                       const isComplete = candidate.percentage >= 100;
                       const hasFecId = !!candidate.fecCandidateId;
                       const hasCommittee = !!candidate.fecCommitteeId;
-                      const isFederal = candidate.level === 'federal_legislative' || candidate.level === 'federal_executive';
                       const financeStatus = calculateFinanceStatus(candidate);
                       // Calculate "Local Total" = Local Itemized + Local Other Receipts + FEC-only summary items
                       // This creates an apples-to-apples comparison with FEC Total Receipts
@@ -2665,16 +2552,6 @@ export function AnswerCoveragePanel() {
                           <TableCell className="px-2 py-2">
                             <CoverageTierBadge tier={candidate.coverageTier} showTooltip={false} compact />
                           </TableCell>
-                          {/* State Finance Column */}
-                          <TableCell className="text-right px-2 py-2 whitespace-nowrap">
-                            <StateFinanceCell
-                              name={candidate.name}
-                              state={candidate.state}
-                              office={candidate.office}
-                              level={candidate.level}
-                              district={candidate.district}
-                            />
-                          </TableCell>
                           {/* Legislative Actions Column */}
                           <TableCell className="text-center px-2 py-2">
                             {candidate.id.match(/^[A-Z][0-9]{6}$/) ? (
@@ -2769,58 +2646,44 @@ export function AnswerCoveragePanel() {
                               syncStatus={syncStatus}
                               financeStatus={getFinanceBadgeStatus() || 'none'}
                               hasOverride={hasOverride}
-                              level={candidate.level}
                             />
                           </TableCell>
                           <TableCell className="px-2 py-2">
-                            {isFederal ? (
-                              <Popover>
-                                <PopoverTrigger asChild>
-                                  <div className="cursor-pointer">
-                                    <CommitteeLinkStatusBadge
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <div className="cursor-pointer">
+                                  <CommitteeLinkStatusBadge
+                                    candidateId={candidate.id}
+                                    candidateName={candidate.name}
+                                    fecCandidateId={candidate.fecCandidateId}
+                                    fecCommitteeId={candidate.fecCommitteeId}
+                                    committeeCount={candidate.committeeCount}
+                                    lastSyncDate={candidate.lastSyncDate}
+                                    onLinkCommittees={fetchFECCommittees}
+                                    onRefetch={refetchCandidates}
+                                    disabled={anyBatchRunning}
+                                  />
+                                </div>
+                              </PopoverTrigger>
+                              {hasCommittee && (
+                                <PopoverContent className="w-96 p-0" align="start">
+                                  <div className="p-3 border-b">
+                                    <h4 className="font-medium text-sm">Committee Management</h4>
+                                    <p className="text-xs text-muted-foreground">
+                                      Toggle which committees to include in donor sync
+                                    </p>
+                                  </div>
+                                  <div className="p-3">
+                                    <CommitteeBreakdown
                                       candidateId={candidate.id}
                                       candidateName={candidate.name}
-                                      fecCandidateId={candidate.fecCandidateId}
-                                      fecCommitteeId={candidate.fecCommitteeId}
-                                      committeeCount={candidate.committeeCount}
-                                      lastSyncDate={candidate.lastSyncDate}
-                                      onLinkCommittees={fetchFECCommittees}
+                                      fecCandidateId={candidate.fecCandidateId!}
                                       onRefetch={refetchCandidates}
-                                      disabled={anyBatchRunning}
                                     />
                                   </div>
-                                </PopoverTrigger>
-                                {hasCommittee && (
-                                  <PopoverContent className="w-96 p-0" align="start">
-                                    <div className="p-3 border-b">
-                                      <h4 className="font-medium text-sm">Committee Management</h4>
-                                      <p className="text-xs text-muted-foreground">
-                                        Toggle which committees to include in donor sync
-                                      </p>
-                                    </div>
-                                    <div className="p-3">
-                                      <CommitteeBreakdown
-                                        candidateId={candidate.id}
-                                        candidateName={candidate.name}
-                                        fecCandidateId={candidate.fecCandidateId!}
-                                        onRefetch={refetchCandidates}
-                                      />
-                                    </div>
-                                  </PopoverContent>
-                                )}
-                              </Popover>
-                            ) : (
-                              <TooltipProvider>
-                                <Tooltip delayDuration={300}>
-                                  <TooltipTrigger asChild>
-                                    <span className="text-muted-foreground/50 text-[10px] cursor-help">—</span>
-                                  </TooltipTrigger>
-                                  <TooltipContent side="left" className="text-xs max-w-[180px]">
-                                    FEC committees apply to federal candidates only.
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            )}
+                                </PopoverContent>
+                              )}
+                            </Popover>
                           </TableCell>
                           <TableCell className="px-2 py-2">
                             <SyncStatusBadge
