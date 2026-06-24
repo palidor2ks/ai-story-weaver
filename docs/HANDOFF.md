@@ -13,6 +13,49 @@
 (template — copy below this block)
 ```
 
+## 2026-06-24 — Unscored-candidate headline + orphaned topic scores — PR #562 (DRAFT, open)
+
+**What happened & why**
+Share cards showed a headline Pulse Score of **"C / Moderate"** for candidates with the default
+`overall_score = 0.00` (e.g. tier_3 state legislators) while the per-issue topic dots showed real,
+off-center numbers — headline and dots contradicted each other (reported: *Stan Lambert, TX State
+Rep*). The ask was to **investigate the data before touching display**.
+
+**Provenance trace (the important finding):** `candidate_topic_scores` has exactly ONE writer —
+the trigger `candidate_answers_topic_scores_sync` → `refresh_candidate_topic_scores()`, which
+averages `candidate_answers` per topic. Those answers are filled for sub-federal candidates by
+`generate-legislator-answers` (Gemini 2.5 Flash), tagged `voting_record | public_statement |
+campaign_position | inferred`. That function sets `overall_score` from **trusted answers only** and
+leaves it `0` when none are trusted. The answers were later **purged** by the inferred-answer
+cleanups, but the old refresh function only `INSERT … ON CONFLICT DO UPDATE` — **never deleted** —
+so the topic-score rows were **orphaned: stale averages of since-deleted answers**. Measured live:
+**179 candidates have topic scores but ZERO answers = 895 orphaned rows** (Lambert is one). So the
+per-issue numbers are **not accurate** — they fail guardrail #8 (verify against source).
+
+**Changes (PR #562, branch `claude/score-headline-mismatch-fix`):**
+- **Data migration** `supabase/migrations/20260624130000_purge_orphaned_topic_scores.sql` — hardens
+  `refresh_candidate_topic_scores()` to also DELETE topic rows with no backing answers (recurrence
+  fix), and one-time purges the 895 orphans. Idempotent; no cron; no images. **Reviewed GO by
+  migration-safety-reviewer.**
+- **Display fix** (`useCandidateShareCardData.ts` + `templates/types.ts` + `PolicyPositionsCard.tsx`,
+  commit 944f686d) — coerce stored `overall_score` 0 → null; fall back to topic-average headline
+  labeled honestly ("Estimated ideology"/"Based on stated positions"); after the migration purges
+  orphans this yields "Not yet scored" for candidates like Lambert.
+
+**State** (verified 2026-06-24)
+Lint 0 errors / 154 pre-existing `any` warnings; build OK; `bun test src` 52 pass / 0 fail. PR #562
+pushed (head 118b3d4f) and **left DRAFT**. **Migration is NOT applied** — DB work is gated and
+guardrail #1 says apply deliberately. Display fix is committed but its full value only lands once the
+migration runs (until then orphaned candidates still get an "Estimated" headline + dots, which is
+strictly better than the old fake "C/Moderate").
+
+**Next**
+- Apply `20260624130000_purge_orphaned_topic_scores.sql` deliberately (with `SUPABASE_DB_URL` set or
+  via the dashboard), then spot-check Lambert renders "Not yet scored" with no issue-dots. Mark #562
+  ready for review once applied.
+
+---
+
 ## 2026-06-24 — Fix share-card "Render failed: undefined" — PR #559 (MERGED)
 
 **What happened & why**
