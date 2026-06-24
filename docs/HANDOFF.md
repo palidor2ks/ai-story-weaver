@@ -79,12 +79,14 @@ Two tasks this session:
    - `check-data-accuracy.sh`: NC added to state_finance_stats gate
 
 **State** (verified 2026-06-24)
-PR #558 open as draft. CI running (Build/Typecheck/Lint in_progress when session ended).
-GitGuardian passed. TypeScript clean locally (`bunx tsc --noEmit` → 0 errors). Subscribed to PR activity.
+PR #558 **MERGED**. All CI green (Build/Lint/Typecheck/Test/GitGuardian ✅). Supabase preview
+applied both migrations and deployed `fetch-nc-finance` edge function successfully.
 
 **Next**
-- Watch CI on #558; fix any failures.
-- Before merging: create `nc_sync_secret` in Vault, apply the two migrations, deploy edge function, run `discover` then `drain` modes.
+- Create `nc_sync_secret` in Vault on the production project (`vault.create_secret('nc_sync_secret', '<random>')`).
+- Deploy the `fetch-nc-finance` edge function to production (`supabase functions deploy fetch-nc-finance`).
+- Trigger `fetch-nc-finance` with `mode=discover` to seed `nc_sync_progress` years 2016–2026.
+- Run drain (or full) — each invocation processes one year; schedule via cron for ongoing updates.
 - NCSBE S3 URL pattern to verify on first run: `https://s3.amazonaws.com/dl.ncsbe.gov/campaign-finance/year/{year}/NC-FullContributionsAllCounties-{year}.zip`
 
 ---
