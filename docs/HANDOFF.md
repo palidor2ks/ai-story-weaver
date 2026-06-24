@@ -13,6 +13,40 @@
 (template — copy below this block)
 ```
 
+## 2026-06-24 — PR #557 merged; fixed three P2 regressions surfaced by Codex review
+
+**What happened & why**
+PR #557 (Gemini redirect URL fix in `corroborate-answers`) was merged to main.
+
+During the PR lifecycle, Codex review surfaced three P2 regressions introduced by the
+squash commit — changes from PR #555 (`CandidateHealthBadge` level prop + federal gates)
+had been accidentally reverted when the branch was squashed before main was up-to-date:
+
+1. **`CandidateHealthBadge`**: restored `level` prop — state/local candidates now show the
+   neutral N/A badge instead of a misleading red 0/4 FEC health score.
+2. **`AnswerCoveragePanel`**: restored `isFederal` variable + `level={candidate.level}` prop
+   at the call site.
+3. **`CommitteeLinkStatusBadge`**: restored federal-only gate — state/local rows show "—"
+   instead of FEC committee management UI that doesn't apply to them.
+
+Codex also raised a P1 concern about dropping `inCitations` from the corroborated gate —
+this is a deliberate tradeoff (Gemini's groundingChunks are always redirects so inCitations
+was structurally always false; pilot showed reasonable 12% corroboration rate with redirect
+URLs correctly blocked). Left as-is; revisit if hallucinated-but-reachable URLs appear.
+
+**State** (verified 2026-06-24)
+PR #557 merged. All fixes on main. TypeScript clean (`bunx tsc --noEmit` → 0 errors).
+
+**Next**
+1. Scale OPEN-WORK #1: fire `corr-gemini-pilot-2026-06-24` over more candidates using the
+   `net.http_post` SQL template + `sb_publishable_*` key + `x-cron-secret`. After a
+   reasonable sample, gate-apply `corroborated=true` rows to `candidate_answers`.
+2. Owner: remove `PERPLEXITY_API_KEY` from Supabase Vault (no consumers remain).
+3. Owner: OPEN-WORK #20 — rotate service_role key, DB password, cron_secret, sync_secrets.
+4. Watch PR #558 (NC finance) — see entry below.
+
+---
+
 ## 2026-06-24 — NC (NCSBE) campaign-finance full pipeline — PR #558
 
 **What happened & why**
