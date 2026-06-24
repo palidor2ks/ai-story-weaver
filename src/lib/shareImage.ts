@@ -20,11 +20,22 @@ const RENDER_OPTIONS = {
 
 export async function nodeToBlob(node: HTMLElement): Promise<Blob> {
   const { toPng, toBlob } = await loadHtmlToImage();
-  // Two-pass render to ensure web fonts are applied
-  await toPng(node, RENDER_OPTIONS);
-  const blob = await toBlob(node, RENDER_OPTIONS);
-  if (!blob) throw new Error('Failed to render image');
-  return blob;
+  try {
+    // Two-pass render to ensure web fonts are applied
+    await toPng(node, RENDER_OPTIONS);
+    const blob = await toBlob(node, RENDER_OPTIONS);
+    if (!blob) throw new Error('Failed to render image');
+    return blob;
+  } catch (e) {
+    // html-to-image rejects with a bare DOM Event (no `.message`) when it can't
+    // inline an embedded resource — typically a cross-origin <img> or webfont.
+    // Left as-is that surfaces as the opaque "Render failed: undefined", so
+    // normalise anything that isn't already an Error into a descriptive one.
+    if (e instanceof Error) throw e;
+    throw new Error(
+      'Could not rasterize the card — an embedded image or font failed to load.',
+    );
+  }
 }
 
 export async function downloadNode(node: HTMLElement, filename: string) {
