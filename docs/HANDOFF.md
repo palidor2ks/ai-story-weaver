@@ -13,6 +13,51 @@
 (template — copy below this block)
 ```
 
+## 2026-06-24 — NC finance data source investigation — DATA SOURCE BLOCKED
+
+**What happened & why**
+Continued from prior session (PR #558 merged). Executed the post-merge operational steps:
+1. ✅ `nc_sync_secret` already in Vault (from prior session)
+2. ✅ `fetch-nc-finance` deployed to production (v4, ACTIVE)
+3. ✅ `discover` mode ran — seeded `nc_sync_progress` for years 2016–2026
+4. 🔴 **drain produced 0 rows** — investigated root cause across 21 probe iterations
+
+**Root cause (definitive, 2026-06-24):**
+NCSBE does not publish bulk contribution CSVs anywhere accessible from cloud IPs:
+- `cf.ncsbe.gov` portal: blocks automated requests from cloud/datacenter IP ranges.
+  Returns identical 14,667-byte empty-results template for ALL search queries regardless
+  of parameters. Confirmed across sessions: date-only, OfficeType filter, LastName=Smith,
+  correct form field names, browser-like headers — all return same empty page.
+- `dl.ncsbe.gov` S3 bucket: contains PDFs and training docs only. No bulk contribution
+  CSVs at any path (`campaign-finance/year/`, `Campaign_Finance/`, `/Campaign_Finance/`,
+  `cf/`, `campaign_finance/`, etc.). All exhaustively enumerated.
+- `www.ncsbe.gov/campaign-finance`: Drupal 10 page (200 OK) but no download sub-paths.
+
+**Code updated:**
+- `supabase/functions/fetch-nc-finance/index.ts`: Added `DATA_SOURCE_BLOCKED` header comment
+  and updated `fetchQuarterCSV` to throw a `DATA_SOURCE_BLOCKED:` error with explanation
+  instead of silently succeeding with 0 rows.
+- `nc-finance-probe` edge function (temporary diagnostic): deployed to production only,
+  not committed. Safe to delete: `supabase functions delete nc-finance-probe`.
+
+**State** (verified 2026-06-24)
+nc_sync_progress seeded for 2016–2026 (all `pending`). nc_contributions has 0 rows.
+All DB schema (tables, indexes, RPC) correct. Edge function deployed but data source blocked.
+
+**Next**
+Options to unblock NC data:
+1. **Run the fetch logic locally**: The Supabase edge function always executes on cloud IPs
+   regardless of where it's triggered; calling it from a home PC doesn't change the outbound IP.
+   Instead, run the fetch code locally — e.g. `supabase functions serve fetch-nc-finance` on a
+   residential/non-datacenter machine, then POST to `http://localhost:54321/functions/v1/fetch-nc-finance`
+   with the sync secret. The portal likely works from a residential IP.
+2. **Public records request**: Submit to NCSBE (https://www.ncsbe.gov/about) asking for bulk
+   contribution CSV for each year.
+3. **Third-party source**: OpenSecrets or FollowTheMoney have NC data; requires API key/subscription.
+4. Cleanup: `supabase functions delete nc-finance-probe` (diagnostic function, not needed).
+
+---
+
 ## 2026-06-24 — Fix share-card "Render failed: undefined" — PR #559 (MERGED)
 
 **What happened & why**
@@ -79,12 +124,14 @@ Two tasks this session:
    - `check-data-accuracy.sh`: NC added to state_finance_stats gate
 
 **State** (verified 2026-06-24)
-PR #558 open as draft. CI running (Build/Typecheck/Lint in_progress when session ended).
-GitGuardian passed. TypeScript clean locally (`bunx tsc --noEmit` → 0 errors). Subscribed to PR activity.
+PR #558 **MERGED**. All CI green (Build/Lint/Typecheck/Test/GitGuardian ✅). Supabase preview
+applied both migrations and deployed `fetch-nc-finance` edge function successfully.
 
 **Next**
-- Watch CI on #558; fix any failures.
-- Before merging: create `nc_sync_secret` in Vault, apply the two migrations, deploy edge function, run `discover` then `drain` modes.
+- Create `nc_sync_secret` in Vault on the production project (`vault.create_secret('nc_sync_secret', '<random>')`).
+- Deploy the `fetch-nc-finance` edge function to production (`supabase functions deploy fetch-nc-finance`).
+- Trigger `fetch-nc-finance` with `mode=discover` to seed `nc_sync_progress` years 2016–2026.
+- Run drain (or full) — each invocation processes one year; schedule via cron for ongoing updates.
 - NCSBE S3 URL pattern to verify on first run: `https://s3.amazonaws.com/dl.ncsbe.gov/campaign-finance/year/{year}/NC-FullContributionsAllCounties-{year}.zip`
 
 ---
