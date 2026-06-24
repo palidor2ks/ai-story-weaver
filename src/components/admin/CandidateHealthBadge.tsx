@@ -10,6 +10,7 @@ interface CandidateHealthBadgeProps {
   financeStatus: 'ok' | 'warning' | 'error' | 'none';
   hasOverride: boolean;
   className?: string;
+  level?: string;
 }
 
 export function CandidateHealthBadge({
@@ -18,8 +19,47 @@ export function CandidateHealthBadge({
   syncStatus,
   financeStatus,
   hasOverride,
-  className
+  className,
+  level,
 }: CandidateHealthBadgeProps) {
+  const isFederalCandidate = !level || level === 'federal_legislative' || level === 'federal_executive';
+
+  // State/local candidates: FEC metrics (committee, donor sync, finance reconciliation)
+  // are not applicable — show a neutral indicator rather than a misleading red warning.
+  if (!isFederalCandidate) {
+    return (
+      <TooltipProvider>
+        <Tooltip delayDuration={200}>
+          <TooltipTrigger asChild>
+            <div className={cn(
+              "inline-flex items-center gap-1 px-1.5 py-0.5 rounded cursor-help bg-muted",
+              className
+            )}>
+              <Circle className="h-3 w-3 text-muted-foreground" />
+              {hasOverride && (
+                <Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5 border-primary/50 text-primary">
+                  Override
+                </Badge>
+              )}
+            </div>
+          </TooltipTrigger>
+          <TooltipContent side="left" className="w-52 p-2">
+            <div className="space-y-1.5 text-xs">
+              <div className="font-medium border-b pb-1 mb-1.5">FEC health N/A</div>
+              <p className="text-muted-foreground">
+                FEC metrics (committee link, donor sync, finance reconciliation) apply to federal candidates only.
+                State/local campaign finance is tracked separately.
+              </p>
+              {hasOverride && (
+                <div className="text-primary border-t pt-1 mt-1">Has manual overrides</div>
+              )}
+            </div>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
+
   // Calculate overall health score (0-4)
   let healthScore = 0;
   if (hasFecId) healthScore++;
