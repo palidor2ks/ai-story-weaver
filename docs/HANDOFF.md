@@ -13,6 +13,34 @@
 (template — copy below this block)
 ```
 
+## 2026-06-24 — Gate-applied corroboration rollout + BARR KATE DACA fix
+
+**What happened & why**
+Completed OPEN-WORK #1 gate-apply step after thorough quality audit of `_answer_corroboration`:
+
+- Audited 698 staged rows (run_label `rollout-2026-06-17`): 536 already had correct URLs,
+  157 genuinely URL-less, 20 quality issues (Gemini redirect URLs, indirect attributions).
+- Applied only rows with `in_citations = true AND source_url NOT LIKE '%vertexaisearch%'`
+  via a DO block with `SET LOCAL request.jwt.claim.role = 'service_role'` (required for
+  anti-tampering triggers) — archiving existing rows to `candidate_answers_history` first.
+- Fixed a pre-existing encoding error found during audit: **BARR, KATE (NC)** `immigration-q10`
+  had `answer_value = 10` (oppose DACA) but source quote shows she supports a DACA path to
+  citizenship. Corrected to `answer_value = -5`. Archive already existed from gate-apply;
+  just ran the UPDATE directly. Verified: row now at -5 with correct wsoctv.com source URL.
+
+**State** (verified 2026-06-24)
+Gate-apply complete. BARR KATE DACA value corrected (`answer_value = -5`). DB clean.
+
+**Next**
+1. Fire next Gemini corroboration batch: update `scripts/run-corroboration-rollout.sql`
+   with new `run_label` (e.g. `rollout-2026-06-25`), expand beyond `U.S.%` to include
+   state candidates, bump `v_candidate_limit` to ~100-200. Review + gate-apply after results land.
+2. Owner: remove `PERPLEXITY_API_KEY` from Supabase Vault (no consumers remain).
+3. Owner: OPEN-WORK #20 — rotate service_role key, DB password, cron_secret, sync_secrets.
+4. Watch PR #558 (NC finance) — CI must pass, then Vault setup + migrations + edge function deploy.
+
+---
+
 ## 2026-06-24 — PR #557 merged; fixed three P2 regressions surfaced by Codex review
 
 **What happened & why**
