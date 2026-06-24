@@ -3,10 +3,9 @@
 // the staging table public._answer_corroboration; does NOT touch candidate_answers (a gated SQL
 // step applies verdict='supports' rows after human inspection — house pattern, cf. match-answer-
 // citations). Anti-fabrication: a source URL is only accepted if it appears among the actually-
-// retrieved search citations AND passes a HEAD/GET reachability check. Uses base `sonar` with
-// search_context_size:'medium' (the per-request search fee is the dominant cost, so we keep it
-// modest) over the open web — no federal-legislative domain allowlist, since most #3 targets are
-// non-incumbents / state & local officials with no congress.gov footprint.
+// retrieved search citations AND passes a HEAD/GET reachability check. Uses Gemini 2.5 Flash with
+// Search Grounding over the open web — no federal-legislative domain allowlist, since most #3
+// targets are non-incumbents / state & local officials with no congress.gov footprint.
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 declare const EdgeRuntime: { waitUntil: (p: Promise<unknown>) => void };
@@ -18,7 +17,10 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const PERPLEXITY_API_KEY = Deno.env.get('PERPLEXITY_API_KEY');
+const GOOGLE_AI_KEY = Deno.env.get('GOOGLE_AI_API_KEY');
+
+const GEMINI_MODEL = 'gemini-2.5-flash';
+const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
 // No federal-legislative domain allowlist: most #3 targets are non-incumbents / state & local
 // officials with no congress.gov footprint, so we search the open web and lean on the prompt
@@ -91,29 +93,39 @@ function stanceLine(v: number | null): string {
   return `value ${v} on a -10..+10 scale (negative=left, positive=right) — the ${side} position`;
 }
 
-async function sonar(messages: unknown[]): Promise<{ content: string; citations: string[]; usage: any } | null> {
-  if (!PERPLEXITY_API_KEY) return null;
-  const r = await fetch('https://api.perplexity.ai/chat/completions', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${PERPLEXITY_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'sonar',
-      messages,
-      web_search_options: { search_context_size: 'medium' }, // 'low' under-retrieved; medium balances cost/recall
-    }),
-  });
-  if (!r.ok) { console.warn('[sonar] status', r.status); return null; }
-  const data = await r.json();
-  return {
-    content: data.choices?.[0]?.message?.content || '',
-    citations: Array.isArray(data.citations) ? data.citations : [],
-    usage: data.usage || {},
+async function gemini(messages: { role: string; content: string }[]): Promise<{ content: string; citations: string[]; usage: any } | null> {
+  if (!GOOGLE_AI_KEY) return null;
+  const system = messages.find(m => m.role === 'system')?.content ?? '';
+  const user = messages.find(m => m.role === 'user')?.content ?? '';
+  const body: any = {
+    contents: [{ role: 'user', parts: [{ text: user }] }],
+    tools: [{ googleSearch: {} }],
+    generationConfig: { temperature: 0.1, maxOutputTokens: 1024 },
   };
+  if (system) body.systemInstruction = { parts: [{ text: system }] };
+  const r = await fetch(
+    `${GEMINI_API_BASE}/models/${GEMINI_MODEL}:generateContent?key=${GOOGLE_AI_KEY}`,
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) },
+  );
+  if (!r.ok) { console.warn('[gemini] status', r.status); return null; }
+  const data = await r.json();
+  // Skip thinking parts (same pattern as generate-legislator-answers)
+  const parts: Array<{ thought?: boolean; text?: string }> =
+    data?.candidates?.[0]?.content?.parts ?? [];
+  const outputPart = parts.find(p => !p.thought && p.text) ?? parts[0];
+  const content: string = outputPart?.text ?? '';
+  // Extract grounded citations from Search Grounding metadata
+  const chunks: Array<{ web?: { uri?: string } }> =
+    data?.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [];
+  const citations: string[] = chunks
+    .map(c => c.web?.uri)
+    .filter((u): u is string => typeof u === 'string' && u.length > 0);
+  return { content, citations, usage: data?.usageMetadata ?? {} };
 }
 
 async function corroborateOne(ctx: string, q: QRow): Promise<any> {
   const t0 = Date.now();
-  const res = await sonar([
+  const res = await gemini([
     { role: 'system', content: `You verify whether public, citable evidence supports a candidate's recorded policy stance. Use ONLY sources you actually find via search (prefer .gov, official records, reputable news); never invent a URL or a quote.` },
     { role: 'user', content:
       `Candidate: ${ctx}.\nQuestion: "${q.text}"\nRecorded stance: ${stanceLine(q.answer_value)}.\n` +
