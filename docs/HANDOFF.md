@@ -13,6 +13,38 @@
 (template — copy below this block)
 ```
 
+## 2026-06-24 — NC (NCSBE) campaign-finance full pipeline — PR #558
+
+**What happened & why**
+Two tasks this session:
+
+1. **Admin table rework for state candidates** (already merged in a prior context window via #555):
+   `CandidateHealthBadge` now accepts `level` prop and shows a neutral gray badge for
+   state/local candidates instead of a misleading red FEC-health warning. `AnswerCoveragePanel`
+   gained a `StateFinanceCell` component (calling TX/FL/NJ/NY finance hooks per row) and a
+   `St. $` column. FEC/Committee/Bills/Floor-Votes column tooltips note "federal only" scope.
+
+2. **Add NC finance hook** (this session) — PR #558 on branch `claude/modest-albattani-qu07vv`:
+   Full NCSBE pipeline mirroring TX/FL/NJ/NY:
+   - `20260624010000_nc_finance_schema.sql` — `nc_contributions` + `nc_sync_progress` + `nc_sync_runs` + `check_nc_sync_secret()` RPC
+   - `20260624020000_nc_legislator_finance_rpc.sql` — `nc_legislator_finance(p_name, p_district, p_office)` using unaccent() token matching; federal NC offices excluded
+   - `supabase/functions/fetch-nc-finance/index.ts` — ZIP range-request download, DecompressionStream inflate, row-count resume cursor, discover/drain/full modes
+   - `src/hooks/useNcLegislatorFinance.ts` — `isNcStateLegislator()` guard + `useNcLegislatorFinance()`
+   - `AnswerCoveragePanel`: NC hook + `NC: 'NCSBE'` in `STATE_FINANCE_SOURCES`
+   - `config.toml`: `[functions.fetch-nc-finance] verify_jwt = false`
+   - `check-data-accuracy.sh`: NC added to state_finance_stats gate
+
+**State** (verified 2026-06-24)
+PR #558 open as draft. CI running (Build/Typecheck/Lint in_progress when session ended).
+GitGuardian passed. TypeScript clean locally (`bunx tsc --noEmit` → 0 errors). Subscribed to PR activity.
+
+**Next**
+- Watch CI on #558; fix any failures.
+- Before merging: create `nc_sync_secret` in Vault, apply the two migrations, deploy edge function, run `discover` then `drain` modes.
+- NCSBE S3 URL pattern to verify on first run: `https://s3.amazonaws.com/dl.ncsbe.gov/campaign-finance/year/{year}/NC-FullContributionsAllCounties-{year}.zip`
+
+---
+
 ## 2026-06-24 — PR #557: fix Gemini redirect URL bug in corroborate-answers; pilot batch fired
 
 **What happened & why**

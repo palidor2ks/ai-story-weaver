@@ -13,7 +13,12 @@ import {
 } from "@/components/ui/pagination";
 
 const PAGE_SIZE = 20;
-import { useCandidatesAnswerCoverageProgressive, useUniqueStates, useUniqueDistricts, useRecalculateCoverageTiers, CandidateAnswerCoverage } from "@/hooks/useCandidatesAnswerCoverage";
+import { useCandidatesAnswerCoverageProgressive, useUniqueStates, useUniqueDistricts, useRecalculateCoverageTiers, CandidateAnswerCoverage, GovernmentLevel } from "@/hooks/useCandidatesAnswerCoverage";
+import { useTxLegislatorFinance } from "@/hooks/useTxLegislatorFinance";
+import { useFlLegislatorFinance } from "@/hooks/useFlLegislatorFinance";
+import { useNjLegislatorFinance } from "@/hooks/useNjLegislatorFinance";
+import { useNyLegislatorFinance } from "@/hooks/useNyLegislatorFinance";
+import { useNcLegislatorFinance } from "@/hooks/useNcLegislatorFinance";
 import { useFinanceCycles } from "@/hooks/useFinanceCycles";
 import { useCoverageDashboardStats } from "@/hooks/useCoverageDashboardStats";
 import { usePopulateCandidateAnswers } from "@/hooks/usePopulateCandidateAnswers";
@@ -69,6 +74,80 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useBackgroundProcessing } from "@/context/BackgroundProcessingContext";
+
+
+function fmtStateFinance(n: number): string {
+  const abs = Math.abs(n);
+  const sign = n < 0 ? '-' : '';
+  if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
+  if (abs >= 1_000) return `${sign}$${Math.round(abs / 1_000)}K`;
+  return `${sign}$${Math.round(abs)}`;
+}
+
+const STATE_FINANCE_SOURCES: Record<string, string> = {
+  TX: 'TEC',
+  FL: 'FDLE',
+  NJ: 'ELEC',
+  NY: 'NYSBOE',
+  NC: 'NCSBE',
+};
+
+interface StateFinanceCellProps {
+  name: string;
+  state: string;
+  office: string;
+  level: GovernmentLevel;
+  district: string | null;
+}
+
+function StateFinanceCell({ name, state, office, level, district }: StateFinanceCellProps) {
+  const isFederal = level === 'federal_legislative' || level === 'federal_executive';
+  const params = { name, state, office, level, district };
+
+  const tx = useTxLegislatorFinance(params);
+  const fl = useFlLegislatorFinance(params);
+  const nj = useNjLegislatorFinance(params);
+  const ny = useNyLegislatorFinance(params);
+  const nc = useNcLegislatorFinance(params);
+
+  if (isFederal) return <span className="text-muted-foreground/40 text-[10px]">—</span>;
+
+  const isLoading = tx.isLoading || fl.isLoading || nj.isLoading || ny.isLoading || nc.isLoading;
+  const data = tx.data ?? fl.data ?? nj.data ?? ny.data ?? nc.data ?? null;
+  const sourceLabel = STATE_FINANCE_SOURCES[state] ?? null;
+
+  if (isLoading) {
+    return <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />;
+  }
+  if (!data || (data.total_raised ?? 0) <= 0) {
+    return <span className="text-muted-foreground/50 text-[10px]">—</span>;
+  }
+
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="text-xs font-medium tabular-nums cursor-help">
+            {fmtStateFinance(data.total_raised)}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="left" className="max-w-[220px]">
+          <p className="font-medium text-sm">{fmtStateFinance(data.total_raised)} raised</p>
+          <p className="text-xs text-muted-foreground">
+            {data.contribution_count.toLocaleString()} contributions
+            {sourceLabel ? ` · ${sourceLabel}` : ''}
+          </p>
+          {(data.election_years ?? []).length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              Years: {data.election_years.slice(0, 5).join(', ')}
+            </p>
+          )}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
 
 const PARTIES = ['all', 'Democrat', 'Republican', 'Independent', 'Other'] as const;
 
