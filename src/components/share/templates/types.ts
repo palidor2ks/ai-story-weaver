@@ -20,6 +20,10 @@ export interface CardData {
   candidateParty?: string;
   candidateImage?: string | null;
   candidateScore?: number | null;
+  // Provenance of candidateScore so the card can label it honestly:
+  // 'measured' = vote/override/trusted-answer derived; 'topic_estimate' =
+  // fallback average of topic scores when no measured score exists.
+  scoreSource?: 'measured' | 'topic_estimate' | null;
   matchScore?: number; // 0-100
   agreements?: { topicName: string; score: number }[];
   disagreements?: { topicName: string; score: number }[];

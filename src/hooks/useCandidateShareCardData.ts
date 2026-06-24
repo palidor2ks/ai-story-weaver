@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useCandidate, useCandidateDonors } from '@/hooks/useCandidates';
 import { useCandidateScoreMap } from '@/hooks/useCandidateScoreMap';
+import { useAllCandidateTopicScores } from '@/hooks/useAllCandidateTopicScores';
+import { calculateAverageScore } from '@/lib/scoring';
 import { useAvailableCycles } from '@/hooks/useAvailableCycles';
 import { useFECTotals } from '@/hooks/useFECTotals';
 import { useFinanceReconciliation } from '@/hooks/useFinanceReconciliation';
@@ -44,6 +46,7 @@ export interface CandidateShareCardData {
   candidateParty: string;
   candidateImage: string | null;
   candidateScore: number | null;
+  scoreSource: 'measured' | 'topic_estimate' | null;
   userScore: null;
   matchScore: 0;
   agreements: [];
@@ -77,6 +80,7 @@ export function useCandidateShareCardData(
   const id = candidateId ?? undefined;
   const { data: candidate, isLoading: candidateLoading } = useCandidate(id);
   const { data: scoreMap } = useCandidateScoreMap(id ? [id] : undefined);
+  const { data: topicScores } = useAllCandidateTopicScores(id);
   const { data: cycleInfo, isLoading: cyclesLoading } = useAvailableCycles(id);
   const effectiveCycle = cycleInfo?.defaultCycle;
   const { data: donors = [], isLoading: donorsLoading } = useCandidateDonors(
@@ -282,7 +286,27 @@ export function useCandidateShareCardData(
   const data = useMemo<CandidateShareCardData | null>(() => {
     if (!id || !candidate) return null;
 
-    const score = scoreMap?.get(id) ?? candidate.overall_score ?? null;
+    // Headline Pulse Score. Source-of-truth order mirrors useCandidateScoreMap,
+    // which treats a stored `overall_score` of exactly 0 as "unset" (the column's
+    // default) rather than a measured centrist score — so we coerce 0 to null too.
+    // Without this, an unscored candidate (e.g. a tier_3 state legislator with no
+    // voting record) rendered a fake "C / Moderate" headline next to real, clearly
+    // off-center per-issue scores. When no canonical score exists, fall back to the
+    // equal-weight average of the candidate's topic scores — the very numbers this
+    // card already displays — so the headline is consistent with the issue dots by
+    // construction instead of contradicting them.
+    const canonicalScore = scoreMap?.get(id) ?? (candidate.overall_score || null);
+    const topicDerivedScore =
+      canonicalScore == null && topicScores && topicScores.length > 0
+        ? calculateAverageScore(topicScores.map((t) => t.score))
+        : null;
+    const score =
+      canonicalScore ??
+      (topicDerivedScore == null ? null : Math.round(topicDerivedScore * 100) / 100);
+    // Track provenance so the card never labels a stance-estimated number as a
+    // "voting record" measurement (the card's headline/footer say so otherwise).
+    const scoreSource: 'measured' | 'topic_estimate' | null =
+      canonicalScore != null ? 'measured' : score != null ? 'topic_estimate' : null;
 
     const topDonors = topDonorSummaries.map((donor) => ({
       name: donor.name,
@@ -395,6 +419,7 @@ export function useCandidateShareCardData(
       candidateParty: candidate.party,
       candidateImage: resolvedImage,
       candidateScore: score,
+      scoreSource,
       userScore: null,
       matchScore: 0,
       agreements: [],
@@ -418,6 +443,7 @@ export function useCandidateShareCardData(
     id,
     candidate,
     scoreMap,
+    topicScores,
     topDonorSummaries,
     donorCauseMap,
     financeReconciliation,
