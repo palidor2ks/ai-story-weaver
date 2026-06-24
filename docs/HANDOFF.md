@@ -62,19 +62,24 @@ Nothing pending on those 5 PRs — decisions are made. (If revisiting name forma
 - `candidate_votes` row confirmed: `bill_id = 'H R 1'`, `candidate_id = 'C001056'` (Cornyn),
   `position = 'Yea'`, `action_date = 2025-06-30`, `vote_number = 335` ✅
 - Old title-based row (`"A bill to provide for reconciliation..."`) still exists — harmless,
-  PoliScore joins via `bill_id = 'H R 1'` so it's ignored.
+  ignored because `bill_id` differs from the canonical key.
 - All other senators will get their HR 1 rows as the cron cycles through the full ~540-member
   pass (~7h at 20/tick).
 - No code changes this session — PR #547 preflight already passed before merge.
+- **PoliScore UI removed** in PR #449 (2026-06-17) — `PoliScoreCard` component removed from
+  candidate profile (duplicated Voting Record tab). Backend tables, RPC, and migrations left
+  intact but dormant. No need to populate `poliscore_federal_key_votes` for HR 1.
 
 **Next**
-Add HR 1 to `poliscore_federal_key_votes` table so PoliScore surfaces it as a key vote.
+No immediate next steps for Senate vote ingestion — `bill_id = 'H R 1'` rows populate via cron.
 
 **Deferred**
 - Optional cleanup: DELETE old title-based `bill_id` rows for the reconciliation bill once
   all senators have the correct `bill_id = 'H R 1'` row.
 - NJ/TX `generate-legislator-answers` re-run still in progress (see v26 entry above).
 - NC spot-check before re-running NC answers.
+- PoliScore backend (`poliscore_federal_key_votes`, RPC, migrations) dormant — if PoliScore
+  is ever re-enabled in UI, HR 1 would need to be added to that table then.
 
 ## 2026-06-23 — v26 deployed (BOOT_ERROR fix); NJ + TX chains re-triggered
 
