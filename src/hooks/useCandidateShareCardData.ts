@@ -244,8 +244,15 @@ export function useCandidateShareCardData(
       setResolvedImage(null);
       return;
     }
-    setResolvedImage(rawImage);
+    // The share card is rasterized by html-to-image, which must inline every
+    // <img> as it draws. A raw cross-origin URL it can't fetch makes it reject
+    // with a bare DOM Event (no `.message`) — surfacing upstream as the opaque
+    // "Render failed: undefined". So we never expose the raw URL to the card:
+    // we embed the photo as a base64 data: URL, or drop it entirely and let the
+    // card fall back to its initials avatar. (Clearing first also avoids showing
+    // a stale previous candidate's photo while the new one resolves.)
     let cancelled = false;
+    setResolvedImage(null);
     const urls: string[] = [rawImage];
     if (id && /^[A-Z]\d{6}$/.test(id)) {
       urls.push(`https://bioguide.congress.gov/bioguide/photo/${id[0]}/${id}.jpg`);
@@ -262,6 +269,10 @@ export function useCandidateShareCardData(
           return;
         }
       }
+      // Every source failed to embed (dead host, proxy 502/504, non-image
+      // body). Leave the photo dropped rather than fall back to a raw URL the
+      // rasterizer would choke on.
+      if (!cancelled) setResolvedImage(null);
     })();
     return () => {
       cancelled = true;
