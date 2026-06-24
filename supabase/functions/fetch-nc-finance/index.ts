@@ -71,9 +71,13 @@ async function fetchQuarterCSV(dateFrom: string, dateTo: string): Promise<string
   // The cf.ncsbe.gov portal blocks automated requests from cloud/datacenter IPs.
   // An empty CSV (2 bytes: \r\n) means the portal returned no data — this is the
   // expected failure mode when running from Supabase edge functions. See file header.
-  if (!text || text.trim().length < 5) {
+  // Detect the two blocked-source response shapes:
+  //   1. Empty response (2 bytes: \r\n) — the ExportResults endpoint when called from cloud IPs
+  //   2. 14 KB HTML empty-results template — the portal's fallback for automated requests
+  const trimmed = text.trimStart();
+  if (!text || trimmed.length < 5 || trimmed.startsWith("<!DOCTYPE") || trimmed.startsWith("<html")) {
     throw new Error(
-      `DATA_SOURCE_BLOCKED: cf.ncsbe.gov returned empty CSV for ${dateFrom}–${dateTo}. ` +
+      `DATA_SOURCE_BLOCKED: cf.ncsbe.gov returned empty/HTML response for ${dateFrom}–${dateTo}. ` +
       `The NCSBE portal blocks automated requests from cloud IPs. ` +
       `Run from a residential IP or use a public records request to obtain bulk data.`
     );
@@ -173,12 +177,16 @@ async function drainYear(supabase: any, year: number, rowCap: number, startedMs:
     try {
       csv = await fetchQuarterCSV(dateFrom, dateTo);
     } catch (e) {
-      // Log but don't fail the whole year — a quarter might be empty/unavailable
+      const msg = String(e);
+      // DATA_SOURCE_BLOCKED is a permanent portal failure, not a transient per-quarter
+      // error. Re-throw so the caller records it in nc_sync_runs.error and returns HTTP 500,
+      // rather than advancing the cursor and silently marking the year as done.
+      if (msg.startsWith("DATA_SOURCE_BLOCKED:")) throw e;
+      // Transient error — log and advance the cursor past this quarter
       console.error(`Quarter ${qi + 1} ${year} fetch error: ${e}`);
-      // Advance cursor past this quarter so we don't retry indefinitely
       await supabase.from("nc_sync_progress").upsert({
         year, status: "pending", rows_done: qi + 1, last_run_at: now,
-        error: `Q${qi + 1}: ${String(e).slice(0, 200)}`,
+        error: `Q${qi + 1}: ${msg.slice(0, 200)}`,
       }, { onConflict: "year" });
       continue;
     }
