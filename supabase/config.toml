@@ -205,6 +205,8 @@ project_id = "ornnzinjrcyigazecctf"
     verify_jwt = false
   [functions.fetch-nj-elec-finance]
     verify_jwt = false
+  [functions.fetch-nc-finance]
+    verify_jwt = false
   [functions.fetch-ny-finance]
     verify_jwt = false
   [functions.fetch-relevant-news]
