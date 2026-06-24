@@ -2520,6 +2520,7 @@ export function AnswerCoveragePanel() {
                       const isComplete = candidate.percentage >= 100;
                       const hasFecId = !!candidate.fecCandidateId;
                       const hasCommittee = !!candidate.fecCommitteeId;
+                      const isFederal = candidate.level === 'federal_legislative' || candidate.level === 'federal_executive';
                       const financeStatus = calculateFinanceStatus(candidate);
                       // Calculate "Local Total" = Local Itemized + Local Other Receipts + FEC-only summary items
                       // This creates an apples-to-apples comparison with FEC Total Receipts
@@ -2725,44 +2726,49 @@ export function AnswerCoveragePanel() {
                               syncStatus={syncStatus}
                               financeStatus={getFinanceBadgeStatus() || 'none'}
                               hasOverride={hasOverride}
+                              level={candidate.level}
                             />
                           </TableCell>
                           <TableCell className="px-2 py-2">
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <div className="cursor-pointer">
-                                  <CommitteeLinkStatusBadge
-                                    candidateId={candidate.id}
-                                    candidateName={candidate.name}
-                                    fecCandidateId={candidate.fecCandidateId}
-                                    fecCommitteeId={candidate.fecCommitteeId}
-                                    committeeCount={candidate.committeeCount}
-                                    lastSyncDate={candidate.lastSyncDate}
-                                    onLinkCommittees={fetchFECCommittees}
-                                    onRefetch={refetchCandidates}
-                                    disabled={anyBatchRunning}
-                                  />
-                                </div>
-                              </PopoverTrigger>
-                              {hasCommittee && (
-                                <PopoverContent className="w-96 p-0" align="start">
-                                  <div className="p-3 border-b">
-                                    <h4 className="font-medium text-sm">Committee Management</h4>
-                                    <p className="text-xs text-muted-foreground">
-                                      Toggle which committees to include in donor sync
-                                    </p>
-                                  </div>
-                                  <div className="p-3">
-                                    <CommitteeBreakdown
+                            {isFederal ? (
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <div className="cursor-pointer">
+                                    <CommitteeLinkStatusBadge
                                       candidateId={candidate.id}
                                       candidateName={candidate.name}
-                                      fecCandidateId={candidate.fecCandidateId!}
+                                      fecCandidateId={candidate.fecCandidateId}
+                                      fecCommitteeId={candidate.fecCommitteeId}
+                                      committeeCount={candidate.committeeCount}
+                                      lastSyncDate={candidate.lastSyncDate}
+                                      onLinkCommittees={fetchFECCommittees}
                                       onRefetch={refetchCandidates}
+                                      disabled={anyBatchRunning}
                                     />
                                   </div>
-                                </PopoverContent>
-                              )}
-                            </Popover>
+                                </PopoverTrigger>
+                                {hasCommittee && (
+                                  <PopoverContent className="w-96 p-0" align="start">
+                                    <div className="p-3 border-b">
+                                      <h4 className="font-medium text-sm">Committee Management</h4>
+                                      <p className="text-xs text-muted-foreground">
+                                        Toggle which committees to include in donor sync
+                                      </p>
+                                    </div>
+                                    <div className="p-3">
+                                      <CommitteeBreakdown
+                                        candidateId={candidate.id}
+                                        candidateName={candidate.name}
+                                        fecCandidateId={candidate.fecCandidateId!}
+                                        onRefetch={refetchCandidates}
+                                      />
+                                    </div>
+                                  </PopoverContent>
+                                )}
+                              </Popover>
+                            ) : (
+                              <span className="text-muted-foreground text-[10px]">—</span>
+                            )}
                           </TableCell>
                           <TableCell className="px-2 py-2">
                             <SyncStatusBadge
