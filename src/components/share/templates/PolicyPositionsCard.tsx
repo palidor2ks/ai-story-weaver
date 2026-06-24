@@ -244,7 +244,7 @@ export const PolicyPositionsCard = forwardRef<HTMLDivElement, Props>(({ data }, 
                   fontSize: 11, color: MUTED, letterSpacing: 2.5,
                   textTransform: 'uppercase' as const, fontWeight: 700, marginBottom: 3,
                 }}>
-                  {data.scoreSource === 'topic_estimate' ? 'Estimated ideology' : 'Voting record ideology'}
+                  Voting record ideology
                 </div>
                 <div style={{
                   fontSize: 18, fontWeight: 800,
@@ -439,7 +439,7 @@ export const PolicyPositionsCard = forwardRef<HTMLDivElement, Props>(({ data }, 
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
             marginTop: 8, fontSize: 13, color: MUTED,
           }}>
-            <span>{data.scoreSource === 'topic_estimate' ? 'Based on stated positions' : 'Based on voting record & FEC data'}</span>
+            <span>Based on voting record &amp; FEC data</span>
             <span style={{ fontWeight: 700, color: FLAG_WHITE }}>{data.brandHost}</span>
           </div>
         </div>
