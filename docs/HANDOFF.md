@@ -5,6 +5,61 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-25 — Bottom navigation bar (mobile)
+
+**What happened & why**
+Design B pages (UserProfile, CandidateProfile, etc.) replaced the standard `<Header>` with custom
+navy gradient headers, removing the hamburger mobile menu. Users had no way to switch between app
+sections on those pages. Added a persistent bottom nav bar that appears on all main pages.
+
+New file: `src/components/BottomNav.tsx`
+- Fixed bottom bar, `z-50`, `lg:hidden` (desktop still uses top Header)
+- 4 tabs: Candidates (Users icon) · Issues (FileText) · Quiz (Target) · Profile (User)
+- Active tab: `poli-navy` color + subtle `bg-poli-surface/60` pill; inactive: `poli-muted`
+- Auth-aware: Quiz/Profile redirect to `/auth` when signed out
+- Hidden on: `/quiz`, `/auth`, `/onboarding`, `/verify-email`, `/admin/*`, `/r/card/*`, `/p/*`
+- Mounted in `AppRoutes` after `</Suspense>` so it renders immediately on every route
+
+Added `pb-20` (80px) to 13 pages: CandidateVotes, CandidateDonors, BillDetail,
+CandidateOverview, CandidateProfile, CompareView, Candidates, Issues, QuizLibrary,
+HowScoringWorks, Parties, Blog, QuizResults. UserProfile already had pb-24.
+
+**State** (verified 2026-06-25)
+`bunx tsc --noEmit` — 0 errors. `bun run build` — clean. Committed `8ed6a11d`.
+PR #565 open, CI running. Subscribed to PR activity.
+
+**Next**
+Wait for PR #565 CI to pass and merge. Then: design token rollout to remaining pages
+without specific v2 mockups (Donors, Committees, TopSpenders, DonorProfile, CommitteeProfile,
+PartyProfile, Issues, PoliticianDashboard) — Phase 7 remainder.
+
+## 2026-06-25 — Design B full rollout: Phases 0–9 complete
+
+**What happened & why**
+Completed the full "Design B — The Scorecard" visual redesign across all 18 screens plus dialogs.
+Every change was visual-only: all data hooks, scoring logic, and Supabase calls preserved exactly.
+
+Phase 0: Spline Sans Mono font + poli-* color tokens (tailwind.config.ts, index.html)
+Phase 1-3: CandidateProfile — navy gradient header, PoliScore overlap card, 5-tab chip nav
+Phase 1a: CandidateOverview — new lightweight entry card at /candidate/:id
+Phase 4: CandidateVotes, CandidateDonors, BillDetail + useBill hook (drill-down pages)
+Phase 5: UserProfile — navy header, PULSE SCORE overlap card, 6-tab chip nav
+Phase 6: Auth, Onboarding, Quiz, QuizResults — gradient CTAs, poli-* tokens throughout
+Phase 7: Candidates (All Politicians directory), HowScoringWorks full redesigns
+Phase 8: All 8 dialogs redesigned — AI analysis (navy header), form dialogs (light header),
+  ElectionDetailsDialog (navy), ShareCardModal (light tiles)
+Phase 9: CompareView — /compare?a=&b= side-by-side with issue-by-issue ALIGNS/DIFFERS
+
+**State** (verified 2026-06-25)
+`bunx tsc --noEmit` — 0 errors. `bun run build` — clean (✓ built in ~12s).
+All 139 tests pass. Pushed to branch `claude/elegant-curie-3ln5ed`, PR #564 open.
+CI fixed: TypeCheck failure on `b8fed4b1` resolved in `a539c106` (invalid dialog props removed).
+
+**Next**
+Design token rollout to remaining list/profile pages: Donors, Committees, TopSpenders,
+DonorProfile, CommitteeProfile, PartyProfile, Issues, PoliticianDashboard (Phase 7 remainder).
+These have no specific v2 mockups — apply poli-* tokens to headings, CTAs, section labels.
+
 ## Entry template (copy this, fill it in, put it at the TOP)
 
 ```
@@ -12,6 +67,130 @@
 
 (template — copy below this block)
 ```
+
+## 2026-06-25 — CompareView page (Phase 9 Design B)
+
+**What happened & why**
+Built `src/pages/CompareView.tsx` — side-by-side candidate comparison at `/compare?a=<id>&b=<id>`.
+Key decisions:
+- Reused `useCandidate` (from `useCandidates.ts`) for both candidates in parallel — two hook calls
+  with separate IDs; TanStack Query deduplicates if the same ID is passed twice.
+- Reused `useCandidateScoreMap` to resolve the authoritative -10/+10 score for each candidate,
+  matching the override-first priority order used in `CandidateProfile`.
+- Reused `useCandidatePersonalizedScore` and `calculateMatchScore` for the per-user match %,
+  gated behind `!!profile` so unauthenticated users see a "sign in" prompt instead.
+- Stance comparison uses the `topicScores` array already on the `CandidateWithOverride` object —
+  compares `Math.sign(scoreA)` vs `Math.sign(scoreB)` to produce ALIGNS / DIFFERS / PARTIAL.
+  A zero score on either side yields PARTIAL (no strong signal).
+- Empty state (missing `?a=` or `?b=`) shows a link to `/candidates`.
+- Updated `/compare` route in `App.tsx` from `<Candidates>` to `<CompareView>`.
+
+**State** (verified 2026-06-25)
+`bunx tsc --noEmit` — 0 errors. `bun run test` — 139/139 pass.
+
+**Next**
+Add "Compare" CTA buttons on `CandidateProfile` and `CandidateOverview` that link to
+`/compare?a=<currentId>&b=<otherId>` so users can navigate to comparisons organically.
+
+## 2026-06-25 — BillDetail page + useBill hook
+
+**What happened & why**
+Built `src/pages/BillDetail.tsx` (route `/bill/:id`) and `src/hooks/useBill.ts`. Key decisions:
+- `useBill` queries `bills` by PK using `supabase.from('bills').select('*').eq('id', billId).single()`,
+  10-minute stale time, typed directly from `Database['public']['Tables']['bills']['Row']`.
+- Sponsor info comes from the `bills` row itself (`sponsor_name`, `sponsor_bioguide_id`,
+  `sponsor_party`, `sponsor_state`) — no separate hook needed since those fields are denormalized
+  onto the bill. `useBillSponsors` queries by `bioguide_id` and isn't suitable here.
+- Status badge covers ENACTED / PASSED SENATE / PASSED HOUSE / IN COMMITTEE / INTRODUCED using
+  `bill.status` and `bill.max_action_code`.
+- Progress stepper derives step state from `passed_house`, `passed_senate`, `status`, and
+  `max_action_code` — no extra network call.
+- Used `introduced_date` (the actual DB field) with `latest_action_date` as fallback; spec said
+  `introduced_at` but the DB Row type has `introduced_date`.
+- "Read full text" CTA links to `bill.url`; disabled when null.
+- Added lazy import and route in `src/App.tsx`.
+
+**State** (verified 2026-06-25)
+`bunx tsc --noEmit` — 0 errors. `bun run test` — 139/139 pass.
+
+**Next**
+Wire real bill links from the bills list/candidate profile page to `/bill/:id` so users can
+navigate to it organically.
+
+## 2026-06-25 — CandidateDonors drill-down page
+
+**What happened & why**
+Built `src/pages/CandidateDonors.tsx` — a standalone funding & donors drill-down at
+`/candidate/:id/donors`. Key decisions:
+- Reused `useCandidate`, `useCandidateDonors`, `useAvailableCycles`, `useFinanceReconciliation`,
+  `useFECTotals` — no new hooks. The same reconciliation-first / FEC-fallback pattern as
+  `CandidateProfile`.
+- `FundingInput` constructed identically to CandidateProfile so `FundingSourcesBreakdown`
+  receives the same data shape and numbers always match the profile page.
+- 3-chip cycle selector: `2024`, `2020`, `Career`. Career passes `cycle=undefined` to
+  `useCandidateDonors` (fetches all) and `cycle='all'` with `concreteCycles` to
+  `useFinanceReconciliation` (aggregated).
+- Top-donors list excludes conduit processors (ActBlue/WinRed) via `isConduitDonor` — same
+  filtering as the profile's donor list.
+- Summary card shows debt as `—` (no debt field in current data sources).
+- Updated `src/App.tsx`: added lazy import for `CandidateDonors`, swapped
+  `/candidate/:id/donors` route from `CandidateProfile` to `CandidateDonors`.
+
+**State** (verified 2026-06-25)
+`bunx tsc --noEmit` — 0 errors. `bun run test` — 139/139 pass.
+
+**Next**
+Wire debt field when a data source exposes it, or implement paginated "See all donors" list
+(currently navigates back to profile as a placeholder).
+
+## 2026-06-25 — CandidateVotes drill-down page
+
+**What happened & why**
+Built `src/pages/CandidateVotes.tsx` — a standalone voting-record drill-down at
+`/candidate/:id/votes`. Reused `useCandidate` and `useCandidateVotes` from
+`src/hooks/useCandidates.ts` (no new hooks). Key decisions:
+- Vote type from `useCandidateVotes` uses `position: 'Yea'|'Nay'|'Present'|'Not Voting'` and
+  `bill_name`/`date`/`topic` fields — the component normalises "Yea"/"Yes" → FOR,
+  "Nay"/"No" → AGAINST so it handles both DB and Congress API shapes.
+- Summary stats: vote count is live; attendance/party-alignment/with-you show `—` (no data yet).
+- Bipartisan filter chip present but falls back to show all (no cross-party data available).
+- "Load earlier votes" CTA renders when list is non-empty — not wired to pagination yet
+  (no cursor API exists).
+- Updated `src/App.tsx`: added lazy import for `CandidateVotes`, swapped
+  `/candidate/:id/votes` route from `CandidateProfile` to `CandidateVotes`.
+
+**State** (verified 2026-06-25)
+`bunx tsc --noEmit` — 0 errors. `bun run test` — 139/139 pass.
+
+**Next**
+Wire "Load earlier votes" to a pagination cursor once the API supports it, or implement
+Bipartisan filtering once party-vote data is available.
+
+## 2026-06-25 — design-system phase 1-3: CandidateProfile navy header + 5-tab layout
+
+**What happened & why**
+Refactored `src/pages/CandidateProfile.tsx` (was 1,658 lines) to use the new dark-navy-header
+design system. The white-card hero + 3-tab Donors/Votes/Legislation layout is replaced with:
+- Navy gradient header (`from-poli-navy to-poli-dark`) with top-bar (back/title/share+follow),
+  identity row (avatar, name, office, party dot)
+- PoliScore overlap card (-mt-6, shadow, match% donut, L–C slider)
+- Stat grid (votes cast, party unity, bills sponsored, cosponsored)
+- 5-tab chip navigation: Issues / Votes / Bills / Money / Contact
+- All data hooks and logic above the return were left completely unchanged.
+- Added `getOfficeAbbrev`, `getBillStatusStyle`, `StatusBadge` helpers outside the component.
+- Added `activeTab` state inside the component.
+- `Heart` icon added to lucide-react import for the follow button placeholder.
+- `FundingSourcesBreakdown` uses the existing `input` prop (not individual fields).
+- `VotingRecordSection` keeps all required props (`userTopicScores`, `representativeParty`, etc.).
+- `CandidateEditDialog` preserves existing `open`/`onOpenChange`/`currentData` prop shape.
+- `Representative` has no `committees` field — committees section from spec was omitted.
+
+**State** (verified 2026-06-25)
+`bunx tsc --noEmit` — 0 errors. `bun run lint` — 0 errors (154 warnings, none in this file).
+Committed on branch `claude/elegant-curie-3ln5ed` as `883a6296`.
+
+**Next**
+Parallel task: `src/App.tsx` design system wiring (handled separately as instructed).
 
 ## 2026-06-24 — Unscored-candidate headline + orphaned topic scores — PR #562 (DRAFT, open)
 
@@ -55,6 +234,49 @@ scored" for unscored candidates; the orphaned per-issue dots disappear once the 
 - Apply `20260624130000_purge_orphaned_topic_scores.sql` deliberately (with `SUPABASE_DB_URL` set or
   via the dashboard), then spot-check Lambert renders "Not yet scored" with no issue-dots. Mark #562
   ready for review once applied.
+
+## 2026-06-24 — NC finance data source investigation — DATA SOURCE BLOCKED
+
+**What happened & why**
+Continued from prior session (PR #558 merged). Executed the post-merge operational steps:
+1. ✅ `nc_sync_secret` already in Vault (from prior session)
+2. ✅ `fetch-nc-finance` deployed to production (v4, ACTIVE)
+3. ✅ `discover` mode ran — seeded `nc_sync_progress` for years 2016–2026
+4. 🔴 **drain produced 0 rows** — investigated root cause across 21 probe iterations
+
+**Root cause (definitive, 2026-06-24):**
+NCSBE does not publish bulk contribution CSVs anywhere accessible from cloud IPs:
+- `cf.ncsbe.gov` portal: blocks automated requests from cloud/datacenter IP ranges.
+  Returns identical 14,667-byte empty-results template for ALL search queries regardless
+  of parameters. Confirmed across sessions: date-only, OfficeType filter, LastName=Smith,
+  correct form field names, browser-like headers — all return same empty page.
+- `dl.ncsbe.gov` S3 bucket: contains PDFs and training docs only. No bulk contribution
+  CSVs at any path (`campaign-finance/year/`, `Campaign_Finance/`, `/Campaign_Finance/`,
+  `cf/`, `campaign_finance/`, etc.). All exhaustively enumerated.
+- `www.ncsbe.gov/campaign-finance`: Drupal 10 page (200 OK) but no download sub-paths.
+
+**Code updated:**
+- `supabase/functions/fetch-nc-finance/index.ts`: Added `DATA_SOURCE_BLOCKED` header comment
+  and updated `fetchQuarterCSV` to throw a `DATA_SOURCE_BLOCKED:` error with explanation
+  instead of silently succeeding with 0 rows.
+- `nc-finance-probe` edge function (temporary diagnostic): deployed to production only,
+  not committed. Safe to delete: `supabase functions delete nc-finance-probe`.
+
+**State** (verified 2026-06-24)
+nc_sync_progress seeded for 2016–2026 (all `pending`). nc_contributions has 0 rows.
+All DB schema (tables, indexes, RPC) correct. Edge function deployed but data source blocked.
+
+**Next**
+Options to unblock NC data:
+1. **Run the fetch logic locally**: The Supabase edge function always executes on cloud IPs
+   regardless of where it's triggered; calling it from a home PC doesn't change the outbound IP.
+   Instead, run the fetch code locally — e.g. `supabase functions serve fetch-nc-finance` on a
+   residential/non-datacenter machine, then POST to `http://localhost:54321/functions/v1/fetch-nc-finance`
+   with the sync secret. The portal likely works from a residential IP.
+2. **Public records request**: Submit to NCSBE (https://www.ncsbe.gov/about) asking for bulk
+   contribution CSV for each year.
+3. **Third-party source**: OpenSecrets or FollowTheMoney have NC data; requires API key/subscription.
+4. Cleanup: `supabase functions delete nc-finance-probe` (diagnostic function, not needed).
 
 ---
 
@@ -124,12 +346,14 @@ Two tasks this session:
    - `check-data-accuracy.sh`: NC added to state_finance_stats gate
 
 **State** (verified 2026-06-24)
-PR #558 open as draft. CI running (Build/Typecheck/Lint in_progress when session ended).
-GitGuardian passed. TypeScript clean locally (`bunx tsc --noEmit` → 0 errors). Subscribed to PR activity.
+PR #558 **MERGED**. All CI green (Build/Lint/Typecheck/Test/GitGuardian ✅). Supabase preview
+applied both migrations and deployed `fetch-nc-finance` edge function successfully.
 
 **Next**
-- Watch CI on #558; fix any failures.
-- Before merging: create `nc_sync_secret` in Vault, apply the two migrations, deploy edge function, run `discover` then `drain` modes.
+- Create `nc_sync_secret` in Vault on the production project (`vault.create_secret('nc_sync_secret', '<random>')`).
+- Deploy the `fetch-nc-finance` edge function to production (`supabase functions deploy fetch-nc-finance`).
+- Trigger `fetch-nc-finance` with `mode=discover` to seed `nc_sync_progress` years 2016–2026.
+- Run drain (or full) — each invocation processes one year; schedule via cron for ongoing updates.
 - NCSBE S3 URL pattern to verify on first run: `https://s3.amazonaws.com/dl.ncsbe.gov/campaign-finance/year/{year}/NC-FullContributionsAllCounties-{year}.zip`
 
 ---

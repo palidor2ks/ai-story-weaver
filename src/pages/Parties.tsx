@@ -33,7 +33,7 @@ export default function Parties() {
       />
       <Header />
       
-      <main className="container py-8 px-4 max-w-4xl">
+      <main className="container py-8 px-4 max-w-4xl pb-20">
         {/* Page Header */}
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-2">
