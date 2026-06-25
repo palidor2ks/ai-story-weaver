@@ -273,7 +273,7 @@ export const Candidates = () => {
 
   if (coreLoading) {
     return (
-      <div className="bg-[#F5F6FA] min-h-screen">
+      <div className="bg-[#F5F6FA] min-h-screen pb-20">
         <Header />
         <div className="bg-gradient-to-br from-poli-navy to-poli-dark pt-12 pb-4 px-4">
           <h1 className="text-2xl font-black text-white">All Politicians</h1>
@@ -288,7 +288,7 @@ export const Candidates = () => {
   }
 
   return (
-    <div className="bg-[#F5F6FA] min-h-screen">
+    <div className="bg-[#F5F6FA] min-h-screen pb-20">
       <Seo
         title="All Politicians — Pulse"
         description="Browse the President, Congress members, governors, and local representatives. Filter by office, party, and state to find leaders who match your values."

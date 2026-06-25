@@ -400,7 +400,7 @@ export const CandidateProfile = () => {
 
 
   return (
-    <div className="min-h-screen bg-[#F5F6FA]">
+    <div className="min-h-screen bg-[#F5F6FA] pb-20">
       <Seo
         title={`${candidate.name} — Pulse`}
         description={`See ${candidate.name}'s positions, voting record, donors, and how they align with your views on the issues that matter most.`}

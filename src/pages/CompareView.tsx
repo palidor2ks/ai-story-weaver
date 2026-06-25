@@ -202,7 +202,7 @@ export const CompareView = () => {
     });
 
   return (
-    <div className="bg-[#F5F6FA] min-h-screen">
+    <div className="bg-[#F5F6FA] min-h-screen pb-20">
       {/* Navy gradient header */}
       <div className="bg-gradient-to-br from-[#182B7A] to-[#0C1A52] pt-12 pb-20 px-4">
         {/* Top bar */}

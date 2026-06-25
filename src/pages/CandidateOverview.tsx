@@ -278,7 +278,7 @@ export const CandidateOverview = () => {
         </Link>
 
         {/* Footer links */}
-        <div className="flex justify-center gap-6 mx-4 mt-5 pb-8">
+        <div className="flex justify-center gap-6 mx-4 mt-5 pb-20">
           <button
             type="button"
             className="font-mono-label text-[10px] tracking-widest text-poli-dim uppercase"

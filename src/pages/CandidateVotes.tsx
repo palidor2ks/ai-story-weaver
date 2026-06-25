@@ -112,7 +112,7 @@ export const CandidateVotes = () => {
       </div>
 
       {/* Vote list */}
-      <div className="px-4 mt-4 pb-6">
+      <div className="px-4 mt-4 pb-20">
         <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
           {isLoading ? (
             <div className="divide-y divide-poli-surface">
