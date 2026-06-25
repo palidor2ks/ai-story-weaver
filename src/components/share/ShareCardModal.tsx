@@ -215,7 +215,7 @@ export const ShareCardModal = ({
       ? 'text-destructive'
       : charCount > charLimit - 40
       ? 'text-amber-600 dark:text-amber-500'
-      : 'text-muted-foreground';
+      : 'text-poli-muted';
 
   const handleResetCaption = () => {
     bodyTouchedRef.current = false;
