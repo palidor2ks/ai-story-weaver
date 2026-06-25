@@ -5,6 +5,32 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-25 — Phase 6: Onboarding sub-component Design B token migration
+
+**What happened & why**
+Three shared sub-components used inside the onboarding flow still had generic shadcn tokens
+(`bg-primary`, `text-muted-foreground`, `bg-gradient-hero`, etc.) that didn't match Design B.
+Applied poli-* token swaps to close the visual gap — token-only changes, no logic touched.
+
+**Changes per file:**
+- `TopicSelector.tsx` — selection badge `bg-primary` → `bg-poli-navy text-white`; description
+  `text-muted-foreground` → `text-poli-muted`
+- `QuizQuestion.tsx` — progress bar background `bg-secondary` → `bg-poli-surface`; fill
+  `bg-gradient-hero` → `bg-gradient-to-r from-poli-navy to-[#B3122F]`; question heading
+  `text-foreground` → `text-poli-navy`; counter → `text-poli-muted`; selected ring →
+  `ring-poli-navy`; selected badge → `bg-poli-navy text-white`; unselected → `bg-poli-surface text-poli-body`
+- `DemographicsForm.tsx` — icon `bg-gradient-hero shadow-glow` → `bg-gradient-to-br from-poli-navy
+  to-[#B3122F] shadow-lg`; heading → `text-poli-navy`; subtitle/helper → `text-poli-muted`; form
+  card → `bg-white border-[rgba(20,23,58,0.1)]`; all form labels → `text-poli-body`; warning icon
+  → `text-poli-navy`. Continue button uses `variant="hero"` (already renders gradient — left as-is)
+
+**State** (verified 2026-06-25)
+`bunx tsc --noEmit` — 0 errors. PR #568 open, CI in progress (run 28169271868 for 4e9f47a6).
+
+**Next**
+Wait for PR #568 CI to pass and merge. Then: Phase 8 dialog redesigns or Phase 9 Compare feature
+per the plan in `docs/HANDOFF.md`.
+
 ## 2026-06-25 — Phase 7: poli-* token rollout to remaining pages
 
 **What happened & why**
