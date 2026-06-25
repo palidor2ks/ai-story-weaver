@@ -5,6 +5,22 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-25 — Positions tab on candidate profile (PR #580)
+
+**What happened & why**
+User wanted "Positions & Your Match" moved out of the Issues tab into its own tab.
+
+Changes (PR #580, merged):
+- `CandidateProfile.tsx`: added `'positions'` to the tab union type and the tab array
+  (inserted between Issues and Votes). Moved `<CandidatePositions>` block from the Issues
+  tab into a new Positions tab. Issues tab now shows only the AI Analysis card.
+
+**State** (verified 2026-06-25)
+PR #580 merged to main. Tab bar now reads: Issues · Positions · Votes · Bills · Money · Contact.
+
+**Next**
+User to confirm layout looks correct in the live app.
+
 ## 2026-06-25 — Remove Issues tab; skip candidate summary page (PR #579)
 
 **What happened & why**

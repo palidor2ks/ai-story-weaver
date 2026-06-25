@@ -635,7 +635,7 @@ export const CandidateProfile = () => {
         {activeTab === 'positions' && (
           <div className="bg-white rounded-[18px] border border-[rgba(20,23,58,0.08)] p-4 shadow-sm">
             <p className="font-mono-label text-[10px] tracking-[2px] text-poli-red mb-3">POSITIONS & YOUR MATCH</p>
-            <CandidatePositions candidateId={candidate.id} candidateName={candidate.name} />
+            <CandidatePositions candidateId={candidate.id} candidateName={candidate.name} defaultOpen />
           </div>
         )}
 
