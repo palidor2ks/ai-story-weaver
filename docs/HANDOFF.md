@@ -13,6 +13,106 @@
 (template — copy below this block)
 ```
 
+## 2026-06-25 — BillDetail page + useBill hook
+
+**What happened & why**
+Built `src/pages/BillDetail.tsx` (route `/bill/:id`) and `src/hooks/useBill.ts`. Key decisions:
+- `useBill` queries `bills` by PK using `supabase.from('bills').select('*').eq('id', billId).single()`,
+  10-minute stale time, typed directly from `Database['public']['Tables']['bills']['Row']`.
+- Sponsor info comes from the `bills` row itself (`sponsor_name`, `sponsor_bioguide_id`,
+  `sponsor_party`, `sponsor_state`) — no separate hook needed since those fields are denormalized
+  onto the bill. `useBillSponsors` queries by `bioguide_id` and isn't suitable here.
+- Status badge covers ENACTED / PASSED SENATE / PASSED HOUSE / IN COMMITTEE / INTRODUCED using
+  `bill.status` and `bill.max_action_code`.
+- Progress stepper derives step state from `passed_house`, `passed_senate`, `status`, and
+  `max_action_code` — no extra network call.
+- Used `introduced_date` (the actual DB field) with `latest_action_date` as fallback; spec said
+  `introduced_at` but the DB Row type has `introduced_date`.
+- "Read full text" CTA links to `bill.url`; disabled when null.
+- Added lazy import and route in `src/App.tsx`.
+
+**State** (verified 2026-06-25)
+`bunx tsc --noEmit` — 0 errors. `bun run test` — 139/139 pass.
+
+**Next**
+Wire real bill links from the bills list/candidate profile page to `/bill/:id` so users can
+navigate to it organically.
+
+## 2026-06-25 — CandidateDonors drill-down page
+
+**What happened & why**
+Built `src/pages/CandidateDonors.tsx` — a standalone funding & donors drill-down at
+`/candidate/:id/donors`. Key decisions:
+- Reused `useCandidate`, `useCandidateDonors`, `useAvailableCycles`, `useFinanceReconciliation`,
+  `useFECTotals` — no new hooks. The same reconciliation-first / FEC-fallback pattern as
+  `CandidateProfile`.
+- `FundingInput` constructed identically to CandidateProfile so `FundingSourcesBreakdown`
+  receives the same data shape and numbers always match the profile page.
+- 3-chip cycle selector: `2024`, `2020`, `Career`. Career passes `cycle=undefined` to
+  `useCandidateDonors` (fetches all) and `cycle='all'` with `concreteCycles` to
+  `useFinanceReconciliation` (aggregated).
+- Top-donors list excludes conduit processors (ActBlue/WinRed) via `isConduitDonor` — same
+  filtering as the profile's donor list.
+- Summary card shows debt as `—` (no debt field in current data sources).
+- Updated `src/App.tsx`: added lazy import for `CandidateDonors`, swapped
+  `/candidate/:id/donors` route from `CandidateProfile` to `CandidateDonors`.
+
+**State** (verified 2026-06-25)
+`bunx tsc --noEmit` — 0 errors. `bun run test` — 139/139 pass.
+
+**Next**
+Wire debt field when a data source exposes it, or implement paginated "See all donors" list
+(currently navigates back to profile as a placeholder).
+
+## 2026-06-25 — CandidateVotes drill-down page
+
+**What happened & why**
+Built `src/pages/CandidateVotes.tsx` — a standalone voting-record drill-down at
+`/candidate/:id/votes`. Reused `useCandidate` and `useCandidateVotes` from
+`src/hooks/useCandidates.ts` (no new hooks). Key decisions:
+- Vote type from `useCandidateVotes` uses `position: 'Yea'|'Nay'|'Present'|'Not Voting'` and
+  `bill_name`/`date`/`topic` fields — the component normalises "Yea"/"Yes" → FOR,
+  "Nay"/"No" → AGAINST so it handles both DB and Congress API shapes.
+- Summary stats: vote count is live; attendance/party-alignment/with-you show `—` (no data yet).
+- Bipartisan filter chip present but falls back to show all (no cross-party data available).
+- "Load earlier votes" CTA renders when list is non-empty — not wired to pagination yet
+  (no cursor API exists).
+- Updated `src/App.tsx`: added lazy import for `CandidateVotes`, swapped
+  `/candidate/:id/votes` route from `CandidateProfile` to `CandidateVotes`.
+
+**State** (verified 2026-06-25)
+`bunx tsc --noEmit` — 0 errors. `bun run test` — 139/139 pass.
+
+**Next**
+Wire "Load earlier votes" to a pagination cursor once the API supports it, or implement
+Bipartisan filtering once party-vote data is available.
+
+## 2026-06-25 — design-system phase 1-3: CandidateProfile navy header + 5-tab layout
+
+**What happened & why**
+Refactored `src/pages/CandidateProfile.tsx` (was 1,658 lines) to use the new dark-navy-header
+design system. The white-card hero + 3-tab Donors/Votes/Legislation layout is replaced with:
+- Navy gradient header (`from-poli-navy to-poli-dark`) with top-bar (back/title/share+follow),
+  identity row (avatar, name, office, party dot)
+- PoliScore overlap card (-mt-6, shadow, match% donut, L–C slider)
+- Stat grid (votes cast, party unity, bills sponsored, cosponsored)
+- 5-tab chip navigation: Issues / Votes / Bills / Money / Contact
+- All data hooks and logic above the return were left completely unchanged.
+- Added `getOfficeAbbrev`, `getBillStatusStyle`, `StatusBadge` helpers outside the component.
+- Added `activeTab` state inside the component.
+- `Heart` icon added to lucide-react import for the follow button placeholder.
+- `FundingSourcesBreakdown` uses the existing `input` prop (not individual fields).
+- `VotingRecordSection` keeps all required props (`userTopicScores`, `representativeParty`, etc.).
+- `CandidateEditDialog` preserves existing `open`/`onOpenChange`/`currentData` prop shape.
+- `Representative` has no `committees` field — committees section from spec was omitted.
+
+**State** (verified 2026-06-25)
+`bunx tsc --noEmit` — 0 errors. `bun run lint` — 0 errors (154 warnings, none in this file).
+Committed on branch `claude/elegant-curie-3ln5ed` as `883a6296`.
+
+**Next**
+Parallel task: `src/App.tsx` design system wiring (handled separately as instructed).
+
 ## 2026-06-24 — NC finance data source investigation — DATA SOURCE BLOCKED
 
 **What happened & why**
