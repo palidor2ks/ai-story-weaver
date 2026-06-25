@@ -5,6 +5,37 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-25 — Challenger status display + match circle fix + candidate filter tabs
+
+**What happened & why**
+Three issues fixed in two PRs:
+
+1. **Match circle percentage label** (`CandidateOverview.tsx`) — the conic-gradient div was missing
+   `relative`, so `absolute inset-[8px]` on the white inner hole was positioning relative to the
+   outer wrapper (including "YOUR MATCH" text below), making it too tall and the arc visible behind
+   the percentage. Also tightened `mt-5` → `mt-1` on the label. (PR #570, already in prior HANDOFF)
+
+2. **Challenger/non-incumbent display** (`Candidates.tsx`, `CandidateOverview.tsx`,
+   `CandidateProfile.tsx`, `supabase/functions/ai-candidate-explanation/index.ts`) — candidates
+   who ran and lost (e.g. Viola Stone) were shown with no status indicator and the AI described
+   them as current officeholders.
+   - Candidates list: `isIncumbent ?? true` → `?? false`; added "Challenger" amber badge for
+     explicitly non-incumbent candidates (alongside existing Incumbent/Former badges)
+   - Profile header: shows `· Challenger` when `is_incumbent === false`
+   - AI edge function: fetches `is_incumbent`, labels the office "Ran For Office (did not win)"
+     for challengers, adds CHALLENGER ground-truth rule so AI says "candidate for" not "is a [title]"
+   - To see corrected AI text for Viola Stone: hit refresh on her AI Analysis card
+
+3. **Executive/State/Local filter tabs** — see previous entry (PR #570 — merged before this)
+
+**State** (verified 2026-06-25)
+`bunx tsc --noEmit` — 0 errors. PR #571 merged, all 7 CI checks green.
+
+**Next**
+Party unity % stat still shows `—` — no data exists. Computing it requires either a Supabase
+SQL view aggregating `candidate_votes` by party majority, or importing GovTrack scores. User
+was asked if they want this built. Awaiting response.
+
 ## 2026-06-25 — Add Executive, State, Local filter tabs to /candidates
 
 **What happened & why**
