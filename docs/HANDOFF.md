@@ -5,6 +5,23 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-25 — Combined support/oppose box; prominent alignment % (PR #583)
+
+**What happened & why**
+User wanted the 👍/👎 stat boxes merged and the alignment percentage made more prominent.
+
+Changes (PR #583, merged):
+- `CandidateProfile.tsx`: Replaced two separate support/oppose boxes with a single
+  `col-span-2` box showing both numbers side-by-side (green/red) with a divider.
+- `VotingRecordSection.tsx`: Alignment % now renders as `text-3xl font-black` inline with
+  "legislative alignment" label — much more visually dominant.
+
+**State** (verified 2026-06-25)
+PR #583 merged to main. All CI checks passed.
+
+**Next**
+User to confirm the combined box and large % look correct in the live app.
+
 ## 2026-06-25 — Stat grid + Political Compass removal (PR #582)
 
 **What happened & why**
