@@ -220,21 +220,25 @@ Libertarian Party Alignment: ${libertarianAlignment}%
 Topic Scores:
 ${topicScoresText}
 
-Provide:
-1. A 2-3 sentence summary of their overall political philosophy based on their ACTUAL POSITIONS — addressed to them ("You generally align with...").
-2. 3-4 key insights about their positions — each addressed to them ("You hold...", "Your strongest...").
-3. A brief comparison of their views to the four major party platforms — addressed to them ("Your views most closely match...").
-4. Their strongest positions — phrased to them ("Your strongest position is...").
+Provide a thorough, detailed analysis with these four sections:
 
-VOICE: Every sentence must address the user directly. Do NOT write "this voter", "the voter", "they", or "their". Write "you" and "your".
+1. SUMMARY (3-4 sentences): Describe their overall political philosophy based on their ACTUAL POSITIONS across all topics. Note any ideological tensions or surprising combinations. Address them as "you" ("You lean...", "Your profile shows...").
+
+2. KEY INSIGHTS (4-5 items): Each insight should be a full sentence explaining something specific and meaningful about their positions — not just a label, but an explanation of what their score means politically. Reference specific topic scores using L/R notation. ("Your L8 score on healthcare suggests...", "You are notably more centrist on X than on Y...").
+
+3. PARTY COMPARISON (3-4 sentences): Compare their overall profile AND specific topic areas to all four party platforms. Be precise — note where they align strongly, where they diverge, and which party is closest on each major issue area. Use percentages where helpful.
+
+4. STRONGEST POSITIONS (3-4 items): Identify their most extreme or clearest positions (highest absolute score values). Each should be a full sentence explaining what that position means politically. ("Your strongest position is on [topic] where your [L/R score] indicates...").
+
+VOICE: Every sentence must address the user directly ("you", "your"). NEVER write "this voter", "the voter", "they", or "their".
 SCORES: Use L/R format only (e.g., "L5", "R3", "CL2"). Never raw numbers like +5 or -5.
 
-Return your response as JSON with this exact structure:
+Return ONLY a JSON object with this exact structure:
 {
-  "summary": "2-3 sentence summary written in second person ('You...')",
-  "keyInsights": ["insight written to you", "insight written to you", "insight written to you"],
-  "partyComparison": "2-3 sentences written to you comparing your views to all four party platforms",
-  "strongestPositions": ["your strongest position phrased to you", "another strong position phrased to you"]
+  "summary": "3-4 sentence overview of their political philosophy",
+  "keyInsights": ["full sentence insight 1", "full sentence insight 2", "full sentence insight 3", "full sentence insight 4"],
+  "partyComparison": "3-4 sentences comparing their views to all four party platforms with specific details",
+  "strongestPositions": ["full sentence about strongest position 1", "full sentence about strongest position 2", "full sentence about strongest position 3"]
 }`;
 
     const response = await fetch(
@@ -244,7 +248,7 @@ Return your response as JSON with this exact structure:
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] }],
-          generationConfig: { temperature: 0.7, maxOutputTokens: 1024, responseMimeType: 'application/json' },
+          generationConfig: { temperature: 0.7, maxOutputTokens: 2048, responseMimeType: 'application/json' },
         }),
       }
     );
@@ -275,31 +279,26 @@ Return your response as JSON with this exact structure:
     const outputPart = parts.find(p => !p.thought && p.text) ?? parts[0];
     const content = outputPart?.text ?? '';
     
-    console.log('AI response received, parsing...');
+    console.log('AI response received, length:', content.length, 'first100:', content.slice(0, 100));
 
-    // Try to parse JSON from response (strip markdown fences Gemini sometimes adds)
+    // Parse JSON — responseMimeType:'application/json' gives clean JSON; strip fences as fallback
     let parsed;
     try {
-      const stripped = content.replace(/^```(?:json)?\s*/m, '').replace(/\s*```\s*$/m, '').trim();
-      const jsonMatch = stripped.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        parsed = JSON.parse(jsonMatch[0]);
-      } else {
-        parsed = {
-          summary: content.slice(0, 500),
-          keyInsights: [],
-          partyComparison: '',
-          strongestPositions: [],
-        };
+      parsed = JSON.parse(content.trim());
+    } catch (_e1) {
+      try {
+        const stripped = content.replace(/^```(?:json)?\s*/m, '').replace(/\s*```\s*$/m, '').trim();
+        const jsonMatch = stripped.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          parsed = JSON.parse(jsonMatch[0]);
+        } else {
+          console.error('No JSON object found in response:', content.slice(0, 200));
+          parsed = { summary: 'Analysis temporarily unavailable. Please try again.', keyInsights: [], partyComparison: '', strongestPositions: [] };
+        }
+      } catch (e2) {
+        console.error('Failed to parse AI response after both attempts:', e2, 'content:', content.slice(0, 200));
+        parsed = { summary: 'Analysis temporarily unavailable. Please try again.', keyInsights: [], partyComparison: '', strongestPositions: [] };
       }
-    } catch (e) {
-      console.error('Failed to parse AI response:', e);
-      parsed = {
-        summary: content.slice(0, 500),
-        keyInsights: [],
-        partyComparison: '',
-        strongestPositions: [],
-      };
     }
 
     return new Response(JSON.stringify({
