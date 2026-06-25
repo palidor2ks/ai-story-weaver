@@ -246,20 +246,19 @@ export const VotingRecordSection = ({
           )}>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-foreground">
-                  You align with{' '}
+                <div className="flex items-baseline gap-2 flex-wrap">
                   <span className={cn(
-                    "font-bold",
-                    alignmentStats.alignmentPercent >= 70 
-                      ? "text-agree" 
-                      : alignmentStats.alignmentPercent >= 40 
-                        ? "text-amber-600" 
+                    "font-black text-3xl leading-none",
+                    alignmentStats.alignmentPercent >= 70
+                      ? "text-agree"
+                      : alignmentStats.alignmentPercent >= 40
+                        ? "text-amber-600"
                         : "text-disagree"
                   )}>
                     {alignmentStats.alignmentPercent}%
                   </span>
-                  {' '}of their legislative activity
-                </p>
+                  <p className="text-sm font-medium text-foreground">legislative alignment</p>
+                </div>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   Based on {alignmentStats.knownVotes} bills where your position is known
                   {alignmentStats.unknownCount > 0 && (
