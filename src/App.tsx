@@ -16,6 +16,7 @@ import { useAllPoliticians } from "./hooks/useAllPoliticians";
 const Auth = lazy(() => import("./pages/Auth").then((m) => ({ default: m.Auth })));
 const Candidates = lazy(() => import("./pages/Candidates").then((m) => ({ default: m.Candidates })));
 const Donors = lazy(() => import("./pages/Donors").then((m) => ({ default: m.Donors })));
+const CandidateOverview = lazy(() => import("./pages/CandidateOverview").then((m) => ({ default: m.CandidateOverview })));
 const CandidateProfile = lazy(() => import("./pages/CandidateProfile").then((m) => ({ default: m.CandidateProfile })));
 const UserProfile = lazy(() => import("./pages/UserProfile").then((m) => ({ default: m.UserProfile })));
 const Quiz = lazy(() => import("./pages/Quiz").then((m) => ({ default: m.Quiz })));
@@ -180,7 +181,11 @@ const AppRoutes = () => (
       <Route path="/parties" element={<RouteGuard requireAuth={false} requireOnboarding={false}><Parties /></RouteGuard>} />
       <Route path="/party/:id" element={<RouteGuard requireAuth={false} requireOnboarding={false}><PartyProfile /></RouteGuard>} />
       <Route path="/donor/:id" element={<RouteGuard requireAuth requireOnboarding={false}><DonorProfile /></RouteGuard>} />
-      <Route path="/candidate/:id" element={<RouteGuard requireAuth={false} requireOnboarding={false}><CandidateProfile /></RouteGuard>} />
+      <Route path="/candidate/:id" element={<RouteGuard requireAuth={false} requireOnboarding={false}><CandidateOverview /></RouteGuard>} />
+      <Route path="/candidate/:id/profile" element={<RouteGuard requireAuth={false} requireOnboarding={false}><CandidateProfile /></RouteGuard>} />
+      <Route path="/candidate/:id/votes" element={<RouteGuard requireAuth={false} requireOnboarding={false}><CandidateProfile /></RouteGuard>} />
+      <Route path="/candidate/:id/donors" element={<RouteGuard requireAuth={false} requireOnboarding={false}><CandidateProfile /></RouteGuard>} />
+      <Route path="/compare" element={<RouteGuard requireAuth={false} requireOnboarding={false}><Candidates /></RouteGuard>} />
       {/* Headless render target for the automatic social-post screenshotter (public, no chrome). */}
       <Route path="/r/card/:candidateId" element={<StatCardRender />} />
       <Route path="/profile" element={<RouteGuard requireAuth requireOnboarding><UserProfile /></RouteGuard>} />
