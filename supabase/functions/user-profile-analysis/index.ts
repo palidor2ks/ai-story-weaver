@@ -244,7 +244,7 @@ Return your response as JSON with this exact structure:
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] }],
-          generationConfig: { temperature: 0.7, maxOutputTokens: 1024 },
+          generationConfig: { temperature: 0.7, maxOutputTokens: 1024, responseMimeType: 'application/json' },
         }),
       }
     );
@@ -277,10 +277,11 @@ Return your response as JSON with this exact structure:
     
     console.log('AI response received, parsing...');
 
-    // Try to parse JSON from response
+    // Try to parse JSON from response (strip markdown fences Gemini sometimes adds)
     let parsed;
     try {
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      const stripped = content.replace(/^```(?:json)?\s*/m, '').replace(/\s*```\s*$/m, '').trim();
+      const jsonMatch = stripped.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         parsed = JSON.parse(jsonMatch[0]);
       } else {
