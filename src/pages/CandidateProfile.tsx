@@ -35,7 +35,7 @@ import { normalizeOfficeName } from '@/lib/officeLabel';
 import { computeFundingBreakdown, groupFundingSources, withPercents } from '@/lib/fundingBreakdown';
 import { CandidateIESection } from '@/components/IndependentExpenditureSections';
 import { cn, formatCompactCurrency } from '@/lib/utils';
-import { ArrowLeft, ExternalLink, MapPin, Calendar, DollarSign, Vote, Sparkles, Pencil, BadgeCheck, FileText, RefreshCw, Info, AlertTriangle, Search, X, ChevronDown, ChevronUp, ScrollText, Briefcase } from 'lucide-react';
+import { ArrowLeft, ExternalLink, MapPin, Calendar, DollarSign, Vote, Sparkles, Pencil, BadgeCheck, FileText, RefreshCw, Info, AlertTriangle, Search, X, ChevronDown, ChevronUp, ScrollText, Briefcase, Heart } from 'lucide-react';
 import { RecipientAIAnalysisDialog } from '@/components/RecipientAIAnalysisDialog';
 import { BillAIAnalysisDialog } from '@/components/BillAIAnalysisDialog';
 import { Input } from '@/components/ui/input';
@@ -93,6 +93,36 @@ const getOfficeLocationLabel = (
   return `${officeLabel} ${getLocationLabel(state, district)}`;
 };
 
+const getOfficeAbbrev = (office: string | undefined | null): string => {
+  if (!office) return 'OFF';
+  const o = office.toLowerCase();
+  if (o.includes('senator')) return 'SEN';
+  if (o.includes('representative')) return 'REP';
+  if (o.includes('governor')) return 'GOV';
+  return office.slice(0, 3).toUpperCase();
+};
+
+const getBillStatusStyle = (status: string | null | undefined) => {
+  const s = (status || '').toLowerCase();
+  if (s.includes('enacted') || s.includes('signed') || s.includes('became law'))
+    return 'bg-poli-green text-white';
+  if (s.includes('passed') && s.includes('senate'))
+    return 'bg-poli-navy text-white';
+  if (s.includes('committee'))
+    return 'bg-poli-gold text-white';
+  return 'bg-poli-surface text-poli-dim';
+};
+
+const StatusBadge = ({ status }: { status?: string | null }) => {
+  if (!status) return null;
+  const label = status.length > 18 ? status.slice(0, 16) + '…' : status;
+  return (
+    <span className={cn('font-mono-label text-[9px] font-semibold px-2 py-0.5 rounded-[5px] shrink-0', getBillStatusStyle(status))}>
+      {label.toUpperCase()}
+    </span>
+  );
+};
+
 export const CandidateProfile = () => {
   const { id } = useParams<{ id: string }>();
   const { data: profile } = useProfile();
@@ -108,6 +138,7 @@ export const CandidateProfile = () => {
   const [visibleDonorCount, setVisibleDonorCount] = useState(20);
   const [visibleBillCount, setVisibleBillCount] = useState(20);
   const [donorSearch, setDonorSearch] = useState('');
+  const [activeTab, setActiveTab] = useState<'issues' | 'votes' | 'bills' | 'money' | 'contact'>('issues');
   const effectiveCycle = selectedCycle ?? cycleInfo?.defaultCycle;
   const { data: donors = [], refetch: refetchDonors } = useCandidateDonors(id, effectiveCycle);
   const { data: earmarkRollups = [] } = useCandidateEarmarkRollups(id, effectiveCycle);
@@ -369,7 +400,7 @@ export const CandidateProfile = () => {
 
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-[#F5F6FA]">
       <Seo
         title={`${candidate.name} — Pulse`}
         description={`See ${candidate.name}'s positions, voting record, donors, and how they align with your views on the issues that matter most.`}
@@ -391,29 +422,386 @@ export const CandidateProfile = () => {
           url: `https://www.polipulseapp.com/candidate/${candidate.id}`,
         }}
       />
-      <Header />
-      
-      <main className="container py-8 px-4">
-        {/* Back Button */}
-        <Link to="/candidates" className="inline-flex items-center text-muted-foreground hover:text-foreground mb-6 transition-colors">
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to Candidates
-        </Link>
 
-        {/* Sticky identity bar (mobile + desktop) */}
-        <div className="md:hidden sticky top-16 z-30 -mx-4 px-4 py-2 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border flex items-center gap-3 mb-4">
+      {/* NAVY GRADIENT HEADER */}
+      <div className="bg-gradient-to-br from-poli-navy to-poli-dark text-white pb-12">
+        {/* Top bar: back, title, share+follow */}
+        <div className="flex items-center justify-between px-5 pt-4 pb-3">
+          <Link to={`/candidate/${id}`}>
+            <ArrowLeft className="w-5 h-5 text-white/70" />
+          </Link>
+          <span className="font-mono-label text-[11px] tracking-widest uppercase text-white/80">
+            {getOfficeAbbrev(candidate.office)}. {candidate.name.split(' ').slice(-1)[0].toUpperCase()}
+          </span>
+          <div className="flex items-center gap-3">
+            <ShareProfileButton
+              candidateId={candidate.id}
+              candidateName={candidate.name}
+              candidateOffice={candidate.office}
+              candidateState={candidate.state}
+              candidateDistrict={candidate.district}
+              candidateParty={candidate.party}
+              candidateScore={resolvedScore}
+              candidateImage={representativeDetails?.image_url || candidate.image_url}
+              fecId={candidate.fec_candidate_id ?? null}
+              userScore={userScore}
+              matchScore={matchScore}
+              agreements={agreements}
+              disagreements={disagreements}
+              profileUrl={window.location.href}
+              incumbent={candidate.is_incumbent ?? true}
+              coverageTier={candidate.coverage_tier ?? undefined}
+              confidence={candidate.confidence ?? undefined}
+              totalRaised={fecTotalReceipts}
+              totalSpent={fecTotalDisbursements}
+              topDonors={(() => {
+                const agg = new Map<string, { name: string; amount: number; primaryCause?: string | null; primaryCauseStance?: string | null; viaEarmarks?: boolean }>();
+                const rollupIndex = buildEarmarkRollupIndex(earmarkRollups);
+                const rollupMatch = new Map<string, { name: string; type: string }>();
+                donors
+                  .filter((d) => !isConduitDonor(d) && !d.is_transfer)
+                  .forEach((d) => {
+                    const aliasName = donorAliasNameMap?.get(`${d.name.trim().toUpperCase()}|${d.type}`);
+                    const n = (aliasName || d.display_name || d.name || 'Unknown').trim();
+                    const matchedKey = matchEarmarkRollupKey(d, rollupIndex);
+                    if (matchedKey) {
+                      if (!rollupMatch.has(matchedKey)) rollupMatch.set(matchedKey, { name: n, type: d.type });
+                      return;
+                    }
+                    const cause = getDonorCause(donorCauseMap, d.name, d.type) ?? getDonorCause(donorCauseMap, n, d.type);
+                    const key = `${n.toUpperCase()}|${d.type}`;
+                    const current = agg.get(key) ?? { name: n, amount: 0, primaryCause: cause?.label ?? null, primaryCauseStance: cause?.stance ?? null };
+                    current.amount += Number(d.amount ?? 0);
+                    if (!current.primaryCause && cause?.label) { current.primaryCause = cause.label; current.primaryCauseStance = cause.stance ?? null; }
+                    agg.set(key, current);
+                  });
+                earmarkRollups.forEach((r) => {
+                  const match = rollupMatch.get(earmarkRollupKey(r.org_label, r.cycle));
+                  const name = match?.name || r.org_label;
+                  const type = match?.type ?? (r.org_type === 'Organization' ? 'Organization' : 'PAC');
+                  const cause = getDonorCause(donorCauseMap, r.org_label, type) ?? getDonorCause(donorCauseMap, name, type);
+                  const key = `${name.toUpperCase()}|${type}|earmark`;
+                  const current = agg.get(key) ?? { name, amount: 0, primaryCause: cause?.label ?? null, primaryCauseStance: cause?.stance ?? null, viaEarmarks: true };
+                  current.amount += r.direct_amount + r.routed_amount;
+                  agg.set(key, current);
+                });
+                return Array.from(agg.values()).sort((a, b) => b.amount - a.amount).slice(0, 3);
+              })()}
+              fundingBreakdown={fundingBreakdownComputed}
+              fundingCycle={fundingInput.cycleLabel}
+              selfFunded={(fecLoans ?? 0) + (fecCandidateContribution ?? 0)}
+            />
+            <Heart className="w-5 h-5 text-white/70" />
+          </div>
+        </div>
+
+        {/* Identity row */}
+        <div className="flex items-center gap-4 px-5 pt-1">
           <OfficialAvatar
             imageUrl={representativeDetails?.image_url || candidate.image_url}
             name={candidate.name}
             party={candidate.party}
-            size="sm"
-            className="rounded-lg shrink-0"
+            size="lg"
+            className="rounded-full ring-2 ring-white/30 ring-offset-2 ring-offset-transparent shrink-0"
           />
-          <div className="min-w-0 flex-1">
-            <p className="font-display font-bold text-sm truncate">{candidate.name}</p>
-            <p className="text-xs text-muted-foreground truncate">{candidate.party} · {officeLocationLabel}</p>
+          <div>
+            <h1 className="font-sans font-black text-[23px] leading-tight text-white">{candidate.name}</h1>
+            <p className="text-white/70 text-sm mt-0.5">
+              {normalizeOfficeName(candidate.office)} · {candidate.state}
+            </p>
+            <div className="flex items-center gap-2 mt-1.5">
+              <span
+                className="w-2 h-2 rounded-full"
+                style={{ background: candidate.party === 'Democrat' ? '#60A5FA' : candidate.party === 'Republican' ? '#FCA5A5' : '#D1FAE5' }}
+              />
+              <span className="text-white/80 text-sm">{candidate.party}</span>
+              {candidate.is_incumbent && <span className="text-white/50 text-sm">· Incumbent</span>}
+            </div>
           </div>
         </div>
+      </div>
+
+      {/* POLISCORE OVERLAP CARD */}
+      <div className="mx-4 -mt-6 bg-white rounded-[22px] shadow-[0_10px_30px_rgba(11,15,34,0.12)] p-5">
+        <p className="font-mono-label text-[9.5px] tracking-[2px] text-poli-red mb-2">POLISCORE</p>
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1">
+            <div className="flex items-baseline gap-2">
+              <span className="font-sans font-black text-[46px] leading-none text-poli-navy">
+                <ScoreText score={resolvedScore} />
+              </span>
+            </div>
+            <p className="text-[13px] text-poli-dim mt-1">
+              {personalized?.score !== null && personalized?.score !== undefined
+                ? `Personalized score (${personalized.matchedCount} questions)`
+                : 'Score unavailable'}
+            </p>
+          </div>
+          {matchScore !== null && (
+            <div className="flex flex-col items-center shrink-0">
+              <div
+                className="relative w-[64px] h-[64px] rounded-full"
+                style={{ background: `conic-gradient(#182B7A 0 ${Math.round(matchScore)}%, #ECECF2 ${Math.round(matchScore)}% 100%)` }}
+              >
+                <div className="absolute inset-[8px] bg-white rounded-full flex items-center justify-center">
+                  <span className="font-sans font-black text-[13px] text-poli-navy">{Math.round(matchScore)}%</span>
+                </div>
+              </div>
+              <p className="font-mono-label text-[8px] text-poli-muted tracking-wide mt-1">YOUR MATCH</p>
+            </div>
+          )}
+        </div>
+        {/* Slider */}
+        <div className="mt-4 relative">
+          <div className="h-[5px] rounded-full bg-gradient-to-r from-[#2E5BFF] via-[#ECECF2] to-[#FF5A6E]" />
+          <div
+            className="absolute top-1/2 -translate-y-1/2"
+            style={{ left: `${Math.max(2, Math.min(98, 50 + (resolvedScore / 10) * 45))}%` }}
+          >
+            <div className="w-[14px] h-[14px] rounded-full bg-poli-navy border-2 border-white shadow -translate-x-1/2" />
+          </div>
+          <div className="flex justify-between mt-2">
+            <span className="font-mono-label text-[8px] text-poli-muted">L · LIBERAL</span>
+            <span className="font-mono-label text-[8px] text-poli-muted">CONSERVATIVE · C</span>
+          </div>
+        </div>
+      </div>
+
+      {/* STAT GRID */}
+      <div className="mx-4 mt-3 grid grid-cols-2 gap-2.5">
+        {[
+          { value: votes.length || '—', label: 'Key votes cast' },
+          { value: '—', label: 'Party unity' },
+          { value: sponsoredBills.filter((b) => b.is_sponsor).length || '—', label: 'Bills sponsored' },
+          { value: sponsoredBills.filter((b) => !b.is_sponsor).length || '—', label: 'Cosponsored' },
+        ].map(stat => (
+          <div key={stat.label} className="border border-[rgba(20,23,58,0.1)] rounded-[16px] p-3.5 bg-white">
+            <p className="font-sans font-black text-[22px] text-poli-navy leading-none">{String(stat.value)}</p>
+            <p className="text-[11px] text-poli-dim mt-1">{stat.label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* 5-TAB NAVIGATION */}
+      <div className="mt-4 px-4">
+        <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+          {(['issues', 'votes', 'bills', 'money', 'contact'] as const).map(tab => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={cn(
+                'flex-none font-sans font-bold text-[12px] px-4 py-[7px] rounded-[20px] whitespace-nowrap transition-colors',
+                activeTab === tab
+                  ? 'bg-poli-navy text-white'
+                  : 'bg-poli-surface text-poli-body hover:bg-poli-surface/70',
+              )}
+            >
+              {tab.charAt(0).toUpperCase() + tab.slice(1)}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* TAB CONTENT */}
+      <div className="mx-4 mt-4 pb-24">
+        {/* ISSUES TAB */}
+        {activeTab === 'issues' && (
+          <div>
+            <div className="bg-white rounded-[18px] border border-[rgba(20,23,58,0.08)] p-4 mb-3 shadow-sm">
+              <div className="flex items-center justify-between mb-2">
+                <p className="font-mono-label text-[10px] tracking-[2px] text-poli-red">AI ANALYSIS</p>
+                {matchScore !== null && (
+                  <span className="font-mono-label text-[10px] font-semibold px-2 py-0.5 rounded-full bg-poli-navy/10 text-poli-navy">
+                    {Math.round(matchScore)}% Match
+                  </span>
+                )}
+              </div>
+              <AIExplanation
+                candidateId={candidate.id}
+                candidateName={candidate.name}
+                topicScores={candidateTopicScores}
+                userTopicScores={userTopicScores.map(uts => {
+                  const topic = candidateTopicScores.find(c => c.topicId === uts.topic_id);
+                  return { topicId: uts.topic_id, topicName: topic?.topicName || uts.topic_id, score: uts.score };
+                })}
+                matchScore={matchScore}
+              />
+            </div>
+            <div className="bg-white rounded-[18px] border border-[rgba(20,23,58,0.08)] p-4 shadow-sm">
+              <p className="font-mono-label text-[10px] tracking-[2px] text-poli-red mb-3">POSITIONS & YOUR MATCH</p>
+              <CandidatePositions candidateId={candidate.id} candidateName={candidate.name} />
+            </div>
+          </div>
+        )}
+
+        {/* VOTES TAB */}
+        {activeTab === 'votes' && (
+          <div>
+            <VotingRecordSection
+              votes={votes}
+              userTopicScores={userTopicScores}
+              representativeParty={candidate.party}
+              candidateName={candidate.name}
+              candidateState={candidate.state}
+              candidateOffice={candidate.office}
+            />
+            <Link to={`/candidate/${id}/votes`} className="block mt-3">
+              <button className="w-full border border-[rgba(20,23,58,0.14)] text-poli-navy font-bold text-sm rounded-[14px] py-3.5">
+                See all {votes.length} votes →
+              </button>
+            </Link>
+          </div>
+        )}
+
+        {/* BILLS TAB */}
+        {activeTab === 'bills' && (
+          <div>
+            <div className="bg-white rounded-[18px] border border-[rgba(20,23,58,0.08)] p-4 shadow-sm">
+              <p className="font-mono-label text-[10px] tracking-[2px] text-poli-red mb-3">SPONSORED BILLS</p>
+              {sponsoredBills.slice(0, visibleBillCount).map((bill) => (
+                <div key={bill.bill_id} className="py-3 border-t border-[rgba(20,23,58,0.07)] first:border-t-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <span className="font-mono-label text-[11px] text-poli-muted block mb-0.5">
+                        {bill.bill_type} {bill.bill_number}
+                      </span>
+                      <p className="text-[13px] font-semibold text-poli-navy leading-snug">{bill.bill_name}</p>
+                    </div>
+                    <StatusBadge status={bill.status} />
+                  </div>
+                </div>
+              ))}
+              {sponsoredBills.length > visibleBillCount && (
+                <button
+                  onClick={() => setVisibleBillCount(prev => prev + 20)}
+                  className="mt-3 w-full border border-[rgba(20,23,58,0.14)] text-poli-navy font-bold text-sm rounded-[14px] py-3"
+                >
+                  Show {sponsoredBills.length - visibleBillCount} more
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* MONEY TAB */}
+        {activeTab === 'money' && (
+          <div>
+            {/* Cycle selector chips */}
+            <div className="flex gap-2 mb-3">
+              {(cycleInfo?.cycles ?? []).filter(c => c !== 'all').slice(0, 3).map(cy => (
+                <button
+                  key={cy}
+                  onClick={() => setSelectedCycle(cy)}
+                  className={cn(
+                    'font-sans font-bold text-[12px] px-4 py-[7px] rounded-[20px]',
+                    effectiveCycle === cy
+                      ? 'bg-poli-navy text-white'
+                      : 'bg-poli-surface text-poli-body',
+                  )}
+                >
+                  {cy}
+                </button>
+              ))}
+            </div>
+            {/* Summary card */}
+            {fecTotalReceipts && (
+              <div className="bg-gradient-to-br from-poli-navy to-poli-dark rounded-[18px] p-4 mb-3 text-white">
+                <p className="font-mono-label text-[9px] tracking-[2px] text-white/55 mb-1">TOTAL RAISED</p>
+                <p className="font-sans font-black text-[36px] leading-none">{formatCurrency(fecTotalReceipts)}</p>
+                {fecTotalDisbursements && (
+                  <div className="flex gap-4 mt-3">
+                    <div>
+                      <p className="font-mono-label text-[9px] text-white/55">SPENT</p>
+                      <p className="font-bold text-[16px]">{formatCurrency(fecTotalDisbursements)}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            {/* Funding sources breakdown */}
+            {fundingBreakdownComputed && (
+              <div className="bg-white rounded-[18px] border border-[rgba(20,23,58,0.08)] p-4 mb-3 shadow-sm">
+                <p className="font-mono-label text-[10px] tracking-[2px] text-poli-red mb-3">SOURCE OF FUNDS</p>
+                <FundingSourcesBreakdown input={fundingInput} />
+              </div>
+            )}
+            {/* Top donors preview (3) */}
+            {donors.filter(d => !isConduitDonor(d)).slice(0, 3).length > 0 && (
+              <div className="bg-white rounded-[18px] border border-[rgba(20,23,58,0.08)] p-4 shadow-sm">
+                <p className="font-mono-label text-[10px] tracking-[2px] text-poli-red mb-3">TOP DONORS</p>
+                {donors.filter(d => !isConduitDonor(d)).slice(0, 3).map((donor, i) => (
+                  <div key={i} className="flex items-center justify-between py-2.5 border-t border-[rgba(20,23,58,0.07)] first:border-t-0">
+                    <div>
+                      <span className="font-mono-label text-[11px] text-poli-muted mr-2">#{i + 1}</span>
+                      <span className="text-[13px] font-bold text-poli-body">{donor.display_name || donor.name}</span>
+                      {donor.type && <p className="text-[11px] text-poli-muted">{donor.type}</p>}
+                    </div>
+                    <span className="font-mono-label text-[13px] font-semibold text-poli-navy">
+                      {formatCurrency(donor.amount ?? 0)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* CTA to full donors page */}
+            <Link to={`/candidate/${id}/donors`} className="block mt-3">
+              <button className="w-full bg-poli-navy text-white font-bold text-sm rounded-[14px] py-3.5">
+                Funding & donor details →
+              </button>
+            </Link>
+          </div>
+        )}
+
+        {/* CONTACT TAB */}
+        {activeTab === 'contact' && (
+          <div>
+            <div className="bg-white rounded-[18px] border border-[rgba(20,23,58,0.08)] p-4 shadow-sm">
+              <p className="font-mono-label text-[10px] tracking-[2px] text-poli-red mb-3">OFFICES</p>
+              {representativeDetails ? (
+                <ContactInfoCard representative={representativeDetails} />
+              ) : (
+                <p className="text-sm text-poli-muted">Contact information unavailable</p>
+              )}
+            </div>
+            <div className="flex gap-2.5 mt-3">
+              {representativeDetails?.phone && (
+                <a href={`tel:${representativeDetails.phone}`} className="flex-1">
+                  <button className="w-full bg-poli-navy text-white font-bold text-sm rounded-[14px] py-3.5">
+                    Call office
+                  </button>
+                </a>
+              )}
+              <button className="flex-1 bg-poli-red text-white font-bold text-sm rounded-[14px] py-3.5">
+                Town halls
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Admin Edit Dialog */}
+      {isAdmin && candidate && (
+        <CandidateEditDialog
+          open={isEditDialogOpen}
+          onOpenChange={setIsEditDialogOpen}
+          candidateId={candidate.id}
+          candidateName={candidate.name}
+          currentData={{
+            name: candidate.name,
+            party: candidate.party,
+            office: candidate.office,
+            state: candidate.state,
+            district: candidate.district,
+            image_url: candidate.image_url,
+            overall_score: resolvedScore,
+            coverage_tier: candidate.coverage_tier || 'tier_3',
+            confidence: candidate.confidence || 'medium',
+          }}
+        />
+      )}
+    </div>
+  );
+};
         <div className="hidden md:flex sticky top-16 z-30 -mx-4 px-4 py-3 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border items-center gap-3 mb-6">
           <OfficialAvatar
             imageUrl={representativeDetails?.image_url || candidate.image_url}
