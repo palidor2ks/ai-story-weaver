@@ -5,7 +5,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -151,45 +150,52 @@ export const EditProfileDialog = ({ profile, onSave, isLoading }: EditProfileDia
           Edit Profile
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-hidden flex flex-col">
-        <DialogHeader>
-          <DialogTitle>Edit Your Profile</DialogTitle>
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-hidden flex flex-col bg-white rounded-2xl p-0 border-0 gap-0">
+        <DialogHeader className="bg-poli-surface px-5 pt-5 pb-4 flex-shrink-0">
+          <p className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest mb-1">
+            Edit Profile
+          </p>
+          <DialogTitle className="text-lg font-black text-poli-navy">
+            Your Profile
+          </DialogTitle>
         </DialogHeader>
-        
-        <div className="space-y-4 py-4 overflow-y-auto pr-1">
+
+        <div className="space-y-4 px-5 py-4 overflow-y-auto pr-1">
           <div className="space-y-2">
-            <Label htmlFor="name">Name</Label>
+            <Label htmlFor="name" className="text-sm font-semibold text-poli-body">Name</Label>
             <Input
               id="name"
               value={formData.name}
               onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
               placeholder="Your name"
+              className="border border-poli-surface rounded-xl h-12 px-4 w-full text-sm text-poli-body focus:ring-1 focus:ring-poli-navy"
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="age">Age</Label>
+            <Label htmlFor="age" className="text-sm font-semibold text-poli-body">Age</Label>
             <Input
               id="age"
               type="number"
               min={18}
               max={120}
               value={formData.age || ''}
-              onChange={(e) => setFormData(prev => ({ 
-                ...prev, 
-                age: e.target.value ? parseInt(e.target.value, 10) : null 
+              onChange={(e) => setFormData(prev => ({
+                ...prev,
+                age: e.target.value ? parseInt(e.target.value, 10) : null
               }))}
               placeholder="Your age"
+              className="border border-poli-surface rounded-xl h-12 px-4 w-full text-sm text-poli-body focus:ring-1 focus:ring-poli-navy"
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="sex">Sex</Label>
+            <Label htmlFor="sex" className="text-sm font-semibold text-poli-body">Sex</Label>
             <Select
               value={formData.sex}
               onValueChange={(value) => setFormData(prev => ({ ...prev, sex: value }))}
             >
-              <SelectTrigger>
+              <SelectTrigger className="border border-poli-surface rounded-xl h-12 px-4 text-sm text-poli-body focus:ring-1 focus:ring-poli-navy">
                 <SelectValue placeholder="Select your sex" />
               </SelectTrigger>
               <SelectContent>
@@ -203,12 +209,12 @@ export const EditProfileDialog = ({ profile, onSave, isLoading }: EditProfileDia
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="income">Household Income</Label>
+            <Label htmlFor="income" className="text-sm font-semibold text-poli-body">Household Income</Label>
             <Select
               value={formData.income}
               onValueChange={(value) => setFormData(prev => ({ ...prev, income: value }))}
             >
-              <SelectTrigger>
+              <SelectTrigger className="border border-poli-surface rounded-xl h-12 px-4 text-sm text-poli-body focus:ring-1 focus:ring-poli-navy">
                 <SelectValue placeholder="Select income range" />
               </SelectTrigger>
               <SelectContent>
@@ -222,12 +228,12 @@ export const EditProfileDialog = ({ profile, onSave, isLoading }: EditProfileDia
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="employment_status">Employment Status</Label>
+            <Label htmlFor="employment_status" className="text-sm font-semibold text-poli-body">Employment Status</Label>
             <Select
               value={formData.employment_status}
               onValueChange={(value) => setFormData(prev => ({ ...prev, employment_status: value }))}
             >
-              <SelectTrigger>
+              <SelectTrigger className="border border-poli-surface rounded-xl h-12 px-4 text-sm text-poli-body focus:ring-1 focus:ring-poli-navy">
                 <SelectValue placeholder="Select employment status" />
               </SelectTrigger>
               <SelectContent>
@@ -240,15 +246,13 @@ export const EditProfileDialog = ({ profile, onSave, isLoading }: EditProfileDia
             </Select>
           </div>
 
-
-
           <div className="space-y-2">
-            <Label htmlFor="political_party">Political Party</Label>
+            <Label htmlFor="political_party" className="text-sm font-semibold text-poli-body">Political Party</Label>
             <Select
               value={formData.political_party}
               onValueChange={(value) => setFormData(prev => ({ ...prev, political_party: value }))}
             >
-              <SelectTrigger>
+              <SelectTrigger className="border border-poli-surface rounded-xl h-12 px-4 text-sm text-poli-body focus:ring-1 focus:ring-poli-navy">
                 <SelectValue placeholder="Select your party" />
               </SelectTrigger>
               <SelectContent>
@@ -262,12 +266,12 @@ export const EditProfileDialog = ({ profile, onSave, isLoading }: EditProfileDia
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="education_level">Education Level</Label>
+            <Label htmlFor="education_level" className="text-sm font-semibold text-poli-body">Education Level</Label>
             <Select
               value={formData.education_level}
               onValueChange={(value) => setFormData(prev => ({ ...prev, education_level: value }))}
             >
-              <SelectTrigger>
+              <SelectTrigger className="border border-poli-surface rounded-xl h-12 px-4 text-sm text-poli-body focus:ring-1 focus:ring-poli-navy">
                 <SelectValue placeholder="Select your education level" />
               </SelectTrigger>
               <SelectContent>
@@ -281,12 +285,12 @@ export const EditProfileDialog = ({ profile, onSave, isLoading }: EditProfileDia
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="race">Race</Label>
+            <Label htmlFor="race" className="text-sm font-semibold text-poli-body">Race</Label>
             <Select
               value={formData.race}
               onValueChange={(value) => setFormData(prev => ({ ...prev, race: value }))}
             >
-              <SelectTrigger>
+              <SelectTrigger className="border border-poli-surface rounded-xl h-12 px-4 text-sm text-poli-body focus:ring-1 focus:ring-poli-navy">
                 <SelectValue placeholder="Select your race" />
               </SelectTrigger>
               <SelectContent>
@@ -300,12 +304,12 @@ export const EditProfileDialog = ({ profile, onSave, isLoading }: EditProfileDia
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="religion">Religion</Label>
+            <Label htmlFor="religion" className="text-sm font-semibold text-poli-body">Religion</Label>
             <Select
               value={formData.religion}
               onValueChange={(value) => setFormData(prev => ({ ...prev, religion: value }))}
             >
-              <SelectTrigger>
+              <SelectTrigger className="border border-poli-surface rounded-xl h-12 px-4 text-sm text-poli-body focus:ring-1 focus:ring-poli-navy">
                 <SelectValue placeholder="Select your religion" />
               </SelectTrigger>
               <SelectContent className="max-h-80">
@@ -324,14 +328,24 @@ export const EditProfileDialog = ({ profile, onSave, isLoading }: EditProfileDia
           </div>
         </div>
 
-        <DialogFooter className="pt-3 border-t">
-          <Button variant="outline" onClick={() => setOpen(false)}>
-            Cancel
-          </Button>
-          <Button onClick={handleSave} disabled={isLoading || !formData.name.trim()}>
+        <div className="flex flex-col gap-2 px-5 pb-5 pt-3 border-t border-poli-surface flex-shrink-0">
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={isLoading || !formData.name.trim()}
+            className="w-full h-12 rounded-xl font-bold text-white text-sm flex items-center justify-center disabled:opacity-60"
+            style={{ background: 'linear-gradient(90deg, #182B7A, #B3122F)' }}
+          >
             {isLoading ? 'Saving...' : 'Save Changes'}
-          </Button>
-        </DialogFooter>
+          </button>
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="text-sm text-poli-muted underline text-center py-1"
+          >
+            Cancel
+          </button>
+        </div>
       </DialogContent>
     </Dialog>
   );
