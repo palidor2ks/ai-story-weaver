@@ -427,7 +427,7 @@ export const CandidateProfile = () => {
       <div className="bg-gradient-to-br from-poli-navy to-poli-dark text-white pb-12">
         {/* Top bar: back, title, share+follow */}
         <div className="flex items-center justify-between px-5 pt-4 pb-3">
-          <Link to={`/candidate/${id}`}>
+          <Link to="/candidates">
             <ArrowLeft className="w-5 h-5 text-white/70" />
           </Link>
           <span className="font-mono-label text-[11px] tracking-widest uppercase text-white/80">
