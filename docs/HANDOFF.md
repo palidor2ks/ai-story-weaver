@@ -5,6 +5,26 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-25 — Fix user-profile-analysis JSON parsing (Gemini markdown fences)
+
+**What happened & why**
+After PRs #575/#576 fixed the Lovable→Gemini switch, the AI Analysis card was showing raw JSON
+(`\`\`\`json { "summary": "..." }`) instead of rendered content. Root cause: `gemini-2.5-flash`
+wraps its JSON response in markdown code fences by default, which broke the regex parser and fell
+back to `content.slice(0, 500)` as the `summary` field.
+
+Fix (PR #577, deployed as v650):
+- Added `responseMimeType: 'application/json'` to `generationConfig` — forces Gemini to return
+  bare JSON without any markdown formatting (primary fix).
+- Added code fence stripping before the regex match as a belt-and-suspenders fallback.
+
+**State** (verified 2026-06-25)
+v650 deployed and PR #577 merged to main. AI Analysis card should now show structured output:
+summary paragraph + Key Insights bullet list + Party Platform Comparison section.
+
+**Next**
+User to confirm the analysis looks correct and has the expected depth/structure.
+
 ## 2026-06-25 — Fix user-profile-analysis AI analysis (Lovable gateway → Gemini direct)
 
 **What happened & why**
