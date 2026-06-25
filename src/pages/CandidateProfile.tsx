@@ -138,7 +138,7 @@ export const CandidateProfile = () => {
   const [visibleDonorCount, setVisibleDonorCount] = useState(20);
   const [visibleBillCount, setVisibleBillCount] = useState(20);
   const [donorSearch, setDonorSearch] = useState('');
-  const [activeTab, setActiveTab] = useState<'issues' | 'votes' | 'bills' | 'money' | 'contact'>('issues');
+  const [activeTab, setActiveTab] = useState<'issues' | 'votes' | 'bills' | 'money' | 'contact' | 'positions'>('issues');
   const effectiveCycle = selectedCycle ?? cycleInfo?.defaultCycle;
   const { data: donors = [], refetch: refetchDonors } = useCandidateDonors(id, effectiveCycle);
   const { data: earmarkRollups = [] } = useCandidateEarmarkRollups(id, effectiveCycle);
@@ -586,7 +586,7 @@ export const CandidateProfile = () => {
       {/* 5-TAB NAVIGATION */}
       <div className="mt-4 px-4">
         <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
-          {(['issues', 'votes', 'bills', 'money', 'contact'] as const).map(tab => (
+          {(['issues', 'positions', 'votes', 'bills', 'money', 'contact'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -628,10 +628,14 @@ export const CandidateProfile = () => {
                 matchScore={matchScore}
               />
             </div>
-            <div className="bg-white rounded-[18px] border border-[rgba(20,23,58,0.08)] p-4 shadow-sm">
-              <p className="font-mono-label text-[10px] tracking-[2px] text-poli-red mb-3">POSITIONS & YOUR MATCH</p>
-              <CandidatePositions candidateId={candidate.id} candidateName={candidate.name} />
-            </div>
+          </div>
+        )}
+
+        {/* POSITIONS TAB */}
+        {activeTab === 'positions' && (
+          <div className="bg-white rounded-[18px] border border-[rgba(20,23,58,0.08)] p-4 shadow-sm">
+            <p className="font-mono-label text-[10px] tracking-[2px] text-poli-red mb-3">POSITIONS & YOUR MATCH</p>
+            <CandidatePositions candidateId={candidate.id} candidateName={candidate.name} />
           </div>
         )}
 
