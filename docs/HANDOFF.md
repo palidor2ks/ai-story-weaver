@@ -5,6 +5,33 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-25 — Design B full rollout: Phases 0–9 complete
+
+**What happened & why**
+Completed the full "Design B — The Scorecard" visual redesign across all 18 screens plus dialogs.
+Every change was visual-only: all data hooks, scoring logic, and Supabase calls preserved exactly.
+
+Phase 0: Spline Sans Mono font + poli-* color tokens (tailwind.config.ts, index.html)
+Phase 1-3: CandidateProfile — navy gradient header, PoliScore overlap card, 5-tab chip nav
+Phase 1a: CandidateOverview — new lightweight entry card at /candidate/:id
+Phase 4: CandidateVotes, CandidateDonors, BillDetail + useBill hook (drill-down pages)
+Phase 5: UserProfile — navy header, PULSE SCORE overlap card, 6-tab chip nav
+Phase 6: Auth, Onboarding, Quiz, QuizResults — gradient CTAs, poli-* tokens throughout
+Phase 7: Candidates (All Politicians directory), HowScoringWorks full redesigns
+Phase 8: All 8 dialogs redesigned — AI analysis (navy header), form dialogs (light header),
+  ElectionDetailsDialog (navy), ShareCardModal (light tiles)
+Phase 9: CompareView — /compare?a=&b= side-by-side with issue-by-issue ALIGNS/DIFFERS
+
+**State** (verified 2026-06-25)
+`bunx tsc --noEmit` — 0 errors. `bun run build` — clean (✓ built in ~12s).
+All 139 tests pass. Pushed to branch `claude/elegant-curie-3ln5ed`, PR #564 open.
+CI fixed: TypeCheck failure on `b8fed4b1` resolved in `a539c106` (invalid dialog props removed).
+
+**Next**
+Design token rollout to remaining list/profile pages: Donors, Committees, TopSpenders,
+DonorProfile, CommitteeProfile, PartyProfile, Issues, PoliticianDashboard (Phase 7 remainder).
+These have no specific v2 mockups — apply poli-* tokens to headings, CTAs, section labels.
+
 ## Entry template (copy this, fill it in, put it at the TOP)
 
 ```
