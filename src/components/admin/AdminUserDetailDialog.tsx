@@ -49,7 +49,7 @@ export function AdminUserDetailDialog({ userId, open, onOpenChange }: Props) {
 
         {isLoading || !profile ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            <Loader2 className="h-6 w-6 animate-spin text-poli-muted" />
           </div>
         ) : (
           <div className="space-y-5">
@@ -79,16 +79,16 @@ export function AdminUserDetailDialog({ userId, open, onOpenChange }: Props) {
                   )}
                 </div>
                 {profile.email && (
-                  <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-1 text-sm text-poli-muted">
                     <Mail className="h-3 w-3" /> {profile.email}
                   </div>
                 )}
                 {profile.location && (
-                  <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-1 text-sm text-poli-muted">
                     <MapPin className="h-3 w-3" /> {profile.location}
                   </div>
                 )}
-                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                <div className="flex items-center gap-1 text-xs text-poli-muted">
                   <Calendar className="h-3 w-3" /> Joined {new Date(profile.created_at).toLocaleDateString()}
                 </div>
               </div>
@@ -120,7 +120,7 @@ export function AdminUserDetailDialog({ userId, open, onOpenChange }: Props) {
                       <Badge key={i} variant="secondary" className="gap-1">
                         <span>{t.topics?.icon}</span>
                         {t.topics?.name}
-                        <span className="text-muted-foreground">· {t.weight}</span>
+                        <span className="text-poli-muted">· {t.weight}</span>
                       </Badge>
                     ))}
                   </div>
@@ -157,7 +157,7 @@ export function AdminUserDetailDialog({ userId, open, onOpenChange }: Props) {
 function Field({ label, value }: { label: string; value?: string | null }) {
   return (
     <div>
-      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="text-xs text-poli-muted">{label}</div>
       <div className="truncate">{value || "—"}</div>
     </div>
   );
