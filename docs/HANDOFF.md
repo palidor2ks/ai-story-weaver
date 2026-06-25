@@ -5,6 +5,32 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-25 — Restore analysis depth + fix JSON parsing (v651, PR #578)
+
+**What happened & why**
+After v650 fixed markdown fences, two issues remained:
+1. JSON.parse was still failing intermittently (regex-first approach was fragile).
+2. Analysis quality regressed — prompt used "brief" wording and only 1024 tokens, producing
+   thin 2-3 sentence responses vs. the richer output the Lovable gateway produced.
+
+Fixes (PR #578, deployed as v651):
+- Rewrote prompt to request 3-4 sentence summary, 4-5 full-sentence key insights (with L/R
+  score references), 3-4 sentence party comparison across all four parties, and 3-4 strongest-
+  position sentences.
+- Increased `maxOutputTokens` 1024 → 2048 to give model room for longer output.
+- Switched JSON parsing to try `JSON.parse(content.trim())` first (clean path when
+  `responseMimeType:'application/json'` is set), then fall back to fence-stripping + regex.
+- Improved error logging on both failure branches.
+
+**State** (verified 2026-06-25)
+v651 deployed to production. PR #578 open as draft, CI in progress. User has not yet confirmed
+that the new output looks correct.
+
+**Next**
+User to hit Refresh on the AI Analysis card and confirm it shows full structured content
+(summary + Key Insights + Party Platform Comparison + Strongest Positions) with appropriate depth.
+Then merge PR #578.
+
 ## 2026-06-25 — Fix user-profile-analysis JSON parsing (Gemini markdown fences)
 
 **What happened & why**
