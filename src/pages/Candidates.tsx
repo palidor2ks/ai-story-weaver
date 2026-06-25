@@ -59,13 +59,16 @@ function getInitials(name: string): string {
   return parts[0]?.[0]?.toUpperCase() ?? '?';
 }
 
-type TabKey = 'all' | 'my-reps' | 'senators' | 'representatives';
+type TabKey = 'all' | 'my-reps' | 'senators' | 'representatives' | 'executive' | 'state' | 'local';
 
 const TAB_LABELS: { key: TabKey; label: string }[] = [
-  { key: 'all', label: 'All' },
-  { key: 'my-reps', label: 'My Reps' },
-  { key: 'senators', label: 'Senators' },
+  { key: 'all',             label: 'All' },
+  { key: 'my-reps',         label: 'My Reps' },
+  { key: 'senators',        label: 'Senate' },
   { key: 'representatives', label: 'House' },
+  { key: 'executive',       label: 'Executive' },
+  { key: 'state',           label: 'State' },
+  { key: 'local',           label: 'Local' },
 ];
 
 export const Candidates = () => {
@@ -76,7 +79,7 @@ export const Candidates = () => {
     includeAllCongress: true,
     // Only fetch geocode + civic API when on a tab that actually needs local reps.
     // Avoids the 0.5–2s civic round-trip on the default "All" tab.
-    fetchCivic: activeTab !== 'all' && activeTab !== 'congress',
+    fetchCivic: !['all', 'senators', 'representatives'].includes(activeTab),
   });
 
   const [searchQuery, setSearchQuery] = useState('');
