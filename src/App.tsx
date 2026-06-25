@@ -18,6 +18,8 @@ const Candidates = lazy(() => import("./pages/Candidates").then((m) => ({ defaul
 const Donors = lazy(() => import("./pages/Donors").then((m) => ({ default: m.Donors })));
 const CandidateOverview = lazy(() => import("./pages/CandidateOverview").then((m) => ({ default: m.CandidateOverview })));
 const CandidateProfile = lazy(() => import("./pages/CandidateProfile").then((m) => ({ default: m.CandidateProfile })));
+const CandidateVotes = lazy(() => import("./pages/CandidateVotes").then((m) => ({ default: m.CandidateVotes })));
+const CandidateDonors = lazy(() => import("./pages/CandidateDonors").then((m) => ({ default: m.CandidateDonors })));
 const UserProfile = lazy(() => import("./pages/UserProfile").then((m) => ({ default: m.UserProfile })));
 const Quiz = lazy(() => import("./pages/Quiz").then((m) => ({ default: m.Quiz })));
 const QuizResults = lazy(() => import("./pages/QuizResults").then((m) => ({ default: m.QuizResults })));
@@ -55,6 +57,7 @@ const PoliticalCompassTest = lazy(() => import("./pages/PoliticalCompassTest"));
 const PoliticalIdeologyTestsComparison = lazy(() => import("./pages/PoliticalIdeologyTestsComparison"));
 const PoliticalCompassExplained = lazy(() => import("./pages/PoliticalCompassExplained"));
 const Issues = lazy(() => import("./pages/Issues"));
+const BillDetail = lazy(() => import("./pages/BillDetail").then((m) => ({ default: m.BillDetail })));
 
 // Fires useCandidates + useAllPoliticians at app boot so data is ready
 // by the time the user navigates to /candidates. TanStack Query deduplicates
@@ -183,8 +186,8 @@ const AppRoutes = () => (
       <Route path="/donor/:id" element={<RouteGuard requireAuth requireOnboarding={false}><DonorProfile /></RouteGuard>} />
       <Route path="/candidate/:id" element={<RouteGuard requireAuth={false} requireOnboarding={false}><CandidateOverview /></RouteGuard>} />
       <Route path="/candidate/:id/profile" element={<RouteGuard requireAuth={false} requireOnboarding={false}><CandidateProfile /></RouteGuard>} />
-      <Route path="/candidate/:id/votes" element={<RouteGuard requireAuth={false} requireOnboarding={false}><CandidateProfile /></RouteGuard>} />
-      <Route path="/candidate/:id/donors" element={<RouteGuard requireAuth={false} requireOnboarding={false}><CandidateProfile /></RouteGuard>} />
+      <Route path="/candidate/:id/votes" element={<RouteGuard requireAuth={false} requireOnboarding={false}><CandidateVotes /></RouteGuard>} />
+      <Route path="/candidate/:id/donors" element={<RouteGuard requireAuth={false} requireOnboarding={false}><CandidateDonors /></RouteGuard>} />
       <Route path="/compare" element={<RouteGuard requireAuth={false} requireOnboarding={false}><Candidates /></RouteGuard>} />
       {/* Headless render target for the automatic social-post screenshotter (public, no chrome). */}
       <Route path="/r/card/:candidateId" element={<StatCardRender />} />
@@ -207,6 +210,7 @@ const AppRoutes = () => (
       <Route path="/blog" element={<RouteGuard requireAuth={false} requireOnboarding={false}><Blog /></RouteGuard>} />
       <Route path="/jobs" element={<RouteGuard requireAuth={false} requireOnboarding={false}><Jobs /></RouteGuard>} />
       <Route path="/issues" element={<RouteGuard requireAuth={false} requireOnboarding={false}><Issues /></RouteGuard>} />
+      <Route path="/bill/:id" element={<RouteGuard requireAuth={false} requireOnboarding={false}><BillDetail /></RouteGuard>} />
       <Route path="/polls" element={<Navigate to="/issues" replace />} />
       <Route path="*" element={<NotFound />} />
       </Routes>
