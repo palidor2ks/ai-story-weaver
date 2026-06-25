@@ -5,6 +5,34 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-25 — Bottom navigation bar (mobile)
+
+**What happened & why**
+Design B pages (UserProfile, CandidateProfile, etc.) replaced the standard `<Header>` with custom
+navy gradient headers, removing the hamburger mobile menu. Users had no way to switch between app
+sections on those pages. Added a persistent bottom nav bar that appears on all main pages.
+
+New file: `src/components/BottomNav.tsx`
+- Fixed bottom bar, `z-50`, `lg:hidden` (desktop still uses top Header)
+- 4 tabs: Candidates (Users icon) · Issues (FileText) · Quiz (Target) · Profile (User)
+- Active tab: `poli-navy` color + subtle `bg-poli-surface/60` pill; inactive: `poli-muted`
+- Auth-aware: Quiz/Profile redirect to `/auth` when signed out
+- Hidden on: `/quiz`, `/auth`, `/onboarding`, `/verify-email`, `/admin/*`, `/r/card/*`, `/p/*`
+- Mounted in `AppRoutes` after `</Suspense>` so it renders immediately on every route
+
+Added `pb-20` (80px) to 13 pages: CandidateVotes, CandidateDonors, BillDetail,
+CandidateOverview, CandidateProfile, CompareView, Candidates, Issues, QuizLibrary,
+HowScoringWorks, Parties, Blog, QuizResults. UserProfile already had pb-24.
+
+**State** (verified 2026-06-25)
+`bunx tsc --noEmit` — 0 errors. `bun run build` — clean. Committed `8ed6a11d`.
+PR #565 open, CI running. Subscribed to PR activity.
+
+**Next**
+Wait for PR #565 CI to pass and merge. Then: design token rollout to remaining pages
+without specific v2 mockups (Donors, Committees, TopSpenders, DonorProfile, CommitteeProfile,
+PartyProfile, Issues, PoliticianDashboard) — Phase 7 remainder.
+
 ## 2026-06-25 — Design B full rollout: Phases 0–9 complete
 
 **What happened & why**
