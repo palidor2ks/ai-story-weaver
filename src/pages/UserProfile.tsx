@@ -26,7 +26,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { AddressAutocomplete } from '@/components/AddressAutocomplete';
 import { RepresentativeComparisonCard } from '@/components/RepresentativeComparisonCard';
 import { PartyComparisonCard } from '@/components/PartyComparisonCard';
-import { NolanChart } from '@/components/NolanChart';
 import { VerificationBadges } from '@/components/VerificationBadges';
 import { UpcomingElectionsCard } from '@/components/profile/UpcomingElectionsCard';
 import { logBadgeEvent } from '@/lib/badges';
@@ -674,9 +673,6 @@ export const UserProfile = () => {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="mb-6 pb-6 border-b border-border">
-                <NolanChart />
-              </div>
               <TooltipProvider>
                 <div className="flex flex-col gap-4">
                   <PartyComparisonCard
