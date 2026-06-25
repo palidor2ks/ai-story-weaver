@@ -37,7 +37,7 @@ export const Header = () => {
   const userName = (user?.user_metadata?.name as string | undefined) || user?.email;
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header className="hidden lg:block sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 items-center justify-between gap-2">
         <Link to="/candidates" className="flex items-center gap-2 shrink-0">
           <img src={logoImg} alt="Pulse — political alignment and donor tracking" width={40} height={40} fetchPriority="high" decoding="async" className="w-10 h-10 object-contain" />
