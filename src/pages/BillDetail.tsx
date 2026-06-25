@@ -198,7 +198,7 @@ export const BillDetail = () => {
         </div>
       </div>
 
-      <div className="max-w-lg mx-auto px-4 pb-16">
+      <div className="max-w-lg mx-auto px-4 pb-20">
         {/* Sponsor card — overlaps header */}
         {bill.sponsor_name && (
           <div className="bg-white rounded-2xl shadow-md p-4 -mt-4 mb-4">

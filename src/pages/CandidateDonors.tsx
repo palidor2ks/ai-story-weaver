@@ -125,7 +125,7 @@ export const CandidateDonors = () => {
         )}
       </div>
 
-      <div className="px-4 pb-10">
+      <div className="px-4 pb-20">
         {/* Summary card — overlaps header */}
         <div className="bg-white rounded-2xl shadow-lg px-6 py-5 -mt-4 mb-4">
           {donorsLoading ? (

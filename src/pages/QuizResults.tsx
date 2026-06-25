@@ -210,7 +210,7 @@ export const QuizResults = () => {
   const donutPct = Math.round(((profile.overall_score ?? 0) + 100) / 2);
 
   return (
-    <div className="bg-[#F5F6FA] min-h-screen">
+    <div className="bg-[#F5F6FA] min-h-screen pb-20">
       <Seo
         title="Your Political Profile — Pulse"
         description="See your personalized political profile based on your quiz responses, and compare your views with candidates and parties."

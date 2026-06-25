@@ -63,7 +63,7 @@ export const HowScoringWorks = () => {
         </div>
       </div>
 
-      <main className="max-w-2xl mx-auto pb-12">
+      <main className="max-w-2xl mx-auto pb-20">
 
         {/* Scale card — overlaps header */}
         <div className="bg-white -mt-4 rounded-2xl shadow-lg mx-4 p-5 mb-6">

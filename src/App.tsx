@@ -10,6 +10,7 @@ import { useHasCompletedOnboarding } from "./hooks/useProfile";
 import { useAdminRole } from "./hooks/useAdminRole";
 import { LoadingScreen } from "./components/LoadingScreen";
 import { BadgeAwardToast } from "./components/BadgeAwardToast";
+import { BottomNav } from "./components/BottomNav";
 import { useCandidates } from "./hooks/useCandidates";
 import { useAllPoliticians } from "./hooks/useAllPoliticians";
 
@@ -216,6 +217,7 @@ const AppRoutes = () => (
       <Route path="*" element={<NotFound />} />
       </Routes>
     </Suspense>
+    <BottomNav />
   </ChunkErrorBoundary>
 );
 
