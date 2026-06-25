@@ -282,7 +282,17 @@ export function useCandidateShareCardData(
   const data = useMemo<CandidateShareCardData | null>(() => {
     if (!id || !candidate) return null;
 
-    const score = scoreMap?.get(id) ?? candidate.overall_score ?? null;
+    // Headline Pulse Score. Source-of-truth order mirrors useCandidateScoreMap,
+    // which treats a stored `overall_score` of exactly 0 as "unset" (the column's
+    // default) rather than a measured centrist score — so we coerce 0 to null too
+    // (via `|| null`). Without this, an unscored candidate (e.g. a tier_3 state
+    // legislator with no voting record) rendered a fake "C / Moderate" headline.
+    // We deliberately do NOT synthesize a headline from candidate_topic_scores:
+    // for unscored candidates those topic rows are AI-estimated (and, for ~179
+    // candidates, orphaned averages of since-deleted answers — see migration
+    // 20260624130000), so promoting them into the headline would surface
+    // unverified data. No canonical score → the card shows "Not yet scored".
+    const score = scoreMap?.get(id) ?? (candidate.overall_score || null);
 
     const topDonors = topDonorSummaries.map((donor) => ({
       name: donor.name,

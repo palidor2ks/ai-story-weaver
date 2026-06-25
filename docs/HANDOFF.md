@@ -192,6 +192,49 @@ Committed on branch `claude/elegant-curie-3ln5ed` as `883a6296`.
 **Next**
 Parallel task: `src/App.tsx` design system wiring (handled separately as instructed).
 
+## 2026-06-24 — Unscored-candidate headline + orphaned topic scores — PR #562 (DRAFT, open)
+
+**What happened & why**
+Share cards showed a headline Pulse Score of **"C / Moderate"** for candidates with the default
+`overall_score = 0.00` (e.g. tier_3 state legislators) while the per-issue topic dots showed real,
+off-center numbers — headline and dots contradicted each other (reported: *Stan Lambert, TX State
+Rep*). The ask was to **investigate the data before touching display**.
+
+**Provenance trace (the important finding):** `candidate_topic_scores` has exactly ONE writer —
+the trigger `candidate_answers_topic_scores_sync` → `refresh_candidate_topic_scores()`, which
+averages `candidate_answers` per topic. Those answers are filled for sub-federal candidates by
+`generate-legislator-answers` (Gemini 2.5 Flash), tagged `voting_record | public_statement |
+campaign_position | inferred`. That function sets `overall_score` from **trusted answers only** and
+leaves it `0` when none are trusted. The answers were later **purged** by the inferred-answer
+cleanups, but the old refresh function only `INSERT … ON CONFLICT DO UPDATE` — **never deleted** —
+so the topic-score rows were **orphaned: stale averages of since-deleted answers**. Measured live:
+**179 candidates have topic scores but ZERO answers = 895 orphaned rows** (Lambert is one). So the
+per-issue numbers are **not accurate** — they fail guardrail #8 (verify against source).
+
+**Changes (PR #562, branch `claude/score-headline-mismatch-fix`):**
+- **Data migration** `supabase/migrations/20260624130000_purge_orphaned_topic_scores.sql` — hardens
+  `refresh_candidate_topic_scores()` to also DELETE topic rows with no backing answers (recurrence
+  fix), and one-time purges the 895 orphans. Idempotent; no cron; no images. **Reviewed GO by
+  migration-safety-reviewer.**
+- **Display fix** (`useCandidateShareCardData.ts` + `templates/types.ts` + `PolicyPositionsCard.tsx`,
+  commits 944f686d → a4d83c89) — coerce stored `overall_score` 0 → null so an unset default no
+  longer renders as a fake "C / Moderate"; with no canonical (vote/override/trusted-answer) score the
+  card shows **"Not yet scored"**. Per the decision on #562 we **do NOT** synthesize a headline from
+  topic scores (the earlier "Estimated ideology" approach in 944f686d was reverted) — promoting
+  AI-estimated/orphaned topic rows into the headline would surface unverified data. The orphaned
+  per-issue dots are removed at the source by the migration.
+
+**State** (verified 2026-06-24)
+Lint 0 errors / 154 pre-existing `any` warnings; build OK; `bunx tsc --noEmit` clean; `bun test src`
+52 pass / 0 fail. PR #562 pushed (head a4d83c89) and **left DRAFT**. **Migration is NOT applied** —
+DB work is gated and guardrail #1 says apply deliberately. The display fix already shows "Not yet
+scored" for unscored candidates; the orphaned per-issue dots disappear once the migration runs.
+
+**Next**
+- Apply `20260624130000_purge_orphaned_topic_scores.sql` deliberately (with `SUPABASE_DB_URL` set or
+  via the dashboard), then spot-check Lambert renders "Not yet scored" with no issue-dots. Mark #562
+  ready for review once applied.
+
 ## 2026-06-24 — NC finance data source investigation — DATA SOURCE BLOCKED
 
 **What happened & why**
