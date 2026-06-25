@@ -261,7 +261,7 @@ export default function TopSpenders() {
 
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-poli-surface">
       <Seo
         title="Top Outside Spenders by Independent Expenditures — Pulse"
         description="Super PACs and outside groups ranked by independent expenditures supporting or opposing federal candidates."
@@ -269,16 +269,22 @@ export default function TopSpenders() {
       />
 
       <Header />
-      <main className="container py-8 px-4">
+
+      {/* Navy gradient banner */}
+      <div className="bg-gradient-to-br from-poli-navy to-poli-dark text-white px-4 pt-12 pb-8">
+        <p className="font-mono-label text-[10px] font-bold uppercase tracking-widest text-white/60 mb-1">TOP SPENDERS</p>
+        <h1 className="text-2xl font-black text-white leading-tight">Top Outside Spenders</h1>
+        <p className="text-sm text-white/70 mt-1">
+          {cycle === 'all' ? 'All cycles · independent expenditures' : `Cycle ${cycle} · independent expenditures`}
+        </p>
+      </div>
+
+      <main className="container py-8 px-4 pb-20">
         <div className="mb-6">
-          <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground mb-2 flex items-center gap-2">
-            <Megaphone className="w-7 h-7 text-primary" />
-            Top Outside Spenders
-          </h1>
-          <p className="text-muted-foreground max-w-2xl">
+          <p className="text-poli-muted max-w-2xl text-sm">
             Super PACs and outside groups ranked by independent expenditures supporting or opposing federal candidates. These dollars are
             spent <em>independently</em> of campaigns and are not subject to contribution limits. Looking for fundraising totals?
-            See <Link to="/committees" className="text-primary underline-offset-2 hover:underline">Committees by receipts</Link>.
+            See <Link to="/committees" className="text-poli-navy underline-offset-2 hover:underline">Committees by receipts</Link>.
           </p>
           <div className="mt-3">
             <CommitteesViewSwitcher />
@@ -291,40 +297,40 @@ export default function TopSpenders() {
         <div className="grid gap-4 sm:grid-cols-3 mb-6">
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-xs uppercase text-muted-foreground tracking-wide">Total IE spending</CardTitle>
+              <CardTitle className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest">Total IE spending</CardTitle>
             </CardHeader>
             <CardContent>
               {isLoading ? <Skeleton className="h-7 w-32" /> : (
                 <p className="text-2xl font-bold">{formatIECompact(summary.total)}</p>
               )}
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="text-xs text-poli-muted mt-1">
                 Top {summary.count} {cycle === 'all' ? 'committees, all cycles' : `committees · cycle ${cycle}`}
               </p>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-xs uppercase text-muted-foreground tracking-wide">Committees</CardTitle>
+              <CardTitle className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest">Committees</CardTitle>
             </CardHeader>
             <CardContent>
               {isLoading ? <Skeleton className="h-7 w-16" /> : (
                 <p className="text-2xl font-bold">{summary.count.toLocaleString()}</p>
               )}
-              <p className="text-xs text-muted-foreground mt-1">Active spenders in view</p>
+              <p className="text-xs text-poli-muted mt-1">Active spenders in view</p>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-xs uppercase text-muted-foreground tracking-wide">#1 Spender</CardTitle>
+              <CardTitle className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest">#1 Spender</CardTitle>
             </CardHeader>
             <CardContent>
               {isLoading ? <Skeleton className="h-7 w-40" /> : summary.top ? (
                 <>
                   <p className="font-semibold truncate">{summary.top.spending_committee_name ?? summary.top.spending_committee_fec_id}</p>
-                  <p className="text-xs text-muted-foreground mt-1">{formatIECompact(summary.top.total_amount)} spent</p>
+                  <p className="text-xs text-poli-muted mt-1">{formatIECompact(summary.top.total_amount)} spent</p>
                 </>
               ) : (
-                <p className="text-sm text-muted-foreground">No data</p>
+                <p className="text-sm text-poli-muted">No data</p>
               )}
             </CardContent>
           </Card>
@@ -333,7 +339,7 @@ export default function TopSpenders() {
         {/* Filters */}
         <div className="flex flex-col sm:flex-row gap-3 mb-4">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-poli-muted" />
             <Input
               placeholder="Search committee name…"
               value={search}
@@ -370,7 +376,7 @@ export default function TopSpenders() {
                 {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
               </div>
             ) : filtered.length === 0 ? (
-              <p className="p-8 text-center text-sm text-muted-foreground">No spenders match the current filters.</p>
+              <p className="p-8 text-center text-sm text-poli-muted">No spenders match the current filters.</p>
             ) : (
               <div className="divide-y divide-border">
                 {filtered.map((r, i) => (
@@ -430,7 +436,7 @@ function SpenderRowItem({ row: r, index: i, raisedMap, causeMap }: SpenderRowIte
         state={{ from: '/top-spenders' }}
         className="grid grid-cols-[auto_1fr_auto] sm:grid-cols-[auto_1fr_auto_auto_auto] items-center gap-2 sm:gap-3 px-4 py-3 hover:bg-accent/40 transition-colors"
       >
-        <span className="w-8 text-right text-sm font-mono text-muted-foreground">{i + 1}</span>
+        <span className="w-8 text-right text-sm font-mono text-poli-muted">{i + 1}</span>
         <div className="min-w-0">
           <div className="flex flex-col sm:flex-row sm:items-center sm:gap-2 gap-1 min-w-0">
             <p className="font-medium text-sm sm:text-base line-clamp-2 sm:truncate">{r.spending_committee_name ?? r.spending_committee_fec_id}</p>
@@ -447,7 +453,7 @@ function SpenderRowItem({ row: r, index: i, raisedMap, causeMap }: SpenderRowIte
               return (
                 <Badge
                   variant="outline"
-                  className={`shrink-0 self-start text-[10px] sm:text-xs font-semibold px-2 py-0.5 max-w-[160px] sm:max-w-[220px] truncate uppercase tracking-wide ${cls}`}
+                  className={`shrink-0 self-start font-mono-label text-[10px] sm:text-xs font-semibold px-2 py-0.5 max-w-[160px] sm:max-w-[220px] truncate uppercase tracking-wide ${cls}`}
                   title={cause.issue ?? cause.label}
                 >
                   {cause.label}
@@ -455,7 +461,7 @@ function SpenderRowItem({ row: r, index: i, raisedMap, causeMap }: SpenderRowIte
               );
             })()}
           </div>
-          <p className="text-xs text-muted-foreground font-mono truncate mt-0.5">
+          <p className="text-xs text-poli-muted font-mono truncate mt-0.5">
             {r.spending_committee_fec_id} · {r.expenditure_count.toLocaleString()} expenditure{r.expenditure_count === 1 ? '' : 's'}
             {(() => {
               const raised = raisedMap?.get(r.spending_committee_fec_id) ?? 0;

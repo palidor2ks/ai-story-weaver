@@ -100,7 +100,7 @@ export const CommitteeProfile = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-poli-surface">
       <Seo
         title={`${committee?.name ?? 'Committee'} — Pulse`}
         description={`Donor breakdown, totals, and contribution history for ${committee?.name ?? 'this committee'}.`}
@@ -109,15 +109,27 @@ export const CommitteeProfile = () => {
       />
       <Header />
 
-      <main className="container py-8 px-4">
+      <div className="bg-gradient-to-br from-poli-navy to-poli-dark text-white px-4 pt-12 pb-10">
+        <p className="font-mono-label text-[10px] font-bold uppercase tracking-widest text-white/60 mb-1">
+          COMMITTEE PROFILE
+        </p>
+        <h1 className="text-2xl font-black text-white leading-tight">
+          {committee?.name ?? 'Committee'}
+        </h1>
+        <p className="text-sm text-white/70 mt-1">
+          {committee?.designation ?? committee?.designationFull ?? 'Federal Political Committee'}
+        </p>
+      </div>
+
+      <main className="container py-8 px-4 pb-20">
         {isAdmin && exclusion && (
           <div className="mb-6 rounded-md border border-destructive/40 bg-destructive/5 px-4 py-3 flex items-start gap-3">
             <div className="flex-1">
               <p className="text-sm font-semibold text-destructive">Excluded from public IE rollups</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
+              <p className="text-xs text-poli-muted mt-0.5">
                 Reason: {exclusion.reason} · Excluded {new Date(exclusion.excluded_at).toLocaleString()}
               </p>
-              <p className="text-xs text-muted-foreground mt-0.5">
+              <p className="text-xs text-poli-muted mt-0.5">
                 Non-admins do not see this committee in Top Spenders, candidate IE summaries, or election dialogs.
               </p>
             </div>
@@ -130,13 +142,13 @@ export const CommitteeProfile = () => {
 
         {isLoading && (
           <div className="flex justify-center py-16">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <Loader2 className="h-8 w-8 animate-spin text-poli-navy" />
           </div>
         )}
 
         {!isLoading && !committee && (
           <div className="text-center py-16">
-            <p className="text-muted-foreground">Committee not found.</p>
+            <p className="text-poli-muted">Committee not found.</p>
           </div>
         )}
 
@@ -144,19 +156,19 @@ export const CommitteeProfile = () => {
           <div className="space-y-8">
             <div className="md:static sticky top-[6.5rem] z-30 -mx-4 px-4 py-3 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border md:border-0 md:bg-transparent md:backdrop-blur-none md:py-0 md:mx-0 md:px-0 flex flex-col gap-3">
               <div className="flex items-center gap-3 flex-wrap">
-                <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-poli-surface text-poli-navy flex items-center justify-center shrink-0">
                   <Landmark className="w-5 h-5 md:w-6 md:h-6" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-xs md:text-sm text-muted-foreground md:mb-1">Committee</p>
-                  <h1 className="font-display text-xl md:text-3xl font-bold text-foreground leading-tight truncate">
+                  <p className="text-xs md:text-sm text-poli-muted md:mb-1">Committee</p>
+                  <h1 className="font-display text-xl md:text-3xl font-bold text-poli-body leading-tight truncate">
                     {committee.name || 'Unknown Committee'}
                   </h1>
-                  <p className="text-muted-foreground text-xs md:text-base md:mt-1 truncate">
+                  <p className="text-poli-muted text-xs md:text-base md:mt-1 truncate">
                     FEC ID: {committee.fecCommitteeId}
                   </p>
                   {committee.candidate && (
-                    <p className="hidden md:block text-muted-foreground text-sm">
+                    <p className="hidden md:block text-poli-muted text-sm">
                       Linked Candidate: {committee.candidate.name} ({committee.candidate.party}) • {committee.candidate.office} {committee.candidate.state}
                     </p>
                   )}
@@ -229,46 +241,46 @@ export const CommitteeProfile = () => {
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               <Card>
                 <CardContent className="p-5">
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-2 text-sm text-poli-muted">
                     <DollarSign className="w-4 h-4" />
                     Total Raised
                   </div>
-                  <p className="text-2xl font-bold text-foreground mt-2">{formatCurrency(committee.totalRaised)}</p>
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <p className="text-2xl font-bold text-poli-navy mt-2">{formatCurrency(committee.totalRaised)}</p>
+                  <p className="text-xs text-poli-muted mt-1">
                     {effectiveCycle === 'all' ? 'All-cycle total from synced rollups' : `${effectiveCycle} cycle total from synced rollups`}
                   </p>
                 </CardContent>
               </Card>
               <Card>
                 <CardContent className="p-5">
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-2 text-sm text-poli-muted">
                     <Users className="w-4 h-4" />
                     Unique Donors
                   </div>
-                  <p className="text-2xl font-bold text-foreground mt-2">{committee.donorCount == null ? '—' : formatNumber(committee.donorCount)}</p>
-                  <p className="text-xs text-muted-foreground mt-1">From committee finance rollups</p>
+                  <p className="text-2xl font-bold text-poli-navy mt-2">{committee.donorCount == null ? '—' : formatNumber(committee.donorCount)}</p>
+                  <p className="text-xs text-poli-muted mt-1">From committee finance rollups</p>
                 </CardContent>
               </Card>
               <Card>
                 <CardContent className="p-5">
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-2 text-sm text-poli-muted">
                     <Landmark className="w-4 h-4" />
                     Contributions
                   </div>
-                  <p className="text-2xl font-bold text-foreground mt-2">{committee.contributionCount == null ? '—' : formatNumber(committee.contributionCount)}</p>
-                  <p className="text-xs text-muted-foreground mt-1">Recorded contribution entries</p>
+                  <p className="text-2xl font-bold text-poli-navy mt-2">{committee.contributionCount == null ? '—' : formatNumber(committee.contributionCount)}</p>
+                  <p className="text-xs text-poli-muted mt-1">Recorded contribution entries</p>
                 </CardContent>
               </Card>
               <Card>
                 <CardContent className="p-5">
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-2 text-sm text-poli-muted">
                     <Calendar className="w-4 h-4" />
                     Last Sync
                   </div>
-                  <p className="text-2xl font-bold text-foreground mt-2">
+                  <p className="text-2xl font-bold text-poli-navy mt-2">
                     {committee.lastSyncDate ? formatDate(committee.lastSyncDate) : '—'}
                   </p>
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <p className="text-xs text-poli-muted mt-1">
                     Last contribution: {committee.lastContributionDate ? formatDate(committee.lastContributionDate) : '—'}
                   </p>
                 </CardContent>
@@ -278,8 +290,8 @@ export const CommitteeProfile = () => {
             {/* Top Contributors Section */}
             <section>
               <div className="flex items-center gap-3 mb-4">
-                <TrendingUp className="w-5 h-5 text-primary" />
-                <h2 className="font-display text-xl font-bold text-foreground">Top Contributors</h2>
+                <TrendingUp className="w-5 h-5 text-poli-navy" />
+                <h2 className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest">Top Contributors</h2>
               </div>
 
               {donors.length > 0 ? (
@@ -290,11 +302,11 @@ export const CommitteeProfile = () => {
                         <CardContent className="p-4">
                           <div className="flex items-start justify-between gap-3 mb-2">
                             <div className="min-w-0 flex-1">
-                              <p className="font-semibold text-foreground truncate">
+                              <p className="font-semibold text-poli-body truncate">
                                 {donor.name}
                               </p>
                               {(donor.city || donor.state) && (
-                                <p className="text-sm text-muted-foreground flex items-center gap-1">
+                                <p className="text-sm text-poli-muted flex items-center gap-1">
                                   <MapPin className="w-3 h-3 flex-shrink-0" />
                                   {donor.city && donor.state 
                                     ? `${donor.city}, ${donor.state}` 
@@ -304,12 +316,12 @@ export const CommitteeProfile = () => {
                             </div>
                           </div>
                           {(donor.employer || donor.occupation) && (
-                            <p className="text-xs text-muted-foreground mb-2 truncate">
+                            <p className="text-xs text-poli-muted mb-2 truncate">
                               {donor.occupation}{donor.occupation && donor.employer && ' • '}{donor.employer}
                             </p>
                           )}
                           <div className="flex items-center justify-between pt-2 border-t border-border">
-                            <span className="text-xs text-muted-foreground">
+                            <span className="text-xs text-poli-muted">
                               {donor.contributionCount} contribution{donor.contributionCount !== 1 ? 's' : ''}
                             </span>
                             <span className="font-bold text-agree">{formatCurrency(donor.totalAmount)}</span>
@@ -321,7 +333,7 @@ export const CommitteeProfile = () => {
                 </div>
               ) : (
                 <Card>
-                  <CardContent className="py-10 text-center text-muted-foreground">
+                  <CardContent className="py-10 text-center text-poli-muted">
                     No contributors found for this committee.
                   </CardContent>
                 </Card>
@@ -335,8 +347,8 @@ export const CommitteeProfile = () => {
               <CardContent className="p-5">
                 <div className="flex items-center justify-between gap-3 mb-4">
                   <div>
-                    <h2 className="text-xl font-semibold text-foreground">Donor Details</h2>
-                    <p className="text-sm text-muted-foreground">
+                    <h2 className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest">Donor Details</h2>
+                    <p className="text-sm text-poli-muted">
                       Showing consolidated donors for this committee (top 500 contributions).
                     </p>
                   </div>
@@ -348,7 +360,7 @@ export const CommitteeProfile = () => {
                 </div>
 
                 {donors.length === 0 ? (
-                  <div className="text-center py-10 text-muted-foreground">No donors recorded for this committee yet.</div>
+                  <div className="text-center py-10 text-poli-muted">No donors recorded for this committee yet.</div>
                 ) : (
                   <div className="rounded-md border overflow-hidden">
                     <Table>
@@ -366,16 +378,16 @@ export const CommitteeProfile = () => {
                         {donors.map((donor) => (
                           <TableRow key={donor.id}>
                             <TableCell>
-                              <Link to={`/donor/${donor.id}`} className="font-medium text-foreground hover:text-primary hover:underline">
+                              <Link to={`/donor/${donor.id}`} className="font-medium text-poli-body hover:text-poli-navy hover:underline">
                                 {donor.name}
                               </Link>
                               {(donor.employer || donor.occupation) && (
-                                <p className="text-xs text-muted-foreground">
+                                <p className="text-xs text-poli-muted">
                                   {[donor.occupation, donor.employer].filter(Boolean).join(' • ')}
                                 </p>
                               )}
                             </TableCell>
-                            <TableCell className="text-muted-foreground">
+                            <TableCell className="text-poli-muted">
                               {donor.city || donor.state ? (
                                 <span className="inline-flex items-center gap-1">
                                   <MapPin className="w-4 h-4" />
@@ -386,7 +398,7 @@ export const CommitteeProfile = () => {
                             <TableCell className="font-semibold">{formatCurrency(donor.totalAmount)}</TableCell>
                             <TableCell>{formatNumber(donor.contributionCount)}</TableCell>
                             <TableCell>{formatDate(donor.latestDate)}</TableCell>
-                            <TableCell className="text-muted-foreground">
+                            <TableCell className="text-poli-muted">
                               {donor.candidateNames?.length
                                 ? donor.candidateNames.join(', ')
                                 : '—'}
