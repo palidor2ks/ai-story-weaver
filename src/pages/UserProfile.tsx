@@ -21,6 +21,7 @@ import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { ScoreText } from '@/components/ScoreText';
+import { formatScore, getScoreLabelProgCon } from '@/lib/scoreFormat';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AddressAutocomplete } from '@/components/AddressAutocomplete';
 import { RepresentativeComparisonCard } from '@/components/RepresentativeComparisonCard';
@@ -365,6 +366,10 @@ export const UserProfile = () => {
     ? 'Leans Conservative'
     : 'Moderate / Mixed';
 
+  const scaledScore = (profile.overall_score ?? 0) / 10;
+  const formattedPoliScore = answeredCount > 0 ? formatScore(scaledScore) : null;
+  const poliScoreDesc = answeredCount > 0 ? getScoreLabelProgCon(scaledScore) : null;
+
   const memberSince = session?.user?.created_at
     ? new Date(session.user.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
     : new Date(profile.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
@@ -442,7 +447,14 @@ export const UserProfile = () => {
             <p className="font-mono-label text-[10px] font-bold text-poli-red uppercase tracking-widest">
               Pulse Score
             </p>
-            <p className="text-poli-navy font-black text-xl mt-0.5">{scoreLabel}</p>
+            {formattedPoliScore ? (
+              <>
+                <p className="font-black text-2xl text-poli-navy leading-none mt-0.5">{formattedPoliScore}</p>
+                <p className="text-sm text-poli-dim">{poliScoreDesc}</p>
+              </>
+            ) : (
+              <p className="text-poli-navy font-black text-xl mt-0.5">{scoreLabel}</p>
+            )}
             <div className="flex flex-col gap-2 mt-3">
               <button
                 className="text-sm text-poli-navy font-medium hover:underline text-left"
@@ -484,8 +496,9 @@ export const UserProfile = () => {
               </div>
             )}
             <p className="font-mono-label text-[8px] text-poli-muted tracking-wide mt-1 text-center">
-              COVERAGE
+              TOPICS
             </p>
+            <p className="text-[7px] text-poli-muted text-center leading-tight">{answeredCount}/10 scored</p>
           </div>
         </div>
       </div>
