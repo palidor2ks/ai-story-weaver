@@ -5,6 +5,49 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-25 — Phase 7: poli-* token rollout to remaining pages
+
+**What happened & why**
+Seven pages still used generic Tailwind tokens and had no `pb-20`, meaning content was obscured
+by the BottomNav. Applied the Design B visual treatment across all 7.
+
+**Changes per page:**
+- `DonorProfile.tsx`, `CommitteeProfile.tsx`, `PartyProfile.tsx` — navy gradient header + full
+  poli-* token swap + `pb-20`
+- `PoliticianDashboard.tsx` — navy header with politician name/office + poli-* tokens + `pb-20`
+- `Donors.tsx`, `Committees.tsx`, `TopSpenders.tsx` — navy page banner + poli-* tokens + `pb-20`
+
+Visual-only changes: all data hooks, business logic, and routing untouched.
+Party-specific accent colors (blue/red/green badges) preserved.
+
+**State** (verified 2026-06-25)
+`bunx tsc --noEmit` — 0 errors. PR #567 open, CI running.
+
+**Next**
+Wait for PR #567 CI to pass and merge. Then: consider onboarding flow redesign (Phase 6) or
+remaining dialog redesigns (Phase 8) per the plan in `docs/HANDOFF.md`.
+
+## 2026-06-25 — Hide mobile top Header, consolidate all nav into bottom bar
+
+**What happened & why**
+Pages using `<Header>` (Candidates, Blog, Issues, etc.) were showing a double-navigation on mobile:
+the old Pulse logo/hamburger bar at the top AND the new BottomNav at the bottom. Fixed both issues:
+
+1. **`src/components/Header.tsx`** — added `hidden lg:block` to outermost `<header>` element.
+   Header is now invisible on mobile (< 1024px), unchanged on desktop (≥ 1024px).
+
+2. **`src/components/BottomNav.tsx`** — upgraded from 4 tabs to 5 tabs. Added "More" tab (Menu icon)
+   that opens a slide-up sheet with secondary nav items: Parties, How it works, Blog, and conditionally
+   Politician Dashboard (if `isPolitician`) and Admin (if `isAdmin`). Also added backdrop overlay,
+   close button, and "More" tab active state for `/parties`, `/blog`, `/how-scoring-works`, `/politician`, `/admin/*`.
+
+**State** (verified 2026-06-25)
+`bunx tsc --noEmit` — 0 errors. PR #566 merged to main (`b73bf625`).
+
+**Next**
+Phase 7 remainder: design token rollout to pages without specific v2 mockups —
+Donors, Committees, TopSpenders, DonorProfile, CommitteeProfile, PartyProfile, PoliticianDashboard.
+
 ## 2026-06-25 — Bottom navigation bar (mobile)
 
 **What happened & why**
