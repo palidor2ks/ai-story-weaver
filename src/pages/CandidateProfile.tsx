@@ -575,15 +575,28 @@ export const CandidateProfile = () => {
           { value: votes.length || '—', label: 'Key votes cast' },
           { value: sponsoredBills.filter((b) => b.is_sponsor).length || '—', label: 'Bills sponsored' },
           { value: sponsoredBills.filter((b) => !b.is_sponsor).length || '—', label: 'Cosponsored' },
-          { value: voteAlignment ? voteAlignment.support : '—', label: "You'd support", icon: '👍' },
-          { value: voteAlignment ? voteAlignment.oppose : '—', label: "You'd oppose", icon: '👎' },
-          { value: '—', label: 'Party unity' },
         ].map(stat => (
           <div key={stat.label} className="border border-[rgba(20,23,58,0.1)] rounded-[14px] p-2.5 bg-white">
             <p className="font-sans font-black text-[18px] text-poli-navy leading-none">{String(stat.value)}</p>
-            <p className="text-[10px] text-poli-dim mt-1 leading-tight">{'icon' in stat ? `${stat.icon} ${stat.label}` : stat.label}</p>
+            <p className="text-[10px] text-poli-dim mt-1 leading-tight">{stat.label}</p>
           </div>
         ))}
+        {/* Combined support/oppose box */}
+        <div className="col-span-2 border border-[rgba(20,23,58,0.1)] rounded-[14px] p-2.5 bg-white flex items-center justify-around">
+          <div className="text-center">
+            <p className="font-sans font-black text-[18px] text-agree leading-none">{voteAlignment ? voteAlignment.support : '—'}</p>
+            <p className="text-[10px] text-poli-dim mt-1">👍 You'd support</p>
+          </div>
+          <div className="w-px h-8 bg-[rgba(20,23,58,0.1)]" />
+          <div className="text-center">
+            <p className="font-sans font-black text-[18px] text-disagree leading-none">{voteAlignment ? voteAlignment.oppose : '—'}</p>
+            <p className="text-[10px] text-poli-dim mt-1">👎 You'd oppose</p>
+          </div>
+        </div>
+        <div className="border border-[rgba(20,23,58,0.1)] rounded-[14px] p-2.5 bg-white">
+          <p className="font-sans font-black text-[18px] text-poli-navy leading-none">—</p>
+          <p className="text-[10px] text-poli-dim mt-1 leading-tight">Party unity</p>
+        </div>
       </div>
 
       {/* 5-TAB NAVIGATION */}
