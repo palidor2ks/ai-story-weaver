@@ -5,6 +5,31 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-25 — Phase 8/9/Candidates/HowScoringWorks audit + dialog cleanup
+
+**What happened & why**
+Audited all remaining plan phases — nearly everything was already implemented in prior sessions.
+Applied 3 remaining dialog token fixes (the only actual gaps found).
+
+**Findings:**
+- `CompareView.tsx` — fully implemented (Phase 9 done)
+- `Candidates.tsx` — fully redesigned with poli-* tokens (600+ lines, already complete)
+- `HowScoringWorks.tsx` — fully redesigned with navy header + scale bar (already complete)
+- 6 of 9 Phase 8 dialogs already migrated (RecipientAIAnalysis, BillAIAnalysis, DonorAIAnalysis,
+  ClaimProfile, EditProfile, ChangePassword)
+
+**Actual changes this session:**
+- `ElectionDetailsDialog.tsx` — `Other` party badge `bg-muted/text-muted-foreground/border-border` → `bg-poli-surface/text-poli-muted`
+- `ShareCardModal.tsx` — char counter `text-muted-foreground` → `text-poli-muted`
+- `SharePreviewDialog.tsx` — preview container `border-border/bg-muted/text-muted-foreground` → poli-* equivalents
+
+**State** (verified 2026-06-25)
+`bunx tsc --noEmit` — 0 errors. PR #569 open, CI queued (run 28169687481 for 9adf27e4).
+
+**Next**
+Wait for PR #569 to merge. The full Design B rollout is essentially complete across all planned
+phases. Remaining work options: Phase 8 admin dialogs (low priority), or new features.
+
 ## 2026-06-25 — Phase 6: Onboarding sub-component Design B token migration
 
 **What happened & why**

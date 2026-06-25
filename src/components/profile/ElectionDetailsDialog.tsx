@@ -12,7 +12,7 @@ const PARTY_BADGE: Record<string, string> = {
   Democrat: 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30',
   Republican: 'bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/30',
   Independent: 'bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30',
-  Other: 'bg-muted text-muted-foreground border-border',
+  Other: 'bg-poli-surface text-poli-muted border-poli-surface',
 };
 
 const TIER_LABEL: Record<string, string> = {
