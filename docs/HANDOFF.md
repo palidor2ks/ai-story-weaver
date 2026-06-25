@@ -5,6 +5,23 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-25 — Add Executive, State, Local filter tabs to /candidates
+
+**What happened & why**
+User noticed `/candidates` only had Senate and House tabs, missing Executive, State, and Local
+officials. The `tabCandidates` switch already handled these three cases — the fix was purely
+exposing them in the UI.
+
+**Changes:**
+- `src/pages/Candidates.tsx` — expanded `TabKey` union type to include `'executive' | 'state' | 'local'`; added 3 entries to `TAB_LABELS`; fixed `fetchCivic` condition (was referencing non-existent `'congress'` key, now correctly skips civic API for `all/senators/representatives` tabs only)
+
+**State** (verified 2026-06-25)
+`bunx tsc --noEmit` — 0 errors. PR #570 merged.
+
+**Next**
+Design B token rollout is complete, and the candidates filter tabs are done. Next roadmap items
+per `docs/ROADMAP.md`.
+
 ## 2026-06-25 — Phase 8 admin dialogs: complete poli-* token migration
 
 **What happened & why**

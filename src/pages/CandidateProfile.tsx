@@ -515,7 +515,8 @@ export const CandidateProfile = () => {
                 style={{ background: candidate.party === 'Democrat' ? '#60A5FA' : candidate.party === 'Republican' ? '#FCA5A5' : '#D1FAE5' }}
               />
               <span className="text-white/80 text-sm">{candidate.party}</span>
-              {candidate.is_incumbent && <span className="text-white/50 text-sm">· Incumbent</span>}
+              {candidate.is_incumbent === true && <span className="text-white/50 text-sm">· Incumbent</span>}
+              {candidate.is_incumbent === false && <span className="text-white/50 text-sm">· Challenger</span>}
             </div>
           </div>
         </div>
