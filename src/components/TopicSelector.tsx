@@ -47,12 +47,12 @@ export const TopicSelector = ({
             <span className="text-xs font-medium text-center leading-tight break-words whitespace-normal w-full px-1">
               {topic.displayName || topic.name}
             </span>
-            <span className="text-[10px] leading-snug text-muted-foreground text-center break-words whitespace-normal w-full px-1 line-clamp-2">
+            <span className="text-[10px] leading-snug text-poli-muted text-center break-words whitespace-normal w-full px-1 line-clamp-2">
               {getTopicDescription(topic.id)}
             </span>
 
             {selected && (
-              <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-primary flex items-center justify-center text-[11px] font-bold text-primary-foreground leading-none">
+              <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-poli-navy flex items-center justify-center text-[11px] font-bold text-white leading-none">
                 {selectedIndex + 1}
               </div>
             )}
