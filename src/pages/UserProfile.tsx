@@ -614,7 +614,7 @@ export const UserProfile = () => {
                 <div className="space-y-4">
                   <p className="text-foreground leading-relaxed">{analysis.summary}</p>
 
-                  {analysis.keyInsights && analysis.keyInsights.length > 0 && (
+                  {Array.isArray(analysis.keyInsights) && analysis.keyInsights.length > 0 && (
                     <div className="mt-4">
                       <h4 className="font-semibold text-foreground mb-2">Key Insights</h4>
                       <ul className="space-y-2">
