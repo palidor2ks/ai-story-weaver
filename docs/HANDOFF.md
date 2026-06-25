@@ -5,6 +5,27 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-25 — Hide mobile top Header, consolidate all nav into bottom bar
+
+**What happened & why**
+Pages using `<Header>` (Candidates, Blog, Issues, etc.) were showing a double-navigation on mobile:
+the old Pulse logo/hamburger bar at the top AND the new BottomNav at the bottom. Fixed both issues:
+
+1. **`src/components/Header.tsx`** — added `hidden lg:block` to outermost `<header>` element.
+   Header is now invisible on mobile (< 1024px), unchanged on desktop (≥ 1024px).
+
+2. **`src/components/BottomNav.tsx`** — upgraded from 4 tabs to 5 tabs. Added "More" tab (Menu icon)
+   that opens a slide-up sheet with secondary nav items: Parties, How it works, Blog, and conditionally
+   Politician Dashboard (if `isPolitician`) and Admin (if `isAdmin`). Also added backdrop overlay,
+   close button, and "More" tab active state for `/parties`, `/blog`, `/how-scoring-works`, `/politician`, `/admin/*`.
+
+**State** (verified 2026-06-25)
+`bunx tsc --noEmit` — 0 errors. PR #566 merged to main (`b73bf625`).
+
+**Next**
+Phase 7 remainder: design token rollout to pages without specific v2 mockups —
+Donors, Committees, TopSpenders, DonorProfile, CommitteeProfile, PartyProfile, PoliticianDashboard.
+
 ## 2026-06-25 — Bottom navigation bar (mobile)
 
 **What happened & why**
