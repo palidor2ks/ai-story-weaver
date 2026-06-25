@@ -5,6 +5,22 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-25 — Stat grid + Political Compass removal (PR #582)
+
+**What happened & why**
+Two user-requested UX changes bundled in one PR:
+1. Stat boxes on candidate profile: switched from 2-col (4 boxes) to 3-col (6 boxes), adding
+   "👍 You'd support" and "👎 You'd oppose" vote counts. Counts lifted from
+   `VotingRecordSection` via a new `onAlignmentStats` callback prop.
+2. Removed the "POLITICAL COMPASS" section and `NolanChart` from `QuizResults.tsx`.
+
+**State** (verified 2026-06-25)
+PR #582 merged to main. All CI checks passed.
+
+**Next**
+User to confirm: (1) stat grid shows 6 boxes with support/oppose counts, (2) Political Compass
+is gone from the quiz results page.
+
 ## 2026-06-25 — Positions tab expands open by default (PR #581)
 
 **What happened & why**
