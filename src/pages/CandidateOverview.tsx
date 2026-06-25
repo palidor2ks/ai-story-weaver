@@ -172,8 +172,11 @@ export const CandidateOverview = () => {
               <div className="flex items-center gap-1.5 mt-1.5">
                 <span className="w-2 h-2 rounded-full bg-white/60" />
                 <span className="text-white/80 text-sm">{candidate.party}</span>
-                {candidate.is_incumbent && (
+                {candidate.is_incumbent === true && (
                   <span className="text-white/50 text-sm">· Incumbent</span>
+                )}
+                {candidate.is_incumbent === false && (
+                  <span className="text-white/50 text-sm">· Challenger</span>
                 )}
               </div>
             </div>

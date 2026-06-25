@@ -80,11 +80,12 @@ serve(async (req) => {
       state: '' as string,
       district: '' as string,
       party: '' as string,
+      is_incumbent: null as boolean | null,
     };
     if (candidateId) {
       const { data: cRow } = await supabase
         .from('candidates')
-        .select('name, office, state, district, party')
+        .select('name, office, state, district, party, is_incumbent')
         .eq('id', candidateId)
         .maybeSingle();
       const { data: oRow } = await supabase
@@ -99,6 +100,7 @@ serve(async (req) => {
         state: oRow?.state || cRow?.state || '',
         district: oRow?.district || cRow?.district || '',
         party: oRow?.party || cRow?.party || '',
+        is_incumbent: cRow?.is_incumbent ?? null,
       };
     }
 
@@ -180,20 +182,30 @@ You must respond in valid JSON format with the following structure:
 For sources, include reputable news outlets, government records, or official statements. Only cite sources you have evidence for.`;
 
     const todayStr = new Date().toISOString().slice(0, 10);
+    const officeLabel = candidateContext.is_incumbent === false
+      ? 'Ran For Office (challenger — did NOT win, does not currently hold this office)'
+      : 'Current Office';
+    const incumbentLine = candidateContext.is_incumbent === true
+      ? '- Officeholder Status: Incumbent — currently holds this office.'
+      : candidateContext.is_incumbent === false
+        ? '- Officeholder Status: CHALLENGER — ran for this office but lost. This person is NOT a current officeholder. Do not describe them as holding any office.'
+        : '';
     const identityBlock = `
 VERIFIED CANDIDATE IDENTITY (authoritative — sourced from the application's live database as of ${todayStr}):
 - Name: ${candidateContext.name}
-- Current Office: ${candidateContext.office || 'unknown'}
+- ${officeLabel}: ${candidateContext.office || 'unknown'}
 - State: ${candidateContext.state || 'unknown'}
 - District: ${candidateContext.district || '(none)'}
 - Party: ${candidateContext.party || 'unknown'}
+${incumbentLine}
 
 GROUND TRUTH RULES:
-- This identity block is verified by our database and OVERRIDES any prior knowledge you have. If your training data shows this person in a different office, defer to the office above — they have since been elected, appointed, or sworn into the Current Office listed.
-- Treat the Current Office as a present-day fact. Do not deny it, hedge about it, or claim the person holds a different office.
+- This identity block is verified by our database and OVERRIDES any prior knowledge you have.
+- If Officeholder Status is CHALLENGER, this person ran for the listed office but did NOT win. You MUST describe them as a "candidate for" or "former candidate for" that office — never as a current member or officeholder.
+- If Officeholder Status is Incumbent, treat the Current Office as a present-day fact. Do not deny it, hedge about it, or claim the person holds a different office.
 - Only analyze THIS specific person. Do NOT write about any other public figure who happens to share this name.
 - Do NOT mention a different city, state, district, or office than the ones listed above.
-- For specific policy positions or votes: if you don't have documented evidence for THIS person, say "position is undocumented" — but never use that phrase to deny their Current Office, party, or state.
+- For specific policy positions or votes: if you don't have documented evidence for THIS person, say "position is undocumented" — but never use that phrase to deny their party or state.
 `;
 
     const userPrompt = `${identityBlock}

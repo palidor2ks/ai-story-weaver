@@ -450,7 +450,7 @@ export const Candidates = () => {
         {pageCandidates.map((candidate) => {
           const isSelected = selectedCandidates.some(c => c.id === candidate.id);
           const isFormer = /^former\b/i.test(candidate.office ?? '');
-          const isIncumbent = candidate.isIncumbent ?? true;
+          const isIncumbent = candidate.isIncumbent ?? false;
 
           const handleRowClick = () => {
             if (compareMode) {
@@ -504,10 +504,15 @@ export const Candidates = () => {
                   {candidate.party} · {normalizeOfficeName(candidate.office)}
                   {candidate.state && candidate.state !== 'US' ? ` · ${candidate.state}` : ''}
                 </p>
-                {/* Incumbent badge */}
+                {/* Incumbent / Challenger / Former badge */}
                 {!isFormer && isIncumbent && (
                   <span className="inline-block mt-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full border border-poli-green text-poli-green leading-tight">
                     Incumbent
+                  </span>
+                )}
+                {!isFormer && !isIncumbent && candidate.isIncumbent !== undefined && (
+                  <span className="inline-block mt-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-500 text-amber-600 leading-tight">
+                    Challenger
                   </span>
                 )}
                 {isFormer && (
