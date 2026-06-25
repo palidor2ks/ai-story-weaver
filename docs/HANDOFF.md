@@ -5,6 +5,27 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-25 — Phase 8 admin dialogs: complete poli-* token migration
+
+**What happened & why**
+Last remaining generic tokens were in the 4 admin-only dialogs. Applied light token application
+as specified in the plan — functional components unchanged, only color tokens swapped.
+
+**Changes per file:**
+- `CandidateEditDialog.tsx` — override status banner `bg-primary/5` → `bg-poli-navy/5`, `bg-muted/50` → `bg-poli-surface/50`, all `text-muted-foreground` → `text-poli-muted`
+- `AdminUserDetailDialog.tsx` — 6× `text-muted-foreground` → `text-poli-muted`
+- `BatchQueueModal.tsx` — `text-muted-foreground` → `text-poli-muted`, `bg-muted/50` → `bg-poli-surface/50`
+- `CandidateAnswersDialog.tsx` — `bg-muted` → `bg-poli-surface`, `text-muted-foreground` → `text-poli-muted`, `text-foreground` → `text-poli-body`, selected topic `bg-primary/10 text-primary` → `bg-poli-navy/10 text-poli-navy`
+
+**State** (verified 2026-06-25)
+`bunx tsc --noEmit` — 0 errors. PR #569 still open (includes HANDOFF + dialog cleanup).
+New commit 81a4ea25 on same branch targeting same PR.
+
+**Next**
+The Design B poli-* token rollout is now fully complete across the entire codebase — all
+user-facing pages, onboarding sub-components, dialogs (user-facing + admin). No further
+token migration work needed. Next: new features or other roadmap items.
+
 ## 2026-06-25 — Phase 8/9/Candidates/HowScoringWorks audit + dialog cleanup
 
 **What happened & why**
