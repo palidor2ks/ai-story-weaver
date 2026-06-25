@@ -58,6 +58,7 @@ const PoliticalIdeologyTestsComparison = lazy(() => import("./pages/PoliticalIde
 const PoliticalCompassExplained = lazy(() => import("./pages/PoliticalCompassExplained"));
 const Issues = lazy(() => import("./pages/Issues"));
 const BillDetail = lazy(() => import("./pages/BillDetail").then((m) => ({ default: m.BillDetail })));
+const CompareView = lazy(() => import("./pages/CompareView").then((m) => ({ default: m.CompareView })));
 
 // Fires useCandidates + useAllPoliticians at app boot so data is ready
 // by the time the user navigates to /candidates. TanStack Query deduplicates
@@ -188,7 +189,7 @@ const AppRoutes = () => (
       <Route path="/candidate/:id/profile" element={<RouteGuard requireAuth={false} requireOnboarding={false}><CandidateProfile /></RouteGuard>} />
       <Route path="/candidate/:id/votes" element={<RouteGuard requireAuth={false} requireOnboarding={false}><CandidateVotes /></RouteGuard>} />
       <Route path="/candidate/:id/donors" element={<RouteGuard requireAuth={false} requireOnboarding={false}><CandidateDonors /></RouteGuard>} />
-      <Route path="/compare" element={<RouteGuard requireAuth={false} requireOnboarding={false}><Candidates /></RouteGuard>} />
+      <Route path="/compare" element={<RouteGuard requireAuth={false} requireOnboarding={false}><CompareView /></RouteGuard>} />
       {/* Headless render target for the automatic social-post screenshotter (public, no chrome). */}
       <Route path="/r/card/:candidateId" element={<StatCardRender />} />
       <Route path="/profile" element={<RouteGuard requireAuth requireOnboarding><UserProfile /></RouteGuard>} />

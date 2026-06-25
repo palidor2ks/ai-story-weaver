@@ -13,6 +13,30 @@
 (template — copy below this block)
 ```
 
+## 2026-06-25 — CompareView page (Phase 9 Design B)
+
+**What happened & why**
+Built `src/pages/CompareView.tsx` — side-by-side candidate comparison at `/compare?a=<id>&b=<id>`.
+Key decisions:
+- Reused `useCandidate` (from `useCandidates.ts`) for both candidates in parallel — two hook calls
+  with separate IDs; TanStack Query deduplicates if the same ID is passed twice.
+- Reused `useCandidateScoreMap` to resolve the authoritative -10/+10 score for each candidate,
+  matching the override-first priority order used in `CandidateProfile`.
+- Reused `useCandidatePersonalizedScore` and `calculateMatchScore` for the per-user match %,
+  gated behind `!!profile` so unauthenticated users see a "sign in" prompt instead.
+- Stance comparison uses the `topicScores` array already on the `CandidateWithOverride` object —
+  compares `Math.sign(scoreA)` vs `Math.sign(scoreB)` to produce ALIGNS / DIFFERS / PARTIAL.
+  A zero score on either side yields PARTIAL (no strong signal).
+- Empty state (missing `?a=` or `?b=`) shows a link to `/candidates`.
+- Updated `/compare` route in `App.tsx` from `<Candidates>` to `<CompareView>`.
+
+**State** (verified 2026-06-25)
+`bunx tsc --noEmit` — 0 errors. `bun run test` — 139/139 pass.
+
+**Next**
+Add "Compare" CTA buttons on `CandidateProfile` and `CandidateOverview` that link to
+`/compare?a=<currentId>&b=<otherId>` so users can navigate to comparisons organically.
+
 ## 2026-06-25 — BillDetail page + useBill hook
 
 **What happened & why**
