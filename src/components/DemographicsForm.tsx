@@ -135,21 +135,21 @@ export const DemographicsForm = ({
   return (
     <div className="max-w-xl mx-auto animate-fade-in">
       <div className="text-center mb-8">
-        <div className="w-16 h-16 rounded-2xl bg-gradient-hero mx-auto mb-6 flex items-center justify-center shadow-glow">
-          <User className="w-8 h-8 text-primary-foreground" />
+        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-poli-navy to-[#B3122F] mx-auto mb-6 flex items-center justify-center shadow-lg">
+          <User className="w-8 h-8 text-white" />
         </div>
-        <h2 className="font-display text-3xl font-bold text-foreground mb-3">
+        <h2 className="font-display text-3xl font-bold text-poli-navy mb-3">
           Tell us about yourself
         </h2>
-        <p className="text-muted-foreground">
+        <p className="text-poli-muted">
           This helps us personalize your experience and provide better matches.
         </p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="bg-card rounded-2xl border border-border p-6 space-y-5">
+        <div className="bg-white rounded-2xl border border-[rgba(20,23,58,0.1)] p-6 space-y-5">
           <div className="space-y-2">
-            <Label htmlFor="address" className="text-foreground">
+            <Label htmlFor="address" className="text-poli-body">
               Address / Location
             </Label>
             <AddressAutocomplete
@@ -165,20 +165,20 @@ export const DemographicsForm = ({
               className="bg-background"
             />
             {stateNotSupported && (
-              <div className="flex gap-2 rounded-lg border border-border bg-muted/50 p-3 text-sm text-foreground">
-                <Info className="w-4 h-4 mt-0.5 shrink-0 text-primary" />
+              <div className="flex gap-2 rounded-lg border border-border bg-muted/50 p-3 text-sm text-poli-body">
+                <Info className="w-4 h-4 mt-0.5 shrink-0 text-poli-navy" />
                 <p>
                   <span className="font-medium">{addressState?.name}</span> isn't fully covered yet — you'll still see your federal officials and members of Congress. We're actively adding more states and will expand to yours soon.
                 </p>
               </div>
             )}
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-poli-muted">
               Used to show candidates in your area
             </p>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="political_party" className="text-foreground">
+            <Label htmlFor="political_party" className="text-poli-body">
               Political Party Affiliation
             </Label>
             <Select
@@ -199,7 +199,7 @@ export const DemographicsForm = ({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="age" className="text-foreground">
+            <Label htmlFor="age" className="text-poli-body">
               Age
             </Label>
             <Input
@@ -218,7 +218,7 @@ export const DemographicsForm = ({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="income" className="text-foreground">
+            <Label htmlFor="income" className="text-poli-body">
               Household Income
             </Label>
             <Select
@@ -239,7 +239,7 @@ export const DemographicsForm = ({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="employment_status" className="text-foreground">
+            <Label htmlFor="employment_status" className="text-poli-body">
               Employment Status
             </Label>
             <Select
@@ -262,7 +262,7 @@ export const DemographicsForm = ({
 
 
           <div className="space-y-2">
-            <Label htmlFor="sex" className="text-foreground">
+            <Label htmlFor="sex" className="text-poli-body">
               Sex
             </Label>
             <Select
@@ -283,7 +283,7 @@ export const DemographicsForm = ({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="education_level" className="text-foreground">
+            <Label htmlFor="education_level" className="text-poli-body">
               Education Level
             </Label>
             <Select
@@ -304,7 +304,7 @@ export const DemographicsForm = ({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="race" className="text-foreground">
+            <Label htmlFor="race" className="text-poli-body">
               Race
             </Label>
             <Select
@@ -326,7 +326,7 @@ export const DemographicsForm = ({
 
 
           <div className="space-y-2">
-            <Label htmlFor="religion" className="text-foreground">
+            <Label htmlFor="religion" className="text-poli-body">
               Religion
             </Label>
             <Select
