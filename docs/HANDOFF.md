@@ -5,6 +5,29 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-25 — Remove Issues tab; skip candidate summary page (PR #579)
+
+**What happened & why**
+User requested two UX changes:
+1. Remove the Issues tab from the bottom nav entirely.
+2. Skip the CandidateOverview summary card — tapping a candidate should go straight to their
+   full profile.
+
+Changes (PR #579, merged):
+- `BottomNav.tsx`: removed Issues tab entry and its `FileText` icon import.
+- `App.tsx`: replaced `/candidate/:id` route with a `CandidateOverviewRedirect` component that
+  does `<Navigate to="/candidate/:id/profile" replace />` — covers all link sites without
+  touching every individual component. `/issues` and `/polls` now redirect to `/candidates`.
+- `CandidateProfile.tsx`: back arrow now goes to `/candidates` (was `/candidate/:id` which
+  would have looped through the redirect).
+
+**State** (verified 2026-06-25)
+PR #579 merged to main. Not yet tested in the live app by the user.
+
+**Next**
+User to confirm: (1) Issues tab is gone from bottom nav, (2) tapping a candidate goes directly
+to the full profile, (3) back arrow returns to the candidates list.
+
 ## 2026-06-25 — Restore analysis depth + fix JSON parsing (v651, PR #578)
 
 **What happened & why**
