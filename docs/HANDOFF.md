@@ -5,6 +5,22 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-25 — Positions tab expands open by default (PR #581)
+
+**What happened & why**
+User wanted the Positions tab to show the topic list already expanded when first tapped.
+
+Changes (PR #581, merged):
+- `CandidatePositions.tsx`: added optional `defaultOpen` prop (defaults `false`).
+- `CandidateProfile.tsx`: passes `defaultOpen` to the Positions tab instance so the
+  accordion opens immediately on tab click.
+
+**State** (verified 2026-06-25)
+PR #581 merged to main.
+
+**Next**
+User to confirm Positions tab opens expanded in the live app.
+
 ## 2026-06-25 — Positions tab on candidate profile (PR #580)
 
 **What happened & why**
