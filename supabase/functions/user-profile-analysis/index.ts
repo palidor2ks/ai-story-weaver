@@ -146,9 +146,9 @@ serve(async (req) => {
     
     console.log(`Generating comprehensive profile summary for user: ${userName || 'Anonymous'}`);
 
-    const GOOGLE_GEMINI_API_KEY = Deno.env.get('GOOGLE_GEMINI_API_KEY');
+    const GOOGLE_GEMINI_API_KEY = Deno.env.get('GOOGLE_AI_API_KEY') || Deno.env.get('GOOGLE_GEMINI_API_KEY');
     if (!GOOGLE_GEMINI_API_KEY) {
-      throw new Error('GOOGLE_GEMINI_API_KEY is not configured');
+      throw new Error('No Google AI API key configured (tried GOOGLE_AI_API_KEY, GOOGLE_GEMINI_API_KEY)');
     }
 
     if (!topicScores || topicScores.length === 0) {
@@ -243,9 +243,8 @@ Return your response as JSON with this exact structure:
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          systemInstruction: { parts: [{ text: systemPrompt }] },
-          contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-          generationConfig: { temperature: 0.7, maxOutputTokens: 800 },
+          contents: [{ parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] }],
+          generationConfig: { temperature: 0.7, maxOutputTokens: 1024 },
         }),
       }
     );
@@ -267,7 +266,7 @@ Return your response as JSON with this exact structure:
       }
       const errorText = await response.text();
       console.error('Gemini API error:', response.status, errorText);
-      throw new Error(`Gemini API error: ${response.status}`);
+      throw new Error(`Gemini API error: ${response.status} — ${errorText.slice(0, 300)}`);
     }
 
     const aiResponse = await response.json();

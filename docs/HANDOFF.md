@@ -5,6 +5,36 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-25 — Fix user-profile-analysis AI analysis (Lovable gateway → Gemini direct)
+
+**What happened & why**
+`user-profile-analysis` edge function was returning 500 ("AI Gateway error: 403") because the
+Lovable AI gateway credentials were invalid/expired. Switched to direct Google Gemini API calls
+(matching the pattern used by other functions). Three rounds of iteration were needed:
+
+1. **Initial switch** (`0dc311d6`) — replaced Lovable gateway call with Gemini v1beta; PR #575
+   merged this. But the first attempt used `systemInstruction` + `gemini-2.0-flash` → 400 error.
+2. **Drop `systemInstruction`** (`12980eaa`) — v1beta `generateContent` doesn't support
+   `systemInstruction` with API key auth; merged system+user prompts into single `contents` entry.
+3. **Prefer `GOOGLE_AI_API_KEY`** (`e9201421`) — try `GOOGLE_AI_API_KEY` first, fall back to
+   `GOOGLE_GEMINI_API_KEY`; also surfaced Gemini error body in 500 responses for diagnosis.
+4. **Switch to `gemini-2.5-flash`** (`10a90312`) — `gemini-2.0-flash` returned 404 "no longer
+   available". `gemini-2.5-flash` works with `GOOGLE_AI_API_KEY`.
+
+All 4 fixes deployed via MCP (v648 is live and working). Commits 2–4 are on branch
+`claude/hopeful-pasteur-kr2o9v` but only commit 1 went to main via PR #575. PR #576 (draft)
+contains the remaining 3 fixes and is awaiting CI + review.
+
+Secondary issue: users who completed the quiz saw "Complete the quiz" fallback text — same root
+cause (500 threw, TanStack Query left `analysis` as `undefined`).
+
+**State** (verified 2026-06-25)
+Deployed v648 with `gemini-2.5-flash` + no `systemInstruction` — function works in production.
+`bunx tsc --noEmit` — 0 errors. PR #576 CI queued.
+
+**Next**
+Merge PR #576 once CI passes. Then user confirms AI Analysis card shows real output (not error).
+
 ## 2026-06-25 — Challenger status display + match circle fix + candidate filter tabs
 
 **What happened & why**
