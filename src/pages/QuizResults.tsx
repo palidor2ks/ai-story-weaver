@@ -20,7 +20,6 @@ import { useToast } from '@/hooks/use-toast';
 import { formatScore, getScoreLabel } from '@/lib/scoreFormat';
 import { Loader2, Sparkles, ArrowRight, BarChart3, Users, Share2, Building2, MapPin, Calendar, Vote } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { NolanChart } from '@/components/NolanChart';
 
 interface ProfileAnalysis {
   summary: string;
@@ -318,34 +317,6 @@ export const QuizResults = () => {
 
       {/* Main content */}
       <div className="max-w-3xl mx-auto mt-6 pb-12">
-
-        {/* Political Compass */}
-        <div className="mx-4 mb-3">
-          <p className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest mb-2">
-            Political Compass
-          </p>
-          <div className="bg-white rounded-xl shadow-sm p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Users className="w-4 h-4 text-poli-navy" />
-              <span className="text-sm font-bold text-poli-body">Political Compass</span>
-            </div>
-            {isLoadingAI ? (
-              <div className="flex items-center gap-3 text-poli-muted py-4">
-                <Loader2 className="w-5 h-5 animate-spin" />
-                <span className="text-sm">Calculating party alignment...</span>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <NolanChart />
-                {profileAnalysis?.partyComparison && (
-                  <p className="text-sm text-poli-muted pt-2 border-t border-poli-surface">
-                    {profileAnalysis.partyComparison}
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
 
         {/* AI Profile Summary */}
         <div className="mx-4 mb-3">

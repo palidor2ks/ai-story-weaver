@@ -139,6 +139,7 @@ export const CandidateProfile = () => {
   const [visibleBillCount, setVisibleBillCount] = useState(20);
   const [donorSearch, setDonorSearch] = useState('');
   const [activeTab, setActiveTab] = useState<'issues' | 'votes' | 'bills' | 'money' | 'contact' | 'positions'>('issues');
+  const [voteAlignment, setVoteAlignment] = useState<{ support: number; oppose: number } | null>(null);
   const effectiveCycle = selectedCycle ?? cycleInfo?.defaultCycle;
   const { data: donors = [], refetch: refetchDonors } = useCandidateDonors(id, effectiveCycle);
   const { data: earmarkRollups = [] } = useCandidateEarmarkRollups(id, effectiveCycle);
@@ -569,16 +570,18 @@ export const CandidateProfile = () => {
       </div>
 
       {/* STAT GRID */}
-      <div className="mx-4 mt-3 grid grid-cols-2 gap-2.5">
+      <div className="mx-4 mt-3 grid grid-cols-3 gap-2">
         {[
           { value: votes.length || '—', label: 'Key votes cast' },
-          { value: '—', label: 'Party unity' },
           { value: sponsoredBills.filter((b) => b.is_sponsor).length || '—', label: 'Bills sponsored' },
           { value: sponsoredBills.filter((b) => !b.is_sponsor).length || '—', label: 'Cosponsored' },
+          { value: voteAlignment ? voteAlignment.support : '—', label: "You'd support", icon: '👍' },
+          { value: voteAlignment ? voteAlignment.oppose : '—', label: "You'd oppose", icon: '👎' },
+          { value: '—', label: 'Party unity' },
         ].map(stat => (
-          <div key={stat.label} className="border border-[rgba(20,23,58,0.1)] rounded-[16px] p-3.5 bg-white">
-            <p className="font-sans font-black text-[22px] text-poli-navy leading-none">{String(stat.value)}</p>
-            <p className="text-[11px] text-poli-dim mt-1">{stat.label}</p>
+          <div key={stat.label} className="border border-[rgba(20,23,58,0.1)] rounded-[14px] p-2.5 bg-white">
+            <p className="font-sans font-black text-[18px] text-poli-navy leading-none">{String(stat.value)}</p>
+            <p className="text-[10px] text-poli-dim mt-1 leading-tight">{'icon' in stat ? `${stat.icon} ${stat.label}` : stat.label}</p>
           </div>
         ))}
       </div>
@@ -649,6 +652,7 @@ export const CandidateProfile = () => {
               candidateName={candidate.name}
               candidateState={candidate.state}
               candidateOffice={candidate.office}
+              onAlignmentStats={(support, oppose) => setVoteAlignment({ support, oppose })}
             />
             <Link to={`/candidate/${id}/votes`} className="block mt-3">
               <button className="w-full border border-[rgba(20,23,58,0.14)] text-poli-navy font-bold text-sm rounded-[14px] py-3.5">
