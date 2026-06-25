@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useParams } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { UserProvider } from "./context/UserContext";
 import { useHasCompletedOnboarding } from "./hooks/useProfile";
@@ -57,9 +57,13 @@ const Onboarding = lazy(() => import("./pages/Onboarding").then((m) => ({ defaul
 const PoliticalCompassTest = lazy(() => import("./pages/PoliticalCompassTest"));
 const PoliticalIdeologyTestsComparison = lazy(() => import("./pages/PoliticalIdeologyTestsComparison"));
 const PoliticalCompassExplained = lazy(() => import("./pages/PoliticalCompassExplained"));
-const Issues = lazy(() => import("./pages/Issues"));
 const BillDetail = lazy(() => import("./pages/BillDetail").then((m) => ({ default: m.BillDetail })));
 const CompareView = lazy(() => import("./pages/CompareView").then((m) => ({ default: m.CompareView })));
+
+function CandidateOverviewRedirect() {
+  const { id } = useParams<{ id: string }>();
+  return <Navigate to={`/candidate/${id}/profile`} replace />;
+}
 
 // Fires useCandidates + useAllPoliticians at app boot so data is ready
 // by the time the user navigates to /candidates. TanStack Query deduplicates
@@ -186,7 +190,7 @@ const AppRoutes = () => (
       <Route path="/parties" element={<RouteGuard requireAuth={false} requireOnboarding={false}><Parties /></RouteGuard>} />
       <Route path="/party/:id" element={<RouteGuard requireAuth={false} requireOnboarding={false}><PartyProfile /></RouteGuard>} />
       <Route path="/donor/:id" element={<RouteGuard requireAuth requireOnboarding={false}><DonorProfile /></RouteGuard>} />
-      <Route path="/candidate/:id" element={<RouteGuard requireAuth={false} requireOnboarding={false}><CandidateOverview /></RouteGuard>} />
+      <Route path="/candidate/:id" element={<CandidateOverviewRedirect />} />
       <Route path="/candidate/:id/profile" element={<RouteGuard requireAuth={false} requireOnboarding={false}><CandidateProfile /></RouteGuard>} />
       <Route path="/candidate/:id/votes" element={<RouteGuard requireAuth={false} requireOnboarding={false}><CandidateVotes /></RouteGuard>} />
       <Route path="/candidate/:id/donors" element={<RouteGuard requireAuth={false} requireOnboarding={false}><CandidateDonors /></RouteGuard>} />
@@ -211,9 +215,9 @@ const AppRoutes = () => (
       <Route path="/blog/political-compass-explained" element={<RouteGuard requireAuth={false} requireOnboarding={false}><PoliticalCompassExplained /></RouteGuard>} />
       <Route path="/blog" element={<RouteGuard requireAuth={false} requireOnboarding={false}><Blog /></RouteGuard>} />
       <Route path="/jobs" element={<RouteGuard requireAuth={false} requireOnboarding={false}><Jobs /></RouteGuard>} />
-      <Route path="/issues" element={<RouteGuard requireAuth={false} requireOnboarding={false}><Issues /></RouteGuard>} />
       <Route path="/bill/:id" element={<RouteGuard requireAuth={false} requireOnboarding={false}><BillDetail /></RouteGuard>} />
-      <Route path="/polls" element={<Navigate to="/issues" replace />} />
+      <Route path="/polls" element={<Navigate to="/candidates" replace />} />
+      <Route path="/issues" element={<Navigate to="/candidates" replace />} />
       <Route path="*" element={<NotFound />} />
       </Routes>
     </Suspense>

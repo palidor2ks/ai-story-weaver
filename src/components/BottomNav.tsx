@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Users, FileText, Target, User, Menu, Building2, HelpCircle, Newspaper, Shield, FileText as FileTextIcon, X } from 'lucide-react';
+import { Users, Target, User, Menu, Building2, HelpCircle, Newspaper, Shield, FileText as FileTextIcon, X } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useAdminRole } from '@/hooks/useAdminRole';
 import { usePoliticianRole } from '@/hooks/usePoliticianProfile';
@@ -18,14 +18,6 @@ const primaryTabs = [
     to: '/candidates',
     requiresAuth: false,
     isActive: (p: string) => p === '/candidates' || p.startsWith('/candidate/') || p === '/compare',
-  },
-  {
-    key: 'issues',
-    label: 'Issues',
-    icon: FileText,
-    to: '/issues',
-    requiresAuth: false,
-    isActive: (p: string) => p === '/issues' || p.startsWith('/bill/'),
   },
   {
     key: 'quiz',
