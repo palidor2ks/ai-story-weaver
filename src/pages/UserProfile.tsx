@@ -490,8 +490,8 @@ export const UserProfile = () => {
         </div>
       </div>
 
-      {/* Hidden dialogs controlled by overlap card buttons */}
-      <div className="hidden">
+      {/* Dialog triggers rendered off-screen so scorecard links can imperatively open them */}
+      <div className="sr-only" ref={editProfileTriggerRef}>
         <EditProfileDialog
           profile={profile}
           onSave={async (data) => {
@@ -499,13 +499,10 @@ export const UserProfile = () => {
             toast.success('Profile updated successfully!');
           }}
           isLoading={updateProfile.isPending}
-          open={isEditProfileOpen}
-          onOpenChange={setIsEditProfileOpen}
         />
-        <ChangePasswordDialog
-          open={isChangePasswordOpen}
-          onOpenChange={setIsChangePasswordOpen}
-        />
+      </div>
+      <div className="sr-only" ref={changePasswordTriggerRef}>
+        <ChangePasswordDialog />
       </div>
 
       {/* QUICK ACTIONS ROW */}
