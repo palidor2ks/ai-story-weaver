@@ -23,13 +23,12 @@ Fixes (PR #578, deployed as v651):
 - Improved error logging on both failure branches.
 
 **State** (verified 2026-06-25)
-v651 deployed to production. PR #578 open as draft, CI in progress. User has not yet confirmed
-that the new output looks correct.
+v651 deployed to production. PR #578 merged to main. All 7 CI checks passed. User has not yet
+confirmed that the analysis card shows the correct depth/structure in the live app.
 
 **Next**
 User to hit Refresh on the AI Analysis card and confirm it shows full structured content
 (summary + Key Insights + Party Platform Comparison + Strongest Positions) with appropriate depth.
-Then merge PR #578.
 
 ## 2026-06-25 — Fix user-profile-analysis JSON parsing (Gemini markdown fences)
 
