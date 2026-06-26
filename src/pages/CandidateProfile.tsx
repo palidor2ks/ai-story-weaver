@@ -591,9 +591,9 @@ export const CandidateProfile = () => {
       {/* STAT GRID */}
       <div className="mx-4 mt-3 grid grid-cols-3 gap-2">
         {[
-          { value: votes.length || '—', label: 'Key votes cast' },
-          { value: sponsoredBills.filter((b) => b.is_sponsor).length || '—', label: 'Bills sponsored' },
-          { value: sponsoredBills.filter((b) => !b.is_sponsor).length || '—', label: 'Cosponsored' },
+          { value: fecTotalReceipts ? formatCurrency(fecTotalReceipts) : '—', label: 'Total raised' },
+          { value: fecTotalDisbursements ? formatCurrency(fecTotalDisbursements) : '—', label: 'Spent' },
+          { value: fecTotals?.cash_on_hand_end_period ? formatCurrency(fecTotals.cash_on_hand_end_period) : '—', label: 'Cash on hand' },
         ].map(stat => (
           <div key={stat.label} className="border border-[rgba(20,23,58,0.1)] rounded-[14px] p-2.5 bg-white">
             <p className="font-sans font-black text-[18px] text-poli-navy leading-none">{String(stat.value)}</p>
