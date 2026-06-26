@@ -166,7 +166,7 @@ export const useCandidateIE = (
       if (filtered) rowsQ = rowsQ.eq('cycle', cycle!);
       else rowsQ = rowsQ.limit(50);
 
-      const [totalsRes, rowsRes, cyclesRes] = await Promise.all([
+      const [totalsRes, rowsRes, cyclesRes, excludedRes] = await Promise.all([
         filtered
           ? Promise.resolve({ data: null })
           : supabase
@@ -180,9 +180,16 @@ export const useCandidateIE = (
           .select('cycle')
           .eq('candidate_id', candidateId!)
           .not('cycle', 'is', null),
+        // Admin-excluded IE committees are hidden everywhere else (Top Spenders
+        // page, rollup views); drop them here too so the profile agrees.
+        supabase.from('ie_excluded_committees_public').select('fec_committee_id'),
       ]);
 
-      const rows = (rowsRes.data ?? []) as IERow[];
+      const excluded = new Set(
+        ((excludedRes.data ?? []) as Array<{ fec_committee_id: string }>).map((r) => r.fec_committee_id),
+      );
+      const rawRows = (rowsRes.data ?? []) as IERow[];
+      const rows = rawRows.filter((r) => !excluded.has(r.spending_committee_fec_id));
 
       let totals: IETotals;
       if (filtered) {

@@ -789,9 +789,11 @@ export const CandidateProfile = () => {
                 Funding & donor details →
               </button>
             </Link>
-            {/* Top spenders — outside groups making independent expenditures for/against */}
+            {/* Top spenders — outside groups making independent expenditures for/against.
+                Use the resolved candidate.id (not the raw route id) so synthetic
+                executive routes like /candidate/federal_president still match IE rows. */}
             <div className="mt-3">
-              <CandidateIESection candidateId={id} />
+              <CandidateIESection candidateId={candidate.id} />
             </div>
           </div>
         )}
