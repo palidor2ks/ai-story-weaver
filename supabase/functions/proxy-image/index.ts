@@ -34,6 +34,8 @@ const ALLOWED_HOST_SUFFIXES = [
   'wixstatic.com',
   'squarespace-cdn.com',
   'civicengine.com',
+  // @unitedstates project — Congress member photos (congress.gov mirror)
+  'unitedstates.github.io',
 ];
 
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
