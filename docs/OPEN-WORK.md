@@ -178,6 +178,24 @@ stale Codex SEO PR #300 also linger — owner's call.)
 
 ---
 
+## 🔵 Frontend (Design B rollback follow-ups)
+
+### 17. ☐ Re-apply bug/data fixes dropped by the Design B rollback (PR #600)
+**What:** The June-26 rollback restored the entire frontend to the pre-Design-B June-24 baseline
+(`08ae3a26`), which also reverted real fixes that were entangled in the redesigned files. Cherry-pick
+these back onto the rolled-back design (NOT the styling — just the logic):
+- "Fix vote AI Analysis being framed as cosponsorship"
+- Share-card: stop showing fake "C/Moderate" for unscored candidates
+- "Harden candidate IE data path and sync card to money cycle"
+- "Filter excluded IE committees + use resolved id for profile spenders"
+- "Cache AI political analysis in DB" (avoid re-running every login/tab-switch)
+- "Show Challenger status for non-incumbent candidates"
+**History:** User reported the app "reverts to the new design" — root cause was Lovable's two-way sync +
+its "Revert" button pinning the preview to Design B. User chose to roll the whole frontend back. Full
+loss list in PR #600 body and the 2026-06-26 HANDOFF entry.
+**State:** Not started. Original commits recoverable via `git log 08ae3a26..` on the pre-rollback main.
+Confirm the rolled-back look is live in Lovable (user must sync Lovable FROM `main`) before layering.
+
 ## ⚪ Code health (deliberate, when bandwidth allows)
 
 ### 11. ☐ Add minimal test harness + CI — closes the "no automated tests" blocker (Phase H).
