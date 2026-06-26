@@ -5,6 +5,22 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-26 — proxy-image allowlist: whitehouse.gov (PR #590, merged)
+
+**What happened & why**
+Full audit of all image sources in the codebase revealed `whitehouse.gov` was missing from the
+`proxy-image` allowlist. Presidential/VP portrait URLs (`whitehouse.gov/wp-content/uploads/...`)
+were being blocked, breaking photo display and share-card rasterization for executive profiles.
+Added to allowlist; deployed as v114. Audit confirmed all other sources (bioguide, OpenStates,
+state legislatures, CDNs) were already covered.
+
+**State** (verified 2026-06-26)
+PR #590 merged. Edge function v114 live.
+
+**Next**
+No follow-up needed. Both `unitedstates.github.io` (#589) and `whitehouse.gov` (#590) are now
+unblocked.
+
 ## 2026-06-26 — proxy-image allowlist: unitedstates.github.io (PR #589, merged)
 
 **What happened & why**
