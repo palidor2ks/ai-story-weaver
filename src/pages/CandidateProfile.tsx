@@ -581,18 +581,25 @@ export const CandidateProfile = () => {
             <p className="text-[10px] text-poli-dim mt-1 leading-tight">{stat.label}</p>
           </div>
         ))}
-        {/* Combined support/oppose box */}
-        <div className="col-span-2 border border-[rgba(20,23,58,0.1)] rounded-[14px] p-2.5 bg-white flex items-center justify-around">
-          <div className="text-center">
-            <p className="font-sans font-black text-[18px] text-agree leading-none">{voteAlignment ? voteAlignment.support : '—'}</p>
-            <p className="text-[10px] text-poli-dim mt-1">👍 You'd support</p>
-          </div>
-          <div className="w-px h-8 bg-[rgba(20,23,58,0.1)]" />
-          <div className="text-center">
-            <p className="font-sans font-black text-[18px] text-disagree leading-none">{voteAlignment ? voteAlignment.oppose : '—'}</p>
-            <p className="text-[10px] text-poli-dim mt-1">👎 You'd oppose</p>
-          </div>
-        </div>
+        {/* Legislative alignment % box */}
+        {(() => {
+          const pct = voteAlignment && (voteAlignment.support + voteAlignment.oppose) > 0
+            ? Math.round(voteAlignment.support / (voteAlignment.support + voteAlignment.oppose) * 100)
+            : null;
+          return (
+            <div className="col-span-2 border border-[rgba(20,23,58,0.1)] rounded-[14px] p-2.5 bg-white flex items-center justify-center">
+              <div className="text-center">
+                <p className={cn(
+                  "font-sans font-black text-[18px] leading-none",
+                  pct === null ? "text-poli-navy" : pct >= 70 ? "text-agree" : pct >= 40 ? "text-amber-600" : "text-disagree"
+                )}>
+                  {pct !== null ? `${pct}%` : '—'}
+                </p>
+                <p className="text-[10px] text-poli-dim mt-1 leading-tight">legislative alignment</p>
+              </div>
+            </div>
+          );
+        })()}
         <div className="border border-[rgba(20,23,58,0.1)] rounded-[14px] p-2.5 bg-white">
           <p className="font-sans font-black text-[18px] text-poli-navy leading-none">—</p>
           <p className="text-[10px] text-poli-dim mt-1 leading-tight">Party unity</p>
