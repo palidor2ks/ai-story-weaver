@@ -5,6 +5,32 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-26 — rep profile: dropped sections restored as tabs (News tab, PoliScore in Votes, state finance in Money)
+
+**What happened & why**
+On the rep profile (`/candidate/:id/profile` → `src/pages/CandidateProfile.tsx`) every section is supposed
+to be a switchable tab. The earlier tab redesign converted most sections but **dropped three** that the
+old stacked layout had — "Latest from X" (`RepresentativeSocialFeed`), "Latest News about …"
+(`RelevantNewsFeed`), and the "PoliScore — Voting Record" card (`PoliScoreCard`) — plus the NJ/FL/NY/TX
+state-legislator finance sections. Their imports were left in the file but never rendered (dead imports).
+This change gives each a tab home: a new **News** tab (7th tab) holds the news feed + X feed, the
+**PoliScore voting-record card** now renders at the top of the **Votes** tab (same office/state gating as
+before), and the four **state-finance sections** render in the **Money** tab (each self-gates by state/
+office, so no-ops elsewhere). Tab nav grid went `grid-cols-6` → `grid-cols-7`. No sections are left
+stacked, and all previously-unused imports are now wired in.
+
+**State** (verified 2026-06-26)
+`bun run build` passes (CandidateProfile chunk builds clean) and `bun test src` is 52/52 green. Lint not
+run (`@eslint/js` missing from the fresh install / sandbox), but the build is the type-check gate.
+Not yet manually exercised in a running app — tab switching and the new News tab's empty/loaded states
+should be eyeballed against a real rep (e.g. Andy Kim, Senator NJ) before merge.
+
+**Next**
+Manually verify the News tab renders (news + X feed), the PoliScore card shows in Votes for a covered
+federal/NC legislator, and 7 tabs don't overflow awkwardly on a narrow phone. Open as draft PR.
+
+---
+
 ## 2026-06-26 — proxy-image now allows .gov + state.XX.us hosts (Texas legislator photos) — PR #596
 
 **What happened & why**
