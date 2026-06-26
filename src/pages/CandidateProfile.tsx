@@ -618,15 +618,15 @@ export const CandidateProfile = () => {
         </div>
       </div>
 
-      {/* 5-TAB NAVIGATION */}
+      {/* TAB NAVIGATION */}
       <div className="mt-4 px-4">
-        <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+        <div className="grid grid-cols-6 gap-1">
           {(['issues', 'positions', 'votes', 'bills', 'money', 'contact'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
               className={cn(
-                'flex-none font-sans font-bold text-[12px] px-4 py-[7px] rounded-[20px] whitespace-nowrap transition-colors',
+                'font-sans font-bold text-[10px] py-[7px] rounded-[16px] text-center leading-tight transition-colors',
                 activeTab === tab
                   ? 'bg-poli-navy text-white'
                   : 'bg-poli-surface text-poli-body hover:bg-poli-surface/70',
