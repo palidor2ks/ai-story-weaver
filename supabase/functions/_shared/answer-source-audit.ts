@@ -51,6 +51,29 @@ function clampReason(raw: unknown): string {
   return String(raw ?? '').replace(/\s+/g, ' ').trim().slice(0, 500);
 }
 
+// Default reason when the model gave a verdict label but no usable prose.
+function defaultReason(v: AuditVerdict): string {
+  return v === 'contradicts' ? 'source contradicts stored stance'
+    : v === 'consistent' ? 'source consistent with stored stance'
+    : 'could not verify source';
+}
+
+// Pull an explicit `"verdict": "<label>"` (and its `"reason"`) out of a JSON-ish blob even when
+// the surrounding JSON is truncated/unterminated. Gemini + googleSearch grounding can cut the
+// reply off before the closing brace, so JSON.parse fails upstream and parseVerdict would
+// otherwise keyword-scan the WHOLE blob — letting an incidental "oppose"/"contradict" inside the
+// reason prose flip a model that actually said "verdict":"consistent" to the DESTRUCTIVE
+// 'contradicts'. Honor the model's structured label, never the prose. Returns null when the blob
+// carries no explicit verdict field (genuine prose-only output → caller falls back to classifyText).
+function extractVerdictField(text: string): ParsedVerdict | null {
+  const vm = text.match(/"verdict"\s*:\s*"?\s*(consistent|contradicts|unverifiable)/i);
+  if (!vm) return null;
+  const verdict = vm[1].toLowerCase() as AuditVerdict;
+  const rm = text.match(/"reason"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+  const reason = clampReason(rm ? rm[1].replace(/\\(["\\])/g, '$1') : '');
+  return { verdict, reason: reason || defaultReason(verdict) };
+}
+
 // Accepts the model's JSON object ({ verdict, reason }) OR a loose string and normalizes it
 // to one of the three allowed verdicts. Anything we can't confidently classify becomes
 // 'unverifiable' — the safe default, because only 'contradicts' triggers a deletion+regen.
@@ -69,8 +92,11 @@ export function parseVerdict(input: unknown): ParsedVerdict {
     return classifyText(raw, reason);
   }
 
-  // String form: scan for a verdict keyword.
+  // String form (JSON.parse failed upstream — often a TRUNCATED reply). Prefer the model's
+  // explicit "verdict" field if one survived the truncation; only keyword-scan genuine prose.
   if (typeof input === 'string') {
+    const field = extractVerdictField(input);
+    if (field) return field;
     return classifyText(input, clampReason(input));
   }
 

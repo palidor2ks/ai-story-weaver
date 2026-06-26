@@ -86,6 +86,36 @@ test('caps the reason length', () => {
   expect(parseVerdict({ verdict: 'consistent', reason: long }).reason.length).toBe(500);
 });
 
+// ── parseVerdict: truncated / fenced model output (the JSON-leak + mislabel bug) ──
+// Gemini + googleSearch can cut the reply off before the closing brace, so JSON.parse fails and
+// the raw blob reaches parseVerdict as a string. The model's STRUCTURED verdict must still win
+// over keyword-scanning the reason prose, otherwise a "consistent" answer with an "oppose"-ish
+// explanation got flipped to the destructive 'contradicts' (observed in production).
+test('honors an explicit verdict field in a truncated (unterminated) JSON blob', () => {
+  const truncated =
+    '```json\n{ "verdict": "consistent", "reason": "The source shows the politician opposed the';
+  // Prose contains "opposed" — the old code keyword-scanned the whole blob and returned contradicts.
+  expect(parseVerdict(truncated).verdict).toBe('consistent');
+});
+
+test('extracts the reason from a fenced JSON blob and drops the fence noise', () => {
+  const out = parseVerdict('```json\n{ "verdict": "contradicts", "reason": "cited bill text supports it" }\n```');
+  expect(out.verdict).toBe('contradicts');
+  expect(out.reason).toBe('cited bill text supports it');
+  expect(out.reason).not.toContain('```');
+});
+
+test('truncated blob with a verdict but no reason falls back to a clean default', () => {
+  const out = parseVerdict('{ "verdict": "unverifiable", "reaso');
+  expect(out.verdict).toBe('unverifiable');
+  expect(out.reason).toBe('could not verify source');
+});
+
+test('prose-only output (no verdict field) still keyword-classifies as before', () => {
+  expect(parseVerdict('The source clearly supports the stored position').verdict).toBe('consistent');
+  expect(parseVerdict('This contradicts the record entirely').verdict).toBe('contradicts');
+});
+
 // ── combineReachability ────────────────────────────────────────────────────────
 
 test('reachable source: trusts the AI verdict unchanged', () => {

@@ -5,6 +5,45 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-26 — Rep-answers status dig: drainer down (401) + audit parser mislabel fix
+
+**What happened & why**
+Status check on the rep-answers crons turned up two distinct problems:
+
+1. **The per-candidate drainer has been dead since ~2026-06-23.** Candidate research moved off
+   pg_cron onto the Railway graphile-worker (`workers/`), and its `drain_research_queue` task is
+   parked at attempts 25/25 with `last_error = drain-research-queue HTTP 401: Unauthorized`
+   (same 401 on `nightly_bill_sync`). It's an AUTH break, not an empty queue — the worker's
+   `CRON_SECRET`/service-role key in **Railway's env** is no longer accepted by the edge functions
+   (exactly the failure `workers/CLAUDE.md` warns about). Impact: **322 candidates stuck in
+   `answers_source='pending_research'`**, only ~14 synced in 24h. The trickle of new answers that
+   continued through 03:51 today was the `answer-audit-fix` cron (still on a working pg_cron key)
+   draining its contradicts backlog, not the drainer. Wrote a gated repair runbook:
+   `scripts/data-repair/2026-06-26-revive-drain-research-queue.sql` (health check + re-arm UPDATE;
+   the job's `key` is nulled so `remove_job()` can't target it). **Requires a human to fix the
+   Railway credential FIRST** — re-arming before that just re-parks at a 401.
+
+2. **The answer auditor was mislabeling answers as `contradicts`.** Of 596 `contradicts` verdicts,
+   ~145 had raw LLM JSON leaking into the reason and 8 literally contained `"verdict":"consistent"`.
+   Cause: when Gemini's reply is truncated (no closing brace), `JSON.parse` fails and `parseVerdict`
+   fell to the bare-string path, which keyword-scanned the WHOLE blob — so an "oppose" in the reason
+   prose flipped a structurally-`consistent` answer to the DESTRUCTIVE `contradicts` (which the fixer
+   then deletes+regens). Fix in `supabase/functions/_shared/answer-source-audit.ts`: new
+   `extractVerdictField()` pulls the explicit `"verdict"`/`"reason"` out of a truncated/fenced blob
+   and the string path honors that structured label before keyword-scanning. +4 unit tests.
+
+**State** (verified 2026-06-26)
+Preflight green: `bun run lint` 0 errors (157 pre-existing warnings), `bun run test` 143 pass / 0
+fail (was 139 + 4 new), `bun run build` passes. The auditor fix is deployed in code only — **the
+edge function `audit-answer-sources` still needs redeploy** for it to take effect on live runs.
+The Railway 401 and the 322-candidate backlog are NOT yet fixed (need the Railway env change).
+
+**Next**
+Fix the Railway `CRON_SECRET`/service-role credential, then run the gated re-arm in
+`scripts/data-repair/2026-06-26-revive-drain-research-queue.sql` to restart the drainer.
+
+---
+
 ## 2026-06-26 — Politicians filter chips wrap on mobile (no longer cut off)
 
 **What happened & why**
