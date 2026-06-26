@@ -47,6 +47,16 @@ const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
 
 function hostAllowed(host: string): boolean {
   const h = host.toLowerCase();
+  // US government photo hosts as a class. `.gov` is restricted to US government
+  // entities, and OpenStates `person.image` points state-legislator portraits at
+  // per-state government hosts (senate.texas.gov, house.texas.gov, leg.colorado.gov,
+  // …) plus the `state.XX.us` subdomains older legislatures use (njleg.state.nj.us,
+  // ncga.state.nc.us). Allowing the whole class stops us from allowlisting one host
+  // per state every time a new legislator photo host appears (Texas was the latest:
+  // senate.texas.gov is not a subdomain of the allowlisted senate.gov). The response
+  // is still validated as image/* and size-capped below, so this only widens sources.
+  if (h === 'gov' || h.endsWith('.gov')) return true;
+  if (/(^|\.)state\.[a-z]{2}\.us$/.test(h)) return true;
   return ALLOWED_HOST_SUFFIXES.some((s) => h === s || h.endsWith('.' + s));
 }
 
