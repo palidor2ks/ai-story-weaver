@@ -5,6 +5,20 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-26 — proxy-image allowlist: unitedstates.github.io (PR #589, merged)
+
+**What happened & why**
+Congress member photos from `unitedstates.github.io` (the @unitedstates project, a mirror of
+congress.gov photos) were hitting a 400 "host not allowed" error in the `proxy-image` edge
+function. Added the host to `ALLOWED_HOST_SUFFIXES`. Deployed as v112.
+
+**State** (verified 2026-06-26)
+PR #589 merged. CI green. Edge function v112 live.
+
+**Next**
+No immediate follow-up needed. Optionally audit other Congress photo URLs that may still be
+blocked (e.g. clerk.house.gov images).
+
 ## 2026-06-26 — Mobile tab overflow fix (PR #588, merged)
 
 **What happened & why**
