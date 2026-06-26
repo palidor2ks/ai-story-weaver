@@ -131,7 +131,7 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const body = await req.json();
-    let { overallScore, topicScores, userName } = body ?? {};
+    let { overallScore, topicScores, userName, force } = body ?? {};
 
     // Validate & clamp inputs to limit prompt-injection / abuse surface.
     if (typeof overallScore !== 'number' || !isFinite(overallScore)) overallScore = 0;
@@ -143,7 +143,31 @@ serve(async (req) => {
       score: Math.max(-10, Math.min(10, Number(ts?.score) || 0)),
     }));
     userName = typeof userName === 'string' ? userName.replace(/[\r\n]+/g, ' ').slice(0, 80) : '';
-    
+    const forceRegenerate = force === true;
+
+    // --- DB cache check (skip if force === true) ---
+    if (!forceRegenerate) {
+      const { data: profileRow } = await supabase
+        .from('profiles')
+        .select('ai_analysis_cache, ai_analysis_cached_at, ai_analysis_score')
+        .eq('id', user.id)
+        .single();
+
+      if (profileRow?.ai_analysis_cache && profileRow.ai_analysis_cached_at) {
+        const cachedAt = new Date(profileRow.ai_analysis_cached_at).getTime();
+        const ageMs = Date.now() - cachedAt;
+        const thirtyDays = 30 * 24 * 60 * 60 * 1000;
+        const scoreDrift = Math.abs((profileRow.ai_analysis_score ?? 0) - overallScore);
+        // Serve cache if < 30 days old and overall score hasn't shifted more than 1 point
+        if (ageMs < thirtyDays && scoreDrift <= 1) {
+          console.log(`Returning cached analysis for user ${user.id}, age ${Math.round(ageMs / 60000)}m`);
+          return new Response(JSON.stringify(profileRow.ai_analysis_cache), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+      }
+    }
+
     console.log(`Generating comprehensive profile summary for user: ${userName || 'Anonymous'}`);
 
     const GOOGLE_GEMINI_API_KEY = Deno.env.get('GOOGLE_AI_API_KEY') || Deno.env.get('GOOGLE_GEMINI_API_KEY');
@@ -301,14 +325,30 @@ Return ONLY a JSON object with this exact structure:
       }
     }
 
-    return new Response(JSON.stringify({
+    const result = {
       ...parsed,
       democratAlignment,
       republicanAlignment,
       greenAlignment,
       libertarianAlignment,
       overallScore,
-    }), {
+    };
+
+    // Persist to DB cache (best-effort; don't fail the response if this errors)
+    supabase
+      .from('profiles')
+      .update({
+        ai_analysis_cache: result,
+        ai_analysis_cached_at: new Date().toISOString(),
+        ai_analysis_score: overallScore,
+      })
+      .eq('id', user.id)
+      .then(({ error }) => {
+        if (error) console.error('Failed to save analysis cache:', error.message);
+        else console.log(`Cached analysis for user ${user.id}`);
+      });
+
+    return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
