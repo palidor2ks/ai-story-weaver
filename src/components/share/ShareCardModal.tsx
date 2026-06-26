@@ -215,7 +215,7 @@ export const ShareCardModal = ({
       ? 'text-destructive'
       : charCount > charLimit - 40
       ? 'text-amber-600 dark:text-amber-500'
-      : 'text-poli-muted';
+      : 'text-muted-foreground';
 
   const handleResetCaption = () => {
     bodyTouchedRef.current = false;
@@ -480,20 +480,14 @@ export const ShareCardModal = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[92vh] overflow-y-auto bg-white rounded-2xl p-0 border-0 gap-0">
-        <DialogHeader className="bg-poli-surface px-5 pt-5 pb-4">
-          <p className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest mb-1">
-            Share
-          </p>
-          <DialogTitle className="text-lg font-black text-poli-navy">
-            Create your share card
-          </DialogTitle>
-          <DialogDescription className="text-sm text-poli-muted">
+      <DialogContent className="max-w-4xl max-h-[92vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Create your share card</DialogTitle>
+          <DialogDescription>
             Pick a design, then download or copy the image and share with the link.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="px-5 pb-5 pt-4 space-y-4">
         {/* Template grid */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {templates.map(({ id, label, Component }) => (
@@ -518,10 +512,10 @@ export const ShareCardModal = ({
             >
               <div
                 className={cn(
-                  'relative w-full overflow-hidden rounded-xl border shadow-sm',
+                  'relative w-full overflow-hidden rounded-xl border-2 bg-muted shadow-sm',
                   selected === id
-                    ? 'border-2 border-poli-navy'
-                    : 'border-poli-surface bg-white group-hover:border-poli-navy/50',
+                    ? 'border-primary ring-2 ring-primary/30'
+                    : 'border-border group-hover:border-primary/50',
                 )}
                 style={{ aspectRatio: '1 / 1' }}
               >
@@ -533,21 +527,21 @@ export const ShareCardModal = ({
                 <span
                   className={cn(
                     'text-xs font-medium',
-                    selected === id ? 'text-poli-navy' : 'text-poli-body',
+                    selected === id ? 'text-primary' : 'text-foreground',
                   )}
                 >
                   {label}
                 </span>
-                {selected === id && <Check className="w-3.5 h-3.5 text-poli-navy" />}
+                {selected === id && <Check className="w-3.5 h-3.5 text-primary" />}
               </div>
             </button>
           ))}
         </div>
 
         {/* Big preview of selected */}
-        <div className="rounded-xl bg-poli-surface p-4 flex items-center justify-center overflow-hidden">
+        <div className="rounded-xl bg-muted/40 p-4 flex items-center justify-center overflow-hidden">
           <div
-            className="relative w-full max-w-[420px] overflow-hidden rounded-lg border border-poli-surface bg-white shadow-sm"
+            className="relative w-full max-w-[420px] overflow-hidden rounded-lg border border-border bg-background shadow-sm"
             style={{ aspectRatio: '1 / 1' }}
           >
             <CardThumb>
@@ -580,9 +574,9 @@ export const ShareCardModal = ({
         </div>
 
         {/* Caption editor */}
-        <div className="space-y-3 rounded-xl border border-poli-surface bg-poli-surface/40 p-4">
+        <div className="space-y-3 rounded-xl border border-border bg-muted/30 p-4">
           <div className="flex items-center justify-between">
-            <Label htmlFor="share-caption" className="text-sm font-semibold text-poli-body">
+            <Label htmlFor="share-caption" className="text-sm font-semibold">
               Caption
             </Label>
             {isEdited && (
@@ -591,7 +585,7 @@ export const ShareCardModal = ({
                 variant="ghost"
                 size="sm"
                 onClick={handleResetCaption}
-                className="h-7 gap-1 text-xs text-poli-muted"
+                className="h-7 gap-1 text-xs"
               >
                 <RotateCcw className="w-3 h-3" />
                 Reset to suggested
@@ -600,8 +594,8 @@ export const ShareCardModal = ({
           </div>
           {captionStyleOptions && captionStyleOptions.length > 0 && onSelectCaptionStyle && (
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-xs text-poli-muted mr-0.5 inline-flex items-center gap-1">
-                <Sparkles className="w-3 h-3 text-poli-navy" /> AI caption:
+              <span className="text-xs text-muted-foreground mr-0.5 inline-flex items-center gap-1">
+                <Sparkles className="w-3 h-3 text-primary" /> AI caption:
               </span>
               {captionStyleOptions.map((opt) => (
                 <Button
@@ -628,7 +622,7 @@ export const ShareCardModal = ({
             }}
             rows={4}
             placeholder="Write a custom message…"
-            className="resize-y bg-white border border-poli-surface rounded-xl text-sm text-poli-body"
+            className="resize-y bg-background"
           />
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-3">
@@ -645,10 +639,10 @@ export const ShareCardModal = ({
                   });
                 }}
               />
-              <Label htmlFor="hashtags-toggle" className="text-sm cursor-pointer text-poli-body">
+              <Label htmlFor="hashtags-toggle" className="text-sm cursor-pointer">
                 Include suggested hashtags
               </Label>
-              <span className="text-xs text-poli-muted font-mono">
+              <span className="text-xs text-muted-foreground font-mono">
                 {defaultHashtags}
               </span>
             </div>
@@ -658,31 +652,26 @@ export const ShareCardModal = ({
           </div>
         </div>
 
-        {/* Primary download CTA */}
+        {/* Actions */}
         <div className="flex flex-wrap gap-2 pt-2">
-          <button
-            onClick={handleDownload}
+          <Button
+            variant="outline"
+            onClick={() => setPreviewOpen(true)}
             disabled={!!busy}
-            className="h-12 rounded-xl font-bold text-white text-sm flex items-center justify-center gap-2 px-5 disabled:opacity-60"
-            style={{ background: 'linear-gradient(90deg, #182B7A, #B3122F)' }}
+            className="gap-2"
           >
+            <Eye className="w-4 h-4" />
+            Preview export
+          </Button>
+          <Button onClick={handleDownload} disabled={!!busy} className="gap-2">
             {busy === 'download' ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
               <Download className="w-4 h-4" />
             )}
             Download PNG
-          </button>
-          <Button
-            variant="outline"
-            onClick={() => setPreviewOpen(true)}
-            disabled={!!busy}
-            className="gap-2 border-poli-navy text-poli-navy rounded-xl h-12"
-          >
-            <Eye className="w-4 h-4" />
-            Preview export
           </Button>
-          <Button onClick={handleCopyImage} disabled={!!busy} variant="outline" className="gap-2 border-poli-navy text-poli-navy rounded-xl h-12">
+          <Button onClick={handleCopyImage} disabled={!!busy} variant="secondary" className="gap-2">
             {busy === 'copy' ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
@@ -690,11 +679,11 @@ export const ShareCardModal = ({
             )}
             Copy image
           </Button>
-          <Button onClick={handleCopyCaption} variant="ghost" className="gap-2 text-poli-muted">
+          <Button onClick={handleCopyCaption} variant="ghost" className="gap-2">
             <Copy className="w-4 h-4" />
             Copy caption
           </Button>
-          <Button onClick={handleCopyLink} variant="ghost" disabled={!!busy} className="gap-2 text-poli-muted">
+          <Button onClick={handleCopyLink} variant="ghost" disabled={!!busy} className="gap-2">
             <Copy className="w-4 h-4" />
             Copy link
           </Button>
@@ -705,7 +694,7 @@ export const ShareCardModal = ({
             variant="outline"
             disabled={!!busy}
             onClick={() => handleSocialIntent('twitter', (s) => twitterIntent(finalText, s))}
-            className="gap-2 border-poli-navy text-poli-navy rounded-xl"
+            className="gap-2"
           >
             <Twitter className="w-4 h-4" />
             Share on X
@@ -714,7 +703,7 @@ export const ShareCardModal = ({
             variant="outline"
             disabled={!!busy}
             onClick={() => handleSocialIntent('facebook', (s) => facebookIntent(s, finalText))}
-            className="gap-2 border-poli-navy text-poli-navy rounded-xl"
+            className="gap-2"
           >
             <Facebook className="w-4 h-4" />
             Facebook
@@ -723,13 +712,13 @@ export const ShareCardModal = ({
             variant="outline"
             disabled={!!busy}
             onClick={() => handleSocialIntent('linkedin', (s) => linkedinIntent(s))}
-            className="gap-2 border-poli-navy text-poli-navy rounded-xl"
+            className="gap-2"
           >
             <Linkedin className="w-4 h-4" />
             LinkedIn
           </Button>
           {supportsNativeShare() && (
-            <Button variant="outline" onClick={handleNative} disabled={!!busy} className="gap-2 border-poli-navy text-poli-navy rounded-xl">
+            <Button variant="outline" onClick={handleNative} disabled={!!busy} className="gap-2">
               {busy === 'native' ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
@@ -740,11 +729,10 @@ export const ShareCardModal = ({
           )}
         </div>
 
-        <p className="text-xs text-poli-muted">
+        <p className="text-xs text-muted-foreground">
           Tip: when you share on X, Facebook or LinkedIn, your card is uploaded and shown
           automatically as the link preview — no copy/paste needed.
         </p>
-        </div>
       </DialogContent>
       <SharePreviewDialog
         open={previewOpen}

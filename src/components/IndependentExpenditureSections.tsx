@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -109,28 +109,9 @@ export const CommitteeIESection = ({
   );
 };
 
-export const CandidateIESection = ({
-  candidateId,
-  preferredCycle,
-}: {
-  candidateId: string | null | undefined;
-  /** When set (e.g. the MONEY tab's selected finance cycle) the card follows it
-   *  until the user picks from its own dropdown — falling back to "all" when the
-   *  preferred cycle has no IE data so outside spending is never hidden. */
-  preferredCycle?: string | null;
-}) => {
+export const CandidateIESection = ({ candidateId }: { candidateId: string | null | undefined }) => {
   const [cycle, setCycle] = useState<string>('all');
-  const [userPicked, setUserPicked] = useState(false);
   const { data, isLoading } = useCandidateIE(candidateId, cycle);
-  // Follow the parent's selected cycle until the user overrides via the dropdown.
-  useEffect(() => {
-    if (userPicked) return;
-    const next =
-      preferredCycle && preferredCycle !== 'all' && data?.availableCycles?.includes(preferredCycle)
-        ? preferredCycle
-        : 'all';
-    setCycle((prev) => (prev === next ? prev : next));
-  }, [preferredCycle, data?.availableCycles, userPicked]);
   const spenderIds = (data?.topSpenders ?? []).map((s) => s.fecId).filter(Boolean) as string[];
   const { data: topicsMap } = useCommitteeTopicsMap(spenderIds);
   const { data: candidateMap } = useCommitteePrimaryCandidatesMap(spenderIds);
@@ -153,7 +134,7 @@ export const CandidateIESection = ({
             Outside Spending
           </CardTitle>
           {availableCycles.length > 0 && (
-            <Select value={cycle} onValueChange={(v) => { setUserPicked(true); setCycle(v); }}>
+            <Select value={cycle} onValueChange={setCycle}>
               <SelectTrigger className="w-[160px] h-8 text-xs">
                 <SelectValue placeholder="All cycles" />
               </SelectTrigger>

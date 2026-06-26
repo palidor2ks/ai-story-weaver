@@ -11,7 +11,7 @@ import { useTopics, useAllCanonicalQuestions, useCanonicalQuestions } from '@/ho
 import { useSaveQuizResults, useSaveUserTopics, useProfile, useUpdateProfile, useHasCompletedOnboarding } from '@/hooks/useProfile';
 import { OnboardingStep, Topic, QuestionOption, QuizAnswer, TopicScore } from '@/types';
 import { calculateQuizScore } from '@/lib/score';
-import { ArrowRight, ArrowLeft, Sparkles, Target, CheckCircle, AlertTriangle, MapPin, HelpCircle, BarChart2 } from 'lucide-react';
+import { ArrowRight, ArrowLeft, Sparkles, Target, CheckCircle, AlertTriangle, MapPin } from 'lucide-react';
 import { toast } from 'sonner';
 
 type ExtendedOnboardingStep = OnboardingStep | 'demographics' | 'local_topics' | 'local_quiz';
@@ -22,11 +22,11 @@ export const Onboarding = () => {
   const { data: profile } = useProfile();
   const { data: hasCompleted, isLoading: onboardingLoading } = useHasCompletedOnboarding();
   const { data: dbTopics = [], isLoading: topicsLoading } = useTopics();
-
+  
   const saveQuizResults = useSaveQuizResults();
   const saveUserTopics = useSaveUserTopics();
   const updateProfile = useUpdateProfile();
-
+  
   const [step, setStep] = useState<ExtendedOnboardingStep>('welcome');
   const [selectedTopics, setSelectedTopics] = useState<Topic[]>([]);
   const [quizAnswers, setQuizAnswers] = useState<QuizAnswer[]>([]);
@@ -43,7 +43,7 @@ export const Onboarding = () => {
   // Get selected topic IDs in order (for saving user topics)
   const selectedTopicIds = useMemo(() => selectedTopics.map(t => t.id), [selectedTopics]);
   const selectedLocalTopicIds = useMemo(() => selectedLocalTopics.map(t => t.id), [selectedLocalTopics]);
-
+  
   // Fetch ALL canonical onboarding questions for federal topics
   const { data: canonicalQuestions = [], isLoading: questionsLoading } = useAllCanonicalQuestions();
 
@@ -102,7 +102,7 @@ export const Onboarding = () => {
   })), [localCanonicalQuestions]);
 
   // Filter out skipped questions to get active questions
-  const activeQuestions = useMemo(() =>
+  const activeQuestions = useMemo(() => 
     questions.filter(q => !skippedQuestionIds.has(q.id)),
   [questions, skippedQuestionIds]);
 
@@ -111,7 +111,7 @@ export const Onboarding = () => {
   [localQuestions, skippedLocalQuestionIds]);
 
   // Dynamic minimum: at least 50% of available questions, minimum of 1
-  const minRequiredAnswers = useMemo(() =>
+  const minRequiredAnswers = useMemo(() => 
     Math.max(1, Math.ceil(questions.length / 2)),
   [questions.length]);
 
@@ -133,7 +133,7 @@ export const Onboarding = () => {
     setSelectedTopics(prev => {
       const exists = prev.some(t => t.id === topic.id);
       let newTopics: Topic[];
-
+      
       if (exists) {
         newTopics = prev.filter(t => t.id !== topic.id);
       } else if (prev.length < 3) {
@@ -141,7 +141,7 @@ export const Onboarding = () => {
       } else {
         return prev;
       }
-
+      
       return newTopics.map((t, index) => ({
         ...t,
         weight: 3 - index
@@ -186,7 +186,7 @@ export const Onboarding = () => {
       }
       return [...prev, newAnswer];
     });
-
+    
     setTimeout(() => {
       if (currentQuestionIndex < activeQuestions.length - 1) {
         setCurrentQuestionIndex(prev => prev + 1);
@@ -231,9 +231,9 @@ export const Onboarding = () => {
     const currentQuestion = activeQuestions[currentQuestionIndex];
     const newSkippedIds = new Set([...skippedQuestionIds, currentQuestion.id]);
     setSkippedQuestionIds(newSkippedIds);
-
+    
     const currentAnswerCount = quizAnswers.length;
-
+    
     if (currentQuestionIndex >= activeQuestions.length - 1) {
       if (currentAnswerCount >= minRequiredAnswers) {
         setStep('local_topics');
@@ -326,7 +326,7 @@ export const Onboarding = () => {
 
   const handleComplete = async () => {
     if (!calculatedScores) return;
-
+    
     // Deduplicate by questionId — local answers take priority over federal
     const allAnswers = [...quizAnswers];
     for (const la of localQuizAnswers) {
@@ -334,7 +334,7 @@ export const Onboarding = () => {
       if (idx >= 0) allAnswers[idx] = la;
       else allAnswers.push(la);
     }
-
+    
     if (allAnswers.length < minRequiredAnswers) {
       toast.error(`Please answer at least ${minRequiredAnswers} questions before continuing.`);
       return;
@@ -344,7 +344,7 @@ export const Onboarding = () => {
       // Save all 5 topic IDs (3 federal + 2 local) with weights
       const allTopicIds = [...selectedTopicIds, ...selectedLocalTopicIds];
       await saveUserTopics.mutateAsync(allTopicIds);
-
+      
       // Save all quiz results (federal + local answers combined)
       await saveQuizResults.mutateAsync({
         overallScore: calculatedScores.overall,
@@ -402,8 +402,8 @@ export const Onboarding = () => {
 
   if (topicsLoading || onboardingLoading) {
     return (
-      <div className="min-h-screen bg-[#F5F6FA] flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-poli-navy" />
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
       </div>
     );
   }
@@ -431,106 +431,95 @@ export const Onboarding = () => {
     }
   };
 
-  // Shared gradient CTA button style
-  const gradientBtnStyle: React.CSSProperties = {
-    background: 'linear-gradient(90deg, #182B7A, #B3122F)',
-  };
-
   const renderStep = () => {
     switch (step) {
       case 'welcome':
         return (
-          <div className="flex flex-col items-center text-center max-w-sm mx-auto pt-8 pb-10 px-4 animate-fade-in">
-            {/* Gradient icon */}
-            <div className="bg-gradient-to-br from-poli-navy to-[#B3122F] rounded-full w-16 h-16 flex items-center justify-center mb-6">
-              <Sparkles className="w-7 h-7 text-white" />
+          <div className="text-center max-w-2xl mx-auto animate-fade-in">
+            <div className="w-20 h-20 rounded-2xl bg-gradient-hero mx-auto mb-8 flex items-center justify-center shadow-glow">
+              <Sparkles className="w-10 h-10 text-primary-foreground" />
             </div>
-
-            <h1 className="text-2xl font-black text-poli-navy mb-1">
-              Welcome, {profile?.name || 'Voter'}!
+            
+            <h1 className="font-display text-4xl md:text-5xl font-bold text-foreground mb-4">
+              Welcome, <span className="text-gradient">{profile?.name || 'Voter'}</span>
             </h1>
-            <p className="text-sm text-poli-muted mb-8">
-              Let's build your political profile
+            
+            <p className="text-lg text-muted-foreground mb-8 leading-relaxed">
+              Let's discover your political alignment on the Left-Right spectrum and find candidates who share your values.
             </p>
 
-            {/* Feature tiles */}
-            <div className="w-full space-y-3 mb-8">
-              <div className="bg-white rounded-xl p-4 flex items-start gap-3 shadow-sm">
-                <div className="w-8 h-8 bg-poli-surface rounded-full flex items-center justify-center shrink-0">
-                  <Target className="w-4 h-4 text-poli-navy" />
+            <div className="space-y-4 mb-10">
+              <div className="flex items-center gap-4 p-4 rounded-xl bg-card border border-border">
+                <div className="w-12 h-12 rounded-lg bg-agree/10 flex items-center justify-center">
+                  <Target className="w-6 h-6 text-agree" />
                 </div>
                 <div className="text-left">
-                  <p className="font-semibold text-poli-body text-sm">Select Topics</p>
-                  <p className="text-xs text-poli-muted">3 federal issues + 2 local issues that matter most</p>
+                  <h3 className="font-semibold text-foreground">Select Your Top Topics</h3>
+                  <p className="text-sm text-muted-foreground">3 federal issues + 2 local issues that matter most</p>
                 </div>
               </div>
-
-              <div className="bg-white rounded-xl p-4 flex items-start gap-3 shadow-sm">
-                <div className="w-8 h-8 bg-poli-surface rounded-full flex items-center justify-center shrink-0">
-                  <HelpCircle className="w-4 h-4 text-poli-navy" />
+              
+              <div className="flex items-center gap-4 p-4 rounded-xl bg-card border border-border">
+                <div className="w-12 h-12 rounded-lg bg-accent/10 flex items-center justify-center">
+                  <Sparkles className="w-6 h-6 text-accent" />
                 </div>
                 <div className="text-left">
-                  <p className="font-semibold text-poli-body text-sm">Answer Questions</p>
-                  <p className="text-xs text-poli-muted">12 federal questions + 4 local questions</p>
+                  <h3 className="font-semibold text-foreground">Answer 16 Questions</h3>
+                  <p className="text-sm text-muted-foreground">12 federal questions + 4 local questions</p>
                 </div>
               </div>
-
-              <div className="bg-white rounded-xl p-4 flex items-start gap-3 shadow-sm">
-                <div className="w-8 h-8 bg-poli-surface rounded-full flex items-center justify-center shrink-0">
-                  <BarChart2 className="w-4 h-4 text-poli-navy" />
+              
+              <div className="flex items-center gap-4 p-4 rounded-xl bg-card border border-border">
+                <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <CheckCircle className="w-6 h-6 text-primary" />
                 </div>
                 <div className="text-left">
-                  <p className="font-semibold text-poli-body text-sm">Get Your Score</p>
-                  <p className="text-xs text-poli-muted">See where you stand from L10 (Left) to R10 (Right)</p>
+                  <h3 className="font-semibold text-foreground">Get Your L/R Score</h3>
+                  <p className="text-sm text-muted-foreground">See where you stand from L10 (Left) to R10 (Right)</p>
                 </div>
               </div>
             </div>
 
-            <button
+            <Button 
+              size="xl" 
+              variant="hero"
               onClick={() => setStep('demographics')}
-              style={gradientBtnStyle}
-              className="w-full h-12 rounded-xl font-bold text-white text-sm hover:opacity-90 flex items-center justify-center gap-2"
+              className="w-full"
             >
               Get Started
-              <ArrowRight className="w-4 h-4" />
-            </button>
+              <ArrowRight className="w-5 h-5" />
+            </Button>
           </div>
         );
 
       case 'demographics':
         return (
-          <div className="mx-4 animate-fade-in">
-            <div className="bg-white rounded-2xl shadow-sm mx-auto max-w-xl p-5">
-              <p className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest mb-4">
-                About You
-              </p>
-              <DemographicsForm
-                initialData={{
-                  address: profile?.address || '',
-                  political_party: profile?.political_party || '',
-                  age: profile?.age || null,
-                  income: profile?.income || '',
-                  employment_status: profile?.employment_status || '',
-                  sex: profile?.sex || '',
-                  religion: profile?.religion || '',
-                }}
-                onSubmit={handleDemographicsSubmit}
-                onBack={() => setStep('welcome')}
-                isLoading={updateProfile.isPending}
-              />
-            </div>
-          </div>
+          <DemographicsForm
+            initialData={{
+              address: profile?.address || '',
+              political_party: profile?.political_party || '',
+              age: profile?.age || null,
+              income: profile?.income || '',
+              employment_status: profile?.employment_status || '',
+              sex: profile?.sex || '',
+              religion: profile?.religion || '',
+            }}
+            onSubmit={handleDemographicsSubmit}
+            onBack={() => setStep('welcome')}
+            isLoading={updateProfile.isPending}
+          />
         );
 
       case 'topics':
         return (
-          <div className="max-w-3xl mx-auto px-4 animate-fade-in">
-            <div className="text-center mb-6">
-              <h2 className="text-lg font-black text-poli-navy">
-                Choose Topics ({selectedTopics.length}/3)
+          <div className="max-w-3xl mx-auto animate-fade-in">
+            <div className="text-center mb-8">
+              <h2 className="font-display text-3xl font-bold text-foreground mb-3">
+                Select Your Top 3 Federal Topics
               </h2>
-              <p className="text-xs text-poli-muted mt-1">
-                Select the 3 federal issues that matter most. Order matters — first = highest weight.
+              <p className="text-muted-foreground">
+                Choose the 3 federal issues that matter most to you. Order matters - select most important first!
+                <span className="text-foreground font-medium"> ({selectedTopics.length}/3 selected)</span>
               </p>
             </div>
 
@@ -542,11 +531,11 @@ export const Onboarding = () => {
             />
 
             {selectedTopics.length > 0 && (
-              <div className="mt-4 p-4 rounded-xl bg-white border border-poli-surface shadow-sm">
-                <p className="text-xs font-semibold text-poli-body mb-2">Your priority order:</p>
+              <div className="mt-6 p-4 rounded-lg bg-secondary/50 border border-border">
+                <p className="text-sm font-medium text-foreground mb-2">Your priority order:</p>
                 <div className="flex flex-wrap gap-2">
                   {selectedTopics.map((topic, index) => (
-                    <span key={topic.id} className="text-xs px-3 py-1 rounded-full bg-poli-surface text-poli-navy font-medium">
+                    <span key={topic.id} className="text-sm px-3 py-1 rounded-full bg-primary/10 text-primary">
                       {index + 1}. {topic.name}
                     </span>
                   ))}
@@ -554,28 +543,24 @@ export const Onboarding = () => {
               </div>
             )}
 
-            <div className="flex items-center gap-3 mt-8">
-              <button
-                onClick={() => setStep('demographics')}
-                className="text-sm text-poli-muted font-medium"
-              >
-                <span className="flex items-center gap-1">
-                  <ArrowLeft className="w-4 h-4" />
-                  Back
-                </span>
-              </button>
-              <button
+            <div className="flex justify-between mt-10">
+              <Button variant="ghost" onClick={() => setStep('demographics')}>
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Back
+              </Button>
+              <Button 
+                size="lg"
+                variant="hero"
                 onClick={() => {
                   setCurrentQuestionIndex(0);
                   setQuizAnswers([]);
                   setStep('quiz');
                 }}
                 disabled={selectedTopics.length !== 3}
-                style={selectedTopics.length === 3 ? gradientBtnStyle : undefined}
-                className="flex-1 h-12 rounded-xl font-bold text-white text-sm hover:opacity-90 flex items-center justify-center gap-2 disabled:opacity-40 disabled:bg-poli-muted disabled:cursor-not-allowed"
               >
-                Continue to Quiz →
-              </button>
+                Continue to Quiz (12 questions)
+                <ArrowRight className="w-5 h-5" />
+              </Button>
             </div>
           </div>
         );
@@ -584,22 +569,19 @@ export const Onboarding = () => {
         if (questionsLoading) {
           return (
             <div className="flex items-center justify-center py-16">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-poli-navy" />
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
             </div>
           );
         }
-
+        
         if (activeQuestions.length === 0) {
           return (
-            <div className="text-center py-16 px-4">
-              <p className="text-poli-muted text-sm">No questions available for your selected topics.</p>
-              <button
-                onClick={() => setStep('topics')}
-                className="mt-4 text-sm text-poli-muted font-medium flex items-center gap-1 mx-auto"
-              >
-                <ArrowLeft className="w-4 h-4" />
+            <div className="text-center py-16">
+              <p className="text-muted-foreground">No questions available for your selected topics.</p>
+              <Button variant="ghost" className="mt-4" onClick={() => setStep('topics')}>
+                <ArrowLeft className="w-4 h-4 mr-2" />
                 Select different topics
-              </button>
+              </Button>
             </div>
           );
         }
@@ -609,37 +591,34 @@ export const Onboarding = () => {
         if (!currentQuestion) {
           return (
             <div className="flex items-center justify-center py-16">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-poli-navy" />
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
             </div>
           );
         }
-
+        
         return (
-          <div className="max-w-2xl mx-auto px-4">
-            <div className="sticky top-0 z-20 -mx-4 px-4 pt-3 pb-4 bg-[#F5F6FA]/95 backdrop-blur supports-[backdrop-filter]:bg-[#F5F6FA]/80 border-b border-poli-surface">
+          <div className="max-w-2xl mx-auto">
+            <div className="sticky top-0 z-20 -mx-4 px-4 pt-3 pb-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border">
               {currentQuestionTopic && (
                 <div className="flex items-center justify-center gap-2 mb-3">
                   <TopicIcon name={currentQuestionTopic.icon} className="w-6 h-6" />
-                  <span className="text-sm font-medium text-poli-muted uppercase tracking-wide">
+                  <span className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
                     {currentQuestionTopic.name}
                   </span>
                 </div>
               )}
               <div className="flex items-center justify-between mb-3">
-                <span className="text-sm font-medium text-poli-muted">
+                <span className="text-sm font-medium text-muted-foreground">
                   Question {currentQuestionIndex + 1} of {activeQuestions.length}
                 </span>
-                <div className="flex-1 mx-4 h-2 bg-poli-surface rounded-full overflow-hidden">
+                <div className="flex-1 mx-4 h-2 bg-secondary rounded-full overflow-hidden">
                   <div
-                    className="h-full transition-all duration-500 ease-out"
-                    style={{
-                      width: `${((currentQuestionIndex + 1) / activeQuestions.length) * 100}%`,
-                      background: 'linear-gradient(90deg, #182B7A, #B3122F)',
-                    }}
+                    className="h-full bg-gradient-hero transition-all duration-500 ease-out"
+                    style={{ width: `${((currentQuestionIndex + 1) / activeQuestions.length) * 100}%` }}
                   />
                 </div>
               </div>
-              <h2 className="text-lg font-semibold text-poli-body leading-snug text-center">
+              <h2 className="font-display text-lg md:text-xl font-semibold text-foreground leading-snug text-center">
                 {currentQuestion.text}
               </h2>
             </div>
@@ -657,42 +636,42 @@ export const Onboarding = () => {
               />
             </div>
 
-            <div className="flex items-center gap-3 mt-8">
-              <button
+
+            <div className="flex justify-between mt-8">
+              <Button 
+                variant="ghost" 
                 onClick={currentQuestionIndex === 0 ? () => setStep('topics') : handlePrevQuestion}
-                className="text-sm text-poli-muted font-medium flex items-center gap-1"
               >
-                <ArrowLeft className="w-4 h-4" />
+                <ArrowLeft className="w-4 h-4 mr-2" />
                 {currentQuestionIndex === 0 ? 'Back to Topics' : 'Previous'}
-              </button>
-              <button
+              </Button>
+              <Button 
+                size="lg"
+                variant="hero"
                 onClick={handleNextQuestion}
                 disabled={!currentAnswer}
-                style={currentAnswer ? gradientBtnStyle : undefined}
-                className="flex-1 h-12 rounded-xl font-bold text-white text-sm hover:opacity-90 flex items-center justify-center gap-2 disabled:opacity-40 disabled:bg-poli-muted disabled:cursor-not-allowed"
               >
                 {currentQuestionIndex === activeQuestions.length - 1 ? 'Continue to Local Topics' : 'Next Question'}
-                <ArrowRight className="w-4 h-4" />
-              </button>
+                <ArrowRight className="w-5 h-5" />
+              </Button>
             </div>
           </div>
         );
 
       case 'local_topics':
         return (
-          <div className="max-w-3xl mx-auto px-4 animate-fade-in">
-            <div className="text-center mb-6">
-              <div className="flex items-center justify-center gap-2 mb-2">
-                <MapPin className="w-4 h-4 text-poli-navy" />
-                <span className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest">
-                  Local Issues
-                </span>
+          <div className="max-w-3xl mx-auto animate-fade-in">
+            <div className="text-center mb-8">
+              <div className="flex items-center justify-center gap-2 mb-4">
+                <MapPin className="w-6 h-6 text-primary" />
+                <span className="text-sm font-medium text-primary uppercase tracking-wide">Local Issues</span>
               </div>
-              <h2 className="text-lg font-black text-poli-navy">
-                Choose Topics ({selectedLocalTopics.length}/2)
+              <h2 className="font-display text-3xl font-bold text-foreground mb-3">
+                Select Your Top 2 Local Topics
               </h2>
-              <p className="text-xs text-poli-muted mt-1">
-                Select 2 local issues that matter most in your community. Order matters!
+              <p className="text-muted-foreground">
+                Choose the 2 local issues that matter most in your community. Order matters!
+                <span className="text-foreground font-medium"> ({selectedLocalTopics.length}/2 selected)</span>
               </p>
             </div>
 
@@ -704,11 +683,11 @@ export const Onboarding = () => {
             />
 
             {selectedLocalTopics.length > 0 && (
-              <div className="mt-4 p-4 rounded-xl bg-white border border-poli-surface shadow-sm">
-                <p className="text-xs font-semibold text-poli-body mb-2">Your local priority order:</p>
+              <div className="mt-6 p-4 rounded-lg bg-secondary/50 border border-border">
+                <p className="text-sm font-medium text-foreground mb-2">Your local priority order:</p>
                 <div className="flex flex-wrap gap-2">
                   {selectedLocalTopics.map((topic, index) => (
-                    <span key={topic.id} className="text-xs px-3 py-1 rounded-full bg-poli-surface text-poli-navy font-medium">
+                    <span key={topic.id} className="text-sm px-3 py-1 rounded-full bg-primary/10 text-primary">
                       {index + 1}. {topic.displayName || topic.name}
                     </span>
                   ))}
@@ -716,26 +695,24 @@ export const Onboarding = () => {
               </div>
             )}
 
-            <div className="flex items-center gap-3 mt-8">
-              <button
-                onClick={() => setStep('quiz')}
-                className="text-sm text-poli-muted font-medium flex items-center gap-1"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                Back
-              </button>
-              <button
+            <div className="flex justify-between mt-10">
+              <Button variant="ghost" onClick={() => setStep('quiz')}>
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Back to Federal Quiz
+              </Button>
+              <Button 
+                size="lg"
+                variant="hero"
                 onClick={() => {
                   setCurrentLocalQuestionIndex(0);
                   setLocalQuizAnswers([]);
                   setStep('local_quiz');
                 }}
                 disabled={selectedLocalTopics.length !== 2}
-                style={selectedLocalTopics.length === 2 ? gradientBtnStyle : undefined}
-                className="flex-1 h-12 rounded-xl font-bold text-white text-sm hover:opacity-90 flex items-center justify-center gap-2 disabled:opacity-40 disabled:bg-poli-muted disabled:cursor-not-allowed"
               >
-                Continue to Local Quiz →
-              </button>
+                Continue to Local Quiz (4 questions)
+                <ArrowRight className="w-5 h-5" />
+              </Button>
             </div>
           </div>
         );
@@ -744,22 +721,19 @@ export const Onboarding = () => {
         if (localQuestionsLoading) {
           return (
             <div className="flex items-center justify-center py-16">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-poli-navy" />
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
             </div>
           );
         }
 
         if (activeLocalQuestions.length === 0) {
           return (
-            <div className="text-center py-16 px-4">
-              <p className="text-poli-muted text-sm">No local questions available for your selected topics.</p>
-              <button
-                onClick={() => setStep('local_topics')}
-                className="mt-4 text-sm text-poli-muted font-medium flex items-center gap-1 mx-auto"
-              >
-                <ArrowLeft className="w-4 h-4" />
+            <div className="text-center py-16">
+              <p className="text-muted-foreground">No local questions available for your selected topics.</p>
+              <Button variant="ghost" className="mt-4" onClick={() => setStep('local_topics')}>
+                <ArrowLeft className="w-4 h-4 mr-2" />
                 Select different local topics
-              </button>
+              </Button>
             </div>
           );
         }
@@ -769,43 +743,38 @@ export const Onboarding = () => {
         if (!currentLocalQuestion) {
           return (
             <div className="flex items-center justify-center py-16">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-poli-navy" />
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
             </div>
           );
         }
 
         return (
-          <div className="max-w-2xl mx-auto px-4">
-            <div className="sticky top-0 z-20 -mx-4 px-4 pt-3 pb-4 bg-[#F5F6FA]/95 backdrop-blur supports-[backdrop-filter]:bg-[#F5F6FA]/80 border-b border-poli-surface">
+          <div className="max-w-2xl mx-auto">
+            <div className="sticky top-0 z-20 -mx-4 px-4 pt-3 pb-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border">
               <div className="flex items-center justify-center gap-2 mb-2">
-                <MapPin className="w-4 h-4 text-poli-navy" />
-                <span className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest">
-                  Local Issues
-                </span>
+                <MapPin className="w-4 h-4 text-primary" />
+                <span className="text-xs font-medium text-primary uppercase tracking-wide">Local Issues</span>
               </div>
               {currentLocalQuestionTopic && (
                 <div className="flex items-center justify-center gap-2 mb-3">
                   <TopicIcon name={currentLocalQuestionTopic.icon} className="w-6 h-6" />
-                  <span className="text-sm font-medium text-poli-muted uppercase tracking-wide">
+                  <span className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
                     {currentLocalQuestionTopic.displayName || currentLocalQuestionTopic.name}
                   </span>
                 </div>
               )}
               <div className="flex items-center justify-between mb-3">
-                <span className="text-sm font-medium text-poli-muted">
+                <span className="text-sm font-medium text-muted-foreground">
                   Question {currentLocalQuestionIndex + 1} of {activeLocalQuestions.length}
                 </span>
-                <div className="flex-1 mx-4 h-2 bg-poli-surface rounded-full overflow-hidden">
+                <div className="flex-1 mx-4 h-2 bg-secondary rounded-full overflow-hidden">
                   <div
-                    className="h-full transition-all duration-500 ease-out"
-                    style={{
-                      width: `${((currentLocalQuestionIndex + 1) / activeLocalQuestions.length) * 100}%`,
-                      background: 'linear-gradient(90deg, #182B7A, #B3122F)',
-                    }}
+                    className="h-full bg-gradient-hero transition-all duration-500 ease-out"
+                    style={{ width: `${((currentLocalQuestionIndex + 1) / activeLocalQuestions.length) * 100}%` }}
                   />
                 </div>
               </div>
-              <h2 className="text-lg font-semibold text-poli-body leading-snug text-center">
+              <h2 className="font-display text-lg md:text-xl font-semibold text-foreground leading-snug text-center">
                 {currentLocalQuestion.text}
               </h2>
             </div>
@@ -823,23 +792,24 @@ export const Onboarding = () => {
               />
             </div>
 
-            <div className="flex items-center gap-3 mt-8">
-              <button
+
+            <div className="flex justify-between mt-8">
+              <Button 
+                variant="ghost" 
                 onClick={currentLocalQuestionIndex === 0 ? () => setStep('local_topics') : handleLocalPrevQuestion}
-                className="text-sm text-poli-muted font-medium flex items-center gap-1"
               >
-                <ArrowLeft className="w-4 h-4" />
+                <ArrowLeft className="w-4 h-4 mr-2" />
                 {currentLocalQuestionIndex === 0 ? 'Back to Local Topics' : 'Previous'}
-              </button>
-              <button
+              </Button>
+              <Button 
+                size="lg"
+                variant="hero"
                 onClick={handleLocalNextQuestion}
                 disabled={!currentLocalAnswer}
-                style={currentLocalAnswer ? gradientBtnStyle : undefined}
-                className="flex-1 h-12 rounded-xl font-bold text-white text-sm hover:opacity-90 flex items-center justify-center gap-2 disabled:opacity-40 disabled:bg-poli-muted disabled:cursor-not-allowed"
               >
                 {currentLocalQuestionIndex === activeLocalQuestions.length - 1 ? 'See Results' : 'Next Question'}
-                <ArrowRight className="w-4 h-4" />
-              </button>
+                <ArrowRight className="w-5 h-5" />
+              </Button>
             </div>
           </div>
         );
@@ -847,75 +817,76 @@ export const Onboarding = () => {
       case 'results': {
         const scores = calculatedScores || { overall: 0, byTopic: [] };
         return (
-          <div className="max-w-2xl mx-auto px-4 text-center animate-fade-in">
-            <div className="bg-gradient-to-br from-poli-navy to-[#B3122F] rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-6">
-              <CheckCircle className="w-8 h-8 text-white" />
+          <div className="max-w-2xl mx-auto text-center animate-fade-in">
+            <div className="w-24 h-24 rounded-2xl bg-gradient-hero mx-auto mb-8 flex items-center justify-center shadow-glow animate-pulse-subtle">
+              <CheckCircle className="w-12 h-12 text-primary-foreground" />
             </div>
 
-            <h2 className="text-2xl font-black text-poli-navy mb-2">
+            <h2 className="font-display text-3xl font-bold text-foreground mb-3">
               Your Political Profile
             </h2>
-            <p className="text-sm text-poli-muted mb-8">
+            <p className="text-muted-foreground mb-10">
               Based on your answers, here's where you stand on the Left-Right spectrum.
             </p>
 
             {skippedCount > 0 && (
-              <div className="flex items-center gap-3 p-4 rounded-xl bg-white border border-poli-surface shadow-sm mb-6 text-left">
-                <AlertTriangle className="w-5 h-5 text-poli-red flex-shrink-0" />
+              <div className="flex items-center gap-3 p-4 rounded-xl bg-warning/10 border border-warning/20 mb-6 text-left">
+                <AlertTriangle className="w-5 h-5 text-warning flex-shrink-0" />
                 <div>
-                  <p className="text-sm font-semibold text-poli-body">
+                  <p className="text-sm font-medium text-foreground">
                     {skippedCount} question{skippedCount !== 1 ? 's' : ''} skipped
                   </p>
-                  <p className="text-xs text-poli-muted">
+                  <p className="text-xs text-muted-foreground">
                     Your score is based on {allDisplayAnswers.length} of {allDisplayAnswers.length + skippedCount} questions.
                   </p>
                 </div>
               </div>
             )}
 
-            <div className="bg-white rounded-2xl border border-poli-surface p-6 mb-8 shadow-sm">
+            <div className="bg-card rounded-2xl border border-border p-6 mb-8 shadow-elevated">
               <div className="text-center mb-8">
-                <span className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest">
+                <span className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
                   Overall Score
                 </span>
                 <div className="mt-4">
                   <ScoreText score={scores.overall} size="lg" showLabel />
                 </div>
-                <p className="text-xs text-poli-muted mt-2">
+                <p className="text-xs text-muted-foreground mt-2">
                   Score Version: v1.0
                 </p>
               </div>
 
-              <div className="space-y-3">
-                <h4 className="font-mono-label text-xs font-bold text-poli-muted uppercase tracking-widest text-left">
+              <div className="space-y-4">
+                <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wide text-left">
                   By Topic
                 </h4>
                 {scores.byTopic.map((ts, index) => (
-                  <div
-                    key={ts.topicId}
-                    className="flex items-center justify-between p-3 rounded-xl bg-poli-surface animate-slide-up"
+                  <div 
+                    key={ts.topicId} 
+                    className="flex items-center justify-between p-3 rounded-lg bg-secondary/50 animate-slide-up"
                     style={{ animationDelay: `${index * 100}ms` }}
                   >
-                    <span className="font-semibold text-poli-body text-sm">{ts.topicName}</span>
+                    <span className="font-medium text-foreground">{ts.topicName}</span>
                     <ScoreText score={ts.score} size="sm" />
                   </div>
                 ))}
               </div>
             </div>
 
-            <button
+            <Button 
+              size="xl"
+              variant="hero"
               onClick={handleComplete}
               disabled={saveQuizResults.isPending || saveUserTopics.isPending || !canComplete}
-              style={canComplete && !saveQuizResults.isPending && !saveUserTopics.isPending ? gradientBtnStyle : undefined}
-              className="w-full h-12 rounded-xl font-bold text-white text-sm hover:opacity-90 flex items-center justify-center gap-2 disabled:opacity-40 disabled:bg-poli-muted disabled:cursor-not-allowed"
+              className="w-full"
               title={!canComplete ? `Answer at least ${minRequiredAnswers} questions to continue` : undefined}
             >
               {saveQuizResults.isPending ? 'Saving...' : 'Explore Politicians'}
-              <ArrowRight className="w-4 h-4" />
-            </button>
-
+              <ArrowRight className="w-5 h-5" />
+            </Button>
+            
             {!canComplete && (
-              <p className="text-sm text-poli-red mt-3">
+              <p className="text-sm text-destructive mt-3">
                 Please answer at least {minRequiredAnswers} questions to continue.
               </p>
             )}
@@ -926,8 +897,8 @@ export const Onboarding = () => {
   };
 
   return (
-    <div className="bg-[#F5F6FA] min-h-screen">
-      <div className="container py-12 md:py-20">
+    <div className="min-h-screen bg-background">
+      <div className="container py-12 md:py-20 px-4">
         {renderStep()}
       </div>
     </div>

@@ -58,28 +58,28 @@ function getOptionTextForScore(
 }
 
 function getScoreBadge(value: number | null) {
-  if (value === null) return { text: '—', className: 'bg-poli-surface text-poli-muted' };
+  if (value === null) return { text: '—', className: 'bg-muted text-muted-foreground' };
   
   const absVal = Math.abs(value);
   const formatted = absVal % 1 === 0 ? absVal.toString() : absVal.toFixed(2);
   
   if (value < 0) return { text: `L${formatted}`, className: 'bg-flag-blue text-white' };
   if (value > 0) return { text: `R${formatted}`, className: 'bg-flag-red text-white' };
-  return { text: 'C', className: 'bg-poli-surface text-poli-muted' };
+  return { text: 'C', className: 'bg-muted text-muted-foreground' };
 }
 
 function getConfidenceBadge(confidence: string | null) {
-  if (!confidence) return { text: '—', className: 'text-poli-muted' };
+  if (!confidence) return { text: '—', className: 'text-muted-foreground' };
   switch (confidence.toLowerCase()) {
     case 'high': return { text: 'High', className: 'text-green-600 dark:text-green-400' };
     case 'medium': return { text: 'Medium', className: 'text-amber-600 dark:text-amber-400' };
     case 'low': return { text: 'Low', className: 'text-red-600 dark:text-red-400' };
-    default: return { text: confidence, className: 'text-poli-muted' };
+    default: return { text: confidence, className: 'text-muted-foreground' };
   }
 }
 
 function getEvidenceBadge(evidenceType: string | null) {
-  if (!evidenceType) return { text: 'Unknown', icon: Globe, className: 'bg-poli-surface text-poli-muted' };
+  if (!evidenceType) return { text: 'Unknown', icon: Globe, className: 'bg-muted text-muted-foreground' };
   
   switch (evidenceType.toLowerCase()) {
     case 'voting_record':
@@ -93,7 +93,7 @@ function getEvidenceBadge(evidenceType: string | null) {
     case 'inferred':
       return { text: 'Inferred', icon: Brain, className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' };
     default:
-      return { text: evidenceType, icon: Globe, className: 'bg-poli-surface text-poli-muted' };
+      return { text: evidenceType, icon: Globe, className: 'bg-muted text-muted-foreground' };
   }
 }
 
@@ -243,9 +243,9 @@ function QuestionRow({
     <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
       <div className="border-b border-border/50 last:border-0">
         <CollapsibleTrigger asChild>
-          <div className="flex items-center gap-3 py-3 px-4 hover:bg-poli-surface/50 cursor-pointer transition-colors">
+          <div className="flex items-center gap-3 py-3 px-4 hover:bg-muted/50 cursor-pointer transition-colors">
             <ChevronDown className={cn(
-              "h-4 w-4 shrink-0 text-poli-muted transition-transform",
+              "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
               isExpanded && "rotate-180"
             )} />
             
@@ -296,25 +296,25 @@ function QuestionRow({
         </CollapsibleTrigger>
 
         <CollapsibleContent>
-          <div className="px-4 pb-4 pt-1 ml-7 space-y-3 bg-poli-surface/30 rounded-b-md">
+          <div className="px-4 pb-4 pt-1 ml-7 space-y-3 bg-muted/30 rounded-b-md">
             {/* Score and Confidence */}
             <div className="flex items-center gap-4 text-sm flex-wrap">
               <div className="flex items-center gap-2">
-                <span className="text-poli-muted">Score:</span>
+                <span className="text-muted-foreground">Score:</span>
                 <Badge variant="outline" className={cn('text-xs', scoreBadge.className)}>
                   {scoreBadge.text}
                 </Badge>
               </div>
               {getOptionTextForScore(question.options, question.answerValue) && (
                 <div className="flex items-center gap-2">
-                  <span className="text-poli-muted">Position:</span>
-                  <span className="text-poli-body font-medium">
+                  <span className="text-muted-foreground">Position:</span>
+                  <span className="text-foreground font-medium">
                     {getOptionTextForScore(question.options, question.answerValue)}
                   </span>
                 </div>
               )}
               <div className="flex items-center gap-2">
-                <span className="text-poli-muted">Confidence:</span>
+                <span className="text-muted-foreground">Confidence:</span>
                 <span className={cn('font-medium', confidenceBadge.className)}>
                   {confidenceBadge.text}
                 </span>
@@ -324,11 +324,11 @@ function QuestionRow({
             {/* AI Explanation */}
             {question.sourceDescription && (
               <div className="space-y-1">
-                <p className="text-xs font-medium text-poli-muted flex items-center gap-1">
+                <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                   <Sparkles className="h-3 w-3" />
                   AI Explanation
                 </p>
-                <p className="text-sm text-poli-body/90 leading-relaxed">
+                <p className="text-sm text-foreground/90 leading-relaxed">
                   {question.sourceDescription}
                 </p>
               </div>
@@ -337,7 +337,7 @@ function QuestionRow({
             {/* Source URLs */}
             {question.sourceUrls && question.sourceUrls.length > 0 && (
               <div className="space-y-1">
-                <p className="text-xs font-medium text-poli-muted">Sources</p>
+                <p className="text-xs font-medium text-muted-foreground">Sources</p>
                 <div className="flex flex-wrap gap-2">
                   {question.sourceUrls.map((url, idx) => {
                     const title = question.sourceTitles?.[idx];
@@ -363,7 +363,7 @@ function QuestionRow({
             )}
 
             {!question.sourceDescription && !question.sourceUrls?.length && (
-              <p className="text-sm text-poli-muted italic">
+              <p className="text-sm text-muted-foreground italic">
                 No AI explanation or sources available
               </p>
             )}
@@ -499,7 +499,7 @@ export function CandidateAnswersDialog({
         <DialogContent className="max-w-5xl h-[80vh]">
           <div className="flex items-center justify-center h-full">
             <Loader2 className="h-6 w-6 animate-spin mr-2" />
-            <span className="text-poli-muted">Loading answers...</span>
+            <span className="text-muted-foreground">Loading answers...</span>
           </div>
         </DialogContent>
       </Dialog>
@@ -518,12 +518,12 @@ export function CandidateAnswersDialog({
           <DialogTitle className="flex items-center justify-between">
             <div>
               <span className="text-lg font-semibold">{candidateName}</span>
-              <span className="text-sm font-normal text-poli-muted ml-3">
+              <span className="text-sm font-normal text-muted-foreground ml-3">
                 Answer Management
               </span>
             </div>
             <div className="flex items-center gap-4 text-sm font-normal">
-              <span className="text-poli-muted">
+              <span className="text-muted-foreground">
                 {totalAnswered}/{totalQuestions} answered
               </span>
               <Badge variant={sourcePercentage >= 70 ? 'default' : sourcePercentage >= 40 ? 'secondary' : 'destructive'}>
@@ -547,7 +547,7 @@ export function CandidateAnswersDialog({
         <div className="flex flex-1 min-h-0">
           {/* Topic Sidebar */}
           <div className="w-72 border-r shrink-0 flex flex-col">
-            <div className="px-4 py-3 border-b bg-poli-surface/30">
+            <div className="px-4 py-3 border-b bg-muted/30">
               <h3 className="text-sm font-medium">Topics</h3>
             </div>
             <ScrollArea className="flex-1">
@@ -565,14 +565,14 @@ export function CandidateAnswersDialog({
                       className={cn(
                         "w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-left transition-colors",
                         isSelected 
-                          ? "bg-poli-navy/10 text-poli-navy border border-poli-navy/20"
-                          : "hover:bg-poli-surface/50"
+                          ? "bg-primary/10 text-primary border border-primary/20" 
+                          : "hover:bg-muted/50"
                       )}
                     >
                       <span className="text-lg shrink-0">{topic.icon}</span>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">{topic.topicName}</p>
-                        <p className="text-xs text-poli-muted">
+                        <p className="text-xs text-muted-foreground">
                           {topic.answeredCount}/{topic.questions.length} answered
                           {topic.answeredCount > 0 && (
                             <span className={cn(
@@ -596,11 +596,11 @@ export function CandidateAnswersDialog({
           <div className="flex-1 flex flex-col min-w-0">
             {selectedTopic && (
               <>
-                <div className="px-4 py-3 border-b bg-poli-surface/30 flex items-center justify-between shrink-0">
+                <div className="px-4 py-3 border-b bg-muted/30 flex items-center justify-between shrink-0">
                   <div className="flex items-center gap-2">
                     <span className="text-lg">{selectedTopic.icon}</span>
                     <h3 className="text-sm font-medium">{selectedTopic.topicName}</h3>
-                    <span className="text-xs text-poli-muted">
+                    <span className="text-xs text-muted-foreground">
                       ({selectedTopic.answeredCount}/{selectedTopic.questions.length} answered)
                     </span>
                   </div>

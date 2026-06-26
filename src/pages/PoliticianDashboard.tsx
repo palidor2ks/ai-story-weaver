@@ -141,8 +141,8 @@ export default function PoliticianDashboard() {
   // Loading state
   if (authLoading || politicianLoading || profileLoading) {
     return (
-      <div className="min-h-screen bg-poli-surface flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-poli-navy" />
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
@@ -155,13 +155,13 @@ export default function PoliticianDashboard() {
   // Politician guard
   if (!politicianData?.isPolitician || !claimedProfile) {
     return (
-      <div className="min-h-screen bg-poli-surface">
+      <div className="min-h-screen bg-background">
         <Header />
         <main className="container mx-auto px-4 py-8">
           <Card className="max-w-lg mx-auto">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <User className="h-6 w-6 text-poli-navy" />
+                <User className="h-6 w-6 text-primary" />
                 Politician Dashboard
               </CardTitle>
               <CardDescription>
@@ -169,10 +169,10 @@ export default function PoliticianDashboard() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="text-poli-muted mb-4">
+              <p className="text-muted-foreground mb-4">
                 To access this dashboard, you need to:
               </p>
-              <ol className="list-decimal list-inside space-y-2 text-sm text-poli-muted mb-6">
+              <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground mb-6">
                 <li>Find your candidate profile on the platform</li>
                 <li>Submit a claim request with verification information</li>
                 <li>Wait for admin approval</li>
@@ -196,36 +196,40 @@ export default function PoliticianDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-poli-surface">
+    <div className="min-h-screen bg-background">
       <Header />
+      
+      <main className="container mx-auto px-4 py-8">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+          <div>
+            <h1 className="text-3xl font-bold flex items-center gap-2">
+              <FileText className="h-8 w-8 text-primary" />
+              Politician Dashboard
+            </h1>
+            <p className="text-muted-foreground mt-1">
+              Answer questions to help voters understand your positions
+            </p>
+          </div>
+          <Link to={`/candidate/${claimedProfile.id}`}>
+            <Button variant="outline" className="gap-2">
+              <ExternalLink className="h-4 w-4" />
+              View Public Profile
+            </Button>
+          </Link>
+        </div>
 
-      {/* Navy gradient banner */}
-      <div className="bg-gradient-to-br from-poli-navy to-poli-dark text-white px-4 pt-12 pb-8">
-        <p className="font-mono-label text-[10px] font-bold uppercase tracking-widest text-white/60 mb-1">
-          MY DASHBOARD
-        </p>
-        <h1 className="text-2xl font-black text-white leading-tight">
-          {claimedProfile.name ?? 'Your Dashboard'}
-        </h1>
-        {(claimedProfile.office || claimedProfile.party) && (
-          <p className="text-sm text-white/70 mt-1">
-            {[claimedProfile.office, claimedProfile.party, claimedProfile.state].filter(Boolean).join(' · ')}
-          </p>
-        )}
-      </div>
-
-      <main className="container mx-auto px-4 py-8 pb-20">
         {/* Profile Card */}
         <Card className="mb-8">
           <CardContent className="py-6">
             <div className="flex flex-col md:flex-row md:items-center gap-6">
               <div className="flex items-center gap-4">
-                <div className="w-16 h-16 rounded-xl bg-poli-surface flex items-center justify-center">
-                  <User className="h-8 w-8 text-poli-navy" />
+                <div className="w-16 h-16 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <User className="h-8 w-8 text-primary" />
                 </div>
                 <div>
                   <h2 className="text-xl font-semibold">{claimedProfile.name}</h2>
-                  <div className="flex items-center gap-2 text-poli-muted">
+                  <div className="flex items-center gap-2 text-muted-foreground">
                     <span>{claimedProfile.office}</span>
                     <span>•</span>
                     <span>{claimedProfile.state}</span>
@@ -239,26 +243,18 @@ export default function PoliticianDashboard() {
               <div className="flex-1 md:ml-auto">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-medium">Questions Answered</span>
-                  <span className="text-sm text-poli-muted">
+                  <span className="text-sm text-muted-foreground">
                     {answeredQuestions} / {totalQuestions}
                   </span>
                 </div>
                 <Progress value={progressPercentage} className="h-2" />
-                <p className="text-xs text-poli-muted mt-1">
+                <p className="text-xs text-muted-foreground mt-1">
                   {progressPercentage.toFixed(0)}% complete
                 </p>
               </div>
             </div>
           </CardContent>
         </Card>
-        <div className="flex justify-end mb-8">
-          <Link to={`/candidate/${claimedProfile.id}`}>
-            <Button variant="outline" className="gap-2">
-              <ExternalLink className="h-4 w-4" />
-              View Public Profile
-            </Button>
-          </Link>
-        </div>
 
         {/* Question Update Notifications */}
         <QuestionUpdateAlert candidateId={claimedProfile.id} className="mb-8" />
@@ -273,7 +269,7 @@ export default function PoliticianDashboard() {
                 </div>
                 <div>
                   <p className="text-2xl font-bold">{answeredQuestions}</p>
-                  <p className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest">Answered</p>
+                  <p className="text-sm text-muted-foreground">Answered</p>
                 </div>
               </div>
             </CardContent>
@@ -286,7 +282,7 @@ export default function PoliticianDashboard() {
                 </div>
                 <div>
                   <p className="text-2xl font-bold">{totalQuestions - answeredQuestions}</p>
-                  <p className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest">Remaining</p>
+                  <p className="text-sm text-muted-foreground">Remaining</p>
                 </div>
               </div>
             </CardContent>
@@ -294,12 +290,12 @@ export default function PoliticianDashboard() {
           <Card>
             <CardContent className="py-4">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-poli-surface flex items-center justify-center">
-                  <Filter className="h-5 w-5 text-poli-navy" />
+                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <Filter className="h-5 w-5 text-primary" />
                 </div>
                 <div>
                   <p className="text-2xl font-bold">{topics.length}</p>
-                  <p className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest">Topics</p>
+                  <p className="text-sm text-muted-foreground">Topics</p>
                 </div>
               </div>
             </CardContent>
@@ -346,12 +342,12 @@ export default function PoliticianDashboard() {
         {/* Questions List */}
         {questionsLoading || answersLoading ? (
           <div className="flex justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-poli-muted" />
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
         ) : filteredQuestions.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center">
-              <p className="text-poli-muted">
+              <p className="text-muted-foreground">
                 {searchQuery || selectedTopic !== 'all' || showAnswered !== 'all'
                   ? 'No questions match your filters.'
                   : 'No questions available.'}
@@ -360,7 +356,7 @@ export default function PoliticianDashboard() {
           </Card>
         ) : (
           <div className="space-y-4">
-            <p className="text-sm text-poli-muted">
+            <p className="text-sm text-muted-foreground">
               Showing {filteredQuestions.length} of {totalQuestions} questions
             </p>
             {filteredQuestions.map((question) => (

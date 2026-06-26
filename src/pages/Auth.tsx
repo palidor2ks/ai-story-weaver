@@ -1,10 +1,17 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Mail, Lock, User } from 'lucide-react';
+import { Mail, Lock, User, ArrowRight } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 import { z } from 'zod';
 import { Seo } from '@/components/Seo';
+import { BetaBadge } from '@/components/BetaBadge';
 
 const emailSchema = z.string().email('Please enter a valid email address');
 const passwordSchema = z.string().min(6, 'Password must be at least 6 characters');
@@ -13,14 +20,14 @@ const nameSchema = z.string().min(2, 'Name must be at least 2 characters');
 export const Auth = () => {
   const navigate = useNavigate();
   const { user, signUp, signIn, loading } = useAuth();
-
+  
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState<'signin' | 'signup'>('signin');
-
+  
   // Sign In form
   const [signInEmail, setSignInEmail] = useState('');
   const [signInPassword, setSignInPassword] = useState('');
-
+  
   // Sign Up form
   const [signUpEmail, setSignUpEmail] = useState('');
   const [signUpPassword, setSignUpPassword] = useState('');
@@ -35,14 +42,14 @@ export const Auth = () => {
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
-
+    
     // Validate
     const emailResult = emailSchema.safeParse(signInEmail);
     if (!emailResult.success) {
       toast.error(emailResult.error.errors[0].message);
       return;
     }
-
+    
     const passwordResult = passwordSchema.safeParse(signInPassword);
     if (!passwordResult.success) {
       toast.error(passwordResult.error.errors[0].message);
@@ -69,20 +76,20 @@ export const Auth = () => {
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
-
+    
     // Validate
     const nameResult = nameSchema.safeParse(signUpName);
     if (!nameResult.success) {
       toast.error(nameResult.error.errors[0].message);
       return;
     }
-
+    
     const emailResult = emailSchema.safeParse(signUpEmail);
     if (!emailResult.success) {
       toast.error(emailResult.error.errors[0].message);
       return;
     }
-
+    
     const passwordResult = passwordSchema.safeParse(signUpPassword);
     if (!passwordResult.success) {
       toast.error(passwordResult.error.errors[0].message);
@@ -108,157 +115,178 @@ export const Auth = () => {
     }
   };
 
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#F5F6FA] flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-poli-navy" />
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
       </div>
     );
   }
 
   return (
-    <main className="bg-[#F5F6FA] min-h-screen flex flex-col items-center justify-center p-6">
+    <main className="min-h-screen bg-background flex items-center justify-center p-4">
       <Seo
         title="Sign in or sign up — Pulse"
         description="Create a Pulse account or sign in to take the political alignment quiz and compare your views with candidates."
         path="/auth"
       />
-
-      {/* Logo block */}
-      <div className="flex flex-col items-center">
-        <div className="bg-poli-navy rounded-2xl w-16 h-16 flex items-center justify-center shadow-lg">
-          <span className="text-3xl font-black text-white">P</span>
-        </div>
-        <span className="text-2xl font-black text-poli-navy mt-3">Pulse</span>
-        <span className="bg-poli-surface text-poli-dim text-[10px] font-mono-label font-bold px-2 py-0.5 rounded-full uppercase tracking-widest mt-1">
-          Beta
-        </span>
-      </div>
-
-      {/* Card */}
-      <div className="bg-white rounded-2xl shadow-lg w-full max-w-sm mx-auto mt-6 p-6">
-
-        {/* Tab switcher */}
-        <div className="bg-poli-surface rounded-full p-1 flex mb-6">
-          <button
-            type="button"
-            onClick={() => setActiveTab('signin')}
-            className={
-              activeTab === 'signin'
-                ? 'bg-white rounded-full shadow-sm text-poli-navy font-bold flex-1 py-2 text-sm text-center'
-                : 'text-poli-muted flex-1 py-2 text-sm text-center cursor-pointer'
-            }
-          >
-            Sign In
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('signup')}
-            className={
-              activeTab === 'signup'
-                ? 'bg-white rounded-full shadow-sm text-poli-navy font-bold flex-1 py-2 text-sm text-center'
-                : 'text-poli-muted flex-1 py-2 text-sm text-center cursor-pointer'
-            }
-          >
-            Sign Up
-          </button>
+      <div className="w-full max-w-md">
+        {/* Logo */}
+        <div className="text-center mb-8">
+          <img
+            src="/icon-192.png"
+            alt="Pulse app icon"
+            width={64}
+            height={64}
+            fetchPriority="high"
+            decoding="async"
+            className="w-16 h-16 rounded-2xl mx-auto mb-4 shadow-glow"
+          />
+          <h1 className="font-display text-3xl font-bold text-foreground flex items-center justify-center gap-2">
+            <span className="text-gradient">Pulse</span>
+            <BetaBadge size="md" />
+            <span className="sr-only">— Political Alignment and Donor Tracking</span>
+          </h1>
+          <p className="text-muted-foreground mt-2">
+            Your political alignment companion
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            You're using an early beta — expect rapid changes.
+          </p>
         </div>
 
-        {/* Sign In form */}
-        {activeTab === 'signin' && (
-          <form onSubmit={handleSignIn} className="space-y-4">
-            <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-poli-muted" />
-              <input
-                id="signin-email"
-                type="email"
-                placeholder="you@example.com"
-                value={signInEmail}
-                onChange={(e) => setSignInEmail(e.target.value)}
-                required
-                className="border border-poli-surface/80 rounded-xl h-12 px-4 pl-10 w-full text-sm focus:ring-1 focus:ring-poli-navy focus:border-poli-navy outline-none bg-white text-poli-body placeholder:text-poli-muted"
-              />
-            </div>
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-poli-muted" />
-              <input
-                id="signin-password"
-                type="password"
-                placeholder="••••••••"
-                value={signInPassword}
-                onChange={(e) => setSignInPassword(e.target.value)}
-                required
-                className="border border-poli-surface/80 rounded-xl h-12 px-4 pl-10 w-full text-sm focus:ring-1 focus:ring-poli-navy focus:border-poli-navy outline-none bg-white text-poli-body placeholder:text-poli-muted"
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              style={{ background: 'linear-gradient(90deg, #182B7A, #B3122F)' }}
-              className="w-full h-12 rounded-xl font-bold text-white text-sm hover:opacity-90 disabled:opacity-60"
-            >
-              {isSubmitting ? 'Signing in...' : 'Sign In →'}
-            </button>
-          </form>
-        )}
+        <Card className="shadow-elevated">
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'signin' | 'signup')}>
+            <CardHeader className="pb-4">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="signin">Sign In</TabsTrigger>
+                <TabsTrigger value="signup">Sign Up</TabsTrigger>
+              </TabsList>
+            </CardHeader>
+            
+            <CardContent>
 
-        {/* Sign Up form */}
-        {activeTab === 'signup' && (
-          <form onSubmit={handleSignUp} className="space-y-4">
-            <div className="relative">
-              <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-poli-muted" />
-              <input
-                id="signup-name"
-                type="text"
-                placeholder="Your name"
-                value={signUpName}
-                onChange={(e) => setSignUpName(e.target.value)}
-                required
-                className="border border-poli-surface/80 rounded-xl h-12 px-4 pl-10 w-full text-sm focus:ring-1 focus:ring-poli-navy focus:border-poli-navy outline-none bg-white text-poli-body placeholder:text-poli-muted"
-              />
-            </div>
-            <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-poli-muted" />
-              <input
-                id="signup-email"
-                type="email"
-                placeholder="you@example.com"
-                value={signUpEmail}
-                onChange={(e) => setSignUpEmail(e.target.value)}
-                required
-                className="border border-poli-surface/80 rounded-xl h-12 px-4 pl-10 w-full text-sm focus:ring-1 focus:ring-poli-navy focus:border-poli-navy outline-none bg-white text-poli-body placeholder:text-poli-muted"
-              />
-            </div>
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-poli-muted" />
-              <input
-                id="signup-password"
-                type="password"
-                placeholder="••••••••"
-                value={signUpPassword}
-                onChange={(e) => setSignUpPassword(e.target.value)}
-                required
-                className="border border-poli-surface/80 rounded-xl h-12 px-4 pl-10 w-full text-sm focus:ring-1 focus:ring-poli-navy focus:border-poli-navy outline-none bg-white text-poli-body placeholder:text-poli-muted"
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              style={{ background: 'linear-gradient(90deg, #182B7A, #B3122F)' }}
-              className="w-full h-12 rounded-xl font-bold text-white text-sm hover:opacity-90 disabled:opacity-60"
-            >
-              {isSubmitting ? 'Creating account...' : 'Create Account →'}
-            </button>
-          </form>
-        )}
+
+              <TabsContent value="signin" className="mt-0">
+                <CardDescription className="mb-4">
+                  Welcome back! Sign in to continue exploring.
+                </CardDescription>
+                <form onSubmit={handleSignIn} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="signin-email">Email</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        id="signin-email"
+                        type="email"
+                        placeholder="you@example.com"
+                        value={signInEmail}
+                        onChange={(e) => setSignInEmail(e.target.value)}
+                        className="pl-10"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="signin-password">Password</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        id="signin-password"
+                        type="password"
+                        placeholder="••••••••"
+                        value={signInPassword}
+                        onChange={(e) => setSignInPassword(e.target.value)}
+                        className="pl-10"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <Button 
+                    type="submit" 
+                    variant="hero" 
+                    className="w-full" 
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting ? 'Signing in...' : 'Sign In'}
+                    <ArrowRight className="w-4 h-4" />
+                  </Button>
+                </form>
+              </TabsContent>
+
+              <TabsContent value="signup" className="mt-0">
+                <CardDescription className="mb-4">
+                  Create an account to discover your political alignment.
+                </CardDescription>
+                <form onSubmit={handleSignUp} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="signup-name">Name</Label>
+                    <div className="relative">
+                      <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        id="signup-name"
+                        type="text"
+                        placeholder="Your name"
+                        value={signUpName}
+                        onChange={(e) => setSignUpName(e.target.value)}
+                        className="pl-10"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="signup-email">Email</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        id="signup-email"
+                        type="email"
+                        placeholder="you@example.com"
+                        value={signUpEmail}
+                        onChange={(e) => setSignUpEmail(e.target.value)}
+                        className="pl-10"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="signup-password">Password</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        id="signup-password"
+                        type="password"
+                        placeholder="••••••••"
+                        value={signUpPassword}
+                        onChange={(e) => setSignUpPassword(e.target.value)}
+                        className="pl-10"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <Button 
+                    type="submit" 
+                    variant="hero" 
+                    className="w-full" 
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting ? 'Creating account...' : 'Create Account'}
+                    <ArrowRight className="w-4 h-4" />
+                  </Button>
+                </form>
+              </TabsContent>
+            </CardContent>
+          </Tabs>
+        </Card>
+
+        <p className="text-center text-sm text-muted-foreground mt-6">
+          By continuing, you agree to our{' '}
+          <a href="/terms" className="text-primary underline underline-offset-2 hover:text-primary/80">Terms of Service</a>{' '}
+          and{' '}
+          <a href="/privacy" className="text-primary underline underline-offset-2 hover:text-primary/80">Privacy Policy</a>.
+        </p>
       </div>
-
-      {/* Footer links */}
-      <p className="text-xs text-poli-muted text-center mt-4">
-        <a href="/terms" className="hover:underline">Terms of Service</a>
-        {' · '}
-        <a href="/privacy" className="hover:underline">Privacy Policy</a>
-      </p>
     </main>
   );
 };

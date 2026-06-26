@@ -1,4 +1,5 @@
 import { ReactNode, useState } from 'react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import {
@@ -10,7 +11,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Loader2, ExternalLink, AlertTriangle, BookOpen, RefreshCw, X, Globe, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { Sparkles, Loader2, ExternalLink, AlertTriangle, BookOpen, RefreshCw, X, Globe, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { ShareAIAnalysisButton } from '@/components/ShareAIAnalysisButton';
 
@@ -78,15 +79,6 @@ const toOneSentence = (items: unknown[]) => {
   return parts.length > 0 ? parts.join('; ') + '.' : '';
 };
 
-const statusBadgeClass = (status: string | null | undefined) => {
-  if (!status) return 'bg-poli-navy/10 text-poli-navy';
-  const s = status.toUpperCase();
-  if (s.includes('ENACTED') || s.includes('SIGNED')) return 'bg-emerald-500/15 text-emerald-700';
-  if (s.includes('VETOED') || s.includes('FAILED')) return 'bg-destructive/15 text-destructive';
-  if (s.includes('PASSED')) return 'bg-blue-500/15 text-blue-700';
-  return 'bg-poli-navy/10 text-poli-navy';
-};
-
 export const BillAIAnalysisDialog = ({
   billId, billType, billNumber, billName, congress, topic, status, billUrl, sponsorshipDate,
   candidateName, candidateParty, candidateOffice, candidateState, isSponsor,
@@ -96,7 +88,7 @@ export const BillAIAnalysisDialog = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const billLabel = billType && billNumber ? `${String(billType).toUpperCase()} ${billNumber}` : null;
+  const billLabel = billType && billNumber ? `${String(billType).toUpperCase()} ${billNumber}` : billName;
 
   const roleLabel = (() => {
     const p = (votePosition ?? '').toLowerCase();
@@ -127,7 +119,6 @@ export const BillAIAnalysisDialog = ({
           candidate_office: candidateOffice ?? null,
           candidate_state: candidateState ?? null,
           is_sponsor: isSponsor,
-          vote_position: votePosition ?? null,
           force_refresh: force,
         },
       });
@@ -151,52 +142,34 @@ export const BillAIAnalysisDialog = ({
   return (
     <Dialog onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="max-w-2xl p-0 overflow-hidden max-h-[85vh] flex flex-col [&>button:last-child]:hidden">
-        {/* Gradient header */}
-        <DialogHeader className="bg-gradient-to-br from-poli-navy to-poli-dark rounded-t-2xl p-5 relative shrink-0">
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto overflow-x-hidden p-4 sm:p-6 [&>button:last-child]:hidden">
+        <DialogHeader className="sticky top-0 z-10 bg-background pb-2 border-b border-border text-left">
           <DialogClose asChild>
-            <button
-              aria-label="Close analysis dialog"
-              className="absolute right-4 top-4 text-white/70 hover:text-white transition-colors"
-            >
+            <Button size="icon" variant="ghost" aria-label="Close analysis dialog" className="absolute right-0 top-0 shrink-0">
               <X className="h-4 w-4" />
-            </button>
+            </Button>
           </DialogClose>
-          <div className="min-w-0 pr-8">
-            <p className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest mb-1">
-              Bill Analysis
-            </p>
-            {billLabel && (
-              <p className="font-mono-label text-xs text-white/70 mb-0.5">{billLabel}</p>
-            )}
-            <DialogTitle className="text-xl font-black text-white leading-tight min-w-0 break-words">
-              {billName}
+          <div className="space-y-1.5 min-w-0 pr-10">
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 shrink-0 text-primary" />
+              <span className="min-w-0 break-words">{billLabel}: {billName}</span>
             </DialogTitle>
-            <DialogDescription className="text-sm text-white/60 mt-0.5">
-              AI analysis · {candidateName} {roleLabel} it
+            <DialogDescription>
+              AI-generated analysis of this bill and why {candidateName} {roleLabel} it — grounded in live web search.
             </DialogDescription>
-            {status && (
-              <span className={`inline-block mt-2 font-mono-label text-xs font-bold px-2 py-0.5 rounded-full ${statusBadgeClass(status)}`}>
-                {status.toUpperCase()}
-              </span>
-            )}
           </div>
           {analysis && !isLoading && (
-            <div className="flex flex-wrap items-center gap-2 pt-3">
+            <div className="flex flex-wrap items-center gap-2 pt-1">
               {!analysis.insufficient_information && (
                 <ShareAIAnalysisButton
-                  subjectName={billLabel ? `${billLabel}: ${billName}` : billName}
+                  subjectName={`${billLabel}: ${billName}`}
                   subtitle="Bill Analysis"
                   subjectKind="bill"
                   summary={analysis.summary}
                   confidence={analysis.confidence}
                 />
               )}
-              <Button
-                size="sm"
-                onClick={() => fetchAnalysis(true)}
-                className="bg-poli-navy text-white rounded-xl h-10 px-4 text-sm font-semibold border border-white/30 hover:bg-poli-dark"
-              >
+              <Button size="sm" variant="outline" onClick={() => fetchAnalysis(true)}>
                 <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
                 Regenerate
               </Button>
@@ -204,213 +177,187 @@ export const BillAIAnalysisDialog = ({
           )}
         </DialogHeader>
 
-        {/* Scrollable content area */}
-        <div className="bg-[#F5F6FA] p-4 overflow-y-auto overflow-x-hidden flex-1 min-h-0">
-          {isLoading && (
-            <div className="flex items-center justify-center py-12 gap-3 text-poli-body">
-              <Loader2 className="h-5 w-5 animate-spin border-poli-navy" />
-              <span>Searching the web and analyzing the bill…</span>
-            </div>
-          )}
+        {isLoading && (
+          <div className="flex items-center justify-center py-12 gap-3 text-muted-foreground">
+            <Loader2 className="h-5 w-5 animate-spin" />
+            <span>Searching the web and analyzing the bill…</span>
+          </div>
+        )}
 
-          {error && !isLoading && (
-            <div className="space-y-3">
-              <div className="flex items-start gap-2 p-3 rounded-xl border border-destructive/30 bg-destructive/5 text-sm text-destructive">
+        {error && !isLoading && (
+          <div className="space-y-3">
+            <div className="flex items-start gap-2 p-3 rounded-md border border-destructive/30 bg-destructive/5 text-sm text-destructive">
+              <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+              <span>{error}</span>
+            </div>
+            <Button size="sm" variant="outline" onClick={() => fetchAnalysis(false)}>Retry</Button>
+          </div>
+        )}
+
+        {analysis && !isLoading && (
+          <div className="space-y-5 text-sm min-w-0 break-words">
+            {analysis.insufficient_information && (
+              <div className="flex items-start gap-2 p-3 rounded-md border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300">
                 <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
-                <span>{error}</span>
+                <span>Insufficient public information to confidently analyze this bill. Treat the analysis below as tentative.</span>
               </div>
-              <Button
-                size="sm"
-                onClick={() => fetchAnalysis(false)}
-                className="border border-poli-navy text-poli-navy rounded-xl h-10 px-4 text-sm font-semibold bg-transparent hover:bg-poli-navy/5"
-              >
-                Retry
-              </Button>
-            </div>
-          )}
+            )}
 
-          {analysis && !isLoading && (
-            <div className="space-y-3 text-sm min-w-0 break-words">
-              {analysis.insufficient_information && (
-                <div className="flex items-start gap-2 p-3 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-700">
-                  <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
-                  <span>Insufficient public information to confidently analyze this bill. Treat the analysis below as tentative.</span>
-                </div>
-              )}
-
-              {typeof analysis.confidence === 'number' && (
-                <div className="bg-white rounded-xl p-4 mb-3 shadow-sm space-y-2">
-                  <p className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest mb-2">
-                    Confidence
-                  </p>
-                  {(() => {
-                    const c = Math.max(0, Math.min(100, Math.round(analysis.confidence!)));
-                    const tone = c >= 70 ? 'bg-emerald-500' : c >= 40 ? 'bg-amber-500' : 'bg-destructive';
-                    const label = c >= 70 ? 'High' : c >= 40 ? 'Medium' : 'Low';
-                    return (
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-medium text-poli-muted whitespace-nowrap">Score</span>
-                        <div className="flex-1 h-1.5 rounded-full bg-poli-surface overflow-hidden">
-                          <div className={`h-full ${tone}`} style={{ width: `${c}%` }} />
-                        </div>
-                        <span className="text-xs font-semibold tabular-nums">{c}/100 · {label}</span>
+            {typeof analysis.confidence === 'number' && (
+              <div className="rounded-md border border-border bg-muted/30 p-3 space-y-2">
+                {(() => {
+                  const c = Math.max(0, Math.min(100, Math.round(analysis.confidence!)));
+                  const tone = c >= 70 ? 'bg-emerald-500' : c >= 40 ? 'bg-amber-500' : 'bg-destructive';
+                  const label = c >= 70 ? 'High' : c >= 40 ? 'Medium' : 'Low';
+                  return (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">Confidence</span>
+                      <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                        <div className={`h-full ${tone}`} style={{ width: `${c}%` }} />
                       </div>
-                    );
-                  })()}
-                  {analysis.confidence_rationale && (
-                    <p className="text-xs text-poli-muted italic">{analysis.confidence_rationale}</p>
-                  )}
-                </div>
-              )}
-
-              {userAlignment && userAlignment !== 'unknown' && (
-                <div className={cn(
-                  "flex items-start gap-2 p-3 rounded-xl border text-sm",
-                  userAlignment === 'support'
-                    ? "bg-agree/10 border-agree/30 text-agree"
-                    : "bg-disagree/10 border-disagree/30 text-disagree"
-                )}>
-                  {userAlignment === 'support'
-                    ? <ThumbsUp className="h-4 w-4 mt-0.5 shrink-0" />
-                    : <ThumbsDown className="h-4 w-4 mt-0.5 shrink-0" />}
-                  <span>
-                    <strong>Based on your quiz answers</strong>, you'd likely{' '}
-                    <strong>{userAlignment === 'support' ? 'agree' : 'disagree'}</strong>{' '}
-                    with this vote. See "Policy positions" below to understand why.
-                  </span>
-                </div>
-              )}
-
-              <div className="bg-white rounded-xl p-4 mb-3 shadow-sm">
-                <p className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest mb-2">
-                  Summary
-                </p>
-                <p className="text-poli-body leading-relaxed">{analysis.summary}</p>
-              </div>
-
-              {analysis.key_provisions && analysis.key_provisions.length > 0 && (
-                <div className="bg-white rounded-xl p-4 mb-3 shadow-sm">
-                  <p className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest mb-2">
-                    Key provisions
-                  </p>
-                  <ul className="list-disc pl-5 space-y-1 text-poli-body">
-                    {analysis.key_provisions.map((p, i) => <li key={i}>{p}</li>)}
-                  </ul>
-                </div>
-              )}
-
-              {analysis.candidate_role_explanation && (
-                <div className="bg-white rounded-xl p-4 mb-3 shadow-sm">
-                  <p className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest mb-2">
-                    Why {candidateName} {roleLabel} it
-                  </p>
-                  <p className="text-poli-body leading-relaxed">{analysis.candidate_role_explanation}</p>
-                </div>
-              )}
-
-              {analysis.positions && analysis.positions.length > 0 && (
-                <div className="bg-white rounded-xl p-4 mb-3 shadow-sm">
-                  <p className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest mb-2">
-                    Policy positions
-                  </p>
-                  <ul className="space-y-1.5">
-                    {analysis.positions.map((p, i) => (
-                      <li key={i} className="text-sm">
-                        <span className="font-medium text-poli-body">{p.topic}:</span>{' '}
-                        <span className="text-poli-muted">{p.stance}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {analysis.supporters && analysis.supporters.length > 0 && (
-                <div className="bg-white rounded-xl p-4 mb-3 shadow-sm">
-                  <p className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest mb-2">
-                    Supporters
-                  </p>
-                  <p className="text-poli-body leading-relaxed">{toOneSentence(analysis.supporters)}</p>
-                </div>
-              )}
-
-              {analysis.opponents && analysis.opponents.length > 0 && (
-                <div className="bg-white rounded-xl p-4 mb-3 shadow-sm">
-                  <p className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest mb-2">
-                    Opponents
-                  </p>
-                  <p className="text-poli-body leading-relaxed">{toOneSentence(analysis.opponents)}</p>
-                </div>
-              )}
-
-              {analysis.controversies && analysis.controversies.length > 0 && (
-                <div className="bg-white rounded-xl p-4 mb-3 shadow-sm">
-                  <p className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest mb-2">
-                    Controversies
-                  </p>
-                  <p className="text-poli-body leading-relaxed">{toOneSentence(analysis.controversies)}</p>
-                </div>
-              )}
-
-              {analysis.public_context_claims && analysis.public_context_claims.length > 0 && (
-                <div className="bg-white rounded-xl p-4 mb-3 shadow-sm">
-                  <p className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest mb-2 flex items-center gap-1.5">
-                    <Globe className="h-3.5 w-3.5" />
-                    From public context
-                  </p>
-                  <ul className="list-disc pl-5 space-y-1 text-poli-body">
-                    {analysis.public_context_claims.map((c, i) => <li key={i}>{c}</li>)}
-                  </ul>
-                  <p className="text-[11px] text-poli-muted italic mt-2">
-                    Numbers in brackets [n] reference the Sources list below.
-                  </p>
-                </div>
-              )}
-
-              {analysis.analysis && (
-                <div className="bg-white rounded-xl p-4 mb-3 shadow-sm">
-                  <p className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest mb-2">
-                    Deeper analysis
-                  </p>
-                  <p className="text-poli-muted whitespace-pre-wrap leading-relaxed">{analysis.analysis}</p>
-                </div>
-              )}
-
-              <div className="bg-white rounded-xl p-4 mb-3 shadow-sm">
-                <p className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest mb-2 flex items-center gap-1.5">
-                  <BookOpen className="h-3.5 w-3.5" />
-                  Sources & citations
-                </p>
-                {analysis.sources?.length > 0 ? (
-                  <ol className="space-y-1 list-decimal pl-5">
-                    {analysis.sources.map((s, i) => (
-                      <li key={i}>
-                        <a
-                          href={s.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-poli-navy hover:underline inline-flex items-start gap-1 max-w-full align-top"
-                        >
-                          <ExternalLink className="h-3 w-3 mt-0.5 shrink-0" />
-                          <span className="min-w-0 break-words">[{i + 1}] {s.title}</span>
-                        </a>
-                      </li>
-                    ))}
-                  </ol>
-                ) : (
-                  <p className="text-xs text-poli-muted italic">
-                    {analysis.provider_errors && analysis.provider_errors.length > 0
-                      ? `External citation providers were unavailable (${analysis.provider_errors.map(p => `${p.provider} ${p.status}`).join(', ')}). This response used the fallback model and should be treated as tentative.`
-                      : 'No external sources cited. Treat this analysis as tentative.'}
-                  </p>
+                      <span className="text-xs font-semibold tabular-nums">{c}/100 · {label}</span>
+                    </div>
+                  );
+                })()}
+                {analysis.confidence_rationale && (
+                  <p className="text-xs text-muted-foreground italic">{analysis.confidence_rationale}</p>
                 )}
               </div>
+            )}
 
-              <p className="text-xs text-poli-muted pb-2">
-                AI-generated. May be incomplete or include errors. Verify with linked sources.
-              </p>
+            {userAlignment && userAlignment !== 'unknown' && (
+              <div className={cn(
+                "flex items-start gap-2 p-3 rounded-md border text-sm",
+                userAlignment === 'support'
+                  ? "bg-agree/10 border-agree/30 text-agree"
+                  : "bg-disagree/10 border-disagree/30 text-disagree"
+              )}>
+                {userAlignment === 'support'
+                  ? <ThumbsUp className="h-4 w-4 mt-0.5 shrink-0" />
+                  : <ThumbsDown className="h-4 w-4 mt-0.5 shrink-0" />}
+                <span>
+                  <strong>Based on your quiz answers</strong>, you'd likely{' '}
+                  <strong>{userAlignment === 'support' ? 'agree' : 'disagree'}</strong>{' '}
+                  with this vote. See "Policy positions" below to understand why.
+                </span>
+              </div>
+            )}
+
+            <p className="text-foreground leading-relaxed">{analysis.summary}</p>
+
+            {analysis.key_provisions && analysis.key_provisions.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="font-semibold text-foreground">Key provisions</h4>
+                <ul className="list-disc pl-5 space-y-1 text-foreground">
+                  {analysis.key_provisions.map((p, i) => <li key={i}>{p}</li>)}
+                </ul>
+              </div>
+            )}
+
+            {analysis.candidate_role_explanation && (
+              <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3">
+                <h4 className="font-semibold text-foreground text-xs uppercase tracking-wide">
+                  Why {candidateName} {roleLabel} it
+                </h4>
+                <p className="text-foreground leading-relaxed">{analysis.candidate_role_explanation}</p>
+              </div>
+            )}
+
+            {analysis.positions && analysis.positions.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="font-semibold text-foreground">Policy positions</h4>
+                <ul className="space-y-1.5">
+                  {analysis.positions.map((p, i) => (
+                    <li key={i} className="text-sm">
+                      <span className="font-medium text-foreground">{p.topic}:</span>{' '}
+                      <span className="text-muted-foreground">{p.stance}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {analysis.supporters && analysis.supporters.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-sm text-foreground leading-relaxed">
+                  <strong>Supporters:</strong> {toOneSentence(analysis.supporters)}
+                </p>
+              </div>
+            )}
+
+            {analysis.opponents && analysis.opponents.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-sm text-foreground leading-relaxed">
+                  <strong>Opponents:</strong> {toOneSentence(analysis.opponents)}
+                </p>
+              </div>
+            )}
+
+            {analysis.controversies && analysis.controversies.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-sm text-foreground leading-relaxed">
+                  <strong>Controversies:</strong> {toOneSentence(analysis.controversies)}
+                </p>
+              </div>
+            )}
+
+            {analysis.public_context_claims && analysis.public_context_claims.length > 0 && (
+              <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3">
+                <h4 className="font-semibold text-foreground flex items-center gap-1.5 text-xs uppercase tracking-wide">
+                  <Globe className="h-3.5 w-3.5 text-primary" />
+                  From public context
+                </h4>
+                <ul className="list-disc pl-5 space-y-1 text-foreground">
+                  {analysis.public_context_claims.map((c, i) => <li key={i}>{c}</li>)}
+                </ul>
+                <p className="text-[11px] text-muted-foreground italic">
+                  Numbers in brackets [n] reference the Sources list below.
+                </p>
+              </div>
+            )}
+
+            {analysis.analysis && (
+              <div className="space-y-2">
+                <h4 className="font-semibold text-foreground">Deeper analysis</h4>
+                <p className="text-muted-foreground whitespace-pre-wrap leading-relaxed">{analysis.analysis}</p>
+              </div>
+            )}
+
+            <div className="space-y-2 pt-2 border-t border-border">
+              <h4 className="font-semibold text-foreground flex items-center gap-1.5">
+                <BookOpen className="h-4 w-4 text-primary" />
+                Sources & citations
+              </h4>
+              {analysis.sources?.length > 0 ? (
+                <ol className="space-y-1 list-decimal pl-5">
+                  {analysis.sources.map((s, i) => (
+                    <li key={i}>
+                      <a
+                        href={s.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline inline-flex items-start gap-1 max-w-full align-top"
+                      >
+                        <ExternalLink className="h-3 w-3 mt-0.5 shrink-0" />
+                        <span className="min-w-0 break-words">[{i + 1}] {s.title}</span>
+                      </a>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p className="text-xs text-muted-foreground italic">
+                  {analysis.provider_errors && analysis.provider_errors.length > 0
+                    ? `External citation providers were unavailable (${analysis.provider_errors.map(p => `${p.provider} ${p.status}`).join(', ')}). This response used the fallback model and should be treated as tentative.`
+                    : 'No external sources cited. Treat this analysis as tentative.'}
+                </p>
+              )}
             </div>
-          )}
-        </div>
+
+            <p className="text-xs text-muted-foreground">
+              AI-generated. May be incomplete or include errors. Verify with linked sources.
+            </p>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

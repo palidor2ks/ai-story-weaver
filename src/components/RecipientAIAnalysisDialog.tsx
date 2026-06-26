@@ -10,7 +10,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Loader2, ExternalLink, AlertTriangle, Database, Globe, BookOpen, RefreshCw, X } from 'lucide-react';
+import { Sparkles, Loader2, ExternalLink, AlertTriangle, Database, Globe, BookOpen, RefreshCw, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { ShareAIAnalysisButton } from '@/components/ShareAIAnalysisButton';
 
@@ -124,53 +124,42 @@ export const RecipientAIAnalysisDialog = ({
     if (open && !analysis && !isLoading) fetchAnalysis();
   };
 
-  const displayName = analysis?.alias_canonical_name || entityName;
-  const subtitle = [office, party, state].filter(Boolean).join(' · ');
-
   return (
     <Dialog onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="max-w-2xl p-0 overflow-hidden max-h-[85vh] flex flex-col [&>button:last-child]:hidden">
-        {/* Gradient header */}
-        <DialogHeader className="bg-gradient-to-br from-poli-navy to-poli-dark rounded-t-2xl p-5 relative shrink-0">
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto overflow-x-hidden p-4 sm:p-6 [&>button:last-child]:hidden">
+        <DialogHeader className="sticky top-0 z-10 bg-background pb-2 border-b border-border text-left">
           <DialogClose asChild>
-            <button
-              aria-label="Close analysis dialog"
-              className="absolute right-4 top-4 text-white/70 hover:text-white transition-colors"
-            >
+            <Button size="icon" variant="ghost" aria-label="Close analysis dialog" className="absolute right-0 top-0 shrink-0">
               <X className="h-4 w-4" />
-            </button>
+            </Button>
           </DialogClose>
-          <div className="min-w-0 pr-8">
-            <p className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest mb-1">
-              AI Analysis
-            </p>
-            <DialogTitle className="text-xl font-black text-white leading-tight">
-              {displayName}
+          <div className="space-y-1.5 min-w-0 pr-10">
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 shrink-0 text-primary" />
+              {analysis?.alias_canonical_name || entityName}
             </DialogTitle>
-            {subtitle && (
-              <DialogDescription className="text-sm text-white/60 mt-0.5">
-                {subtitle}
-              </DialogDescription>
-            )}
+            <DialogDescription>
+              AI-generated analysis of this {entityKind}'s positions, goals, and political activity — grounded in live web search.
+            </DialogDescription>
             {analysis?.aliased_fec_ids && analysis.aliased_fec_ids.length > 1 && (
-              <div className="flex items-center gap-1.5 flex-wrap pt-2">
-                <span className="font-mono-label text-xs font-bold text-white/50 uppercase tracking-widest">
+              <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
                   Combined across:
                 </span>
                 {analysis.aliased_fec_ids.map((id) => (
-                  <span key={id} className="font-mono-label text-xs bg-poli-navy/10 text-white/80 px-2 py-0.5 rounded-full border border-white/20">
+                  <Badge key={id} variant="secondary" className="font-mono text-[10px]">
                     {id}
-                  </span>
+                  </Badge>
                 ))}
               </div>
             )}
           </div>
           {analysis && !isLoading && (
-            <div className="flex flex-wrap items-center gap-2 pt-3">
+            <div className="flex flex-wrap items-center gap-2 pt-1">
               {!analysis.insufficient_information && (
                 <ShareAIAnalysisButton
-                  subjectName={displayName}
+                  subjectName={analysis.alias_canonical_name || entityName}
                   subtitle={entityKind === 'committee' ? 'Committee Analysis' : 'Candidate Analysis'}
                   subjectKind={entityKind}
                   summary={analysis.summary}
@@ -184,11 +173,7 @@ export const RecipientAIAnalysisDialog = ({
                   }
                 />
               )}
-              <Button
-                size="sm"
-                onClick={() => fetchAnalysis(true)}
-                className="bg-poli-navy text-white rounded-xl h-10 px-4 text-sm font-semibold border border-white/30 hover:bg-poli-dark"
-              >
+              <Button size="sm" variant="outline" onClick={() => fetchAnalysis(true)}>
                 <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
                 Regenerate
               </Button>
@@ -196,260 +181,226 @@ export const RecipientAIAnalysisDialog = ({
           )}
         </DialogHeader>
 
-        {/* Scrollable content area */}
-        <div className="bg-[#F5F6FA] p-4 overflow-y-auto overflow-x-hidden flex-1 min-h-0">
-          {isLoading && (
-            <div className="flex items-center justify-center py-12 gap-3 text-poli-body">
-              <Loader2 className="h-5 w-5 animate-spin border-poli-navy" />
-              <span>Searching the web and generating analysis…</span>
-            </div>
-          )}
+        {isLoading && (
+          <div className="flex items-center justify-center py-12 gap-3 text-muted-foreground">
+            <Loader2 className="h-5 w-5 animate-spin" />
+            <span>Searching the web and generating analysis…</span>
+          </div>
+        )}
 
-          {error && !isLoading && (
-            <div className="space-y-3">
-              <div className="flex items-start gap-2 p-3 rounded-xl border border-destructive/30 bg-destructive/5 text-sm text-destructive">
+        {error && !isLoading && (
+          <div className="space-y-3">
+            <div className="flex items-start gap-2 p-3 rounded-md border border-destructive/30 bg-destructive/5 text-sm text-destructive">
+              <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+              <span>{error}</span>
+            </div>
+            <Button size="sm" variant="outline" onClick={() => fetchAnalysis(false)}>Retry</Button>
+          </div>
+        )}
+
+        {analysis && !isLoading && (
+          <div className="space-y-5 text-sm min-w-0 break-words">
+            {analysis.insufficient_information && (
+              <div className="flex items-start gap-2 p-3 rounded-md border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300">
                 <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
-                <span>{error}</span>
+                <span>Insufficient public information to confidently identify this entity. Treat the analysis below as tentative.</span>
               </div>
-              <Button
-                size="sm"
-                onClick={() => fetchAnalysis(false)}
-                className="border border-poli-navy text-poli-navy rounded-xl h-10 px-4 text-sm font-semibold bg-transparent hover:bg-poli-navy/5"
-              >
-                Retry
-              </Button>
-            </div>
-          )}
+            )}
 
-          {analysis && !isLoading && (
-            <div className="space-y-3 text-sm min-w-0 break-words">
-              {analysis.insufficient_information && (
-                <div className="flex items-start gap-2 p-3 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-700">
-                  <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
-                  <span>Insufficient public information to confidently identify this entity. Treat the analysis below as tentative.</span>
-                </div>
-              )}
-
-              {(typeof analysis.confidence === 'number' || analysis.data_coverage) && (
-                <div className="bg-white rounded-xl p-4 mb-3 shadow-sm space-y-2">
-                  <p className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest mb-2">
-                    Data quality
-                  </p>
-                  <div className="flex items-center justify-between gap-3 flex-wrap">
-                    {analysis.data_coverage && (() => {
-                      const cfg = {
-                        none: { label: 'No filings', tone: 'bg-destructive/15 text-destructive border-destructive/30' },
-                        sparse: { label: 'Sparse filings', tone: 'bg-amber-500/15 text-amber-700 border-amber-500/30' },
-                        moderate: { label: 'Moderate filings', tone: 'bg-blue-500/15 text-blue-700 border-blue-500/30' },
-                        rich: { label: 'Rich filings', tone: 'bg-emerald-500/15 text-emerald-700 border-emerald-500/30' },
-                      }[analysis.data_coverage];
-                      return (
-                        <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-md border ${cfg.tone}`}>
-                          <Database className="h-3.5 w-3.5" />
-                          Data coverage: {cfg.label}
-                        </span>
-                      );
-                    })()}
-                    {typeof analysis.confidence === 'number' && (() => {
-                      const c = Math.max(0, Math.min(100, Math.round(analysis.confidence)));
-                      const tone = c >= 70 ? 'bg-emerald-500' : c >= 40 ? 'bg-amber-500' : 'bg-destructive';
-                      const label = c >= 70 ? 'High' : c >= 40 ? 'Medium' : 'Low';
-                      return (
-                        <div className="flex items-center gap-2 min-w-[200px] flex-1">
-                          <span className="text-xs font-medium text-poli-muted whitespace-nowrap">Confidence</span>
-                          <div className="flex-1 h-1.5 rounded-full bg-poli-surface overflow-hidden">
-                            <div className={`h-full ${tone}`} style={{ width: `${c}%` }} />
-                          </div>
-                          <span className="text-xs font-semibold tabular-nums">{c}/100 · {label}</span>
-                        </div>
-                      );
-                    })()}
-                  </div>
-                  {analysis.confidence_rationale && (
-                    <p className="text-xs text-poli-muted italic">{analysis.confidence_rationale}</p>
-                  )}
-                </div>
-              )}
-
-              <div className="bg-white rounded-xl p-4 mb-3 shadow-sm">
-                <p className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest mb-2">
-                  Summary
-                </p>
-                <p className="text-poli-body leading-relaxed">{analysis.summary}</p>
-              </div>
-
-              {analysis.positions && analysis.positions.length > 0 && (
-                <div className="bg-white rounded-xl p-4 mb-3 shadow-sm">
-                  <p className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest mb-2">
-                    Positions
-                  </p>
-                  <ul className="space-y-1.5">
-                    {analysis.positions.map((p, i) => (
-                      <li key={i} className="text-sm">
-                        <span className="font-medium text-poli-body">{p.topic}:</span>{' '}
-                        <span className="text-poli-muted">{p.stance}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {analysis.goals && analysis.goals.length > 0 && (
-                <div className="bg-white rounded-xl p-4 mb-3 shadow-sm">
-                  <p className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest mb-2">
-                    Goals
-                  </p>
-                  <p className="text-poli-body leading-relaxed">{toOneSentence(analysis.goals)}</p>
-                </div>
-              )}
-
-              {analysis.causes && analysis.causes.length > 0 && (
-                <div className="bg-white rounded-xl p-4 mb-3 shadow-sm">
-                  <p className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest mb-2">
-                    Causes
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {analysis.causes.map((c, i) => (
-                      <span key={i} className="font-mono-label text-xs bg-poli-navy/10 text-poli-navy px-2 py-0.5 rounded-full">
-                        {c}
+            {(typeof analysis.confidence === 'number' || analysis.data_coverage) && (
+              <div className="rounded-md border border-border bg-muted/30 p-3 space-y-2">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  {analysis.data_coverage && (() => {
+                    const cfg = {
+                      none: { label: 'No filings', tone: 'bg-destructive/15 text-destructive border-destructive/30' },
+                      sparse: { label: 'Sparse filings', tone: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30' },
+                      moderate: { label: 'Moderate filings', tone: 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30' },
+                      rich: { label: 'Rich filings', tone: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30' },
+                    }[analysis.data_coverage];
+                    return (
+                      <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-md border ${cfg.tone}`}>
+                        <Database className="h-3.5 w-3.5" />
+                        Data coverage: {cfg.label}
                       </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {analysis.notable_recipients && analysis.notable_recipients.length > 0 && (
-                <div className="bg-white rounded-xl p-4 mb-3 shadow-sm">
-                  <p className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest mb-2">
-                    {entityKind === 'committee' ? 'Notable spending / recipients' : 'Notable endorsements & coalitions'}
-                  </p>
-                  <p className="text-poli-body leading-relaxed">{toOneSentence(analysis.notable_recipients)}</p>
-                </div>
-              )}
-
-              {analysis.key_people && analysis.key_people.length > 0 && (
-                <div className="bg-white rounded-xl p-4 mb-3 shadow-sm">
-                  <p className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest mb-2">
-                    Key people
-                  </p>
-                  <p className="text-poli-body leading-relaxed">{toOneSentence(analysis.key_people)}</p>
-                </div>
-              )}
-
-              {analysis.controversies && analysis.controversies.length > 0 && (
-                <div className="bg-white rounded-xl p-4 mb-3 shadow-sm">
-                  <p className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest mb-2">
-                    Controversies
-                  </p>
-                  <p className="text-poli-body leading-relaxed">{toOneSentence(analysis.controversies)}</p>
-                </div>
-              )}
-
-              {analysis.related_entities && analysis.related_entities.length > 0 && (
-                <div className="bg-white rounded-xl p-4 mb-3 shadow-sm border border-amber-500/30">
-                  <p className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest mb-2 flex items-center gap-1.5">
-                    <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
-                    Possibly related committees
-                  </p>
-                  <p className="text-xs text-poli-muted italic mb-2">
-                    These share a similar name but are separate FEC registrations. If you believe any of these are the same organization, an admin can link them as an alias to combine the analysis.
-                  </p>
-                  <ul className="space-y-2">
-                    {analysis.related_entities.map((r, i) => (
-                      <li key={i} className="text-sm">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-medium text-poli-body">{r.name || 'Unknown'}</span>
-                          {r.fec_id && (
-                            <span className="font-mono-label text-xs bg-poli-navy/10 text-poli-navy px-2 py-0.5 rounded-full">
-                              {r.fec_id}
-                            </span>
-                          )}
-                          <Badge variant="secondary" className="text-[10px]">{r.relationship.replace(/_/g, ' ')}</Badge>
+                    );
+                  })()}
+                  {typeof analysis.confidence === 'number' && (() => {
+                    const c = Math.max(0, Math.min(100, Math.round(analysis.confidence)));
+                    const tone = c >= 70 ? 'bg-emerald-500' : c >= 40 ? 'bg-amber-500' : 'bg-destructive';
+                    const label = c >= 70 ? 'High' : c >= 40 ? 'Medium' : 'Low';
+                    return (
+                      <div className="flex items-center gap-2 min-w-[200px] flex-1">
+                        <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">Confidence</span>
+                        <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                          <div className={`h-full ${tone}`} style={{ width: `${c}%` }} />
                         </div>
-                        {r.evidence && <p className="text-xs text-poli-muted mt-0.5">{r.evidence}</p>}
-                        {r.citation && (
-                          <a href={r.citation} target="_blank" rel="noopener noreferrer" className="text-xs text-poli-navy hover:underline inline-flex items-center gap-1 mt-0.5">
-                            <ExternalLink className="h-3 w-3" /> source
-                          </a>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
+                        <span className="text-xs font-semibold tabular-nums">{c}/100 · {label}</span>
+                      </div>
+                    );
+                  })()}
                 </div>
-              )}
-
-              {analysis.finance_claims && analysis.finance_claims.length > 0 && (
-                <div className="bg-white rounded-xl p-4 mb-3 shadow-sm">
-                  <p className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest mb-2 flex items-center gap-1.5">
-                    <Database className="h-3.5 w-3.5" />
-                    From finance signals
-                  </p>
-                  <ul className="list-disc pl-5 space-y-1 text-poli-body">
-                    {analysis.finance_claims.map((c, i) => <li key={i}>{c}</li>)}
-                  </ul>
-                </div>
-              )}
-
-              {analysis.public_context_claims && analysis.public_context_claims.length > 0 && (
-                <div className="bg-white rounded-xl p-4 mb-3 shadow-sm">
-                  <p className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest mb-2 flex items-center gap-1.5">
-                    <Globe className="h-3.5 w-3.5" />
-                    From public context
-                  </p>
-                  <ul className="list-disc pl-5 space-y-1 text-poli-body">
-                    {analysis.public_context_claims.map((c, i) => <li key={i}>{c}</li>)}
-                  </ul>
-                  <p className="text-[11px] text-poli-muted italic mt-2">
-                    Numbers in brackets [n] reference the Sources list below.
-                  </p>
-                </div>
-              )}
-
-              {analysis.analysis && (
-                <div className="bg-white rounded-xl p-4 mb-3 shadow-sm">
-                  <p className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest mb-2">
-                    Deeper analysis
-                  </p>
-                  <p className="text-poli-muted whitespace-pre-wrap leading-relaxed">{analysis.analysis}</p>
-                </div>
-              )}
-
-              <div className="bg-white rounded-xl p-4 mb-3 shadow-sm">
-                <p className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest mb-2 flex items-center gap-1.5">
-                  <BookOpen className="h-3.5 w-3.5" />
-                  Sources & citations
-                </p>
-                {analysis.sources?.length > 0 ? (
-                  <ol className="space-y-1 list-decimal pl-5">
-                    {analysis.sources.map((s, i) => (
-                      <li key={i}>
-                        <a
-                          href={s.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-poli-navy hover:underline inline-flex items-start gap-1 max-w-full align-top"
-                        >
-                          <ExternalLink className="h-3 w-3 mt-0.5 shrink-0" />
-                          <span className="min-w-0 break-words">[{i + 1}] {s.title}</span>
-                        </a>
-                      </li>
-                    ))}
-                  </ol>
-                ) : (
-                  <p className="text-xs text-poli-muted italic">
-                    {analysis.provider_errors && analysis.provider_errors.length > 0
-                      ? `External citation providers were unavailable (${analysis.provider_errors.map(p => `${p.provider} ${p.status}`).join(', ')}). This response used the fallback model and should be treated as tentative.`
-                      : "No external sources cited. Treat this analysis as tentative."}
-                  </p>
+                {analysis.confidence_rationale && (
+                  <p className="text-xs text-muted-foreground italic">{analysis.confidence_rationale}</p>
                 )}
               </div>
+            )}
 
-              <p className="text-xs text-poli-muted pb-2">
-                AI-generated. May be incomplete or include errors. Verify with linked sources.
-              </p>
+            <p className="text-foreground leading-relaxed">{analysis.summary}</p>
+
+            {analysis.positions && analysis.positions.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="font-semibold text-foreground">Positions</h4>
+                <ul className="space-y-1.5">
+                  {analysis.positions.map((p, i) => (
+                    <li key={i} className="text-sm">
+                      <span className="font-medium text-foreground">{p.topic}:</span>{' '}
+                      <span className="text-muted-foreground">{p.stance}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {analysis.goals && analysis.goals.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-sm text-foreground leading-relaxed">
+                  <strong>Goals:</strong> {toOneSentence(analysis.goals)}
+                </p>
+              </div>
+            )}
+
+            {analysis.causes && analysis.causes.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="font-semibold text-foreground">Causes</h4>
+                <div className="flex flex-wrap gap-1.5">
+                  {analysis.causes.map((c, i) => <Badge key={i} variant="secondary">{c}</Badge>)}
+                </div>
+              </div>
+            )}
+
+            {analysis.notable_recipients && analysis.notable_recipients.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-sm text-foreground leading-relaxed">
+                  <strong>{entityKind === 'committee' ? 'Notable spending / recipients' : 'Notable endorsements & coalitions'}:</strong>{' '}
+                  {toOneSentence(analysis.notable_recipients)}
+                </p>
+              </div>
+            )}
+
+            {analysis.key_people && analysis.key_people.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-sm text-foreground leading-relaxed">
+                  <strong>Key people:</strong> {toOneSentence(analysis.key_people)}
+                </p>
+              </div>
+            )}
+
+            {analysis.controversies && analysis.controversies.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-sm text-foreground leading-relaxed">
+                  <strong>Controversies:</strong> {toOneSentence(analysis.controversies)}
+                </p>
+              </div>
+            )}
+
+            {analysis.related_entities && analysis.related_entities.length > 0 && (
+              <div className="space-y-2 rounded-md border border-amber-500/30 bg-amber-500/5 p-3">
+                <h4 className="font-semibold text-foreground flex items-center gap-1.5 text-xs uppercase tracking-wide">
+                  <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
+                  Possibly related committees (distinct FEC filers)
+                </h4>
+                <p className="text-[11px] text-muted-foreground italic">
+                  These share a similar name but are separate FEC registrations. If you believe any of these are the same organization, an admin can link them as an alias to combine the analysis.
+                </p>
+                <ul className="space-y-2">
+                  {analysis.related_entities.map((r, i) => (
+                    <li key={i} className="text-sm">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-medium text-foreground">{r.name || 'Unknown'}</span>
+                        {r.fec_id && <Badge variant="outline" className="font-mono text-[10px]">{r.fec_id}</Badge>}
+                        <Badge variant="secondary" className="text-[10px]">{r.relationship.replace(/_/g, ' ')}</Badge>
+                      </div>
+                      {r.evidence && <p className="text-xs text-muted-foreground mt-0.5">{r.evidence}</p>}
+                      {r.citation && (
+                        <a href={r.citation} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline inline-flex items-center gap-1 mt-0.5">
+                          <ExternalLink className="h-3 w-3" /> source
+                        </a>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {analysis.finance_claims && analysis.finance_claims.length > 0 && (
+              <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3">
+                <h4 className="font-semibold text-foreground flex items-center gap-1.5 text-xs uppercase tracking-wide">
+                  <Database className="h-3.5 w-3.5 text-primary" />
+                  From finance signals
+                </h4>
+                <ul className="list-disc pl-5 space-y-1 text-foreground">
+                  {analysis.finance_claims.map((c, i) => <li key={i}>{c}</li>)}
+                </ul>
+              </div>
+            )}
+
+            {analysis.public_context_claims && analysis.public_context_claims.length > 0 && (
+              <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3">
+                <h4 className="font-semibold text-foreground flex items-center gap-1.5 text-xs uppercase tracking-wide">
+                  <Globe className="h-3.5 w-3.5 text-primary" />
+                  From public context
+                </h4>
+                <ul className="list-disc pl-5 space-y-1 text-foreground">
+                  {analysis.public_context_claims.map((c, i) => <li key={i}>{c}</li>)}
+                </ul>
+                <p className="text-[11px] text-muted-foreground italic">
+                  Numbers in brackets [n] reference the Sources list below.
+                </p>
+              </div>
+            )}
+
+            {analysis.analysis && (
+              <div className="space-y-2">
+                <h4 className="font-semibold text-foreground">Deeper analysis</h4>
+                <p className="text-muted-foreground whitespace-pre-wrap leading-relaxed">{analysis.analysis}</p>
+              </div>
+            )}
+
+            <div className="space-y-2 pt-2 border-t border-border">
+              <h4 className="font-semibold text-foreground flex items-center gap-1.5">
+                <BookOpen className="h-4 w-4 text-primary" />
+                Sources & citations
+              </h4>
+              {analysis.sources?.length > 0 ? (
+                <ol className="space-y-1 list-decimal pl-5">
+                  {analysis.sources.map((s, i) => (
+                    <li key={i}>
+                      <a
+                        href={s.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline inline-flex items-start gap-1 max-w-full align-top"
+                      >
+                        <ExternalLink className="h-3 w-3 mt-0.5 shrink-0" />
+                        <span className="min-w-0 break-words">[{i + 1}] {s.title}</span>
+                      </a>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p className="text-xs text-muted-foreground italic">
+                  {analysis.provider_errors && analysis.provider_errors.length > 0
+                    ? `External citation providers were unavailable (${analysis.provider_errors.map(p => `${p.provider} ${p.status}`).join(', ')}). This response used the fallback model and should be treated as tentative.`
+                    : "No external sources cited. Treat this analysis as tentative."}
+                </p>
+              )}
             </div>
-          )}
-        </div>
+
+            <p className="text-xs text-muted-foreground">
+              AI-generated. May be incomplete or include errors. Verify with linked sources.
+            </p>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

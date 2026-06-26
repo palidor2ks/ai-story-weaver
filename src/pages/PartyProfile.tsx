@@ -246,7 +246,7 @@ export default function PartyProfile() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-poli-surface">
+      <div className="min-h-screen bg-background">
         <Header />
         <main className="container py-8 px-4 max-w-4xl">
           <Skeleton className="h-8 w-32 mb-4" />
@@ -259,12 +259,12 @@ export default function PartyProfile() {
 
   if (error || !party) {
     return (
-      <div className="min-h-screen bg-poli-surface">
+      <div className="min-h-screen bg-background">
         <Header />
         <main className="container py-8 px-4 max-w-4xl text-center">
-          <Building2 className="w-16 h-16 text-poli-muted mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-poli-body mb-2">Party Not Found</h1>
-          <p className="text-poli-muted mb-4">
+          <Building2 className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+          <h1 className="text-2xl font-bold text-foreground mb-2">Party Not Found</h1>
+          <p className="text-muted-foreground mb-4">
             The party you're looking for doesn't exist.
           </p>
           <Link to="/parties">
@@ -279,7 +279,7 @@ export default function PartyProfile() {
   }
 
   return (
-    <div className="min-h-screen bg-poli-surface">
+    <div className="min-h-screen bg-background">
       <Seo
         title={`${party.name} — Pulse`}
         description={`Explore the ${party.name}'s official platform, positions across policy topics, and how they compare with your views.`}
@@ -287,24 +287,12 @@ export default function PartyProfile() {
         type="article"
       />
       <Header />
-
-      <div className="bg-gradient-to-br from-poli-navy to-poli-dark text-white px-4 pt-12 pb-10">
-        <p className="font-mono-label text-[10px] font-bold uppercase tracking-widest text-white/60 mb-1">
-          PARTY PROFILE
-        </p>
-        <h1 className="text-2xl font-black text-white leading-tight">
-          {party.name}
-        </h1>
-        <p className="text-sm text-white/70 mt-1">
-          {party.description}
-        </p>
-      </div>
-
-      <main className="container py-8 px-4 max-w-4xl pb-20">
+      
+      <main className="container py-8 px-4 max-w-4xl">
         {/* Back Link */}
         <Link 
           to="/parties" 
-          className="inline-flex items-center gap-2 text-poli-muted hover:text-poli-body transition-colors mb-6"
+          className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors mb-6"
         >
           <ArrowLeft className="w-4 h-4" />
           All Parties
@@ -337,7 +325,7 @@ export default function PartyProfile() {
                 <h1 className={cn("font-display text-3xl font-bold", colors.text)}>
                   {party.name}
                 </h1>
-                <p className="text-poli-muted mt-2 leading-relaxed">
+                <p className="text-muted-foreground mt-2 leading-relaxed">
                   {party.description}
                 </p>
                 
@@ -366,7 +354,7 @@ export default function PartyProfile() {
         <div className="grid md:grid-cols-3 gap-4 mb-8">
           <Card className="shadow-sm">
             <CardContent className="p-4 text-center">
-              <span className="text-sm text-poli-muted">Platform Score</span>
+              <span className="text-sm text-muted-foreground">Platform Score</span>
               <div className="mt-1">
                 <ScoreText score={party.overallScore} size="lg" className="text-3xl" />
               </div>
@@ -375,8 +363,8 @@ export default function PartyProfile() {
           
           <Card className="shadow-sm">
             <CardContent className="p-4 text-center">
-              <span className="text-sm text-poli-muted">Topics Covered</span>
-              <div className="text-3xl font-bold text-poli-body mt-1">
+              <span className="text-sm text-muted-foreground">Topics Covered</span>
+              <div className="text-3xl font-bold text-foreground mt-1">
                 {Object.keys(answersByTopic).length}
               </div>
             </CardContent>
@@ -384,12 +372,12 @@ export default function PartyProfile() {
           
           <Card className={cn("shadow-sm", colors.bg, colors.border)}>
             <CardContent className="p-4 text-center">
-              <span className="text-sm text-poli-muted">Your Alignment</span>
+              <span className="text-sm text-muted-foreground">Your Alignment</span>
               <div className={cn("text-3xl font-bold mt-1", colors.text)}>
                 {userScores.length > 0 ? `${userAlignment}%` : 'N/A'}
               </div>
               {userScores.length === 0 && (
-                <p className="text-xs text-poli-muted mt-1">Complete quiz to see</p>
+                <p className="text-xs text-muted-foreground mt-1">Complete quiz to see</p>
               )}
             </CardContent>
           </Card>
@@ -441,10 +429,10 @@ export default function PartyProfile() {
                       className="flex items-center justify-between p-3 rounded-lg bg-secondary/50"
                     >
                       <div className="min-w-0">
-                        <span className="text-sm font-medium text-poli-body truncate block">
+                        <span className="text-sm font-medium text-foreground truncate block">
                           {topic.topicName}
                         </span>
-                        <span className="text-xs text-poli-muted">
+                        <span className="text-xs text-muted-foreground">
                           {topic.answerCount} questions
                         </span>
                       </div>
@@ -467,8 +455,8 @@ export default function PartyProfile() {
           <CardContent>
             {Object.keys(answersByTopic).length === 0 ? (
               <div className="text-center py-8">
-                <FileText className="w-12 h-12 text-poli-muted mx-auto mb-4" />
-                <p className="text-poli-muted">
+                <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-muted-foreground">
                   No positions documented yet. Check back soon!
                 </p>
               </div>
@@ -481,7 +469,7 @@ export default function PartyProfile() {
                       <AccordionTrigger className="hover:no-underline">
                         <div className="flex items-center gap-3">
                           <span className="text-xl">{topic.icon}</span>
-                          <span className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest">{topic.name}</span>
+                          <span className="font-medium">{topic.name}</span>
                           <Badge variant="secondary" className="ml-2">
                             {topic.answers.length}
                           </Badge>
@@ -495,7 +483,7 @@ export default function PartyProfile() {
                               className="p-4 rounded-lg bg-secondary/30 border border-border"
                             >
                               {/* Question */}
-                              <p className="font-medium text-poli-body mb-3">
+                              <p className="font-medium text-foreground mb-3">
                                 {answer.question?.text}
                               </p>
                               
@@ -514,8 +502,8 @@ export default function PartyProfile() {
                                       : "bg-gray-500/5 border-gray-500"
                                   )}>
                                     <p className="text-sm">
-                                      <span className="font-medium text-poli-muted">Party Position: </span>
-                                      <span className="text-poli-body">{matchingOption.text}</span>
+                                      <span className="font-medium text-muted-foreground">Party Position: </span>
+                                      <span className="text-foreground">{matchingOption.text}</span>
                                     </p>
                                   </div>
                                 ) : null;
@@ -538,7 +526,7 @@ export default function PartyProfile() {
                                 </Badge>
                                 <ScoreText score={answer.answer_value} size="sm" />
                                 {answer.confidence && (
-                                  <div className="flex items-center gap-1 text-xs text-poli-muted">
+                                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
                                     {getConfidenceIcon(answer.confidence)}
                                     {answer.confidence} confidence
                                   </div>
@@ -547,7 +535,7 @@ export default function PartyProfile() {
 
                               {/* AI explanation/notes */}
                               {answer.notes && (
-                                <p className="text-sm text-poli-muted mb-3 italic">
+                                <p className="text-sm text-muted-foreground mb-3 italic">
                                   {answer.notes}
                                 </p>
                               )}
