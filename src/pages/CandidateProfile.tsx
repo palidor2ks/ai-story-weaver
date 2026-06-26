@@ -138,7 +138,7 @@ export const CandidateProfile = () => {
   const [visibleDonorCount, setVisibleDonorCount] = useState(20);
   const [visibleBillCount, setVisibleBillCount] = useState(20);
   const [donorSearch, setDonorSearch] = useState('');
-  const [activeTab, setActiveTab] = useState<'issues' | 'votes' | 'bills' | 'money' | 'contact' | 'positions'>('issues');
+  const [activeTab, setActiveTab] = useState<'issues' | 'votes' | 'bills' | 'money' | 'news' | 'contact' | 'positions'>('issues');
   const effectiveCycle = selectedCycle ?? cycleInfo?.defaultCycle;
   const { data: donors = [], refetch: refetchDonors } = useCandidateDonors(id, effectiveCycle);
   const { data: earmarkRollups = [] } = useCandidateEarmarkRollups(id, effectiveCycle);
@@ -620,8 +620,8 @@ export const CandidateProfile = () => {
 
       {/* TAB NAVIGATION */}
       <div className="mt-4 px-4">
-        <div className="grid grid-cols-6 gap-1">
-          {(['issues', 'positions', 'votes', 'bills', 'money', 'contact'] as const).map(tab => (
+        <div className="grid grid-cols-7 gap-1">
+          {(['issues', 'positions', 'votes', 'bills', 'money', 'news', 'contact'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -677,6 +677,33 @@ export const CandidateProfile = () => {
         {/* VOTES TAB */}
         {activeTab === 'votes' && (
           <div>
+            {/* PoliScore voting record — NC GA state legislators only (v0_nc).
+                Shows per-legislator position on curated key votes from the 2025 session. */}
+            {candidate.id &&
+              candidate.state === 'NC' &&
+              (candidate.office === 'State Senator' || candidate.office === 'State Representative') && (
+              <div className="mb-3">
+                <PoliScoreCard
+                  candidateId={candidate.id}
+                  candidateName={candidate.name}
+                  jurisdiction="nc_state"
+                />
+              </div>
+            )}
+
+            {/* PoliScore voting record — federal Representatives and Senators.
+                v0 covers curated House key votes; Senate key votes are being added. */}
+            {candidate.id &&
+              (candidate.office === 'Representative' || candidate.office === 'Senator') && (
+              <div className="mb-3">
+                <PoliScoreCard
+                  candidateId={candidate.id}
+                  candidateName={candidate.name}
+                  office={candidate.office}
+                />
+              </div>
+            )}
+
             <VotingRecordSection
               votes={votes}
               userTopicScores={userTopicScores}
@@ -789,12 +816,65 @@ export const CandidateProfile = () => {
                 Funding & donor details →
               </button>
             </Link>
+            {/* State-legislator campaign finance. Each section self-gates: it
+                renders only for legislators in its state that have synced
+                contribution data, so they're no-ops for everyone else. */}
+            <div className="mt-3 space-y-3">
+              <NjStateFinanceSection
+                name={candidate.name}
+                district={candidate.district}
+                office={candidate.office}
+                state={candidate.state}
+                level={(candidate as { level?: string }).level}
+              />
+              <FlStateFinanceSection
+                name={candidate.name}
+                district={candidate.district}
+                office={candidate.office}
+                state={candidate.state}
+                level={(candidate as { level?: string }).level}
+              />
+              <NyStateFinanceSection
+                name={candidate.name}
+                district={candidate.district}
+                office={candidate.office}
+                state={candidate.state}
+                level={(candidate as { level?: string }).level}
+              />
+              <TxStateFinanceSection
+                name={candidate.name}
+                district={candidate.district}
+                office={candidate.office}
+                state={candidate.state}
+                level={(candidate as { level?: string }).level}
+              />
+            </div>
             {/* Top spenders — outside groups making independent expenditures for/against.
                 Use the resolved candidate.id (not the raw route id) so synthetic
                 executive routes like /candidate/federal_president still match IE rows. */}
             <div className="mt-3">
               <CandidateIESection candidateId={candidate.id} preferredCycle={effectiveCycle} />
             </div>
+          </div>
+        )}
+
+        {/* NEWS TAB — Latest News + Latest from X */}
+        {activeTab === 'news' && (
+          <div className="space-y-3">
+            <RelevantNewsFeed
+              people={[{
+                name: candidate.name,
+                office: candidate.office,
+                state: candidate.state,
+                district: candidate.district,
+              }]}
+              topics={userTopicScores.map(uts => (uts as { topic_id?: string }).topic_id).filter(Boolean) as string[]}
+              state={candidate.state}
+              district={candidate.district}
+              title={`Latest News about ${candidate.name}`}
+              maxItems={8}
+            />
+            <RepresentativeSocialFeed candidateId={candidate.id} />
           </div>
         )}
 
