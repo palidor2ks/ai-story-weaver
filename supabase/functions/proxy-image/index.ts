@@ -27,6 +27,9 @@ const ALLOWED_HOST_SUFFIXES = [
   'ncga.state.nc.us',
   'nc.gov',
   'naag.org',
+  'texas.gov',
+  'state.tx.us',
+  'capitol.texas.gov',
   // Common image CDNs that OpenStates / official bios point at.
   'amazonaws.com',
   'googleapis.com',
