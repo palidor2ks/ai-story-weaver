@@ -5,6 +5,44 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-26 — Top spenders (outside spending) on rep profile MONEY tab (PR #592)
+
+**What happened & why**
+User asked to "make sure top spenders is added onto rep profile page." The `CandidateIESection`
+component (Outside Spending: total/support/oppose stats + a "Top spending committees" table) was
+already built and imported into `CandidateProfile.tsx` but never rendered — a half-wired feature.
+Completed the wiring in the MONEY tab (below the "Funding & donor details" CTA), reusing the
+existing `useCandidateIE` hook. Matches the VOTES tab pattern (a shadcn `Card` section inside the
+mobile layout). Self-gates to `null` when a candidate has no IE data.
+
+Codex then flagged 7 issues; all fixed and all 7 review threads resolved:
+- **Resolved id** — pass `candidate.id` (not the raw route id) so synthetic exec routes
+  (`federal_president`) still match IE rows.
+- **Exclusions** — `useCandidateIE` now drops `ie_excluded_committees_public` committees, matching
+  the donor hook / Top Spenders page, filtered over the FULL set *before* ranking.
+- **Aliased-candidate `maybeSingle()` bug** — stopped reading `candidate_independent_expenditure_totals`
+  (that view groups by `target_fec_candidate_id`, so aliased candidates return >1 row and
+  `.maybeSingle()` collapsed to null → "No expenditures" despite real spending). **Confirmed real in
+  dev**: B001230, C001075, etc. have 2 view rows. Totals now summed from raw rows.
+- **Ranking / truncation** — fetch raw filings with an explicit high cap and aggregate totals + top
+  spenders from one cleaned rowset (no more "50 largest filings only"; no default-page truncation).
+- **Cycle UX** — `CandidateIESection` takes `preferredCycle`; it follows the MONEY tab's selected
+  cycle but falls back to "all cycles" when that cycle has no IE data (never hides spending); its
+  dropdown still allows manual override.
+
+Merged latest `origin/main` (only `docs/HANDOFF.md` conflicted — top-entry collision).
+
+**State** (verified 2026-06-26)
+Preflight green after merge: `eslint` 0 errors (1 pre-existing warning unrelated), `bun run build`
+passes, `bun test src` 52 pass / 0 fail. Data path spot-checked against dev DB (Baldwin top
+spenders sane: Senate Leadership Fund $23.5M, Fix Washington PAC $15.7M). PR #592 mergeable
+(`unstable` = a non-required check pending, not a conflict). Not yet viewed in a running app.
+
+**Next**
+Manually confirm the section renders on a candidate with IE data (e.g. Harris/Trump): cycle
+follow/fallback behaves, committee links work. Note: repo `ci.yml` Build workflow has not been
+registering runs for this PR (other checks pass) — check the Actions tab if Build is a required gate.
+
 ## 2026-06-26 — Compact `$12M` format on FUNDING & DONORS page (PR #591, merged)
 
 **What happened & why**
