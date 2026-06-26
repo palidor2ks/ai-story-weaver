@@ -1,5 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
-import { Header } from '@/components/Header';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Seo } from '@/components/Seo';
 import { useAuth } from '@/context/AuthContext';
 import { useProfile, useUserTopics, useUserTopicScores, useResetOnboarding, useUpdateProfile } from '@/hooks/useProfile';
@@ -10,7 +9,7 @@ import { usePartyMatchScores } from '@/hooks/usePartyMatchScores';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { normalizeOfficeName } from '@/lib/officeLabel';
 import { User, RefreshCw, Target, LogOut, RotateCcw, Users, Sparkles, Building2, MapPin, Pencil, Check, X, AlertCircle, HelpCircle, Info, Share2 } from 'lucide-react';
@@ -18,16 +17,15 @@ import { EditProfileDialog } from '@/components/EditProfileDialog';
 import { ChangePasswordDialog } from '@/components/ChangePasswordDialog';
 import { AvatarUpload } from '@/components/AvatarUpload';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { ScoreText } from '@/components/ScoreText';
+import { formatScore, getScoreLabelProgCon } from '@/lib/scoreFormat';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AddressAutocomplete } from '@/components/AddressAutocomplete';
 import { RepresentativeComparisonCard } from '@/components/RepresentativeComparisonCard';
 import { PartyComparisonCard } from '@/components/PartyComparisonCard';
-import { NolanChart } from '@/components/NolanChart';
 import { VerificationBadges } from '@/components/VerificationBadges';
 import { UpcomingElectionsCard } from '@/components/profile/UpcomingElectionsCard';
 import { logBadgeEvent } from '@/lib/badges';
@@ -71,6 +69,9 @@ export const UserProfile = () => {
   const [isRefreshingRepAI, setIsRefreshingRepAI] = useState(false);
   const [isRefreshingAnalysis, setIsRefreshingAnalysis] = useState(false);
   const [isRefreshingParties, setIsRefreshingParties] = useState(false);
+  const [activeTab, setActiveTab] = useState<'analysis' | 'party' | 'reps' | 'elections' | 'badges' | 'topics'>('analysis');
+  const editProfileTriggerRef = useRef<HTMLDivElement>(null);
+  const changePasswordTriggerRef = useRef<HTMLDivElement>(null);
 
   // Fire identity_verified badge event when returning from ID.me
   useEffect(() => {
@@ -104,15 +105,18 @@ export const UserProfile = () => {
     return scoreMap?.get(id) ?? null;
   };
 
-  const topicScoresList = userTopicScores.map(ts => ({
-    topicId: ts.topic_id,
-    topicName: ts.topics?.name || ts.topic_id,
-    score: ts.score,
-  }));
+  const topicScoresList = useMemo(
+    () => userTopicScores.map(ts => ({
+      topicId: ts.topic_id,
+      topicName: ts.topics?.name || ts.topic_id,
+      score: ts.score,
+    })),
+    [userTopicScores]
+  );
 
-  // Fetch AI analysis
+  // Fetch AI analysis — stable key; edge function handles DB-level caching
   const { data: analysis, isLoading: analysisLoading } = useQuery<ProfileAnalysis>({
-    queryKey: ['profile-analysis', profile?.id, topicScoresList],
+    queryKey: ['profile-analysis', profile?.id, profile?.overall_score],
     queryFn: async () => {
       const { data, error } = await supabase.functions.invoke('user-profile-analysis', {
         body: {
@@ -126,7 +130,8 @@ export const UserProfile = () => {
       return data as ProfileAnalysis;
     },
     enabled: !!session && !!profile && topicScoresList.length > 0,
-    staleTime: 1000 * 60 * 10, // Cache for 10 minutes
+    staleTime: Infinity, // Edge function owns freshness; Refresh button forces regeneration
+    gcTime: 1000 * 60 * 30,
   });
 
   const handleSignOut = async () => {
@@ -186,7 +191,16 @@ export const UserProfile = () => {
   const handleRefreshPoliticalAnalysis = async () => {
     setIsRefreshingAnalysis(true);
     try {
-      await queryClient.invalidateQueries({ queryKey: ['profile-analysis'] });
+      const { data, error } = await supabase.functions.invoke('user-profile-analysis', {
+        body: {
+          overallScore: profile?.overall_score ?? 0,
+          topicScores: topicScoresList,
+          userName: profile?.name,
+          force: true,
+        },
+      });
+      if (error) throw error;
+      queryClient.setQueryData(['profile-analysis', profile?.id, profile?.overall_score], data);
       toast.success('Political analysis refreshed!');
     } catch (error) {
       console.error('Error refreshing analysis:', error);
@@ -326,8 +340,7 @@ export const UserProfile = () => {
 
   if (profileLoading) {
     return (
-      <div className="min-h-screen bg-background">
-        <Header />
+      <div className="min-h-screen bg-[#F5F6FA]">
         <div className="flex items-center justify-center py-20">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
         </div>
@@ -337,8 +350,7 @@ export const UserProfile = () => {
 
   if (!profile) {
     return (
-      <div className="min-h-screen bg-background">
-        <Header />
+      <div className="min-h-screen bg-[#F5F6FA]">
         <main className="container py-8 px-4 text-center">
           <p className="text-muted-foreground">Please complete onboarding first.</p>
           <Link to="/">
@@ -355,558 +367,573 @@ export const UserProfile = () => {
     icon: ut.topics?.icon || '',
   }));
 
+  // Compute pulse score donut from topic scores answered vs total questions coverage
+  const answeredCount = topicScoresList.length;
+  // Use a rough coverage display: answered / 10 capped at 100 as visual proxy
+  const donutPct = answeredCount > 0 ? Math.min(100, Math.round((answeredCount / Math.max(answeredCount, 10)) * 100)) : 0;
+
+  const scoreLabel = profile.overall_score <= -30
+    ? 'Leans Progressive'
+    : profile.overall_score >= 30
+    ? 'Leans Conservative'
+    : 'Moderate / Mixed';
+
+  const scaledScore = (profile.overall_score ?? 0) / 10;
+  const formattedPoliScore = answeredCount > 0 ? formatScore(scaledScore) : null;
+  const poliScoreDesc = answeredCount > 0 ? getScoreLabelProgCon(scaledScore) : null;
+
+  const memberSince = session?.user?.created_at
+    ? new Date(session.user.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+    : new Date(profile.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+
+  // Parse city/state from address for sub-line
+  const addressCity = (() => {
+    if (!profile.address) return null;
+    const parts = profile.address.split(',');
+    if (parts.length >= 2) {
+      const city = parts[parts.length - 3]?.trim();
+      const stateZip = parts[parts.length - 2]?.trim();
+      const state = stateZip?.match(/^([A-Z]{2})/)?.[1];
+      if (city && state) return `${city}, ${state}`;
+    }
+    return null;
+  })();
+
+  const TABS = [
+    { id: 'analysis', label: 'AI Analysis' },
+    { id: 'party', label: 'Party' },
+    { id: 'reps', label: 'Reps' },
+    { id: 'elections', label: 'Elections' },
+    { id: 'badges', label: 'Badges' },
+    { id: 'topics', label: 'Topics' },
+  ] as const;
+
   return (
-    <div className="min-h-screen bg-background">
+    <div className="bg-[#F5F6FA] min-h-screen">
       <Seo
         title="Your Profile — Pulse"
         description="Manage your Pulse account, address, and topic priorities."
         path="/profile"
         noIndex
       />
-      <Header />
 
-      <main className="container py-8 px-4 max-w-4xl">
-        {/* Profile Header */}
-        <div className="bg-card rounded-2xl border border-border p-5 sm:p-6 md:p-8 mb-8 shadow-elevated">
-          <div className="flex flex-col gap-5">
-            {/* Identity: avatar + name, with sign out top-right */}
-            <div className="flex items-start gap-4 sm:gap-5">
-              <AvatarUpload
-                userId={profile.id}
-                currentAvatarUrl={profile.avatar_url}
-                userName={profile.name}
-                onAvatarChange={() => queryClient.invalidateQueries({ queryKey: ['profile'] })}
-              />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-start justify-between gap-3">
-                  <h1 className="break-words font-display text-2xl md:text-3xl font-bold text-foreground">
-                    {profile.name}
-                  </h1>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleSignOut}
-                    className="flex-shrink-0 gap-2 text-muted-foreground hover:text-foreground"
-                  >
-                    <LogOut className="w-4 h-4" />
-                    <span className="hidden sm:inline">Sign Out</span>
-                  </Button>
-                </div>
-                <p className="text-muted-foreground mt-1">
-                  Member since {new Date(profile.created_at).toLocaleDateString()}
-                </p>
-                {isEditingAddress ? (
-                  <div className="flex items-center gap-2 mt-2">
-                    <div className="flex-1">
-                      <AddressAutocomplete
-                        value={addressInput}
-                        onChange={setAddressInput}
-                        onAddressSelect={(details) => setAddressInput(details.formattedAddress)}
-                        placeholder="Start typing your address..."
-                        className="text-sm"
-                      />
-                    </div>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-100"
-                      onClick={handleSaveAddress}
-                      disabled={updateProfile.isPending}
-                    >
-                      <Check className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                      onClick={handleCancelEditAddress}
-                      disabled={updateProfile.isPending}
-                    >
-                      <X className="w-4 h-4" />
-                    </Button>
-                  </div>
-                ) : profile.address ? (
-                  <button
-                    onClick={handleEditAddress}
-                    className="text-sm text-muted-foreground flex items-center gap-1 mt-1 hover:text-foreground transition-colors group"
-                  >
-                    <MapPin className="w-3 h-3" />
-                    {profile.address}
-                    <Pencil className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleEditAddress}
-                    className="text-sm text-primary flex items-center gap-1 mt-1 hover:underline"
-                  >
-                    <MapPin className="w-3 h-3" />
-                    Add your address
-                  </button>
-                )}
-              </div>
-            </div>
+      {/* NAVY GRADIENT HEADER */}
+      <div className="bg-gradient-to-br from-poli-navy to-poli-dark text-white pb-16 pt-12">
+        {/* Top bar */}
+        <div className="flex items-center justify-between px-5 pb-4">
+          <span className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest">
+            My Profile
+          </span>
+          <button
+            onClick={handleSignOut}
+            className="text-white/70 hover:text-white transition-colors"
+            aria-label="Sign out"
+          >
+            <LogOut className="w-5 h-5" />
+          </button>
+        </div>
 
-            {/* Pulse Score */}
-            <div className="border-t border-border/60 pt-4">
-              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Pulse Score
-              </span>
-              <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                <ScoreText
-                  score={profile.overall_score}
-                  size="lg"
-                  className="[&>span:first-child]:text-4xl [&>span:first-child]:font-extrabold sm:[&>span:first-child]:text-5xl"
-                />
-                <span className="text-sm text-muted-foreground sm:text-base">
-                  {profile.overall_score <= -30 ? 'Leans Progressive on most issues' :
-                   profile.overall_score >= 30 ? 'Leans Conservative on most issues' :
-                   'Moderate or mixed views across issues'}
-                </span>
-              </div>
-            </div>
-
-            {/* Profile actions + verification */}
-            <div>
-              <div className="flex flex-wrap items-center gap-1">
-                <EditProfileDialog
-                  profile={profile}
-                  onSave={async (data) => {
-                    await updateProfile.mutateAsync(data);
-                    toast.success('Profile updated successfully!');
-                  }}
-                  isLoading={updateProfile.isPending}
-                />
-                <ChangePasswordDialog />
-              </div>
-              <VerificationBadges profile={profile} />
-            </div>
+        {/* Identity row */}
+        <div className="flex items-center gap-4 px-5">
+          <AvatarUpload
+            userId={profile.id}
+            currentAvatarUrl={profile.avatar_url}
+            userName={profile.name}
+            onAvatarChange={() => queryClient.invalidateQueries({ queryKey: ['profile'] })}
+          />
+          <div className="min-w-0 flex-1">
+            <h1 className="text-xl font-black text-white break-words">{profile.name}</h1>
+            <p className="text-sm text-white/60 mt-0.5">
+              Member since {memberSince}
+              {addressCity ? ` · ${addressCity}` : ''}
+            </p>
           </div>
         </div>
+      </div>
 
-        {/* Quiz Action Buttons */}
-        <div className="flex flex-col sm:flex-row gap-3 mb-8">
-          <Link to="/results" className="flex-1">
-            <Button variant="secondary" className="w-full gap-2">
-              <Share2 className="w-4 h-4" />
-              View & Share Results
-            </Button>
-          </Link>
-          <Link to="/quiz?mode=random" className="flex-1">
-            <Button variant="default" className="w-full gap-2">
-              <HelpCircle className="w-4 h-4" />
-              Answer More Questions
-            </Button>
-          </Link>
-          <Link to="/quiz" className="flex-1">
-            <Button variant="outline" className="w-full gap-2">
-              <RefreshCw className="w-4 h-4" />
-              Retake Full Quiz
-            </Button>
-          </Link>
-          <Button
-            variant="ghost"
-            className="flex-1 gap-2 text-destructive hover:text-destructive hover:bg-destructive/10"
-            onClick={handleResetOnboarding}
-            disabled={resetOnboarding.isPending}
-          >
-            <RotateCcw className="w-4 h-4" />
-            {resetOnboarding.isPending ? 'Resetting...' : 'Reset Onboarding'}
-          </Button>
-        </div>
+      {/* PULSE SCORE OVERLAP CARD */}
+      <div className="-mt-6 mx-4 rounded-2xl shadow-lg bg-white p-4 z-10 relative">
+        <div className="flex items-start gap-4">
+          {/* Left: score info + actions */}
+          <div className="flex-1 min-w-0">
+            <p className="font-mono-label text-[10px] font-bold text-poli-red uppercase tracking-widest">
+              Pulse Score
+            </p>
+            {formattedPoliScore ? (
+              <>
+                <p className="font-black text-2xl text-poli-navy leading-none mt-0.5">{formattedPoliScore}</p>
+                <p className="text-sm text-poli-dim">{poliScoreDesc}</p>
+              </>
+            ) : (
+              <p className="text-poli-navy font-black text-xl mt-0.5">{scoreLabel}</p>
+            )}
+            <div className="flex flex-col gap-2 mt-3">
+              <button
+                className="text-sm text-poli-navy font-medium hover:underline text-left"
+                onClick={() => editProfileTriggerRef.current?.querySelector('button')?.click()}
+              >
+                Edit profile →
+              </button>
+              <button
+                className="text-sm text-poli-navy font-medium hover:underline text-left"
+                onClick={() => changePasswordTriggerRef.current?.querySelector('button')?.click()}
+              >
+                Change password →
+              </button>
+              <Link
+                to="/quiz"
+                className="text-sm font-bold text-white bg-poli-navy rounded-full px-4 py-1.5 inline-block text-center hover:bg-poli-dark transition-colors"
+              >
+                Answer more questions →
+              </Link>
+            </div>
+          </div>
 
-        <Tabs defaultValue="ai-analysis" className="w-full">
-          <TabsList className="w-full justify-start overflow-x-auto flex-nowrap mb-6">
-            <TabsTrigger value="ai-analysis">AI Analysis</TabsTrigger>
-            <TabsTrigger value="party-alignment">Party Alignment</TabsTrigger>
-            <TabsTrigger value="representatives">Representatives</TabsTrigger>
-            <TabsTrigger value="elections">Upcoming Elections</TabsTrigger>
-            <TabsTrigger value="badges">Badges</TabsTrigger>
-            <TabsTrigger value="topics">Priority Topics</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="ai-analysis">
-        {/* AI Analysis Summary */}
-        <Card className="mb-8 shadow-elevated">
-          <CardHeader>
-            <CardTitle className="font-display flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-accent" />
-                AI Political Analysis
-              </div>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleRefreshPoliticalAnalysis}
-                      disabled={isRefreshingAnalysis || analysisLoading}
-                      className="gap-1.5 text-xs"
-                    >
-                      <RefreshCw className={cn("h-3.5 w-3.5", (isRefreshingAnalysis || analysisLoading) && "animate-spin")} />
-                      Refresh
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Regenerate AI political analysis</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {analysisLoading ? (
-              <div className="space-y-3">
-                <Skeleton className="h-4 w-full" />
-                <Skeleton className="h-4 w-3/4" />
-                <Skeleton className="h-4 w-5/6" />
-              </div>
-            ) : analysis?.summary ? (
-              <div className="space-y-4">
-                <p className="text-foreground leading-relaxed">{analysis.summary}</p>
-
-                {analysis.keyInsights && analysis.keyInsights.length > 0 && (
-                  <div className="mt-4">
-                    <h4 className="font-semibold text-foreground mb-2">Key Insights</h4>
-                    <ul className="space-y-2">
-                      {analysis.keyInsights.map((insight, i) => (
-                        <li key={i} className="flex items-start gap-2 text-muted-foreground">
-                          <span className="text-accent mt-1">•</span>
-                          {insight}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {analysis.partyComparison && (
-                  <div className="mt-4 p-4 rounded-lg bg-secondary/50">
-                    <h4 className="font-semibold text-foreground mb-2">Party Platform Comparison</h4>
-                    <p className="text-muted-foreground">{analysis.partyComparison}</p>
-                  </div>
-                )}
+          {/* Right: donut */}
+          <div className="flex flex-col items-center shrink-0">
+            {answeredCount > 0 ? (
+              <div
+                className="relative w-[64px] h-[64px] rounded-full"
+                style={{
+                  background: `conic-gradient(#182B7A 0 ${donutPct}%, #ECECF2 ${donutPct}% 100%)`,
+                }}
+              >
+                <div className="absolute inset-[8px] bg-white rounded-full flex items-center justify-center">
+                  <span className="font-sans font-black text-[13px] text-poli-navy">{donutPct}%</span>
+                </div>
               </div>
             ) : (
-              <p className="text-muted-foreground">Complete the quiz to see your AI-generated political analysis.</p>
+              <div className="relative w-[64px] h-[64px] rounded-full bg-poli-surface flex items-center justify-center">
+                <span className="font-sans font-black text-[16px] text-poli-muted">—</span>
+              </div>
             )}
-          </CardContent>
-        </Card>
-          </TabsContent>
+            <p className="font-mono-label text-[8px] text-poli-muted tracking-wide mt-1 text-center">
+              TOPICS
+            </p>
+            <p className="text-[7px] text-poli-muted text-center leading-tight">{answeredCount}/10 scored</p>
+          </div>
+        </div>
+      </div>
 
-          <TabsContent value="party-alignment">
-        {/* Party Alignment */}
-        <Card className="mb-8 shadow-elevated">
-          <CardHeader>
-            <CardTitle className="font-display flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <Users className="w-5 h-5 text-accent" />
-                Party Alignment
-              </div>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleRefreshPartyComparisons}
-                      disabled={isRefreshingParties || partyScoresLoading}
-                      className="gap-1.5 text-xs"
-                    >
-                      <RefreshCw className={cn("h-3.5 w-3.5", isRefreshingParties && "animate-spin")} />
-                      Refresh All
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Regenerate AI comparison summaries for all parties</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="mb-6 pb-6 border-b border-border">
-              <NolanChart />
-            </div>
-            <TooltipProvider>
-              <div className="flex flex-col gap-4">
-                <PartyComparisonCard
-                  partyId="democrat"
-                  partyName="Democratic"
-                  score={partyScores?.democrat}
-                  isLoading={partyScoresLoading}
-                />
-                <PartyComparisonCard
-                  partyId="republican"
-                  partyName="Republican"
-                  score={partyScores?.republican}
-                  isLoading={partyScoresLoading}
-                />
-                <PartyComparisonCard
-                  partyId="green"
-                  partyName="Green"
-                  score={partyScores?.green}
-                  isLoading={partyScoresLoading}
-                />
-                <PartyComparisonCard
-                  partyId="libertarian"
-                  partyName="Libertarian"
-                  score={partyScores?.libertarian}
-                  isLoading={partyScoresLoading}
-                />
-              </div>
-            </TooltipProvider>
-          </CardContent>
-        </Card>
-          </TabsContent>
+      {/* Dialog triggers rendered off-screen so scorecard links can imperatively open them */}
+      <div className="sr-only" ref={editProfileTriggerRef}>
+        <EditProfileDialog
+          profile={profile}
+          onSave={async (data) => {
+            await updateProfile.mutateAsync(data);
+            toast.success('Profile updated successfully!');
+          }}
+          isLoading={updateProfile.isPending}
+        />
+      </div>
+      <div className="sr-only" ref={changePasswordTriggerRef}>
+        <ChangePasswordDialog />
+      </div>
 
-          <TabsContent value="representatives">
-        {/* Your Representatives */}
-        <Card className="mb-8 shadow-elevated">
-          <CardHeader>
-            <CardTitle className="font-display flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <Users className="w-5 h-5 text-accent" />
-                Your Representatives
-                {allRepsLoading ? (
-                  <Badge variant="outline" className="ml-2 text-xs font-normal animate-pulse">
-                    Looking up representatives...
-                  </Badge>
-                ) : congressionalState && congressionalDistrict ? (
-                  <Badge variant="outline" className="ml-2 text-xs font-normal">
-                    {congressionalState}-{congressionalDistrict}
-                  </Badge>
-                ) : null}
-              </div>
+      {/* QUICK ACTIONS ROW */}
+      <div className="px-4 mt-3 flex gap-2">
+        <Link to="/results" className="flex-1">
+          <Button variant="outline" size="sm" className="w-full gap-1.5 text-xs">
+            <Share2 className="w-3.5 h-3.5" />
+            View & Share
+          </Button>
+        </Link>
+        <Link to="/quiz" className="flex-1">
+          <Button variant="outline" size="sm" className="w-full gap-1.5 text-xs">
+            <RefreshCw className="w-3.5 h-3.5" />
+            Retake Quiz
+          </Button>
+        </Link>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1.5 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+          onClick={handleResetOnboarding}
+          disabled={resetOnboarding.isPending}
+        >
+          <RotateCcw className="w-3.5 h-3.5" />
+          Reset
+        </Button>
+      </div>
 
-              {profile.address && (
-                <div className="flex items-center gap-1">
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={handleRefreshRepComparisons}
-                          disabled={isRefreshingRepAI || allRepsLoading}
-                          className="gap-1.5 text-xs"
-                        >
-                          <Sparkles className={cn("h-3.5 w-3.5", isRefreshingRepAI && "animate-pulse")} />
-                          {isRefreshingRepAI ? 'Refreshing...' : 'Refresh AI'}
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Regenerate AI comparison summaries for all representatives</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={handleRefreshRepresentatives}
-                    disabled={allRepsLoading}
-                    aria-label="Refresh representatives"
-                  >
-                    <RefreshCw className={cn("h-4 w-4", allRepsLoading && "animate-spin")} />
-                  </Button>
-                </div>
+      {/* VERIFICATION STRIP */}
+      {(!profile.identity_verified || !profile.voter_verified) && (
+        <div className="mx-4 mt-3">
+          <VerificationBadges profile={profile} />
+        </div>
+      )}
+
+      {/* 6-TAB NAVIGATION */}
+      <div className="mt-4 px-4">
+        <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+          {TABS.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={cn(
+                'flex-none font-sans font-bold text-[12px] px-4 py-[7px] rounded-[20px] whitespace-nowrap transition-colors',
+                activeTab === tab.id
+                  ? 'bg-poli-navy text-white'
+                  : 'bg-poli-surface text-poli-body hover:bg-poli-surface/70',
               )}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {!profile.address ? (
-              <div className="text-center py-6">
-                <p className="text-muted-foreground mb-4">Add your address to see your representatives.</p>
-                <Button variant="outline" onClick={handleEditAddress}>
-                  Add Address
-                </Button>
-              </div>
-            ) : allRepsLoading ? (
-              <div className="space-y-4">
-                <div className="flex items-center justify-center gap-3 py-4 text-muted-foreground">
-                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-primary border-t-transparent" />
-                  <span>Finding your representatives...</span>
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* TAB CONTENT */}
+      <div className="mx-4 mt-4 pb-24">
+
+        {/* AI Analysis tab */}
+        {activeTab === 'analysis' && (
+          <Card className="mb-8 shadow-elevated">
+            <CardHeader>
+              <CardTitle className="font-display flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-accent" />
+                  AI Political Analysis
                 </div>
-                {[1, 2, 3].map(i => (
-                  <div key={i} className="flex items-center gap-4 p-4 rounded-lg border border-border animate-pulse">
-                    <Skeleton className="w-12 h-12 rounded-full" />
-                    <div className="flex-1">
-                      <Skeleton className="h-4 w-32 mb-2" />
-                      <Skeleton className="h-3 w-24" />
-                    </div>
-                    <Skeleton className="h-8 w-16" />
-                  </div>
-                ))}
-              </div>
-            ) : (federalReps.length > 0 || (civicData && (civicData.federalExecutive.length > 0 || civicData.stateExecutive.length > 0 || civicData.stateLegislative.length > 0 || civicData.local.length > 0))) ? (
-              <div className="space-y-6">
-                {/* Federal Executive (President, VP) */}
-                {civicData && civicData.federalExecutive.length > 0 && (
-                  <div>
-                    <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
-                      <Building2 className="w-4 h-4" />
-                      Federal Executive
-                    </h4>
-                    <div className="space-y-3">
-                      {civicData.federalExecutive.map((official) => (
-                        <RepresentativeComparisonCard
-                          key={official.id}
-                          official={official}
-                          resolvedScore={getResolvedScore(official.id, official.overall_score)}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Federal Legislative (Congress) */}
-                {federalReps.length > 0 && (
-                  <div>
-                    <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
-                      <Building2 className="w-4 h-4" />
-                      U.S. Congress
-                    </h4>
-                    <div className="space-y-3">
-                      {federalReps.map((rep) => {
-                        // Convert Representative to CivicOfficial format for RepresentativeComparisonCard
-                        const official: CivicOfficial = {
-                          id: rep.bioguide_id || rep.id,
-                          name: rep.name,
-                          party: rep.party,
-                          office: rep.office,
-                          level: 'federal_legislative',
-                          state: rep.state,
-                          district: rep.district || undefined,
-                          image_url: rep.image_url,
-                          is_incumbent: rep.is_incumbent,
-                          overall_score: rep.overall_score,
-                          coverage_tier: rep.coverage_tier,
-                          confidence: rep.confidence,
-                        };
-                        return (
-                          <RepresentativeComparisonCard
-                            key={rep.id}
-                            official={official}
-                            resolvedScore={getResolvedScore(rep.bioguide_id || rep.id, rep.overall_score)}
-                          />
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* State Executive (Governor, Lt. Governor) */}
-                {civicData && civicData.stateExecutive.length > 0 && (
-                  <div>
-                    <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
-                      <Building2 className="w-4 h-4" />
-                      State Executive
-                    </h4>
-                    <div className="space-y-3">
-                      {civicData.stateExecutive.map((official) => (
-                        <RepresentativeComparisonCard
-                          key={official.id}
-                          official={official}
-                          resolvedScore={getResolvedScore(official.id, official.overall_score)}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* State Legislative */}
-                {civicData && civicData.stateLegislative.length > 0 && (
-                  <div>
-                    <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
-                      <Building2 className="w-4 h-4" />
-                      State Legislature
-                    </h4>
-                    <div className="space-y-3">
-                      {civicData.stateLegislative.map((official) => (
-                        <RepresentativeComparisonCard
-                          key={official.id}
-                          official={official}
-                          resolvedScore={getResolvedScore(official.id, official.overall_score)}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Local Officials */}
-                {civicData && civicData.local.length > 0 && (
-                  <div>
-                    <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
-                      <MapPin className="w-4 h-4" />
-                      Local Officials
-                      {civicData.userWard && (
-                        <Badge variant="outline" className="text-xs font-normal">
-                          {civicData.userWard}
-                        </Badge>
-                      )}
-                    </h4>
-                    {civicData.wardNote && (
-                      <div className="mb-3 flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-700">
-                        <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
-                        <span>{civicData.wardNote}</span>
-                      </div>
-                    )}
-                    <div className="space-y-3">
-                      {civicData.local.map((official) => (
-                        <RepresentativeComparisonCard
-                          key={official.id}
-                          official={official}
-                          resolvedScore={getResolvedScore(official.id, official.overall_score)}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : repsError ? (
-              <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
-                <div className="flex items-start gap-3">
-                  <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
-                  <div className="flex-1">
-                    <p className="font-medium text-destructive">Failed to load representatives</p>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      There was an error fetching your representatives. Please try again.
-                    </p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="mt-3 gap-2"
-                      onClick={handleRefreshRepresentatives}
-                    >
-                      <RefreshCw className="w-4 h-4" />
-                      Retry
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            ) : geocodeFailed ? (
-              <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-4">
-                <div className="flex items-start gap-3">
-                  <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-                  <div className="flex-1">
-                    <p className="font-medium text-amber-600">Could not find your congressional district</p>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      We couldn't determine your exact congressional district from the address provided.
-                      Try updating your address to include street number, city, state, and ZIP code.
-                    </p>
-                    <div className="flex gap-2 mt-3">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-2"
-                        onClick={handleEditAddress}
-                      >
-                        <Pencil className="w-4 h-4" />
-                        Edit Address
-                      </Button>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="gap-2"
+                        onClick={handleRefreshPoliticalAnalysis}
+                        disabled={isRefreshingAnalysis || analysisLoading}
+                        className="gap-1.5 text-xs"
+                      >
+                        <RefreshCw className={cn("h-3.5 w-3.5", (isRefreshingAnalysis || analysisLoading) && "animate-spin")} />
+                        Refresh
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Regenerate AI political analysis</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {analysisLoading ? (
+                <div className="space-y-3">
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-3/4" />
+                  <Skeleton className="h-4 w-5/6" />
+                </div>
+              ) : analysis?.summary ? (
+                <div className="space-y-4">
+                  <p className="text-foreground leading-relaxed">{analysis.summary}</p>
+
+                  {analysis.keyInsights && analysis.keyInsights.length > 0 && (
+                    <div className="mt-4">
+                      <h4 className="font-semibold text-foreground mb-2">Key Insights</h4>
+                      <ul className="space-y-2">
+                        {analysis.keyInsights.map((insight, i) => (
+                          <li key={i} className="flex items-start gap-2 text-muted-foreground">
+                            <span className="text-accent mt-1">•</span>
+                            {insight}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {analysis.partyComparison && (
+                    <div className="mt-4 p-4 rounded-lg bg-secondary/50">
+                      <h4 className="font-semibold text-foreground mb-2">Party Platform Comparison</h4>
+                      <p className="text-muted-foreground">{analysis.partyComparison}</p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-muted-foreground">Complete the quiz to see your AI-generated political analysis.</p>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Party tab */}
+        {activeTab === 'party' && (
+          <Card className="mb-8 shadow-elevated">
+            <CardHeader>
+              <CardTitle className="font-display flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Users className="w-5 h-5 text-accent" />
+                  Party Alignment
+                </div>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleRefreshPartyComparisons}
+                        disabled={isRefreshingParties || partyScoresLoading}
+                        className="gap-1.5 text-xs"
+                      >
+                        <RefreshCw className={cn("h-3.5 w-3.5", isRefreshingParties && "animate-spin")} />
+                        Refresh All
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Regenerate AI comparison summaries for all parties</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <TooltipProvider>
+                <div className="flex flex-col gap-4">
+                  <PartyComparisonCard
+                    partyId="democrat"
+                    partyName="Democratic"
+                    score={partyScores?.democrat}
+                    isLoading={partyScoresLoading}
+                  />
+                  <PartyComparisonCard
+                    partyId="republican"
+                    partyName="Republican"
+                    score={partyScores?.republican}
+                    isLoading={partyScoresLoading}
+                  />
+                  <PartyComparisonCard
+                    partyId="green"
+                    partyName="Green"
+                    score={partyScores?.green}
+                    isLoading={partyScoresLoading}
+                  />
+                  <PartyComparisonCard
+                    partyId="libertarian"
+                    partyName="Libertarian"
+                    score={partyScores?.libertarian}
+                    isLoading={partyScoresLoading}
+                  />
+                </div>
+              </TooltipProvider>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Reps tab */}
+        {activeTab === 'reps' && (
+          <Card className="mb-8 shadow-elevated">
+            <CardHeader>
+              <CardTitle className="font-display flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Users className="w-5 h-5 text-accent" />
+                  Your Representatives
+                  {allRepsLoading ? (
+                    <Badge variant="outline" className="ml-2 text-xs font-normal animate-pulse">
+                      Looking up representatives...
+                    </Badge>
+                  ) : congressionalState && congressionalDistrict ? (
+                    <Badge variant="outline" className="ml-2 text-xs font-normal">
+                      {congressionalState}-{congressionalDistrict}
+                    </Badge>
+                  ) : null}
+                </div>
+
+                {profile.address && (
+                  <div className="flex items-center gap-1">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleRefreshRepComparisons}
+                            disabled={isRefreshingRepAI || allRepsLoading}
+                            className="gap-1.5 text-xs"
+                          >
+                            <Sparkles className={cn("h-3.5 w-3.5", isRefreshingRepAI && "animate-pulse")} />
+                            {isRefreshingRepAI ? 'Refreshing...' : 'Refresh AI'}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Regenerate AI comparison summaries for all representatives</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={handleRefreshRepresentatives}
+                      disabled={allRepsLoading}
+                      aria-label="Refresh representatives"
+                    >
+                      <RefreshCw className={cn("h-4 w-4", allRepsLoading && "animate-spin")} />
+                    </Button>
+                  </div>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {!profile.address ? (
+                <div className="text-center py-6">
+                  <p className="text-muted-foreground mb-4">Add your address to see your representatives.</p>
+                  <Button variant="outline" onClick={handleEditAddress}>
+                    Add Address
+                  </Button>
+                </div>
+              ) : allRepsLoading ? (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-center gap-3 py-4 text-muted-foreground">
+                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-primary border-t-transparent" />
+                    <span>Finding your representatives...</span>
+                  </div>
+                  {[1, 2, 3].map(i => (
+                    <div key={i} className="flex items-center gap-4 p-4 rounded-lg border border-border animate-pulse">
+                      <Skeleton className="w-12 h-12 rounded-full" />
+                      <div className="flex-1">
+                        <Skeleton className="h-4 w-32 mb-2" />
+                        <Skeleton className="h-3 w-24" />
+                      </div>
+                      <Skeleton className="h-8 w-16" />
+                    </div>
+                  ))}
+                </div>
+              ) : (federalReps.length > 0 || (civicData && (civicData.federalExecutive.length > 0 || civicData.stateExecutive.length > 0 || civicData.stateLegislative.length > 0 || civicData.local.length > 0))) ? (
+                <div className="space-y-6">
+                  {/* Federal Executive (President, VP) */}
+                  {civicData && civicData.federalExecutive.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+                        <Building2 className="w-4 h-4" />
+                        Federal Executive
+                      </h4>
+                      <div className="space-y-3">
+                        {civicData.federalExecutive.map((official) => (
+                          <RepresentativeComparisonCard
+                            key={official.id}
+                            official={official}
+                            resolvedScore={getResolvedScore(official.id, official.overall_score)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Federal Legislative (Congress) */}
+                  {federalReps.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+                        <Building2 className="w-4 h-4" />
+                        U.S. Congress
+                      </h4>
+                      <div className="space-y-3">
+                        {federalReps.map((rep) => {
+                          // Convert Representative to CivicOfficial format for RepresentativeComparisonCard
+                          const official: CivicOfficial = {
+                            id: rep.bioguide_id || rep.id,
+                            name: rep.name,
+                            party: rep.party,
+                            office: rep.office,
+                            level: 'federal_legislative',
+                            state: rep.state,
+                            district: rep.district || undefined,
+                            image_url: rep.image_url,
+                            is_incumbent: rep.is_incumbent,
+                            overall_score: rep.overall_score,
+                            coverage_tier: rep.coverage_tier,
+                            confidence: rep.confidence,
+                          };
+                          return (
+                            <RepresentativeComparisonCard
+                              key={rep.id}
+                              official={official}
+                              resolvedScore={getResolvedScore(rep.bioguide_id || rep.id, rep.overall_score)}
+                            />
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* State Executive (Governor, Lt. Governor) */}
+                  {civicData && civicData.stateExecutive.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+                        <Building2 className="w-4 h-4" />
+                        State Executive
+                      </h4>
+                      <div className="space-y-3">
+                        {civicData.stateExecutive.map((official) => (
+                          <RepresentativeComparisonCard
+                            key={official.id}
+                            official={official}
+                            resolvedScore={getResolvedScore(official.id, official.overall_score)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* State Legislative */}
+                  {civicData && civicData.stateLegislative.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+                        <Building2 className="w-4 h-4" />
+                        State Legislature
+                      </h4>
+                      <div className="space-y-3">
+                        {civicData.stateLegislative.map((official) => (
+                          <RepresentativeComparisonCard
+                            key={official.id}
+                            official={official}
+                            resolvedScore={getResolvedScore(official.id, official.overall_score)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Local Officials */}
+                  {civicData && civicData.local.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+                        <MapPin className="w-4 h-4" />
+                        Local Officials
+                        {civicData.userWard && (
+                          <Badge variant="outline" className="text-xs font-normal">
+                            {civicData.userWard}
+                          </Badge>
+                        )}
+                      </h4>
+                      {civicData.wardNote && (
+                        <div className="mb-3 flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-700">
+                          <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
+                          <span>{civicData.wardNote}</span>
+                        </div>
+                      )}
+                      <div className="space-y-3">
+                        {civicData.local.map((official) => (
+                          <RepresentativeComparisonCard
+                            key={official.id}
+                            official={official}
+                            resolvedScore={getResolvedScore(official.id, official.overall_score)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : repsError ? (
+                <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="font-medium text-destructive">Failed to load representatives</p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        There was an error fetching your representatives. Please try again.
+                      </p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-3 gap-2"
                         onClick={handleRefreshRepresentatives}
                       >
                         <RefreshCw className="w-4 h-4" />
@@ -915,59 +942,124 @@ export const UserProfile = () => {
                     </div>
                   </div>
                 </div>
-              </div>
-            ) : (
-              <p className="text-muted-foreground text-center py-4">
-                No representatives found for your address.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-          </TabsContent>
-
-          <TabsContent value="elections">
-            {/* Upcoming Elections */}
-            <UpcomingElectionsCard address={profile?.address} />
-          </TabsContent>
-
-          <TabsContent value="badges">
-            {/* Badges */}
-            <BadgeShelf userId={session?.user?.id} family="voter" />
-          </TabsContent>
-
-          <TabsContent value="topics">
-            {/* Priority Topics */}
-            <Card className="shadow-elevated">
-              <CardHeader>
-                <CardTitle className="font-display flex items-center gap-2">
-                  <Target className="w-5 h-5 text-accent" />
-                  Your Priority Topics
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {topicsList.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {topicsList.map(topic => (
-                      <Badge
-                        key={topic.id}
-                        variant="secondary"
-                        className="px-4 py-2 text-base gap-2"
-                      >
-                        <span>{topic.icon}</span>
-                        {topic.name}
-                      </Badge>
-                    ))}
+              ) : geocodeFailed ? (
+                <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-4">
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="font-medium text-amber-600">Could not find your congressional district</p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        We couldn't determine your exact congressional district from the address provided.
+                        Try updating your address to include street number, city, state, and ZIP code.
+                      </p>
+                      <div className="flex gap-2 mt-3">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-2"
+                          onClick={handleEditAddress}
+                        >
+                          <Pencil className="w-4 h-4" />
+                          Edit Address
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="gap-2"
+                          onClick={handleRefreshRepresentatives}
+                        >
+                          <RefreshCw className="w-4 h-4" />
+                          Retry
+                        </Button>
+                      </div>
+                    </div>
                   </div>
-                ) : (
-                  <p className="text-muted-foreground text-center py-4">
-                    No priority topics selected yet.
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
-      </main>
+                </div>
+              ) : (
+                <p className="text-muted-foreground text-center py-4">
+                  No representatives found for your address.
+                </p>
+              )}
+
+              {/* Address editing section */}
+              {isEditingAddress && (
+                <div className="flex items-center gap-2 mt-4">
+                  <div className="flex-1">
+                    <AddressAutocomplete
+                      value={addressInput}
+                      onChange={setAddressInput}
+                      onAddressSelect={(details) => setAddressInput(details.formattedAddress)}
+                      placeholder="Start typing your address..."
+                      className="text-sm"
+                    />
+                  </div>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-100"
+                    onClick={handleSaveAddress}
+                    disabled={updateProfile.isPending}
+                  >
+                    <Check className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                    onClick={handleCancelEditAddress}
+                    disabled={updateProfile.isPending}
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Elections tab */}
+        {activeTab === 'elections' && (
+          <UpcomingElectionsCard address={profile?.address} />
+        )}
+
+        {/* Badges tab */}
+        {activeTab === 'badges' && (
+          <BadgeShelf userId={session?.user?.id} family="voter" />
+        )}
+
+        {/* Topics tab */}
+        {activeTab === 'topics' && (
+          <Card className="shadow-elevated">
+            <CardHeader>
+              <CardTitle className="font-display flex items-center gap-2">
+                <Target className="w-5 h-5 text-accent" />
+                Your Priority Topics
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {topicsList.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {topicsList.map(topic => (
+                    <Badge
+                      key={topic.id}
+                      variant="secondary"
+                      className="px-4 py-2 text-base gap-2"
+                    >
+                      <span>{topic.icon}</span>
+                      {topic.name}
+                    </Badge>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-muted-foreground text-center py-4">
+                  No priority topics selected yet.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+      </div>
     </div>
   );
 };

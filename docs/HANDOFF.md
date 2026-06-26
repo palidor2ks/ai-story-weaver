@@ -5,6 +5,38 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-26 — RE-APPLY Design B (reverse the rollback) + keep the IE outside-money line
+
+**What happened & why**
+Plot twist on the same day: after the #600 rollback, the user clarified they actually **want Design B**
+— and, screen-by-screen, opted **into** every functional change it carried (profile chip-tabs, mobile
+bottom nav, the new Compare / Bill-detail / Candidate-Overview pages). Of the three features Design B
+had *deleted*, they chose to keep only one. So this session reverses the rollback and re-adds that one
+feature.
+
+**The change (branch `claude/reapply-design-b-keep-ie`)**
+1. **Restored the entire frontend to `3324ecec`** (the pre-rollback main tip) via
+   `git checkout 3324ecec -- src index.html tailwind.config.ts` + `git rm` of the two BASE-only files
+   Design B had deleted (`NolanChart.tsx`, `useNolanPositions.ts`). Frontend now matches `3324ecec`
+   byte-for-byte. This brings back full Design B **and** the post-Design-B bug fixes in one move
+   (effectively reverts #600). Backend was byte-identical to `3324ecec` (0 `supabase/` diff), so it
+   builds clean.
+2. **Re-added the outside-money (IE) line** on candidate-directory cards: Design B kept the
+   `useCandidatesIE` call but discarded its return and stopped rendering. Captured `ieMap` again,
+   render `<IESummaryInline>` under each name (BASE behavior, `hideIfEmpty`), and restyled
+   `IESummaryInline` to the poli-* palette (poli-green support / poli-red oppose / poli-muted).
+3. **Intentionally NOT re-added:** Nolan Chart / Political Compass and the state-coverage callout —
+   user chose to leave those dropped.
+
+**State** (verified 2026-06-26)
+`bun run build` clean; `bun test src` 52/52 green. Not yet visually exercised. OPEN-WORK #17 marked
+done (resolved by the wholesale restore, not a cherry-pick).
+
+**Next**
+Open draft PR. Same Lovable caveat as always: after merge to `main`, the user must **sync Lovable FROM
+`main`** (and stop using Lovable's "Revert") or the preview won't change. Manually smoke the profile
+chip-tabs, mobile bottom nav, the new pages, and the restyled IE line on candidate cards.
+
 ## 2026-06-26 — ROLL BACK "Design B" frontend to pre-redesign June-24 baseline (user request)
 
 **What happened & why**

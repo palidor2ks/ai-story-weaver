@@ -1,16 +1,12 @@
 import { useState, useMemo, useCallback, useEffect, useRef, useDeferredValue } from 'react';
-import { Header } from '@/components/Header';
+import { useNavigate } from 'react-router-dom';
 import { Seo } from '@/components/Seo';
-import { CandidateCard } from '@/components/CandidateCard';
 import { ComparePanel } from '@/components/ComparePanel';
 import { calculateMatchScore } from '@/hooks/useCandidates';
 import { useProfile } from '@/hooks/useProfile';
 import { useUnifiedCandidates } from '@/hooks/useUnifiedCandidates';
 import { useHiddenStates } from '@/hooks/useHiddenStates';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Pagination,
   PaginationContent,
@@ -20,11 +16,15 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from '@/components/ui/pagination';
-import { Search, SlidersHorizontal, Users, MapPin, Building, Crown, Landmark, GitCompare, X, Loader2, Info } from 'lucide-react';
+import { Search, GitCompare, Loader2 } from 'lucide-react';
 import { Candidate } from '@/types';
 import { cn } from '@/lib/utils';
-import { normalizeOfficeName } from '@/lib/officeLabel';
+import { normalizeOfficeName, toDisplayName } from '@/lib/officeLabel';
 import { useCandidatesIE } from '@/hooks/useIndependentExpenditures';
+import { IESummaryInline } from '@/components/IESummaryInline';
+import { formatScore } from '@/lib/scoreFormat';
+import { OfficialAvatar } from '@/components/OfficialAvatar';
+import { Header } from '@/components/Header';
 
 const PAGE_SIZE = 25;
 
@@ -41,16 +41,46 @@ const getPageList = (current: number, total: number): (number | 'ellipsis')[] =>
   return pages;
 };
 
+function getPoliScoreColor(score: number | null | undefined): string {
+  if (score === null || score === undefined) return 'text-poli-muted';
+  if (score <= -3) return 'text-poli-navy';
+  if (score >= 3) return 'text-poli-red';
+  return 'text-[#7A3FB8]';
+}
+
+function getAvatarBg(party: string): string {
+  if (party === 'Democrat') return 'bg-[#2A5BD0]';
+  if (party === 'Republican') return 'bg-[#C8102E]';
+  return 'bg-poli-muted';
+}
+
+function getInitials(name: string): string {
+  const parts = name.split(' ').filter(Boolean);
+  if (parts.length >= 2) return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+  return parts[0]?.[0]?.toUpperCase() ?? '?';
+}
+
+type TabKey = 'all' | 'my-reps' | 'senators' | 'representatives' | 'executive' | 'state' | 'local';
+
+const TAB_LABELS: { key: TabKey; label: string }[] = [
+  { key: 'all',             label: 'All' },
+  { key: 'my-reps',         label: 'My Reps' },
+  { key: 'senators',        label: 'Senate' },
+  { key: 'representatives', label: 'House' },
+  { key: 'executive',       label: 'Executive' },
+  { key: 'state',           label: 'State' },
+  { key: 'local',           label: 'Local' },
+];
 
 export const Candidates = () => {
-  const { data: profile, isLoading: profileLoading } = useProfile();
+  const { data: profile } = useProfile();
   const [activeTab, setActiveTab] = useState<string>('all');
   const unified = useUnifiedCandidates({
     address: profile?.address,
     includeAllCongress: true,
     // Only fetch geocode + civic API when on a tab that actually needs local reps.
     // Avoids the 0.5–2s civic round-trip on the default "All" tab.
-    fetchCivic: activeTab !== 'all' && activeTab !== 'congress',
+    fetchCivic: !['all', 'senators', 'representatives'].includes(activeTab),
   });
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -64,6 +94,8 @@ export const Candidates = () => {
   const [compareMode, setCompareMode] = useState(false);
   const [selectedCandidates, setSelectedCandidates] = useState<Candidate[]>([]);
   const [compareReady, setCompareReady] = useState(false);
+
+  const navigate = useNavigate();
 
   const handleToggleSelect = useCallback((candidate: Candidate) => {
     setSelectedCandidates(prev => {
@@ -93,8 +125,6 @@ export const Candidates = () => {
   const federalExecutiveCandidates = unified.federalExec;
   const formerExecutiveCandidates = unified.formerExec;
   const stateExecutiveCandidates = unified.stateExec;
-  const stateLegislativeCandidates = unified.stateLeg;
-  const localCandidates = unified.local;
 
   const myRepsCombined = useMemo(() => {
     const combined = unified.myReps.concat(
@@ -131,11 +161,6 @@ export const Candidates = () => {
   }, [allCandidates, isHidden]);
 
   const uniqueOffices = officeCounts.uniqueOffices;
-
-  // Show a coverage callout when the user's own state isn't in our active set.
-  // Derived from their Congress members (reliable even for hidden states).
-  const userStateCode = unified.myReps[0]?.state ?? null;
-  const userStateIsHidden = !!profile?.address && !unified.isAddressLoading && !!userStateCode && isHidden(userStateCode);
 
   // Get candidates based on active tab
   const tabCandidates = useMemo(() => {
@@ -249,41 +274,25 @@ export const Candidates = () => {
   const coreLoading = unified.dbLoading || unified.allLoading;
   const reposLoading = unified.civicLoading || unified.repsLoading;
 
-  // Count for tabs
-  const executiveCount = federalExecutiveCandidates.length + formerExecutiveCandidates.length + stateExecutiveCandidates.length;
-  // State/Local tabs surface ALL known state/local officials (the address-keyed civic
-  // feed AND DB-ingested rows like discover-state-legislators), so count off the unified
-  // `all` list by level rather than the civic-only buckets — which keeps "My Reps"
-  // address-scoped while the directory shows the full roster.
-  const [stateCount, localCount] = useMemo(() => [
-    allCandidates.filter(c => c.level === 'state').length,
-    allCandidates.filter(c => c.level === 'local').length,
-  ], [allCandidates]);
-
 
   if (coreLoading) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="bg-[#F5F6FA] min-h-screen pb-20">
         <Header />
-        <main className="container py-8 px-4">
-          <div className="mb-8">
-            <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground mb-2">
-              All Politicians
-            </h1>
-            <div className="h-5 w-72 bg-muted rounded animate-pulse" />
-          </div>
-          <div className="flex flex-col items-center justify-center py-20 gap-4">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-            <p className="text-muted-foreground text-sm">Loading all officials...</p>
-          </div>
-        </main>
+        <div className="bg-gradient-to-br from-poli-navy to-poli-dark pt-12 pb-4 px-4">
+          <h1 className="text-2xl font-black text-white">All Politicians</h1>
+          <p className="text-sm text-white/60 mt-1">Loading…</p>
+        </div>
+        <div className="flex flex-col items-center justify-center py-20 gap-4">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-poli-navy" />
+          <p className="text-poli-muted text-sm">Loading all officials...</p>
+        </div>
       </div>
     );
   }
 
   return (
-
-    <div className="min-h-screen bg-background">
+    <div className="bg-[#F5F6FA] min-h-screen pb-20">
       <Seo
         title="All Politicians — Pulse"
         description="Browse the President, Congress members, governors, and local representatives. Filter by office, party, and state to find leaders who match your values."
@@ -305,267 +314,301 @@ export const Candidates = () => {
           },
         }}
       />
+
       <Header />
-      
-      <main className="container py-8 px-4">
-        <div className="mb-8">
-          <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground mb-2">
-            All Politicians
-          </h1>
-          <p className="text-muted-foreground">
-            Browse {officeCounts.visibleAll} officials including the President, Congress, Governors, and local representatives.
-          </p>
-        </div>
 
-        <h2 className="sr-only">Politicians directory</h2>
-        {/* Tabs for different views */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
-          <TabsList className="flex flex-wrap h-auto gap-1 w-full lg:w-auto lg:inline-flex">
-            <TabsTrigger value="all" className="gap-2">
-              <Building className="w-4 h-4 hidden sm:inline" />
-              All ({officeCounts.visibleAll})
-            </TabsTrigger>
-            <TabsTrigger value="my-reps" className="gap-2">
-              <MapPin className="w-4 h-4 hidden sm:inline" />
-              My Reps ({myRepsCombined.length})
-            </TabsTrigger>
-            <TabsTrigger value="executive" className="gap-2">
-              <Crown className="w-4 h-4 hidden sm:inline" />
-              Executive ({executiveCount})
-            </TabsTrigger>
-            <TabsTrigger value="senators" className="gap-2">
-              <Users className="w-4 h-4 hidden sm:inline" />
-              Senators ({officeCounts.senator})
-            </TabsTrigger>
-            <TabsTrigger value="representatives" className="gap-2">
-              <Users className="w-4 h-4 hidden sm:inline" />
-              House ({officeCounts.rep})
-            </TabsTrigger>
-            <TabsTrigger value="state" className="gap-2">
-              <Landmark className="w-4 h-4 hidden sm:inline" />
-              State ({stateCount})
-            </TabsTrigger>
-            <TabsTrigger value="local" className="gap-2">
-              <MapPin className="w-4 h-4 hidden sm:inline" />
-              Local ({localCount})
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
+      {/* Navy gradient header */}
+      <div className="bg-gradient-to-br from-poli-navy to-poli-dark pt-12 pb-4 px-4">
+        <h1 className="text-2xl font-black text-white">All Politicians</h1>
+        <p className="text-sm text-white/60 mt-1">{officeCounts.visibleAll} politicians</p>
+      </div>
 
-        {/* Coverage callout — always visible; extra context when user's own state isn't active */}
-        <div className="flex gap-3 rounded-lg border border-border bg-muted/50 px-4 py-3 text-sm text-foreground mb-4">
-          <Info className="w-4 h-4 mt-0.5 shrink-0 text-primary" />
-          <p>
-            {userStateIsHidden
-              ? <>We don't have full coverage for <span className="font-medium">{userStateCode}</span> yet — you're seeing national officials and candidates from our active states. We're working on adding more states soon.</>
-              : <>PoliPulse is currently focused on a select set of states. We're actively expanding — more politicians and states are being added regularly.</>
-            }
-          </p>
-        </div>
+      <h2 className="sr-only">Politicians directory</h2>
 
-        {/* Filters */}
-        <div className="flex flex-col sm:flex-row gap-4 mb-6">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-            <Input
-              placeholder="Search by name, state, or office..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              aria-label="Search politicians"
-              className="pl-10"
-            />
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            <Select value={sortBy} onValueChange={(v: 'match' | 'name' | 'party') => setSortBy(v)}>
-              <SelectTrigger className="w-[140px]">
-                <SlidersHorizontal className="w-4 h-4 mr-2" />
-                <SelectValue placeholder="Sort by" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="name">Name</SelectItem>
-                <SelectItem value="match">Best Match</SelectItem>
-                <SelectItem value="party">Party</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={partyFilter} onValueChange={setPartyFilter}>
-              <SelectTrigger className="w-[140px]">
-                <SelectValue placeholder="Party" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Parties</SelectItem>
-                <SelectItem value="Democrat">Democrat</SelectItem>
-                <SelectItem value="Republican">Republican</SelectItem>
-                <SelectItem value="Independent">Independent</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={statusFilter} onValueChange={(v: 'all' | 'incumbent' | 'challenger') => setStatusFilter(v)}>
-              <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Candidates</SelectItem>
-                <SelectItem value="incumbent">Incumbents</SelectItem>
-                <SelectItem value="challenger">Challengers</SelectItem>
-              </SelectContent>
-            </Select>
-            {activeTab === 'all' && (
-              <Select value={officeFilter} onValueChange={setOfficeFilter}>
-                <SelectTrigger className="w-[160px]">
-                  <SelectValue placeholder="Office" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Offices</SelectItem>
-                  {uniqueOffices.map(office => (
-                    <SelectItem key={office} value={office}>{office}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+      {/* Filter chips row — wraps on mobile so every tab stays reachable */}
+      <div className="flex flex-wrap gap-2 px-4 py-3">
+        {TAB_LABELS.map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => setActiveTab(key)}
+            className={cn(
+              'flex-shrink-0 rounded-full px-3 py-1.5 text-xs sm:px-4 sm:text-sm font-semibold transition-colors',
+              activeTab === key
+                ? 'bg-[#14173A] text-white font-bold'
+                : 'bg-poli-surface text-poli-body'
             )}
-            {/* Compare Mode Toggle */}
-            <Button 
-              variant={compareMode ? "default" : "outline"} 
-              size="sm"
-              onClick={() => {
-                if (compareMode) {
-                  handleCloseCompare();
-                } else {
-                  setCompareMode(true);
-                  setCompareReady(false);
-                }
-              }}
-              className={cn("gap-2", compareMode && "bg-primary")}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Search + filter row */}
+      <div className="px-4 pb-3 flex flex-col sm:flex-row gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-poli-muted pointer-events-none" />
+          <input
+            type="text"
+            placeholder="Search by name, state, or office..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            aria-label="Search politicians"
+            className="border border-poli-surface/80 rounded-xl h-10 px-4 pl-9 text-sm bg-white text-poli-body placeholder:text-poli-muted w-full outline-none focus:ring-2 focus:ring-poli-navy/30"
+          />
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          <Select value={partyFilter} onValueChange={setPartyFilter}>
+            <SelectTrigger className="border border-poli-surface/80 rounded-xl h-10 px-3 text-sm bg-white text-poli-body w-[130px]">
+              <SelectValue placeholder="Party" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Parties</SelectItem>
+              <SelectItem value="Democrat">Democrat</SelectItem>
+              <SelectItem value="Republican">Republican</SelectItem>
+              <SelectItem value="Independent">Independent</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {activeTab === 'all' && (
+            <Select value={officeFilter} onValueChange={setOfficeFilter}>
+              <SelectTrigger className="border border-poli-surface/80 rounded-xl h-10 px-3 text-sm bg-white text-poli-body w-[140px]">
+                <SelectValue placeholder="Office" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Offices</SelectItem>
+                {uniqueOffices.map(office => (
+                  <SelectItem key={office} value={office}>{office}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
+          <button
+            onClick={() => {
+              if (compareMode) {
+                handleCloseCompare();
+              } else {
+                setCompareMode(true);
+                setCompareReady(false);
+              }
+            }}
+            className="border border-poli-navy text-poli-navy rounded-xl h-10 px-4 text-sm font-semibold flex items-center gap-1.5 hover:bg-poli-navy/5 transition-colors"
+          >
+            <GitCompare className="w-4 h-4" aria-hidden="true" />
+            {compareMode ? 'Exit' : 'Compare'}
+          </button>
+
+          {compareMode && (
+            <button
+              onClick={() => setCompareReady(true)}
+              disabled={selectedCandidates.length < 2}
+              className="border border-poli-navy bg-poli-navy text-white rounded-xl h-10 px-4 text-sm font-semibold disabled:opacity-50 transition-colors"
             >
-              {compareMode ? (
-                <>
-                  <X className="w-4 h-4" aria-hidden="true" />
-                  Exit Compare
-                </>
-              ) : (
-                <>
-                  <GitCompare className="w-4 h-4" aria-hidden="true" />
-                  Compare
-                </>
-              )}
-            </Button>
-            {compareMode && (
-              <Button
-                size="sm"
-                onClick={() => setCompareReady(true)}
-                disabled={selectedCandidates.length < 2}
-                aria-label="Show comparison panel"
-                className="gap-2"
-              >
-                Done ({selectedCandidates.length})
-              </Button>
-            )}
-          </div>
+              Done ({selectedCandidates.length})
+            </button>
+          )}
         </div>
+      </div>
 
-        <div ref={resultsTopRef} className="flex items-center justify-between mb-4 gap-3 flex-wrap scroll-mt-24">
-          <p className="text-sm text-muted-foreground">
-            {filteredCandidates.length > 0 && (
-              <>Showing {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filteredCandidates.length)} of {filteredCandidates.length} politician{filteredCandidates.length !== 1 ? 's' : ''}</>
-            )}
-          </p>
-          <div className="flex items-center gap-3">
-            {reposLoading && (
-              <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Loader2 className="w-3 h-3 animate-spin" />
-                Loading your representatives…
-              </span>
-            )}
-            {compareMode && (
-              <p className="text-sm text-primary font-medium">
-                {selectedCandidates.length}/4 selected for comparison
-              </p>
-            )}
-          </div>
+      {/* Info banner for My Reps tab */}
+      {activeTab === 'my-reps' && (
+        <div className="mx-4 mb-3 bg-[#F4F6FB] rounded-xl p-3 text-xs text-poli-muted border border-poli-surface">
+          {profile?.address
+            ? 'Showing politicians who represent your registered address.'
+            : 'Add your address in your profile to see your local representatives.'}
         </div>
+      )}
 
-        <div className={cn(
-          "grid gap-4 md:grid-cols-2 lg:grid-cols-3",
-          compareMode && compareReady && selectedCandidates.length > 0 && "pb-[80vh] sm:pb-48"
-        )}>
-          {pageCandidates.map((candidate, index) => (
-            <CandidateCard
-              key={candidate.id}
-              candidate={candidate}
-              index={index}
-              compareMode={compareMode}
-              isSelected={selectedCandidates.some(c => c.id === candidate.id)}
-              onToggleSelect={handleToggleSelect}
-              ieTotals={ieMap?.get(candidate.id)}
-            />
-          ))}
-        </div>
-
-        {totalPages > 1 && (
-          <Pagination className="mt-8">
-            <PaginationContent>
-              <PaginationItem>
-                <PaginationPrevious
-                  onClick={() => currentPage > 1 && goToPage(currentPage - 1)}
-                  aria-disabled={currentPage === 1}
-                  className={cn(currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer')}
-                />
-              </PaginationItem>
-              {getPageList(currentPage, totalPages).map((page, i) =>
-                page === 'ellipsis' ? (
-                  <PaginationItem key={`ellipsis-${i}`} className="hidden sm:block">
-                    <PaginationEllipsis />
-                  </PaginationItem>
-                ) : (
-                  <PaginationItem key={page} className={cn(page !== currentPage && 'hidden sm:block')}>
-                    <PaginationLink
-                      isActive={page === currentPage}
-                      onClick={() => goToPage(page)}
-                      className="cursor-pointer"
-                    >
-                      {page}
-                    </PaginationLink>
-                  </PaginationItem>
-                ),
-              )}
-              <PaginationItem>
-                <PaginationNext
-                  onClick={() => currentPage < totalPages && goToPage(currentPage + 1)}
-                  aria-disabled={currentPage === totalPages}
-                  className={cn(currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer')}
-                />
-              </PaginationItem>
-            </PaginationContent>
-          </Pagination>
+      {/* Results meta row */}
+      <div ref={resultsTopRef} className="flex items-center justify-between px-4 pb-2 scroll-mt-24">
+        <p className="text-xs text-poli-muted">
+          {filteredCandidates.length > 0 && (
+            <>
+              {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filteredCandidates.length)} of {filteredCandidates.length}
+            </>
+          )}
+        </p>
+        {reposLoading && (
+          <span className="inline-flex items-center gap-1 text-xs text-poli-muted">
+            <Loader2 className="w-3 h-3 animate-spin" />
+            Loading your representatives…
+          </span>
         )}
+        {compareMode && (
+          <p className="text-xs text-poli-navy font-semibold">
+            {selectedCandidates.length}/4 selected
+          </p>
+        )}
+      </div>
+
+      {/* Politician list rows */}
+      <div
+        className={cn(
+          'pb-6',
+          compareMode && compareReady && selectedCandidates.length > 0 && 'pb-[80vh] sm:pb-48'
+        )}
+      >
+        {pageCandidates.map((candidate) => {
+          const isSelected = selectedCandidates.some(c => c.id === candidate.id);
+          const isFormer = /^former\b/i.test(candidate.office ?? '');
+          const isIncumbent = candidate.isIncumbent ?? false;
+
+          const handleRowClick = () => {
+            if (compareMode) {
+              handleToggleSelect(candidate);
+              return;
+            }
+            navigate(`/candidate/${candidate.id}`);
+          };
+
+          return (
+            <div
+              key={candidate.id}
+              role="button"
+              tabIndex={0}
+              onClick={handleRowClick}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleRowClick(); }}
+              aria-label={`View ${toDisplayName(candidate.name)}`}
+              className={cn(
+                'bg-white rounded-xl mb-2 mx-4 p-4 flex items-center gap-3 shadow-sm cursor-pointer transition-shadow hover:shadow-md',
+                compareMode && isSelected && 'ring-2 ring-poli-navy'
+              )}
+            >
+              {/* Avatar */}
+              {candidate.imageUrl ? (
+                <OfficialAvatar
+                  imageUrl={candidate.imageUrl}
+                  name={candidate.name}
+                  party={candidate.party}
+                  size="sm"
+                  className="flex-shrink-0 w-[42px] h-[42px] ring-0"
+                  loading="lazy"
+                />
+              ) : (
+                <div
+                  className={cn(
+                    'w-[42px] h-[42px] rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0',
+                    getAvatarBg(candidate.party)
+                  )}
+                  aria-hidden="true"
+                >
+                  {getInitials(toDisplayName(candidate.name))}
+                </div>
+              )}
+
+              {/* Name + sub-line */}
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-poli-body text-sm truncate">
+                  {toDisplayName(candidate.name)}
+                </p>
+                <p className="text-xs text-poli-muted truncate">
+                  {candidate.party} · {normalizeOfficeName(candidate.office)}
+                  {candidate.state && candidate.state !== 'US' ? ` · ${candidate.state}` : ''}
+                </p>
+                {/* Incumbent / Challenger / Former badge */}
+                {!isFormer && isIncumbent && (
+                  <span className="inline-block mt-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full border border-poli-green text-poli-green leading-tight">
+                    Incumbent
+                  </span>
+                )}
+                {!isFormer && !isIncumbent && candidate.isIncumbent !== undefined && (
+                  <span className="inline-block mt-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-500 text-amber-600 leading-tight">
+                    Challenger
+                  </span>
+                )}
+                {isFormer && (
+                  <span className="inline-block mt-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-500 text-amber-600 leading-tight">
+                    Former
+                  </span>
+                )}
+                {/* Outside money (independent expenditures) */}
+                <IESummaryInline totals={ieMap?.get(candidate.id)} size="xs" className="mt-1" />
+              </div>
+
+              {/* PoliScore */}
+              <span
+                className={cn(
+                  'font-mono-label text-sm font-bold flex-shrink-0',
+                  getPoliScoreColor(candidate.overallScore)
+                )}
+              >
+                {formatScore(candidate.overallScore)}
+              </span>
+            </div>
+          );
+        })}
 
         {filteredCandidates.length === 0 && (
-          <div className="text-center py-16">
-            <p className="text-muted-foreground">
-              {(activeTab === 'my-reps' || activeTab === 'state' || activeTab === 'local' || activeTab === 'executive') && !profile?.address 
-                ? 'Add your address in your profile to see your representatives.' 
+          <div className="text-center py-16 px-4">
+            <p className="text-poli-muted text-sm">
+              {(activeTab === 'my-reps') && !profile?.address
+                ? 'Add your address in your profile to see your representatives.'
                 : 'No politicians found.'}
             </p>
-            <Button variant="ghost" className="mt-4" onClick={() => {
-              setSearchQuery('');
-              setPartyFilter('all');
-              setOfficeFilter('all');
-              setStatusFilter('all');
-            }}>
+            <button
+              onClick={() => {
+                setSearchQuery('');
+                setPartyFilter('all');
+                setOfficeFilter('all');
+                setStatusFilter('all');
+              }}
+              className="mt-4 text-sm text-poli-navy underline"
+            >
               Clear Filters
-            </Button>
+            </button>
           </div>
         )}
+      </div>
 
-        {/* Compare Panel */}
-        {compareMode && compareReady && selectedCandidates.length > 0 && (
-          <ComparePanel 
-            candidates={selectedCandidates}
-            userScore={profile?.overall_score ?? 0}
-            onRemove={handleRemoveFromCompare}
-            onClear={handleClearCompare}
-            onClose={handleCloseCompare}
-          />
-        )}
-      </main>
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <Pagination className="mt-2 mb-8">
+          <PaginationContent>
+            <PaginationItem>
+              <PaginationPrevious
+                onClick={() => currentPage > 1 && goToPage(currentPage - 1)}
+                aria-disabled={currentPage === 1}
+                className={cn(currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer')}
+              />
+            </PaginationItem>
+            {getPageList(currentPage, totalPages).map((page, i) =>
+              page === 'ellipsis' ? (
+                <PaginationItem key={`ellipsis-${i}`} className="hidden sm:block">
+                  <PaginationEllipsis />
+                </PaginationItem>
+              ) : (
+                <PaginationItem key={page} className={cn(page !== currentPage && 'hidden sm:block')}>
+                  <PaginationLink
+                    isActive={page === currentPage}
+                    onClick={() => goToPage(page)}
+                    className="cursor-pointer"
+                  >
+                    {page}
+                  </PaginationLink>
+                </PaginationItem>
+              ),
+            )}
+            <PaginationItem>
+              <PaginationNext
+                onClick={() => currentPage < totalPages && goToPage(currentPage + 1)}
+                aria-disabled={currentPage === totalPages}
+                className={cn(currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer')}
+              />
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
+      )}
+
+      {/* Compare Panel */}
+      {compareMode && compareReady && selectedCandidates.length > 0 && (
+        <ComparePanel
+          candidates={selectedCandidates}
+          userScore={profile?.overall_score ?? 0}
+          onRemove={handleRemoveFromCompare}
+          onClear={handleClearCompare}
+          onClose={handleCloseCompare}
+        />
+      )}
     </div>
   );
 };

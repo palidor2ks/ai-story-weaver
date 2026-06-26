@@ -127,7 +127,7 @@ export const Committees = () => {
 
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-poli-surface">
       <Seo
         title="Top Federal Committees by Receipts — Pulse"
         description="All federal committees ranked by money raised. Donor counts, contribution totals, and links to the candidates they back."
@@ -136,16 +136,25 @@ export const Committees = () => {
 
       <Header />
 
-      <main className="container py-8 px-4">
+      {/* Navy gradient banner */}
+      <div className="bg-gradient-to-br from-poli-navy to-poli-dark text-white px-4 pt-12 pb-8">
+        <p className="font-mono-label text-[10px] font-bold uppercase tracking-widest text-white/60 mb-1">COMMITTEES</p>
+        <h1 className="text-2xl font-black text-white leading-tight">Top Federal Committees by Receipts</h1>
+        <p className="text-sm text-white/70 mt-1">
+          {committees.length > 0
+            ? `${committees.length.toLocaleString()} committees loaded · ranked by money raised`
+            : 'All federal committees ranked by money raised'}
+        </p>
+      </div>
+
+      <main className="container py-8 px-4 pb-20">
         <div className="flex flex-col gap-4 mb-8">
           <div>
-            <p className="text-sm text-muted-foreground mb-1 font-medium">Committees</p>
-            <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground">Top Federal Committees by Receipts</h1>
-            <p className="text-muted-foreground mt-2">
-              All federal committees ranked by money raised. Looking for outside spending instead? See{' '}
-              <Link to="/top-spenders" className="text-primary underline-offset-2 hover:underline">Top Outside Spenders</Link>.
+            <p className="text-sm text-poli-muted mb-3">
+              Looking for outside spending instead? See{' '}
+              <Link to="/top-spenders" className="text-poli-navy underline-offset-2 hover:underline">Top Outside Spenders</Link>.
             </p>
-            <div className="mt-3">
+            <div className="mt-1">
               <CommitteesViewSwitcher />
             </div>
           </div>
@@ -153,7 +162,7 @@ export const Committees = () => {
           <h2 className="sr-only">Committees directory</h2>
           <div className="flex flex-col sm:flex-row sm:items-center gap-3">
             <div className="relative w-full sm:max-w-md">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-poli-muted" />
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -241,7 +250,7 @@ export const Committees = () => {
 
         {isLoading && (
           <div className="flex justify-center py-16">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <Loader2 className="h-8 w-8 animate-spin text-poli-navy" />
           </div>
         )}
 
@@ -254,11 +263,11 @@ export const Committees = () => {
         {!isLoading && !isError && committees.length === 0 && (
           <Card className="border-dashed">
             <CardContent className="flex flex-col items-center text-center py-16 px-6 gap-3">
-              <div className="w-12 h-12 rounded-full bg-muted text-muted-foreground flex items-center justify-center">
+              <div className="w-12 h-12 rounded-full bg-poli-surface text-poli-muted flex items-center justify-center">
                 <Inbox className="w-6 h-6" />
               </div>
               <h3 className="font-semibold text-lg">No committees to show</h3>
-              <p className="text-sm text-muted-foreground max-w-md">
+              <p className="text-sm text-poli-muted max-w-md">
                 {!hasAnyFilterOptions
                   ? "We don't have any committee data loaded yet. Once committees are imported, they'll appear here."
                   : 'No committees match your current filters. Try clearing the search or selecting a different cycle.'}
@@ -290,7 +299,7 @@ export const Committees = () => {
               <CardContent className="p-5 h-full">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+                    <div className="w-11 h-11 rounded-lg bg-poli-surface text-poli-navy flex items-center justify-center">
                       <Landmark className="w-5 h-5" />
                     </div>
                     <div>
@@ -311,16 +320,16 @@ export const Committees = () => {
                         {(() => {
                           const ie = ieMap?.get(committee.fecCommitteeId) ?? 0;
                           return ie > 0 ? (
-                            <Badge variant="outline" className="text-xs gap-1 border-primary/40 text-primary">
+                            <Badge variant="outline" className="text-xs gap-1 border-poli-navy/40 text-poli-navy">
                               <Megaphone className="w-3 h-3" />
                               IE {formatIECompact(ie)}
                             </Badge>
                           ) : null;
                         })()}
                       </div>
-                      <p className="text-sm text-muted-foreground">FEC ID: {committee.fecCommitteeId}</p>
+                      <p className="text-sm text-poli-muted">FEC ID: {committee.fecCommitteeId}</p>
                       {committee.candidate && (
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-sm text-poli-muted">
                           Linked to {committee.candidate.name} ({committee.candidate.party})
                         </p>
                       )}
@@ -352,14 +361,14 @@ export const Committees = () => {
                     <>
                       <div className="grid grid-cols-2 gap-3 mt-6">
                         <div className="p-3 rounded-lg border bg-muted/30">
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <div className="flex items-center gap-2 text-sm text-poli-muted">
                             <DollarSign className="w-4 h-4" />
                             Total Raised
                           </div>
                           <p
                             className={cn(
                               "text-xl font-semibold mt-1",
-                              isUnsynced ? "text-muted-foreground" : "text-foreground"
+                              isUnsynced ? "text-poli-muted" : "text-poli-body"
                             )}
                             title={isUnsynced ? undefined : formatCurrencyFull(committee.totalRaised)}
                           >
@@ -367,13 +376,13 @@ export const Committees = () => {
                           </p>
                         </div>
                         <div className="p-3 rounded-lg border bg-muted/30">
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <div className="flex items-center gap-2 text-sm text-poli-muted">
                             <Users className="w-4 h-4" />
                             Donors
                           </div>
                           <p className={cn(
                             "text-xl font-semibold mt-1",
-                            (committee.donorCount ?? 0) > 0 ? "text-foreground" : "text-muted-foreground"
+                            (committee.donorCount ?? 0) > 0 ? "text-poli-body" : "text-poli-muted"
                           )}>
                             {isUnsynced
                               ? '—'
@@ -384,7 +393,7 @@ export const Committees = () => {
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-between text-xs text-muted-foreground mt-4">
+                      <div className="flex items-center justify-between text-xs text-poli-muted mt-4">
                         <span>
                           {isUnsynced
                             ? 'Not yet synced from FEC'

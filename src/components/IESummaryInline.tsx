@@ -26,7 +26,7 @@ export const IESummaryInline = ({ totals, size = 'xs', className, hideIfEmpty = 
 
   if (total === 0 && hideIfEmpty) return null;
   if (total === 0) {
-    return <span className={cn('text-muted-foreground', size === 'xs' ? 'text-[11px]' : 'text-xs', className)}>No outside money</span>;
+    return <span className={cn('text-poli-muted', size === 'xs' ? 'text-[11px]' : 'text-xs', className)}>No outside money</span>;
   }
 
   const textSize = size === 'xs' ? 'text-[11px]' : 'text-xs';
@@ -35,13 +35,13 @@ export const IESummaryInline = ({ totals, size = 'xs', className, hideIfEmpty = 
   return (
     <div className={cn('flex items-center gap-2 font-medium', textSize, className)} title={`Outside money${cycle ? ` (${cycle} cycle)` : ''}`}>
       {support > 0 && (
-        <span className="inline-flex items-center gap-0.5 text-emerald-600 dark:text-emerald-400">
+        <span className="inline-flex items-center gap-0.5 text-poli-green">
           <TrendingUp className={iconSize} aria-hidden />
           {compact(support)}
         </span>
       )}
       {oppose > 0 && (
-        <span className="inline-flex items-center gap-0.5 text-destructive">
+        <span className="inline-flex items-center gap-0.5 text-poli-red">
           <TrendingDown className={iconSize} aria-hidden />
           {compact(oppose)}
         </span>

@@ -180,21 +180,16 @@ stale Codex SEO PR #300 also linger — owner's call.)
 
 ## 🔵 Frontend (Design B rollback follow-ups)
 
-### 17. ☐ Re-apply bug/data fixes dropped by the Design B rollback (PR #600)
-**What:** The June-26 rollback restored the entire frontend to the pre-Design-B June-24 baseline
-(`08ae3a26`), which also reverted real fixes that were entangled in the redesigned files. Cherry-pick
-these back onto the rolled-back design (NOT the styling — just the logic):
-- "Fix vote AI Analysis being framed as cosponsorship"
-- Share-card: stop showing fake "C/Moderate" for unscored candidates
-- "Harden candidate IE data path and sync card to money cycle"
-- "Filter excluded IE committees + use resolved id for profile spenders"
-- "Cache AI political analysis in DB" (avoid re-running every login/tab-switch)
-- "Show Challenger status for non-incumbent candidates"
-**History:** User reported the app "reverts to the new design" — root cause was Lovable's two-way sync +
-its "Revert" button pinning the preview to Design B. User chose to roll the whole frontend back. Full
-loss list in PR #600 body and the 2026-06-26 HANDOFF entry.
-**State:** Not started. Original commits recoverable via `git log 08ae3a26..` on the pre-rollback main.
-Confirm the rolled-back look is live in Lovable (user must sync Lovable FROM `main`) before layering.
+### 17. ✅ Re-apply bug/data fixes dropped by the Design B rollback — done 2026-06-26 (rollback reversed)
+**What:** The June-26 rollback (#600) reverted the frontend to the pre-Design-B June-24 baseline,
+dropping real fixes entangled in the redesigned files. **Resolved:** the user decided they wanted
+Design B back after all (with the chip-tabs, bottom nav, and new pages), so we **restored the whole
+frontend to the pre-rollback tip `3324ecec`** — which brings those fixes back wholesale (vote-analysis
+cosponsorship, share-card "no fake scores", IE data hardening, excluded-IE-committee filter, cached AI
+analysis, Challenger status). Branch `claude/reapply-design-b-keep-ie`. No cherry-pick needed.
+**Note:** The Nolan Chart / Political Compass and the state-coverage callout stay **dropped** (user's
+choice). The outside-money (IE) line — which Design B had silently stopped rendering — was **re-added**
+and restyled to the poli-* palette.
 
 ## ⚪ Code health (deliberate, when bandwidth allows)
 
