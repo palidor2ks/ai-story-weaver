@@ -228,7 +228,7 @@ export const CandidateDonors = () => {
                         {donor.display_name}
                       </span>
                       <span className="font-semibold text-poli-navy text-sm tabular-nums shrink-0">
-                        ${donor.amount.toLocaleString()}
+                        {formatCompactCurrency(donor.amount)}
                       </span>
                     </div>
                     <div className="h-1.5 w-full rounded-full bg-poli-surface overflow-hidden">
