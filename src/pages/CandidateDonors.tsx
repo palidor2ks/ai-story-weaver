@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatCompactCurrency } from '@/lib/utils';
 import { useCandidate, useCandidateDonors } from '@/hooks/useCandidates';
 import { useAvailableCycles } from '@/hooks/useAvailableCycles';
 import { useFinanceReconciliation } from '@/hooks/useFinanceReconciliation';
@@ -14,8 +14,9 @@ type Cycle = '2024' | '2020' | 'Career';
 
 const CYCLES: Cycle[] = ['2024', '2020', 'Career'];
 
+// Compact form ($12M) to match the funding-sources header and the rest of the app.
 const fmt = (n: number | null | undefined) =>
-  n != null && n > 0 ? `$${n.toLocaleString()}` : '—';
+  n != null && n > 0 ? formatCompactCurrency(n) : '—';
 
 export const CandidateDonors = () => {
   const { id } = useParams<{ id: string }>();
@@ -227,7 +228,7 @@ export const CandidateDonors = () => {
                         {donor.display_name}
                       </span>
                       <span className="font-semibold text-poli-navy text-sm tabular-nums shrink-0">
-                        ${donor.amount.toLocaleString()}
+                        {formatCompactCurrency(donor.amount)}
                       </span>
                     </div>
                     <div className="h-1.5 w-full rounded-full bg-poli-surface overflow-hidden">

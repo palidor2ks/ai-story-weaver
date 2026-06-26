@@ -24,6 +24,7 @@ interface RequestBody {
   candidate_office?: string | null;
   candidate_state?: string | null;
   is_sponsor: boolean;
+  vote_position?: string | null;
   sponsorship_date?: string | null;
   bill_url?: string | null;
   force_refresh?: boolean;
@@ -81,16 +82,32 @@ Deno.serve(async (req) => {
     const billNumber = String(body.bill_number ?? "").trim();
     const billName = String(body.bill_name ?? "").trim();
     const candidateName = String(body.candidate_name ?? "").trim();
-    const role = body.is_sponsor ? "sponsored" : "cosponsored";
+
+    // The candidate's relationship to this measure can be a roll-call vote (Yea/Nay)
+    // or a sponsorship. Frame the analysis around the ACTUAL action — conflating a
+    // vote with cosponsorship produces nonsense (e.g. "no evidence they cosponsored
+    // this nomination" on what was really a confirmation vote).
+    const votePos = String(body.vote_position ?? "").toLowerCase().trim();
+    const action = (() => {
+      if (votePos === "yea" || votePos === "aye" || votePos === "yes") return "voted YES on";
+      if (votePos === "nay" || votePos === "no") return "voted NO on";
+      if (votePos === "present") return "voted PRESENT on";
+      if (votePos === "sponsored") return "sponsored";
+      if (votePos === "cosponsored") return "cosponsored";
+      return body.is_sponsor ? "sponsored" : "cosponsored";
+    })();
+    const isVote = action.startsWith("voted");
+    const measureWord = isVote ? "measure (a bill, resolution, nomination, or procedural motion)" : "bill";
+    const role = action;
 
     if (!candidateName || (!billName && !billNumber)) {
       return json({ error: "candidate_name and bill information are required" }, 400);
     }
 
-    // Bill analysis depends on which candidate is being viewed (sponsor vs cosponsor
-    // and their record), so cache per bill + candidate + role.
+    // Bill analysis depends on which candidate is being viewed and how they acted
+    // (vote direction or sponsorship role), so cache per bill + candidate + action.
     const subjectId = String(body.bill_id ?? `${billType}-${billNumber}-${body.congress ?? ''}`).trim();
-    const fp = await fingerprint({ candidate: candidateName, role: body.is_sponsor ? 's' : 'c' });
+    const fp = await fingerprint({ candidate: candidateName, role: body.is_sponsor ? 's' : 'c', action });
     const cacheKey = { kind: "bill" as const, subject_id: subjectId, input_fingerprint: fp };
     if (!body.force_refresh && subjectId) {
       const cached = await readCache<Record<string, unknown>>(cacheKey);
@@ -108,19 +125,22 @@ Deno.serve(async (req) => {
       body.candidate_party ? `${body.candidate_party} party` : null,
       body.candidate_office ? `serving as ${body.candidate_office}` : null,
       body.candidate_state ? `from ${body.candidate_state}` : null,
-      body.sponsorship_date ? `${role} on ${body.sponsorship_date}` : null,
+      body.sponsorship_date ? `${role} ${body.sponsorship_date}` : null,
       body.bill_url ? `official link: ${body.bill_url}` : null,
     ].filter(Boolean).join("; ");
 
-    const searchPrompt = `Research the U.S. bill "${billLabel}: ${billName}"${anchorBits ? ` (${anchorBits})` : ""} and the role of ${candidateName}, who ${role} it.
+    const searchPrompt = `Research the U.S. ${measureWord} "${billLabel}: ${billName}"${anchorBits ? ` (${anchorBits})` : ""} and the role of ${candidateName}, who ${role} it.
 
-Use congress.gov, govtrack.us, propublica.org/congress, ballotpedia.org, votesmart.org, and major news outlets (nytimes.com, washingtonpost.com, politico.com, reuters.com, apnews.com, thehill.com, rollcall.com). Confirm you are analyzing the SAME bill by matching bill number, congress, and short title. If you can't confirm, set insufficient_information=true and cap confidence at 20.
+${isVote
+  ? `IMPORTANT: ${candidateName} ${role} this measure as a recorded vote — they did NOT necessarily sponsor or cosponsor it. This may be a bill, resolution, nomination/confirmation, or procedural motion. Do not frame their involvement as sponsorship or cosponsorship; analyze why they would cast this vote.`
+  : ``}
+Use congress.gov, govtrack.us, propublica.org/congress, ballotpedia.org, votesmart.org, and major news outlets (nytimes.com, washingtonpost.com, politico.com, reuters.com, apnews.com, thehill.com, rollcall.com). Confirm you are analyzing the SAME measure by matching its number/title and congress (for a nomination, match the nominee name and the position). If you can't confirm, set insufficient_information=true and cap confidence at 20.
 
 Produce a structured analysis covering:
-- summary: 2-3 sentences explaining what the bill does in plain English
-- key_provisions: bullet list of the main provisions
-- positions: list of issue positions ({topic, stance}) describing where the bill sits on major policy axes
-- candidate_role_explanation: 2-4 sentences explaining why ${candidateName} likely ${role} this bill, grounded in their record, district, party, or stated positions. If you cannot confidently explain, say so.
+- summary: 2-3 sentences explaining what the ${isVote ? "measure" : "bill"} does in plain English
+- key_provisions: bullet list of the main provisions (for a nomination, who the nominee is and the role)
+- positions: list of issue positions ({topic, stance}) describing where the ${isVote ? "measure" : "bill"} sits on major policy axes
+- candidate_role_explanation: 2-4 sentences explaining why ${candidateName} likely ${role} this ${isVote ? "measure" : "bill"}, grounded in their record, state/district, party, or stated positions. If you cannot confidently explain, say so.
 - supporters: groups, lawmakers, or coalitions backing the bill (with [n] cites)
 - opponents: groups, lawmakers, or coalitions opposing the bill (with [n] cites)
 - controversies: documented controversies or contested provisions

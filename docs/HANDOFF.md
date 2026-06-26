@@ -30,6 +30,61 @@ Manually confirm the section renders on a candidate with IE data (e.g. Harris/Tr
 cycle dropdown + committee links behave. Optional: style the shadcn Card to better match the mobile
 poli- aesthetic if it looks out of place.
 
+## 2026-06-26 — Compact `$12M` format on FUNDING & DONORS page (PR #591, merged)
+
+**What happened & why**
+On the candidate **FUNDING & DONORS** page (`src/pages/CandidateDonors.tsx`), the top stat boxes
+(Total Raised / Cash on Hand / Total Spent / Debt) rendered full numbers like `$12,441,004`,
+which overflowed the stat row on narrow mobile screens — and were inconsistent with the
+funding-sources header on the same page (already `$12M`) and the rest of the app. Switched the
+page's local `fmt` helper from `toLocaleString()` to the shared `formatCompactCurrency`
+(`src/lib/utils.ts`). Follow-up in the same session: also made the individual top-donor line
+amounts compact (`$25K`) for full-page consistency.
+
+**State** (verified 2026-06-26)
+PR #591 merged. CI green (Lint, Build, Test, Typecheck, Lockfile guard, GitGuardian). Local
+`bun run lint` (0 errors) + `bun run build` pass.
+
+**Next**
+Still open from prior session: optionally add debt data (`debts_owed_by_committee`) to the
+`useFECTotals` hook — Debt currently always renders `—` (`fecDebt` is hardcoded `null`).
+
+## 2026-06-26 — vote AI Analysis framed votes as "cosponsored" (branch claude/image-issue-2cfo9i)
+
+**What happened & why**
+The "AI Analysis" dialog on a roll-call vote in the Voting Record produced self-contradicting
+output: the header said "{candidate} voted No on it" while the deeper analysis said "there is no
+evidence {candidate} cosponsored this nomination." Root cause: `BillAIAnalysisDialog` sent only
+`is_sponsor: false` to the `ai-bill-analysis` edge function and never the vote direction, so the
+function always framed the analysis as `cosponsored`. That's nonsense for a vote — and doubly so
+for a judicial confirmation, which is a nomination you can't cosponsor.
+
+Fix: pass `vote_position` through to the edge function; the function now derives the real action
+(voted YES/NO/PRESENT vs sponsored/cosponsored), frames the whole prompt around it, treats the
+subject as a generic "measure (bill, resolution, nomination, or procedural motion)" for votes,
+and includes the action in the cache fingerprint so stale "cosponsored" entries are busted.
+
+**State** (verified 2026-06-26)
+`bun run lint` 0 errors, `bun run build` ✓, `bun run test` 139 pass. Edge function NOT yet
+redeployed — needs `supabase functions deploy ai-bill-analysis` after merge.
+
+**Next**
+Deploy the `ai-bill-analysis` edge function so the new framing takes effect in prod.
+
+## 2026-06-26 — proxy-image allowlist: unitedstates.github.io (PR #589, merged)
+
+**What happened & why**
+Congress member photos from `unitedstates.github.io` (the @unitedstates project, a mirror of
+congress.gov photos) were hitting a 400 "host not allowed" error in the `proxy-image` edge
+function. Added the host to `ALLOWED_HOST_SUFFIXES`. Deployed as v112.
+
+**State** (verified 2026-06-26)
+PR #589 merged. CI green. Edge function v112 live.
+
+**Next**
+No immediate follow-up needed. Optionally audit other Congress photo URLs that may still be
+blocked (e.g. clerk.house.gov images).
+
 ## 2026-06-26 — Mobile tab overflow fix (PR #588, merged)
 
 **What happened & why**
