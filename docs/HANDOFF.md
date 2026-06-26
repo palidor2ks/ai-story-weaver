@@ -5,6 +5,34 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-26 — proxy-image now allows .gov + state.XX.us hosts (Texas legislator photos) — PR #596
+
+**What happened & why**
+A monitoring report flagged a `RUNTIME_ERROR` / blank screen tied to a `proxy-image` request for a
+Texas state senator portrait (`https://senate.texas.gov/.../Hinojosa_Adam-...jpg`). Root cause:
+`proxy-image`'s allowlist had `senate.gov`, and `hostAllowed` matches `h === s || h.endsWith('.'+s)`,
+so `senate.texas.gov` (not a subdomain of `senate.gov`) was rejected with `400 host_not_allowed`.
+The share-card portrait dropped to the initials avatar and the failed proxy request surfaced as a
+runtime error. This is the same whack-a-mole the allowlist keeps hitting (recent commits added
+`whitehouse.gov`, `unitedstates.github.io` one host at a time). OpenStates `person.image` points each
+state's legislator portraits at that state's own government host. Fix: in
+`supabase/functions/proxy-image/index.ts`, `hostAllowed` now accepts the whole US-government host
+class — any `.gov` host, plus the `state.XX.us` pattern older legislatures use (`ncga.state.nc.us`,
+`njleg.state.nj.us`) — instead of one host per state. Response is still validated as `image/*` and
+size-capped (5 MB), so this only widens the source list, not content validation.
+
+**State** (verified 2026-06-26)
+Change is confined to a Deno edge function (not in the Vite bundle / ESLint scope / `bun test src`),
+so those gates are unaffected. Matcher logic validated against positive cases (`senate.texas.gov`,
+`house.texas.gov`, `ncga.state.nc.us`, `njleg.state.nj.us`) and negatives (`mygov.com.evil.net`,
+`company.us`, `something.us`) — all pass. Not yet deployed; not exercised against the live function.
+
+**Next**
+Deploy the `proxy-image` edge function and confirm the Texas senator share card renders the real
+portrait (proxy returns 200, not 400). PR #596 is a draft awaiting review/merge.
+
+---
+
 ## 2026-06-26 — Politicians filter chips wrap on mobile (no longer cut off)
 
 **What happened & why**
