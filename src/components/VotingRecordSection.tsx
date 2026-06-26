@@ -37,7 +37,7 @@ interface VotingRecordSectionProps {
 }
 
 // Map display topic names to the 6 consolidated federal topic IDs
-const topicNameToId: Record<string, string> = {
+export const topicNameToId: Record<string, string> = {
   'Economy & Work': 'economy-work',
   'Economy': 'economy-work',
   'Technology': 'economy-work',
