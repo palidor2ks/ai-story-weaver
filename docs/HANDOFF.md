@@ -5,6 +5,42 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-26 — Rep profile Positions tab: "Positions & your match" list (AI one-liner + per-topic deep dive)
+
+**What happened & why**
+The Positions tab only had the `CandidatePositions` "Positions & Sources" Q&A accordion, not the
+designed "Positions & your match" list (topic + one-liner + ALIGN/PARTIAL/DIFFER pill + spectrum bar
++ "+" deep-analysis, "Compare all N issues"). Built it, reusing existing infra.
+
+**The change (branch `claude/positions-match-list`)**
+1. **`ai-policy-card-positions`** — added a `full` mode (param `full:true`, cache cycle
+   `profile-positions-v1`, separate from the top-4 social card `policy-card-v3`) returning one
+   position per topic. Per provenance review, the `detail` one-liner is constrained to a GENERAL lean
+   ("Consistently progressive record"), NOT invented specific bills/policies (it only has a score).
+2. **`ai-topic-analysis`** — NEW edge function for the "+" deep dive. Grounded in the rep's real
+   `candidate_topic_scores` + their `candidate_answers` for that topic (with `evidence_type` surfaced
+   so sourced/vote data outweighs inferred), cached per `(candidate, topic-deep:<topicId>)`. Thin-data
+   fallback says so honestly.
+3. **`src/lib/stance.ts`** — extracted `compareStances`/`stanceBadgeClass` (+ `stanceShortLabel`) out
+   of `CompareView.tsx` (which now imports them); unit-tested.
+4. **`PositionsMatchList.tsx`** — the list UI; pill = candidate-vs-your score when logged in, else the
+   rep's lean label. Bar width = |score|, color = match (navy/gold/red) or lean. "+" opens a cached
+   `ai-topic-analysis` dialog. Footer "Compare all {N} issues →" (dynamic: 6 federal/state, 5 local).
+   Carries an "AI-generated, not quotes" disclaimer.
+5. **`CandidateProfile.tsx`** — Positions tab now renders `PositionsMatchList` on top, with the sourced
+   `CandidatePositions` accordion kept below (collapsed) for provenance.
+
+**State** (verified 2026-06-26)
+`bun run build` clean; `bun test src` 57/57 (added 5 `stance` tests). content-provenance-reviewer ran;
+its P0/P1 fixes (general-lean one-liner, AI label on the list, evidence_type in grounding) applied.
+Edge functions NOT yet smoke-tested live (need deploy/JWT). Not visually exercised.
+
+**Next**
+After merge, edge functions auto-deploy. Smoke `ai-policy-card-positions {full:true}` (all ~6 topics
+with `detail`) and `ai-topic-analysis` (grounded paragraph, `cached:true` 2nd call) for a federal rep;
+eyeball the Positions tab (pills vs a logged-in user, bars, "+" dialog, dynamic count). Sync Lovable
+from `main` to see it in preview.
+
 ## 2026-06-26 — RE-APPLY Design B (reverse the rollback) + keep the IE outside-money line
 
 **What happened & why**
