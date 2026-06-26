@@ -55,7 +55,7 @@ import { CoverageTier, ConfidenceLevel } from '@/lib/scoreFormat';
 import { CandidateEditDialog } from '@/components/admin/CandidateEditDialog';
 import { ClaimProfileDialog } from '@/components/ClaimProfileDialog';
 import { OfficialAvatar } from '@/components/OfficialAvatar';
-import { VotingRecordSection } from '@/components/VotingRecordSection';
+import { VotingRecordSection, topicNameToId } from '@/components/VotingRecordSection';
 import { ShareProfileButton } from '@/components/ShareProfileButton';
 import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -139,7 +139,6 @@ export const CandidateProfile = () => {
   const [visibleBillCount, setVisibleBillCount] = useState(20);
   const [donorSearch, setDonorSearch] = useState('');
   const [activeTab, setActiveTab] = useState<'issues' | 'votes' | 'bills' | 'money' | 'contact' | 'positions'>('issues');
-  const [voteAlignment, setVoteAlignment] = useState<{ support: number; oppose: number } | null>(null);
   const effectiveCycle = selectedCycle ?? cycleInfo?.defaultCycle;
   const { data: donors = [], refetch: refetchDonors } = useCandidateDonors(id, effectiveCycle);
   const { data: earmarkRollups = [] } = useCandidateEarmarkRollups(id, effectiveCycle);
@@ -211,6 +210,26 @@ export const CandidateProfile = () => {
     },
   });
   const { data: votes = [] } = useCandidateVotes(id);
+  const alignmentPercent = useMemo(() => {
+    if (!candidate || !votes.length) return null;
+    const userScoreMap: Record<string, number> = {};
+    userTopicScores.forEach(ts => { userScoreMap[ts.topic_id] = ts.score; });
+    let support = 0, oppose = 0;
+    votes.forEach(vote => {
+      const topicId = topicNameToId[vote.topic];
+      if (!topicId) return;
+      const userScore = userScoreMap[topicId];
+      if (userScore === undefined || userScore === null) return;
+      const isProgressiveBill = candidate.party === 'Democrat';
+      if (isProgressiveBill) {
+        if (userScore < 0) support++; else if (userScore > 0) oppose++;
+      } else {
+        if (userScore > 0) support++; else if (userScore < 0) oppose++;
+      }
+    });
+    const total = support + oppose;
+    return total > 0 ? Math.round((support / total) * 100) : null;
+  }, [votes, userTopicScores, candidate?.party]);
   const { data: representativeDetails } = useRepresentativeDetails(id);
   const { data: adminData } = useAdminRole();
   const { user } = useAuth();
@@ -582,24 +601,17 @@ export const CandidateProfile = () => {
           </div>
         ))}
         {/* Legislative alignment % box */}
-        {(() => {
-          const pct = voteAlignment && (voteAlignment.support + voteAlignment.oppose) > 0
-            ? Math.round(voteAlignment.support / (voteAlignment.support + voteAlignment.oppose) * 100)
-            : null;
-          return (
-            <div className="col-span-2 border border-[rgba(20,23,58,0.1)] rounded-[14px] p-2.5 bg-white flex items-center justify-center">
-              <div className="text-center">
-                <p className={cn(
-                  "font-sans font-black text-[18px] leading-none",
-                  pct === null ? "text-poli-navy" : pct >= 70 ? "text-agree" : pct >= 40 ? "text-amber-600" : "text-disagree"
-                )}>
-                  {pct !== null ? `${pct}%` : '—'}
-                </p>
-                <p className="text-[10px] text-poli-dim mt-1 leading-tight">legislative alignment</p>
-              </div>
-            </div>
-          );
-        })()}
+        <div className="col-span-2 border border-[rgba(20,23,58,0.1)] rounded-[14px] p-2.5 bg-white flex items-center justify-center">
+          <div className="text-center">
+            <p className={cn(
+              "font-sans font-black text-[18px] leading-none",
+              alignmentPercent === null ? "text-poli-navy" : alignmentPercent >= 70 ? "text-agree" : alignmentPercent >= 40 ? "text-amber-600" : "text-disagree"
+            )}>
+              {alignmentPercent !== null ? `${alignmentPercent}%` : '—'}
+            </p>
+            <p className="text-[10px] text-poli-dim mt-1 leading-tight">legislative alignment</p>
+          </div>
+        </div>
         <div className="border border-[rgba(20,23,58,0.1)] rounded-[14px] p-2.5 bg-white">
           <p className="font-sans font-black text-[18px] text-poli-navy leading-none">—</p>
           <p className="text-[10px] text-poli-dim mt-1 leading-tight">Party unity</p>
@@ -672,7 +684,6 @@ export const CandidateProfile = () => {
               candidateName={candidate.name}
               candidateState={candidate.state}
               candidateOffice={candidate.office}
-              onAlignmentStats={(support, oppose) => setVoteAlignment({ support, oppose })}
             />
             <Link to={`/candidate/${id}/votes`} className="block mt-3">
               <button className="w-full border border-[rgba(20,23,58,0.14)] text-poli-navy font-bold text-sm rounded-[14px] py-3.5">
