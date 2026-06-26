@@ -47,7 +47,6 @@ import { AIExplanation } from '@/components/AIExplanation';
 
 import { AIFeedback, ReportIssueButton } from '@/components/AIFeedback';
 import { ContactInfoCard } from '@/components/ContactInfoCard';
-import { PoliScoreCard } from '@/components/PoliScoreCard';
 import { RelevantNewsFeed } from '@/components/RelevantNewsFeed';
 import { RepresentativeSocialFeed } from '@/components/RepresentativeSocialFeed';
 import { CandidatePositions } from '@/components/CandidatePositions';
@@ -677,33 +676,6 @@ export const CandidateProfile = () => {
         {/* VOTES TAB */}
         {activeTab === 'votes' && (
           <div>
-            {/* PoliScore voting record — NC GA state legislators only (v0_nc).
-                Shows per-legislator position on curated key votes from the 2025 session. */}
-            {candidate.id &&
-              candidate.state === 'NC' &&
-              (candidate.office === 'State Senator' || candidate.office === 'State Representative') && (
-              <div className="mb-3">
-                <PoliScoreCard
-                  candidateId={candidate.id}
-                  candidateName={candidate.name}
-                  jurisdiction="nc_state"
-                />
-              </div>
-            )}
-
-            {/* PoliScore voting record — federal Representatives and Senators.
-                v0 covers curated House key votes; Senate key votes are being added. */}
-            {candidate.id &&
-              (candidate.office === 'Representative' || candidate.office === 'Senator') && (
-              <div className="mb-3">
-                <PoliScoreCard
-                  candidateId={candidate.id}
-                  candidateName={candidate.name}
-                  office={candidate.office}
-                />
-              </div>
-            )}
-
             <VotingRecordSection
               votes={votes}
               userTopicScores={userTopicScores}
