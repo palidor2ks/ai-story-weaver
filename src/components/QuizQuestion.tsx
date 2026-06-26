@@ -33,12 +33,12 @@ export const QuizQuestion = ({
     <div className="animate-fade-in">
       {!hideHeader && (
         <div className="flex items-center justify-between mb-6">
-          <span className="text-sm font-medium text-muted-foreground">
+          <span className="text-sm font-medium text-poli-muted">
             Question {questionNumber} of {totalQuestions}
           </span>
-          <div className="flex-1 mx-4 h-2 bg-secondary rounded-full overflow-hidden">
+          <div className="flex-1 mx-4 h-2 bg-poli-surface rounded-full overflow-hidden">
             <div
-              className="h-full bg-gradient-hero transition-all duration-500 ease-out"
+              className="h-full bg-gradient-to-r from-poli-navy to-[#B3122F] transition-all duration-500 ease-out"
               style={{ width: `${(questionNumber / totalQuestions) * 100}%` }}
             />
           </div>
@@ -48,7 +48,7 @@ export const QuizQuestion = ({
       <Card className="bg-card border-border shadow-elevated">
         <CardContent className="p-6 md:p-8">
           {!hideQuestionText && (
-            <h2 className="font-display text-xl md:text-2xl font-semibold text-foreground mb-8 leading-relaxed">
+            <h2 className="font-display text-xl md:text-2xl font-semibold text-poli-navy mb-8 leading-relaxed">
               {question.text}
             </h2>
           )}
@@ -65,14 +65,14 @@ export const QuizQuestion = ({
                   onClick={() => onSelect(option)}
                   className={cn(
                     "w-full justify-start text-left h-auto py-4 px-5 transition-all duration-200",
-                    isSelected && "ring-2 ring-accent ring-offset-2",
+                    isSelected && "ring-2 ring-poli-navy ring-offset-2",
                     "animate-slide-up"
                   )}
                   style={{ animationDelay: `${index * 50}ms` }}
                 >
                   <span className={cn(
                     "w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold mr-4 flex-shrink-0",
-                    isSelected ? "bg-primary-foreground text-primary" : "bg-secondary text-muted-foreground"
+                    isSelected ? "bg-poli-navy text-white" : "bg-poli-surface text-poli-body"
                   )}>
                     {String.fromCharCode(65 + index)}
                   </span>

@@ -149,7 +149,7 @@ export function CandidateEditDialog({
                 "text-xs",
                 existingOverride.is_active 
                   ? "border-primary text-primary" 
-                  : "border-muted-foreground/50 text-muted-foreground"
+                  : "border-muted-foreground/50 text-poli-muted"
               )}>
                 {existingOverride.is_active ? 'Override Active' : 'Override Inactive'}
               </Badge>
@@ -163,26 +163,26 @@ export function CandidateEditDialog({
         {existingOverride && (
           <div className={cn(
             "flex items-center gap-2 p-2 border rounded text-sm",
-            existingOverride.is_active 
-              ? "bg-primary/5 border-primary/20" 
-              : "bg-muted/50 border-muted-foreground/20"
+            existingOverride.is_active
+              ? "bg-poli-navy/5 border-poli-navy/20"
+              : "bg-poli-surface/50 border-poli-muted/20"
           )}>
             <AlertCircle className={cn(
               "h-4 w-4 shrink-0",
-              existingOverride.is_active ? "text-primary" : "text-muted-foreground"
+              existingOverride.is_active ? "text-primary" : "text-poli-muted"
             )} />
             <div className="flex-1">
               <span className="font-medium">
                 {existingOverride.is_active ? 'Override active' : 'Override inactive'}
               </span>
               {existingOverride.updated_at && (
-                <span className="text-muted-foreground ml-2">
+                <span className="text-poli-muted ml-2">
                   Last updated {formatDistanceToNow(new Date(existingOverride.updated_at), { addSuffix: true })}
                 </span>
               )}
             </div>
             <div className="flex items-center gap-2">
-              <Label htmlFor="override-active-toggle" className="text-xs text-muted-foreground">
+              <Label htmlFor="override-active-toggle" className="text-xs text-poli-muted">
                 {existingOverride.is_active ? 'Active' : 'Inactive'}
               </Label>
               <Switch
@@ -216,7 +216,7 @@ export function CandidateEditDialog({
                     className={cn(isFieldOverridden('name') && 'border-primary/50')}
                   />
                   {isFieldOverridden('name') && (
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-poli-muted">
                       API value: {currentData.name}
                     </p>
                   )}
@@ -238,7 +238,7 @@ export function CandidateEditDialog({
                     </SelectContent>
                   </Select>
                   {isFieldOverridden('party') && (
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-poli-muted">
                       API value: {currentData.party}
                     </p>
                   )}

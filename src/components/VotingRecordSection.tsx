@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -33,10 +33,11 @@ interface VotingRecordSectionProps {
   candidateName?: string;
   candidateState?: string | null;
   candidateOffice?: string | null;
+  onAlignmentStats?: (support: number, oppose: number) => void;
 }
 
 // Map display topic names to the 6 consolidated federal topic IDs
-const topicNameToId: Record<string, string> = {
+export const topicNameToId: Record<string, string> = {
   'Economy & Work': 'economy-work',
   'Economy': 'economy-work',
   'Technology': 'economy-work',
@@ -68,6 +69,7 @@ export const VotingRecordSection = ({
   candidateName,
   candidateState,
   candidateOffice,
+  onAlignmentStats,
 }: VotingRecordSectionProps) => {
   const [expandedYears, setExpandedYears] = useState<Set<string>>(new Set());
   const [expandedTopics, setExpandedTopics] = useState<Set<string>>(new Set());
@@ -149,6 +151,10 @@ export const VotingRecordSection = ({
       alignmentPercent
     };
   }, [votes, userScoreMap, representativeParty]);
+
+  useEffect(() => {
+    onAlignmentStats?.(alignmentStats.supportCount, alignmentStats.opposeCount);
+  }, [alignmentStats.supportCount, alignmentStats.opposeCount]);
 
   const toggleYear = (year: string) => {
     setExpandedYears(prev => {
@@ -240,20 +246,19 @@ export const VotingRecordSection = ({
           )}>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-foreground">
-                  You align with{' '}
+                <div className="flex items-baseline gap-2 flex-wrap">
                   <span className={cn(
-                    "font-bold",
-                    alignmentStats.alignmentPercent >= 70 
-                      ? "text-agree" 
-                      : alignmentStats.alignmentPercent >= 40 
-                        ? "text-amber-600" 
+                    "font-black text-3xl leading-none",
+                    alignmentStats.alignmentPercent >= 70
+                      ? "text-agree"
+                      : alignmentStats.alignmentPercent >= 40
+                        ? "text-amber-600"
                         : "text-disagree"
                   )}>
                     {alignmentStats.alignmentPercent}%
                   </span>
-                  {' '}of their legislative activity
-                </p>
+                  <p className="text-sm font-medium text-foreground">legislative alignment</p>
+                </div>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   Based on {alignmentStats.knownVotes} bills where your position is known
                   {alignmentStats.unknownCount > 0 && (

@@ -12,7 +12,7 @@ const PARTY_BADGE: Record<string, string> = {
   Democrat: 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30',
   Republican: 'bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/30',
   Independent: 'bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30',
-  Other: 'bg-muted text-muted-foreground border-border',
+  Other: 'bg-poli-surface text-poli-muted border-poli-surface',
 };
 
 const TIER_LABEL: Record<string, string> = {
@@ -28,33 +28,33 @@ function formatDate(iso: string): string {
 
 function CandidateCard({ c, ie }: { c: UpcomingCandidate; ie?: IETotals }) {
   return (
-    <div className="rounded-lg border border-border/60 p-3 space-y-2">
+    <div className="bg-white rounded-xl p-4 mb-2 shadow-sm space-y-2">
       <div className="flex items-start gap-3">
         {c.image_url ? (
           <img src={c.image_url} alt={c.name} className="w-12 h-12 rounded-full object-cover flex-shrink-0" />
         ) : (
-          <div className="w-12 h-12 rounded-full bg-muted flex-shrink-0" />
+          <div className="w-12 h-12 rounded-full bg-poli-surface flex-shrink-0" />
         )}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-semibold">{c.name}</span>
+            <span className="font-semibold text-poli-body">{c.name}</span>
             <Badge variant="outline" className={PARTY_BADGE[c.party] ?? PARTY_BADGE.Other}>{c.party}</Badge>
             {c.is_incumbent && <Badge variant="secondary" className="text-xs">Incumbent</Badge>}
           </div>
-          <div className="text-xs text-muted-foreground mt-0.5">
+          <div className="text-xs text-poli-muted mt-0.5">
             {c.office}{c.district ? ` · District ${c.district}` : ''}{c.state ? ` · ${c.state}` : ''}
           </div>
           <IESummaryInline totals={ie} size="sm" className="mt-1" />
         </div>
         <div className="flex-shrink-0 text-right">
           {c.is_pending_research ? (
-            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground italic">
+            <span className="inline-flex items-center gap-1 text-xs text-poli-muted italic">
               <Loader2 className="w-3 h-3 animate-spin" /> Researching…
             </span>
           ) : c.overall_score !== null ? (
             <ScoreText score={c.overall_score} className="text-sm font-semibold" />
           ) : (
-            <span className="text-xs text-muted-foreground">No data yet</span>
+            <span className="text-xs text-poli-muted">No data yet</span>
           )}
         </div>
       </div>
@@ -65,7 +65,7 @@ function CandidateCard({ c, ie }: { c: UpcomingCandidate; ie?: IETotals }) {
             <Badge variant="outline" className="text-[10px] capitalize">{c.confidence} confidence</Badge>
           )}
         </div>
-        <Button asChild size="sm" variant="ghost" className="h-7 text-xs">
+        <Button asChild size="sm" variant="ghost" className="h-7 text-xs text-poli-navy">
           <Link to={`/candidate/${c.candidate_id}`}>
             View profile <ExternalLink className="w-3 h-3 ml-1" />
           </Link>
@@ -103,51 +103,58 @@ export function ElectionDetailsDialog({ election, open, onOpenChange, ieMap }: P
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{election.name}</DialogTitle>
-          <DialogDescription className="flex flex-wrap items-center gap-3 text-xs pt-1">
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col bg-white rounded-2xl p-0 border-0 gap-0">
+        <DialogHeader className="bg-gradient-to-br from-poli-navy to-poli-dark rounded-t-2xl p-5 flex-shrink-0">
+          <p className="font-mono-label text-xs font-bold uppercase tracking-widest mb-1 text-[#C8102E]/80">
+            Election
+          </p>
+          <DialogTitle className="text-xl font-black text-white">
+            {election.name}
+          </DialogTitle>
+          <DialogDescription className="flex flex-wrap items-center gap-3 text-xs pt-1 text-white/60">
             <span className="inline-flex items-center gap-1">
               <Calendar className="w-3.5 h-3.5" /> {formatDate(election.election_date)}
             </span>
-            <Badge variant="outline" className="capitalize">{election.level}</Badge>
-            <Badge variant="outline" className="capitalize">{election.election_type}</Badge>
+            <Badge variant="outline" className="capitalize border-white/20 text-white/70">{election.level}</Badge>
+            <Badge variant="outline" className="capitalize border-white/20 text-white/70">{election.election_type}</Badge>
             {(election.jurisdiction || election.state) && (
               <span className="inline-flex items-center gap-1">
                 <MapPin className="w-3.5 h-3.5" /> {election.jurisdiction ?? election.state}
               </span>
             )}
-            <span className="text-muted-foreground">Source: {election.source}</span>
+            <span className="text-white/40">Source: {election.source}</span>
           </DialogDescription>
         </DialogHeader>
 
-        {raceTotal > 0 && (
-          <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs flex flex-wrap items-center gap-x-4 gap-y-1">
-            <span className="font-medium">Outside money in this race:</span>
-            <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
-              <TrendingUp className="w-3 h-3" /> {formatIECompact(raceSupport)} supporting
-            </span>
-            <span className="inline-flex items-center gap-1 text-destructive">
-              <TrendingDown className="w-3 h-3" /> {formatIECompact(raceOppose)} opposing
-            </span>
-          </div>
-        )}
-
-        <div className="space-y-5 pt-2">
-          {byOffice.size === 0 ? (
-            <p className="text-sm text-muted-foreground">No candidates listed yet for this race.</p>
-          ) : (
-            Array.from(byOffice.entries()).map(([office, cands]) => (
-              <section key={office} className="space-y-2">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  {office} · {cands.length} candidate{cands.length === 1 ? '' : 's'}
-                </h3>
-                <div className="space-y-2">
-                  {cands.map(c => <CandidateCard key={c.candidate_id} c={c} ie={ieMap?.get(c.candidate_id)} />)}
-                </div>
-              </section>
-            ))
+        <div className="bg-[#F5F6FA] p-4 overflow-y-auto flex-1">
+          {raceTotal > 0 && (
+            <div className="rounded-xl bg-white border border-poli-surface px-3 py-2 text-xs flex flex-wrap items-center gap-x-4 gap-y-1 mb-4 shadow-sm">
+              <span className="font-medium text-poli-body">Outside money in this race:</span>
+              <span className="inline-flex items-center gap-1 text-emerald-600">
+                <TrendingUp className="w-3 h-3" /> {formatIECompact(raceSupport)} supporting
+              </span>
+              <span className="inline-flex items-center gap-1 text-poli-red">
+                <TrendingDown className="w-3 h-3" /> {formatIECompact(raceOppose)} opposing
+              </span>
+            </div>
           )}
+
+          <div className="space-y-5">
+            {byOffice.size === 0 ? (
+              <p className="text-sm text-poli-muted">No candidates listed yet for this race.</p>
+            ) : (
+              Array.from(byOffice.entries()).map(([office, cands]) => (
+                <section key={office} className="space-y-2">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-poli-muted">
+                    {office} · {cands.length} candidate{cands.length === 1 ? '' : 's'}
+                  </h3>
+                  <div>
+                    {cands.map(c => <CandidateCard key={c.candidate_id} c={c} ie={ieMap?.get(c.candidate_id)} />)}
+                  </div>
+                </section>
+              ))
+            )}
+          </div>
         </div>
       </DialogContent>
     </Dialog>

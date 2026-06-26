@@ -82,7 +82,7 @@ export const QuizLibrary = () => {
       />
       <Header />
       
-      <main className="container py-8 px-4">
+      <main className="container py-8 px-4 pb-20">
         <div className="max-w-4xl mx-auto">
           {/* Header */}
           <div className="mb-8">

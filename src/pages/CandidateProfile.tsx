@@ -35,7 +35,7 @@ import { normalizeOfficeName } from '@/lib/officeLabel';
 import { computeFundingBreakdown, groupFundingSources, withPercents } from '@/lib/fundingBreakdown';
 import { CandidateIESection } from '@/components/IndependentExpenditureSections';
 import { cn, formatCompactCurrency } from '@/lib/utils';
-import { ArrowLeft, ExternalLink, MapPin, Calendar, DollarSign, Vote, Sparkles, Pencil, BadgeCheck, FileText, RefreshCw, Info, AlertTriangle, Search, X, ChevronDown, ChevronUp, ScrollText, Briefcase } from 'lucide-react';
+import { ArrowLeft, ExternalLink, MapPin, Calendar, DollarSign, Vote, Sparkles, Pencil, BadgeCheck, FileText, RefreshCw, Info, AlertTriangle, Search, X, ChevronDown, ChevronUp, ScrollText, Briefcase, Heart } from 'lucide-react';
 import { RecipientAIAnalysisDialog } from '@/components/RecipientAIAnalysisDialog';
 import { BillAIAnalysisDialog } from '@/components/BillAIAnalysisDialog';
 import { Input } from '@/components/ui/input';
@@ -55,7 +55,7 @@ import { CoverageTier, ConfidenceLevel } from '@/lib/scoreFormat';
 import { CandidateEditDialog } from '@/components/admin/CandidateEditDialog';
 import { ClaimProfileDialog } from '@/components/ClaimProfileDialog';
 import { OfficialAvatar } from '@/components/OfficialAvatar';
-import { VotingRecordSection } from '@/components/VotingRecordSection';
+import { VotingRecordSection, topicNameToId } from '@/components/VotingRecordSection';
 import { ShareProfileButton } from '@/components/ShareProfileButton';
 import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -93,6 +93,36 @@ const getOfficeLocationLabel = (
   return `${officeLabel} ${getLocationLabel(state, district)}`;
 };
 
+const getOfficeAbbrev = (office: string | undefined | null): string => {
+  if (!office) return 'OFF';
+  const o = office.toLowerCase();
+  if (o.includes('senator')) return 'SEN';
+  if (o.includes('representative')) return 'REP';
+  if (o.includes('governor')) return 'GOV';
+  return office.slice(0, 3).toUpperCase();
+};
+
+const getBillStatusStyle = (status: string | null | undefined) => {
+  const s = (status || '').toLowerCase();
+  if (s.includes('enacted') || s.includes('signed') || s.includes('became law'))
+    return 'bg-poli-green text-white';
+  if (s.includes('passed') && s.includes('senate'))
+    return 'bg-poli-navy text-white';
+  if (s.includes('committee'))
+    return 'bg-poli-gold text-white';
+  return 'bg-poli-surface text-poli-dim';
+};
+
+const StatusBadge = ({ status }: { status?: string | null }) => {
+  if (!status) return null;
+  const label = status.length > 18 ? status.slice(0, 16) + '…' : status;
+  return (
+    <span className={cn('font-mono-label text-[9px] font-semibold px-2 py-0.5 rounded-[5px] shrink-0', getBillStatusStyle(status))}>
+      {label.toUpperCase()}
+    </span>
+  );
+};
+
 export const CandidateProfile = () => {
   const { id } = useParams<{ id: string }>();
   const { data: profile } = useProfile();
@@ -108,6 +138,7 @@ export const CandidateProfile = () => {
   const [visibleDonorCount, setVisibleDonorCount] = useState(20);
   const [visibleBillCount, setVisibleBillCount] = useState(20);
   const [donorSearch, setDonorSearch] = useState('');
+  const [activeTab, setActiveTab] = useState<'issues' | 'votes' | 'bills' | 'money' | 'news' | 'contact' | 'positions'>('issues');
   const effectiveCycle = selectedCycle ?? cycleInfo?.defaultCycle;
   const { data: donors = [], refetch: refetchDonors } = useCandidateDonors(id, effectiveCycle);
   const { data: earmarkRollups = [] } = useCandidateEarmarkRollups(id, effectiveCycle);
@@ -179,6 +210,26 @@ export const CandidateProfile = () => {
     },
   });
   const { data: votes = [] } = useCandidateVotes(id);
+  const alignmentPercent = useMemo(() => {
+    if (!candidate || !votes.length) return null;
+    const userScoreMap: Record<string, number> = {};
+    userTopicScores.forEach(ts => { userScoreMap[ts.topic_id] = ts.score; });
+    let support = 0, oppose = 0;
+    votes.forEach(vote => {
+      const topicId = topicNameToId[vote.topic];
+      if (!topicId) return;
+      const userScore = userScoreMap[topicId];
+      if (userScore === undefined || userScore === null) return;
+      const isProgressiveBill = candidate.party === 'Democrat';
+      if (isProgressiveBill) {
+        if (userScore < 0) support++; else if (userScore > 0) oppose++;
+      } else {
+        if (userScore > 0) support++; else if (userScore < 0) oppose++;
+      }
+    });
+    const total = support + oppose;
+    return total > 0 ? Math.round((support / total) * 100) : null;
+  }, [votes, userTopicScores, candidate?.party]);
   const { data: representativeDetails } = useRepresentativeDetails(id);
   const { data: adminData } = useAdminRole();
   const { user } = useAuth();
@@ -369,7 +420,7 @@ export const CandidateProfile = () => {
 
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-[#F5F6FA] pb-20">
       <Seo
         title={`${candidate.name} — Pulse`}
         description={`See ${candidate.name}'s positions, voting record, donors, and how they align with your views on the issues that matter most.`}
@@ -391,1117 +442,268 @@ export const CandidateProfile = () => {
           url: `https://www.polipulseapp.com/candidate/${candidate.id}`,
         }}
       />
-      <Header />
-      
-      <main className="container py-8 px-4">
-        {/* Back Button */}
-        <Link to="/candidates" className="inline-flex items-center text-muted-foreground hover:text-foreground mb-6 transition-colors">
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to Candidates
-        </Link>
 
-        {/* Sticky identity bar (mobile + desktop) */}
-        <div className="md:hidden sticky top-16 z-30 -mx-4 px-4 py-2 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border flex items-center gap-3 mb-4">
-          <OfficialAvatar
-            imageUrl={representativeDetails?.image_url || candidate.image_url}
-            name={candidate.name}
-            party={candidate.party}
-            size="sm"
-            className="rounded-lg shrink-0"
-          />
-          <div className="min-w-0 flex-1">
-            <p className="font-display font-bold text-sm truncate">{candidate.name}</p>
-            <p className="text-xs text-muted-foreground truncate">{candidate.party} · {officeLocationLabel}</p>
-          </div>
-        </div>
-        <div className="hidden md:flex sticky top-16 z-30 -mx-4 px-4 py-3 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border items-center gap-3 mb-6">
-          <OfficialAvatar
-            imageUrl={representativeDetails?.image_url || candidate.image_url}
-            name={candidate.name}
-            party={candidate.party}
-            size="sm"
-            className="rounded-lg shrink-0"
-          />
-          <div className="min-w-0">
-            <p className="font-display font-bold text-base truncate">{candidate.name}</p>
-            <p className="text-sm text-muted-foreground truncate">
-              {officeLocationLabel}
-            </p>
-          </div>
-        </div>
-
-        {/* Hero Section */}
-        <div className="bg-card rounded-2xl border border-border p-6 md:p-8 mb-8 shadow-elevated">
-
-          <div className="flex flex-col md:flex-row md:items-start gap-6">
-            {/* Avatar */}
-            <OfficialAvatar
-              imageUrl={representativeDetails?.image_url || candidate.image_url}
-              name={candidate.name}
-              party={candidate.party}
-              size="lg"
-              className="rounded-2xl"
-              imageClassName="object-top scale-110"
-            />
-
-            {/* Info */}
-            <div className="flex-1 min-w-0">
-              {/* Top row: name/badges on left, action icons on right */}
-              <div className="flex items-start gap-3 mb-4">
-                <div className="flex-1 min-w-0">
-                  <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground">
-                    {candidate.name}
-                  </h1>
-                  <div className="flex flex-wrap items-center gap-3 mt-2 text-muted-foreground">
-                    <span className="font-medium">{normalizeOfficeName(candidate.office)}</span>
-                    <span>•</span>
-                    <span className="flex items-center gap-1">
-                      <MapPin className="w-4 h-4" />
-                      {locationLabel}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2 mt-3">
-                    <Badge variant="outline" className={cn("border text-sm", getPartyColor(candidate.party))}>
-                      {candidate.party}
-                    </Badge>
-                    {isClaimed && (
-                      <Badge variant="secondary" className="bg-agree/10 text-agree border-agree/30">
-                        <BadgeCheck className="h-3 w-3 mr-1" />
-                        Verified
-                      </Badge>
-                    )}
-                    {candidate.hasOverride && isAdmin && (
-                      <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/30">
-                        Overridden
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-
-                {/* Action icons — top right */}
-                <div className="flex flex-wrap justify-end items-center gap-2 shrink-0">
-                  {canEdit && (
-                    <IconActionButton
-                      label="Edit"
-                      icon={<Pencil className="h-4 w-4" />}
-                      onClick={() => setIsEditDialogOpen(true)}
-                    />
-                  )}
-                  {isPoliticianOwner && (
-                    <Link to="/politician" aria-label="Answer Questions">
-                      <IconActionButton
-                        label="Answer Questions"
-                        icon={<FileText className="h-4 w-4" />}
-                      />
-                    </Link>
-                  )}
-                  <ClaimProfileDialog
-                    candidateId={candidate.id}
-                    candidateName={candidate.name}
-                    isAlreadyClaimed={isClaimed}
-                  />
-                  {user && <RecipientAIAnalysisDialog
-                    entityKind="candidate"
-                    entityId={candidate.id}
-                    entityName={candidate.name}
-                    fecId={candidate.fec_candidate_id ?? null}
-                    party={candidate.party}
-                    office={candidate.office}
-                    state={candidate.state}
-                    trigger={
-                      <IconActionButton
-                        label="AI Analysis"
-                        icon={<Sparkles className="h-4 w-4" />}
-                      />
+      {/* NAVY GRADIENT HEADER */}
+      <div className="bg-gradient-to-br from-poli-navy to-poli-dark text-white pb-12">
+        {/* Top bar: back, title, share+follow */}
+        <div className="flex items-center justify-between px-5 pt-4 pb-3">
+          <Link to="/candidates">
+            <ArrowLeft className="w-5 h-5 text-white/70" />
+          </Link>
+          <span className="font-mono-label text-[11px] tracking-widest uppercase text-white/80">
+            {getOfficeAbbrev(candidate.office)}. {candidate.name.split(' ').slice(-1)[0].toUpperCase()}
+          </span>
+          <div className="flex items-center gap-3">
+            <ShareProfileButton
+              candidateId={candidate.id}
+              candidateName={candidate.name}
+              candidateOffice={candidate.office}
+              candidateState={candidate.state}
+              candidateDistrict={candidate.district}
+              candidateParty={candidate.party}
+              candidateScore={resolvedScore}
+              candidateImage={representativeDetails?.image_url || candidate.image_url}
+              fecId={candidate.fec_candidate_id ?? null}
+              userScore={userScore}
+              matchScore={matchScore}
+              agreements={agreements}
+              disagreements={disagreements}
+              profileUrl={window.location.href}
+              incumbent={candidate.is_incumbent ?? true}
+              coverageTier={candidate.coverage_tier ?? undefined}
+              confidence={candidate.confidence ?? undefined}
+              totalRaised={fecTotalReceipts}
+              totalSpent={fecTotalDisbursements}
+              topDonors={(() => {
+                const agg = new Map<string, { name: string; amount: number; primaryCause?: string | null; primaryCauseStance?: string | null; viaEarmarks?: boolean }>();
+                const rollupIndex = buildEarmarkRollupIndex(earmarkRollups);
+                const rollupMatch = new Map<string, { name: string; type: string }>();
+                donors
+                  .filter((d) => !isConduitDonor(d) && !d.is_transfer)
+                  .forEach((d) => {
+                    const aliasName = donorAliasNameMap?.get(`${d.name.trim().toUpperCase()}|${d.type}`);
+                    const n = (aliasName || d.display_name || d.name || 'Unknown').trim();
+                    const matchedKey = matchEarmarkRollupKey(d, rollupIndex);
+                    if (matchedKey) {
+                      if (!rollupMatch.has(matchedKey)) rollupMatch.set(matchedKey, { name: n, type: d.type });
+                      return;
                     }
-                  />}
-                  <ShareProfileButton
-                    candidateId={candidate.id}
-                    candidateName={candidate.name}
-                    candidateOffice={candidate.office}
-                    candidateState={candidate.state}
-                    candidateDistrict={candidate.district}
-                    candidateParty={candidate.party}
-                    candidateScore={resolvedScore}
-                    candidateImage={representativeDetails?.image_url || candidate.image_url}
-                    fecId={candidate.fec_candidate_id ?? null}
-                    userScore={userScore}
-                    matchScore={matchScore}
-                    agreements={agreements}
-                    disagreements={disagreements}
-                    profileUrl={window.location.href}
-                    incumbent={candidate.is_incumbent ?? true}
-                    coverageTier={candidate.coverage_tier ?? undefined}
-                    confidence={candidate.confidence ?? undefined}
-                    totalRaised={fecTotalReceipts}
-                    totalSpent={fecTotalDisbursements}
-                    topDonors={(() => {
-                      const agg = new Map<string, { name: string; amount: number; primaryCause?: string | null; primaryCauseStance?: string | null; viaEarmarks?: boolean }>();
-                      // Earmark-program orgs (e.g. AIPAC) rank on the stat card by
-                      // their combined "by or through" figure, same as the funding
-                      // list below: the matched donor row is skipped (its direct
-                      // dollars are inside the rollup) so nothing is double-listed.
-                      const rollupIndex = buildEarmarkRollupIndex(earmarkRollups);
-                      const rollupMatch = new Map<string, { name: string; type: string }>();
-                      donors
-                        .filter((d) => !isConduitDonor(d) && !d.is_transfer)
-                        .forEach((d) => {
-                          const aliasName = donorAliasNameMap?.get(`${d.name.trim().toUpperCase()}|${d.type}`);
-                          const n = (aliasName || d.display_name || d.name || 'Unknown').trim();
-                          const matchedKey = matchEarmarkRollupKey(d, rollupIndex);
-                          if (matchedKey) {
-                            // Donors iterate amount-desc: keep the first (largest) match.
-                            if (!rollupMatch.has(matchedKey)) rollupMatch.set(matchedKey, { name: n, type: d.type });
-                            return;
-                          }
-                          const cause = getDonorCause(donorCauseMap, d.name, d.type) ?? getDonorCause(donorCauseMap, n, d.type);
-                          const key = `${n.toUpperCase()}|${d.type}`;
-                          const current = agg.get(key) ?? {
-                            name: n,
-                            amount: 0,
-                            primaryCause: cause?.label ?? null,
-                            primaryCauseStance: cause?.stance ?? null,
-                          };
-                          current.amount += Number(d.amount ?? 0);
-                          if (!current.primaryCause && cause?.label) {
-                            current.primaryCause = cause.label;
-                            current.primaryCauseStance = cause.stance ?? null;
-                          }
-                          agg.set(key, current);
-                        });
-                      earmarkRollups.forEach((r) => {
-                        const match = rollupMatch.get(earmarkRollupKey(r.org_label, r.cycle));
-                        const name = match?.name || r.org_label;
-                        const type = match?.type ?? (r.org_type === 'Organization' ? 'Organization' : 'PAC');
-                        const cause = getDonorCause(donorCauseMap, r.org_label, type) ?? getDonorCause(donorCauseMap, name, type);
-                        const key = `${name.toUpperCase()}|${type}|earmark`;
-                        const current = agg.get(key) ?? {
-                          name,
-                          amount: 0,
-                          primaryCause: cause?.label ?? null,
-                          primaryCauseStance: cause?.stance ?? null,
-                          viaEarmarks: true,
-                        };
-                        current.amount += r.direct_amount + r.routed_amount;
-                        agg.set(key, current);
-                      });
-                      return Array.from(agg.values())
-                        .sort((a, b) => b.amount - a.amount)
-                        .slice(0, 3);
-                    })()}
-                    fundingBreakdown={fundingBreakdownComputed}
-                    fundingCycle={fundingInput.cycleLabel}
-                    selfFunded={(fecLoans ?? 0) + (fecCandidateContribution ?? 0)}
-                  />
+                    const cause = getDonorCause(donorCauseMap, d.name, d.type) ?? getDonorCause(donorCauseMap, n, d.type);
+                    const key = `${n.toUpperCase()}|${d.type}`;
+                    const current = agg.get(key) ?? { name: n, amount: 0, primaryCause: cause?.label ?? null, primaryCauseStance: cause?.stance ?? null };
+                    current.amount += Number(d.amount ?? 0);
+                    if (!current.primaryCause && cause?.label) { current.primaryCause = cause.label; current.primaryCauseStance = cause.stance ?? null; }
+                    agg.set(key, current);
+                  });
+                earmarkRollups.forEach((r) => {
+                  const match = rollupMatch.get(earmarkRollupKey(r.org_label, r.cycle));
+                  const name = match?.name || r.org_label;
+                  const type = match?.type ?? (r.org_type === 'Organization' ? 'Organization' : 'PAC');
+                  const cause = getDonorCause(donorCauseMap, r.org_label, type) ?? getDonorCause(donorCauseMap, name, type);
+                  const key = `${name.toUpperCase()}|${type}|earmark`;
+                  const current = agg.get(key) ?? { name, amount: 0, primaryCause: cause?.label ?? null, primaryCauseStance: cause?.stance ?? null, viaEarmarks: true };
+                  current.amount += r.direct_amount + r.routed_amount;
+                  agg.set(key, current);
+                });
+                return Array.from(agg.values()).sort((a, b) => b.amount - a.amount).slice(0, 3);
+              })()}
+              fundingBreakdown={fundingBreakdownComputed}
+              fundingCycle={fundingInput.cycleLabel}
+              selfFunded={(fecLoans ?? 0) + (fecCandidateContribution ?? 0)}
+            />
+            <Heart className="w-5 h-5 text-white/70" />
+          </div>
+        </div>
 
-
-                </div>
-              </div>
-
-
-              {/* Score Display */}
-              <CandidateScoreCard
-                score={resolvedScore}
-                matchScore={matchScore}
-                userScore={profile?.overall_score ?? null}
-                personalizedScore={personalized?.score ?? null}
-                personalizedCount={personalized?.matchedCount ?? 0}
-                className="mb-4"
+        {/* Identity row */}
+        <div className="flex items-center gap-4 px-5 pt-1">
+          <OfficialAvatar
+            imageUrl={representativeDetails?.image_url || candidate.image_url}
+            name={candidate.name}
+            party={candidate.party}
+            size="lg"
+            className="rounded-full ring-2 ring-white/30 ring-offset-2 ring-offset-transparent shrink-0"
+          />
+          <div>
+            <h1 className="font-sans font-black text-[23px] leading-tight text-white">{candidate.name}</h1>
+            <p className="text-white/70 text-sm mt-0.5">
+              {normalizeOfficeName(candidate.office)} · {candidate.state}
+            </p>
+            <div className="flex items-center gap-2 mt-1.5">
+              <span
+                className="w-2 h-2 rounded-full"
+                style={{ background: candidate.party === 'Democrat' ? '#60A5FA' : candidate.party === 'Republican' ? '#FCA5A5' : '#D1FAE5' }}
               />
-
-              {/* Badges */}
-              <div className="flex flex-wrap items-center gap-2 mb-3">
-                <IncumbentBadge isIncumbent={candidate.is_incumbent ?? true} />
-                <CoverageTierBadge tier={(candidate.coverage_tier as CoverageTier) || 'tier_3'} />
-                <ConfidenceBadge confidence={(candidate.confidence as ConfidenceLevel) || 'medium'} />
-              </div>
-
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Calendar className="w-4 h-4" />
-                <span>Data updated {new Date(candidate.last_updated).toLocaleDateString()}</span>
-              </div>
+              <span className="text-white/80 text-sm">{candidate.party}</span>
+              {candidate.is_incumbent === true && <span className="text-white/50 text-sm">· Incumbent</span>}
+              {candidate.is_incumbent === false && <span className="text-white/50 text-sm">· Challenger</span>}
             </div>
           </div>
         </div>
+      </div>
 
-        {/* AI Explanation Section */}
-        <div className="mb-8">
-          <AIExplanation
-            candidateId={candidate.id}
-            candidateName={candidate.name}
-            topicScores={candidateTopicScores}
-            userTopicScores={userTopicScores.map(uts => {
-              const topic = candidateTopicScores.find(c => c.topicId === uts.topic_id);
-              return {
-                topicId: uts.topic_id,
-                topicName: topic?.topicName || uts.topic_id,
-                score: uts.score,
-              };
-            })}
-            matchScore={matchScore}
-          />
-        </div>
-
-
-        {/* Positions & Sources Section */}
-        <div className="mb-8">
-          <CandidatePositions
-            candidateId={candidate.id}
-            candidateName={candidate.name}
-          />
-        </div>
-
-        {/* Prior Positions Section */}
-        {candidate?.priorOffices && candidate.priorOffices.length > 0 && (
-          <div className="mb-8">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Briefcase className="w-5 h-5 text-muted-foreground" />
-                  Prior Positions
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {candidate.priorOffices.map((po, idx) => (
-                    <div key={idx} className="flex items-center justify-between py-2 border-b last:border-b-0 border-border">
-                      <div>
-                        <span className="font-medium">{normalizeOfficeName(po.office)}</span>
-                        {po.district && <span className="text-muted-foreground">, District {po.district}</span>}
-                        <span className="text-muted-foreground"> — {po.state}</span>
-                      </div>
-                      {(po.start_year || po.end_year) && (
-                        <span className="text-sm text-muted-foreground">
-                          {po.start_year}–{po.end_year || 'Present'}
-                        </span>
-                      )}
-                    </div>
-                  ))}
+      {/* POLISCORE OVERLAP CARD */}
+      <div className="mx-4 -mt-6 bg-white rounded-[22px] shadow-[0_10px_30px_rgba(11,15,34,0.12)] p-5">
+        <p className="font-mono-label text-[9.5px] tracking-[2px] text-poli-red mb-2">POLISCORE</p>
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1">
+            <div className="flex items-baseline gap-2">
+              <span className="font-sans font-black text-[46px] leading-none text-poli-navy">
+                <ScoreText score={resolvedScore} />
+              </span>
+            </div>
+            <p className="text-[13px] text-poli-dim mt-1">
+              {personalized?.score !== null && personalized?.score !== undefined
+                ? `Personalized score (${personalized.matchedCount} questions)`
+                : 'Score unavailable'}
+            </p>
+          </div>
+          {matchScore !== null && (
+            <div className="flex flex-col items-center shrink-0">
+              <div
+                className="relative w-[64px] h-[64px] rounded-full"
+                style={{ background: `conic-gradient(#182B7A 0 ${Math.round(matchScore)}%, #ECECF2 ${Math.round(matchScore)}% 100%)` }}
+              >
+                <div className="absolute inset-[8px] bg-white rounded-full flex items-center justify-center">
+                  <span className="font-sans font-black text-[13px] text-poli-navy">{Math.round(matchScore)}%</span>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+              <p className="font-mono-label text-[8px] text-poli-muted tracking-wide mt-1">YOUR MATCH</p>
+            </div>
+          )}
+        </div>
+        {/* Slider */}
+        <div className="mt-4 relative">
+          <div className="h-[5px] rounded-full bg-gradient-to-r from-[#2E5BFF] via-[#ECECF2] to-[#FF5A6E]" />
+          <div
+            className="absolute top-1/2 -translate-y-1/2"
+            style={{ left: `${Math.max(2, Math.min(98, 50 + (resolvedScore / 10) * 45))}%` }}
+          >
+            <div className="w-[14px] h-[14px] rounded-full bg-poli-navy border-2 border-white shadow -translate-x-1/2" />
           </div>
-        )}
-
-        {/* Contact Info Section */}
-        {representativeDetails && (
-          <div className="mb-8">
-            <ContactInfoCard representative={representativeDetails} />
+          <div className="flex justify-between mt-2">
+            <span className="font-mono-label text-[8px] text-poli-muted">L · LIBERAL</span>
+            <span className="font-mono-label text-[8px] text-poli-muted">CONSERVATIVE · C</span>
           </div>
-        )}
+        </div>
+      </div>
 
-        {/* X Feed Section */}
-        {candidate && (
-          <div className="mb-8">
-            <RepresentativeSocialFeed candidateId={candidate.id} />
+      {/* STAT GRID */}
+      <div className="mx-4 mt-3 grid grid-cols-3 gap-2">
+        {[
+          { value: fecTotalReceipts ? formatCurrency(fecTotalReceipts) : '—', label: 'Total raised' },
+          { value: fecTotalDisbursements ? formatCurrency(fecTotalDisbursements) : '—', label: 'Spent' },
+          { value: fecTotals?.cash_on_hand_end_period ? formatCurrency(fecTotals.cash_on_hand_end_period) : '—', label: 'Cash on hand' },
+        ].map(stat => (
+          <div key={stat.label} className="border border-[rgba(20,23,58,0.1)] rounded-[14px] p-2.5 bg-white">
+            <p className="font-sans font-black text-[18px] text-poli-navy leading-none">{String(stat.value)}</p>
+            <p className="text-[10px] text-poli-dim mt-1 leading-tight">{stat.label}</p>
           </div>
-        )}
-
-        {/* Latest News Section */}
-        {candidate && (
-          <div className="mb-8">
-            <RelevantNewsFeed
-              people={[{
-                name: candidate.name,
-                office: candidate.office,
-                state: candidate.state,
-                district: candidate.district,
-              }]}
-              topics={userTopicScores.map(uts => (uts as { topic_id?: string }).topic_id).filter(Boolean)}
-              state={candidate.state}
-              district={candidate.district}
-              title={`Latest News about ${candidate.name}`}
-              maxItems={8}
-            />
+        ))}
+        {/* Legislative alignment % box */}
+        <div className="col-span-2 border border-[rgba(20,23,58,0.1)] rounded-[14px] p-2.5 bg-white flex items-center justify-center">
+          <div className="text-center">
+            <p className={cn(
+              "font-sans font-black text-[18px] leading-none",
+              alignmentPercent === null ? "text-poli-navy" : alignmentPercent >= 70 ? "text-agree" : alignmentPercent >= 40 ? "text-amber-600" : "text-disagree"
+            )}>
+              {alignmentPercent !== null ? `${alignmentPercent}%` : '—'}
+            </p>
+            <p className="text-[10px] text-poli-dim mt-1 leading-tight">legislative alignment</p>
           </div>
-        )}
+        </div>
+        <div className="border border-[rgba(20,23,58,0.1)] rounded-[14px] p-2.5 bg-white">
+          <p className="font-sans font-black text-[18px] text-poli-navy leading-none">—</p>
+          <p className="text-[10px] text-poli-dim mt-1 leading-tight">Party unity</p>
+        </div>
+      </div>
 
+      {/* TAB NAVIGATION */}
+      <div className="mt-4 px-4">
+        <div className="grid grid-cols-7 gap-1">
+          {(['issues', 'positions', 'votes', 'bills', 'money', 'news', 'contact'] as const).map(tab => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={cn(
+                'font-sans font-bold text-[10px] py-[7px] rounded-[16px] text-center leading-tight transition-colors',
+                activeTab === tab
+                  ? 'bg-poli-navy text-white'
+                  : 'bg-poli-surface text-poli-body hover:bg-poli-surface/70',
+              )}
+            >
+              {tab.charAt(0).toUpperCase() + tab.slice(1)}
+            </button>
+          ))}
+        </div>
+      </div>
 
-        {/* NJ state-legislator campaign finance (ELEC). Renders only for NJ
-            state legislators that have synced ELEC contribution data. */}
-        <NjStateFinanceSection
-          name={candidate.name}
-          district={candidate.district}
-          office={candidate.office}
-          state={candidate.state}
-          level={(candidate as { level?: string }).level}
-        />
-
-        {/* FL state-legislator campaign finance (Division of Elections). Renders
-            only for FL state legislators that have synced contribution data. */}
-        <FlStateFinanceSection
-          name={candidate.name}
-          district={candidate.district}
-          office={candidate.office}
-          state={candidate.state}
-          level={(candidate as { level?: string }).level}
-        />
-
-        {/* NY state-legislator campaign finance (NYSBOE / data.ny.gov). Renders
-            only for NY state legislators that have synced contribution data. */}
-        <NyStateFinanceSection
-          name={candidate.name}
-          district={candidate.district}
-          office={candidate.office}
-          state={candidate.state}
-          level={(candidate as { level?: string }).level}
-        />
-
-        {/* TX state-legislator campaign finance (Texas Ethics Commission). Renders
-            only for TX state legislators that have matched/synced contribution data. */}
-        <TxStateFinanceSection
-          name={candidate.name}
-          district={candidate.district}
-          office={candidate.office}
-          state={candidate.state}
-          level={(candidate as { level?: string }).level}
-        />
-
-        {/* PoliScore voting record — NC GA state legislators only (v0_nc).
-            Shows per-legislator position on curated key votes from the 2025 session. */}
-        {candidate.id &&
-          candidate.state === 'NC' &&
-          (candidate.office === 'State Senator' || candidate.office === 'State Representative') && (
-          <PoliScoreCard
-            candidateId={candidate.id}
-            candidateName={candidate.name}
-            jurisdiction="nc_state"
-          />
-        )}
-
-        {/* PoliScore voting record — federal Representatives and Senators.
-            v0 covers 28 curated House key votes; Senate key votes are being added. */}
-        {candidate.id &&
-          (candidate.office === 'Representative' || candidate.office === 'Senator') && (
-          <PoliScoreCard
-            candidateId={candidate.id}
-            candidateName={candidate.name}
-            office={candidate.office}
-          />
-        )}
-
-        {/* Tabs for Donors and Votes */}
-        <Tabs defaultValue="donors" className="w-full">
-          <TabsList className="mb-6">
-            <TabsTrigger value="donors" className="gap-2">
-              <DollarSign className="w-4 h-4" />
-              Donors
-            </TabsTrigger>
-            <TabsTrigger value="votes" className="gap-2">
-              <Vote className="w-4 h-4" />
-              Voting Record
-            </TabsTrigger>
-            <TabsTrigger value="legislation" className="gap-2">
-              <ScrollText className="w-4 h-4" />
-              Legislation {sponsoredBills.length > 0 && `(${sponsoredBills.length})`}
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="donors">
-            <Card className="shadow-elevated">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="font-display">Campaign Contributions</CardTitle>
-                  <div className="flex items-center gap-2">
-                    {canEdit && candidate.fec_candidate_id && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleFetchDonors}
-                        disabled={isDonorLoading(id || '')}
-                      >
-                        <RefreshCw className={cn("w-4 h-4 mr-2", isDonorLoading(id || '') && "animate-spin")} />
-                        Refresh Donors
-                      </Button>
-                    )}
-                    <Select
-                      value={effectiveCycle ?? ''}
-                      onValueChange={(v) => setSelectedCycle(v)}
-                      disabled={!cycleInfo}
-                    >
-                      <SelectTrigger className="h-8 w-[140px]">
-                        <SelectValue placeholder="Cycle" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(cycleInfo?.cycles ?? []).map((cy) => (
-                          <SelectItem key={cy} value={cy}>{cy} Cycle</SelectItem>
-                        ))}
-                        <SelectItem value="all">All cycles</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                {candidate.last_donor_sync && (
-                  <p className="text-xs text-muted-foreground">
-                    Last synced: {new Date(candidate.last_donor_sync).toLocaleDateString()}
-                  </p>
+      {/* TAB CONTENT */}
+      <div className="mx-4 mt-4 pb-24">
+        {/* ISSUES TAB */}
+        {activeTab === 'issues' && (
+          <div>
+            <div className="bg-white rounded-[18px] border border-[rgba(20,23,58,0.08)] p-4 mb-3 shadow-sm">
+              <div className="flex items-center justify-between mb-2">
+                <p className="font-mono-label text-[10px] tracking-[2px] text-poli-red">AI ANALYSIS</p>
+                {matchScore !== null && (
+                  <span className="font-mono-label text-[10px] font-semibold px-2 py-0.5 rounded-full bg-poli-navy/10 text-poli-navy">
+                    {Math.round(matchScore)}% Match
+                  </span>
                 )}
-              </CardHeader>
-              <CardContent>
-                {donors.length > 0 ? (
-                  <>
-                    {/* Recipient Transparency Banner */}
-                    {donors[0]?.recipient_committee_name && (
-                      <div className="mb-4 p-3 rounded-lg bg-primary/5 border border-primary/20">
-                        <p className="text-sm text-muted-foreground">
-                          <strong className="text-foreground">Recipient:</strong> {donors[0].recipient_committee_name}
-                          {donors[0].recipient_committee_id && (
-                            <span className="text-xs ml-1">({donors[0].recipient_committee_id})</span>
-                          )}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          These are itemized contributions to the campaign committee, not personal income.
-                        </p>
-                      </div>
-                    )}
-                    
+              </div>
+              <AIExplanation
+                candidateId={candidate.id}
+                candidateName={candidate.name}
+                topicScores={candidateTopicScores}
+                userTopicScores={userTopicScores.map(uts => {
+                  const topic = candidateTopicScores.find(c => c.topicId === uts.topic_id);
+                  return { topicId: uts.topic_id, topicName: topic?.topicName || uts.topic_id, score: uts.score };
+                })}
+                matchScore={matchScore}
+              />
+            </div>
+          </div>
+        )}
 
-                    {/* FEC-derived aggregates to align list with FEC Total Receipts */}
-                    {hasFecBreakdown && (
-                      <Collapsible open={isFecBreakdownOpen} onOpenChange={setIsFecBreakdownOpen} className="mb-6">
-                        <div className="rounded-lg border border-border overflow-hidden">
-                          <CollapsibleTrigger asChild>
-                            <button className="w-full flex items-center justify-between px-4 py-3 bg-secondary/60 border-b border-border hover:bg-secondary/80 transition-colors">
-                              <div className="flex items-center gap-2">
-                                <DollarSign className="w-4 h-4 text-primary" />
-                                <span className="text-sm font-medium text-foreground">FEC Contribution Breakdown</span>
-                                {fecSourceLabel && (
-                                  <span className="text-xs text-muted-foreground">({fecSourceLabel})</span>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-3">
-                                <span className="text-sm font-bold text-primary">{formatCurrency(fecTotalReceipts)}</span>
-                                {isFecBreakdownOpen ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
-                              </div>
-                            </button>
-                          </CollapsibleTrigger>
-                          
-                          <CollapsibleContent>
-                            <div className="divide-y divide-border">
-                              {/* Itemized Individual (Line 11A) */}
-                              <div className="flex items-center justify-between px-4 py-3">
-                                <div className="flex items-center gap-3">
-                                  <span className="text-sm font-medium text-foreground">Itemized Individual (Line 11A)</span>
-                                  <Badge variant="outline" className="text-[10px]">{itemizedIndividualDonors.length} donors</Badge>
-                                </div>
-                                <span className="text-sm font-semibold">{formatCurrency(fecItemized)}</span>
-                              </div>
-                              
-                              {/* PAC/Committee (Line 11C) */}
-                              {(financeReconciliation?.fec_pac_contributions ?? 0) > 0 && (
-                                <div className="flex items-center justify-between px-4 py-3">
-                                  <div className="flex items-center gap-3">
-                                    <span className="text-sm font-medium text-foreground">PAC/Committee (Line 11C)</span>
-                                    <Badge variant="outline" className="text-[10px]">{pacDonors.length} sources</Badge>
-                                  </div>
-                                  <span className="text-sm font-semibold">{formatCurrency(financeReconciliation?.fec_pac_contributions)}</span>
-                                </div>
-                              )}
-                              
-                              {/* Party Contributions (Line 11B) */}
-                              {(financeReconciliation?.fec_party_contributions ?? 0) > 0 && (
-                                <div className="flex items-center justify-between px-4 py-3">
-                                  <div className="flex items-center gap-3">
-                                    <span className="text-sm font-medium text-foreground">Party Contributions (Line 11B)</span>
-                                  </div>
-                                  <span className="text-sm font-semibold">{formatCurrency(financeReconciliation?.fec_party_contributions)}</span>
-                                </div>
-                              )}
-                              
-                              {/* Transfers (Line 12) */}
-                              {fecTransfers > 0 && (
-                                <div className="flex items-center justify-between px-4 py-3">
-                                  <div className="flex flex-col">
-                                    <span className="text-sm font-medium text-foreground">Transfers (Line 12)</span>
-                                    <span className="text-[11px] text-muted-foreground">From other authorized committees</span>
-                                  </div>
-                                  <span className="text-sm font-semibold">{formatCurrency(fecTransfers)}</span>
-                                </div>
-                              )}
-                              
-                              {/* Candidate Loans */}
-                              {fecLoans > 0 && (
-                                <div className="flex items-center justify-between px-4 py-3 bg-amber-500/5">
-                                  <div className="flex flex-col">
-                                    <span className="text-sm font-medium text-foreground">Candidate Loans</span>
-                                    <span className="text-[11px] text-muted-foreground">Loans from the candidate to campaign</span>
-                                  </div>
-                                  <span className="text-sm font-semibold text-amber-700">{formatCurrency(fecLoans)}</span>
-                                </div>
-                              )}
-                              
-                              {/* Candidate Contribution */}
-                              {fecCandidateContribution > 0 && (
-                                <div className="flex items-center justify-between px-4 py-3">
-                                  <div className="flex flex-col">
-                                    <span className="text-sm font-medium text-foreground">Candidate Contribution</span>
-                                    <span className="text-[11px] text-muted-foreground">Direct contribution from candidate</span>
-                                  </div>
-                                  <span className="text-sm font-semibold">{formatCurrency(fecCandidateContribution)}</span>
-                                </div>
-                              )}
-                              
-                              {/* Other Receipts (Line 15) */}
-                              {fecOtherReceipts > 0 && (
-                                <div className="flex items-center justify-between px-4 py-3 bg-muted/30">
-                                  <div className="flex flex-col">
-                                    <span className="text-sm font-medium text-foreground">Other Receipts (Line 15)</span>
-                                    <span className="text-[11px] text-muted-foreground">Slate mailers, refunds, misc</span>
-                                  </div>
-                                  <span className="text-sm font-semibold">{formatCurrency(fecOtherReceipts)}</span>
-                                </div>
-                              )}
-                              
-                              {/* Unitemized / Small Donors */}
-                              <div className="flex items-center justify-between px-4 py-3 bg-muted/30">
-                                <div className="flex flex-col">
-                                  <span className="text-sm font-medium text-foreground">Unitemized (Small Donors)</span>
-                                  <span className="text-[11px] text-muted-foreground">Donations &lt;$200, FEC aggregate</span>
-                                </div>
-                                <span className="text-sm font-semibold">{formatCurrency(fecUnitemized)}</span>
-                              </div>
-                              
-                              {/* Total Row */}
-                              <div className="flex items-center justify-between px-4 py-3 bg-primary/5 border-t-2 border-primary/30">
-                                <span className="text-sm font-bold text-foreground">FEC Total Receipts</span>
-                                <span className="text-lg font-bold text-primary">{formatCurrency(fecTotalReceipts)}</span>
-                              </div>
-                            </div>
-                          </CollapsibleContent>
-                        </div>
-                      </Collapsible>
-                    )}
+        {/* POSITIONS TAB */}
+        {activeTab === 'positions' && (
+          <div className="bg-white rounded-[18px] border border-[rgba(20,23,58,0.08)] p-4 shadow-sm">
+            <p className="font-mono-label text-[10px] tracking-[2px] text-poli-red mb-3">POSITIONS & YOUR MATCH</p>
+            <CandidatePositions candidateId={candidate.id} candidateName={candidate.name} defaultOpen />
+          </div>
+        )}
 
-                    
-                    <div className="mb-6 p-4 rounded-xl bg-secondary/50">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm text-muted-foreground">All Contributors & Funding Sources</p>
-                          <p className="text-2xl font-bold text-foreground">
-                            {donors.filter(d => !isConduitDonor(d)).length}
-                            {fecUnitemized && fecUnitemized > 0 ? ' + Small Donors' : ''}
-                            {(fecLoans > 0 || fecCandidateContribution > 0 || fecTransfers > 0) ? ' + Self-Funding' : ''}
-                          </p>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Individuals, PACs, Organizations{fecUnitemized && fecUnitemized > 0 ? ', Unitemized' : ''}
-                            {(fecLoans > 0 || fecCandidateContribution > 0) && ', Candidate Self-Funding'}
-                            {fecTransfers > 0 && ', Committee Transfers'}
-                            {conduitDonors.length > 0 && ` (${conduitDonors.length} conduits excluded)`}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-xs text-muted-foreground">FEC Total Receipts</p>
-                          <p className="text-xl font-bold text-foreground">
-                            {formatCurrency(fecTotalReceipts ?? 0)}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
+        {/* VOTES TAB */}
+        {activeTab === 'votes' && (
+          <div>
+            {/* PoliScore voting record — NC GA state legislators only (v0_nc).
+                Shows per-legislator position on curated key votes from the 2025 session. */}
+            {candidate.id &&
+              candidate.state === 'NC' &&
+              (candidate.office === 'State Senator' || candidate.office === 'State Representative') && (
+              <div className="mb-3">
+                <PoliScoreCard
+                  candidateId={candidate.id}
+                  candidateName={candidate.name}
+                  jurisdiction="nc_state"
+                />
+              </div>
+            )}
 
-                    {/* Funding Sources breakdown — shareable panel */}
-                    <FundingSourcesBreakdown input={fundingInput} className="mb-6" />
+            {/* PoliScore voting record — federal Representatives and Senators.
+                v0 covers curated House key votes; Senate key votes are being added. */}
+            {candidate.id &&
+              (candidate.office === 'Representative' || candidate.office === 'Senator') && (
+              <div className="mb-3">
+                <PoliScoreCard
+                  candidateId={candidate.id}
+                  candidateName={candidate.name}
+                  office={candidate.office}
+                />
+              </div>
+            )}
 
-                    {/* Search Bar */}
-                    <div className="mb-4 relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                      <Input
-                        placeholder="Search donors by name, employer, or location..."
-                        value={donorSearch}
-                        onChange={(e) => {
-                          setDonorSearch(e.target.value);
-                          setVisibleDonorCount(20); // Reset pagination on search
-                        }}
-                        className="pl-9 pr-9"
-                      />
-                      {donorSearch && (
-                        <button
-                          onClick={() => {
-                            setDonorSearch('');
-                            setVisibleDonorCount(20);
-                          }}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-
-                    <div className="space-y-3">
-                      {(() => {
-                        // Build unified funding sources array
-                        type FundingSource = {
-                          id: string;
-                          name: string;
-                          amount: number;
-                          sourceType: 'donor' | 'small_donors' | 'candidate_loan' | 'candidate_contribution' | 'committee_transfer' | 'earmark_org';
-                          donor?: typeof donors[0];
-                          badgeLabel?: string;
-                          badgeStyle?: string;
-                          description?: string;
-                          subLabel?: string;
-                          searchText?: string;
-                          linkTo?: string; // For clickable committee links
-                          donorType?: string; // For cause lookup on earmark_org entries
-                        };
-
-                        const allSources: FundingSource[] = [];
-
-                        // Earmark-program orgs (e.g. AIPAC) get ONE combined "by or
-                        // through" entry: direct dollars + member earmarks attributed
-                        // to the org. The matched per-cycle donor row is replaced by
-                        // that entry (its direct dollars are inside the rollup), so
-                        // nothing is double-listed; the routed dollars stay out of
-                        // every total — the members are themselves listed as donors.
-                        const rollupByKey = buildEarmarkRollupIndex(earmarkRollups);
-                        const rollupDonorMatch = new Map<string, { donorId: string; displayName: string }>();
-
-                        // Add regular donors - but exclude entries already shown as FEC summary categories
-                        // EXCEPT: Show transfer donors with their names for transparency (they just won't count toward totals)
-                        donors.forEach(d => {
-                          // Conduits (ActBlue/WinRed/Democracy Engine) are payment
-                          // processors, not donors: never listed, no aggregate shown.
-                          if (isConduitDonor(d)) {
-                            return;
-                          }
-                          // Skip loan entries (line 13A) if fecLoans is already shown as FEC aggregate
-                          if (fecLoans > 0 && d.line_number === '13A') {
-                            return;
-                          }
-                          // Skip candidate contributions (line 11AI) if fecCandidateContribution is already shown
-                          if (fecCandidateContribution > 0 && d.line_number === '11AI') {
-                            return;
-                          }
-
-                          const isTransfer = d.line_number?.startsWith('12') || d.is_transfer;
-                          const displayName = d.display_name || d.name;
-
-                          // Replaced by the org's combined earmark entry below. The
-                          // donor group consolidates alias spellings (display_name +
-                          // name_variations), while the RPC groups by raw contributor
-                          // name — so try every known spelling. (The RPC now
-                          // groups by canonical alias name when one exists, so
-                          // most multi-spelling orgs consolidate server-side.)
-                          if (!isTransfer) {
-                            const matchedKey = matchEarmarkRollupKey(d, rollupByKey);
-                            if (matchedKey) {
-                              // Donors iterate amount-desc: keep the first (largest) match.
-                              if (!rollupDonorMatch.has(matchedKey)) {
-                                rollupDonorMatch.set(matchedKey, { donorId: d.id, displayName });
-                              }
-                              return;
-                            }
-                          }
-
-                          // Show transfer donors with their names but mark them as transfers
-                          if (isTransfer) {
-                            // For transfers, the conduit_committee_id is the originating committee
-                            const committeeId = d.conduit_committee_id;
-                            allSources.push({
-                              id: d.id,
-                              name: displayName,
-                              amount: d.amount,
-                              sourceType: 'committee_transfer',
-                              donor: d,
-                              badgeLabel: 'Line 12',
-                              badgeStyle: 'border-purple-500/50 text-purple-600 bg-purple-500/10',
-                              description: `Transfer from ${displayName}`,
-                              subLabel: 'Committee transfer',
-                              searchText: [displayName, 'transfer committee'].join(' ').toLowerCase(),
-                              linkTo: committeeId ? `/committee/${committeeId}` : undefined
-                            });
-                          } else {
-                            allSources.push({
-                              id: d.id,
-                              name: d.name,
-                              amount: d.amount,
-                              sourceType: 'donor',
-                              donor: d,
-                              searchText: [displayName, d.employer, d.contributor_city, d.contributor_state, d.type].filter(Boolean).join(' ').toLowerCase()
-                            });
-                          }
-                        });
-
-                        // Combined "by or through" entries for earmark-program orgs.
-                        // Ranked by direct + routed; the breakdown is stated on the
-                        // card so the overlap with individual donors is explicit.
-                        // Group by org across cycles so AIPAC 2024 + AIPAC 2026 appear
-                        // as one card when showing "all" cycles.
-                        const earmarkByOrg = new Map<string, {
-                          r: typeof earmarkRollups[0];
-                          direct_amount: number;
-                          direct_count: number;
-                          routed_amount: number;
-                          routed_count: number;
-                          cycles: string[];
-                        }>();
-                        earmarkRollups.forEach(r => {
-                          const orgKey = normalizeOrgKey(r.org_label);
-                          if (earmarkByOrg.has(orgKey)) {
-                            const existing = earmarkByOrg.get(orgKey)!;
-                            existing.direct_amount += r.direct_amount;
-                            existing.direct_count += r.direct_count;
-                            existing.routed_amount += r.routed_amount;
-                            existing.routed_count += r.routed_count;
-                            existing.cycles.push(r.cycle);
-                          } else {
-                            earmarkByOrg.set(orgKey, {
-                              r,
-                              direct_amount: r.direct_amount,
-                              direct_count: r.direct_count,
-                              routed_amount: r.routed_amount,
-                              routed_count: r.routed_count,
-                              cycles: [r.cycle],
-                            });
-                          }
-                        });
-                        earmarkByOrg.forEach(({ r, direct_amount, direct_count: _dc, routed_amount, routed_count, cycles }) => {
-                          // Find a donor link for any cycle of this org (largest amount first)
-                          let match: { donorId: string; displayName: string } | undefined;
-                          for (const c of cycles) {
-                            const m = rollupDonorMatch.get(earmarkRollupKey(r.org_label, c));
-                            if (m) { match = m; break; }
-                          }
-                          const orgName = match?.displayName || r.org_label;
-                          const combined = direct_amount + routed_amount;
-                          const cycleNums = cycles.map(Number).filter(Boolean).sort((a, b) => a - b);
-                          const cycleLabel = cycleNums.length > 1
-                            ? `${cycleNums[0]}–${cycleNums[cycleNums.length - 1]}`
-                            : cycles[0];
-                          allSources.push({
-                            id: `earmark|${normalizeOrgKey(r.org_label)}`,
-                            name: orgName,
-                            amount: combined,
-                            sourceType: 'earmark_org',
-                            badgeLabel: 'Earmark program',
-                            badgeStyle: 'border-amber-500/50 text-amber-600 bg-amber-500/10',
-                            description: `${formatCurrency(direct_amount)} given directly + ${formatCurrency(routed_amount)} earmarked through ${orgName} by its donors (${routed_count.toLocaleString()} contributions). Those donors are also listed individually — earmarked dollars are never counted twice.`,
-                            subLabel: `${cycleLabel} · by or through`,
-                            searchText: [orgName, r.org_label, 'earmark', 'by or through', r.org_type].join(' ').toLowerCase(),
-                            linkTo: match ? `/donor/${match.donorId}` : undefined,
-                            donorType: r.org_type,
-                          });
-                        });
-
-                        // Add FEC aggregate sources
-                        if (fecUnitemized && fecUnitemized > 0) {
-                          allSources.push({
-                            id: 'small-donors',
-                            name: 'Small Donors (Unitemized)',
-                            amount: fecUnitemized,
-                            sourceType: 'small_donors',
-                            badgeLabel: 'Aggregate',
-                            badgeStyle: 'border-primary/50 text-primary bg-primary/10',
-                            description: 'Individual donations under $200 — not itemized by FEC',
-                            subLabel: 'FEC aggregate',
-                            searchText: 'small donors unitemized aggregate'
-                          });
-                        }
-                        
-                        if (fecLoans > 0) {
-                          allSources.push({
-                            id: 'candidate-loan',
-                            name: candidate.name,
-                            amount: fecLoans,
-                            sourceType: 'candidate_loan',
-                            badgeLabel: 'Candidate Loan',
-                            badgeStyle: 'border-blue-500/50 text-blue-600 bg-blue-500/10',
-                            description: 'Loan from the candidate to their own campaign — may be repaid from future contributions',
-                            subLabel: 'Self-funded',
-                            searchText: `${candidate.name.toLowerCase()} loan self-funded`
-                          });
-                        }
-                        
-                        if (fecCandidateContribution > 0) {
-                          allSources.push({
-                            id: 'candidate-contribution',
-                            name: candidate.name,
-                            amount: fecCandidateContribution,
-                            sourceType: 'candidate_contribution',
-                            badgeLabel: 'Candidate Contribution',
-                            badgeStyle: 'border-blue-500/50 text-blue-600 bg-blue-500/10',
-                            description: 'Direct contribution from the candidate (not a loan — non-repayable)',
-                            subLabel: 'Self-funded',
-                            searchText: `${candidate.name.toLowerCase()} contribution self-funded`
-                          });
-                        }
-                        
-                        // Only show FEC aggregate transfer entry if we don't have imported transfer donors
-                        // (to avoid double-counting - we prefer to show individual transfer sources)
-                        const hasImportedTransfers = donors.some(d => d.line_number?.startsWith('12') || d.is_transfer);
-                        if (fecTransfers > 0 && !hasImportedTransfers) {
-                          allSources.push({
-                            id: 'committee-transfers',
-                            name: 'Committee Transfers',
-                            amount: fecTransfers,
-                            sourceType: 'committee_transfer',
-                            badgeLabel: 'Line 12',
-                            badgeStyle: 'border-purple-500/50 text-purple-600 bg-purple-500/10',
-                            description: 'Transfers from other authorized campaign committees',
-                            subLabel: 'Inter-committee',
-                            searchText: 'committee transfers inter-committee'
-                          });
-                        }
-                        
-                        // Sort by amount descending
-                        allSources.sort((a, b) => b.amount - a.amount);
-                        
-                        // Filter by search term
-                        const searchLower = donorSearch.toLowerCase().trim();
-                        const filteredSources = searchLower
-                          ? allSources.filter(s => s.searchText?.includes(searchLower))
-                          : allSources;
-                        
-                        // Paginate
-                        const visibleSources = filteredSources.slice(0, visibleDonorCount);
-                        const remaining = filteredSources.length - visibleDonorCount;
-                        
-                        return (
-                          <>
-                            {visibleSources.length === 0 && (
-                              <div className="text-center py-8 text-muted-foreground">
-                                No donors match your search.
-                              </div>
-                            )}
-                            {visibleSources.map(source => {
-                              // Render donor-type sources
-                              // (conduit rows never reach here — they're filtered out
-                              // of allSources; earmark-program orgs render as
-                              // 'earmark_org' aggregate cards instead)
-                              if (source.sourceType === 'donor' && source.donor) {
-                                const donor = source.donor;
-                                const displayName = donor.display_name || donor.name;
-
-                                return (
-                                  <Link
-                                    key={source.id}
-                                    to={`/donor/${donor.id}`}
-                                    className="block group"
-                                  >
-                                    <div className="flex items-center justify-between p-4 rounded-lg border transition-all border-border hover:border-primary/30 hover:shadow-sm">
-                                      <div>
-                                        <div className="flex items-center gap-2">
-                                          <p className="font-medium text-foreground group-hover:text-primary transition-colors">{displayName}</p>
-                                          {donor.is_consolidated && donor.name_variations && donor.name_variations.length > 1 && (
-                                            <TooltipProvider>
-                                              <Tooltip>
-                                                <TooltipTrigger>
-                                                  <Badge variant="outline" className="text-[10px] border-primary/50 text-primary bg-primary/10">
-                                                    {donor.name_variations.length} merged
-                                                  </Badge>
-                                                </TooltipTrigger>
-                                                <TooltipContent className="max-w-xs">
-                                                  <p className="font-medium mb-1">Merged Names</p>
-                                                  <ul className="text-xs space-y-0.5">
-                                                    {donor.name_variations.slice(0, 10).map((name, i) => (
-                                                      <li key={i}>{name}</li>
-                                                    ))}
-                                                    {donor.name_variations.length > 10 && (
-                                                      <li>...and {donor.name_variations.length - 10} more</li>
-                                                    )}
-                                                  </ul>
-                                                </TooltipContent>
-                                              </Tooltip>
-                                            </TooltipProvider>
-                                          )}
-                                        </div>
-                                        <div className="flex flex-wrap items-center gap-2 mt-1">
-                                          <Badge variant="secondary">{donor.type}</Badge>
-                                          {(() => {
-                                            const cause = getDonorCause(donorCauseMap, displayName, donor.type);
-                                            return cause ? <CauseBadge cause={cause} /> : null;
-                                          })()}
-                                          {(() => {
-                                            const via = donor.via_committees ?? [];
-                                            const external = via.filter(v => v.designation !== 'P' && v.designation !== 'A');
-                                            if (external.length === 0) return null;
-                                            const designationLabel = (d: string | null) => {
-                                              switch (d) {
-                                                case 'O': return 'Super PAC';
-                                                case 'U': return 'Unauthorized';
-                                                case 'D': return 'Leadership PAC';
-                                                case 'J': return 'Joint Fundraising';
-                                                case 'B': return 'Lobbyist PAC';
-                                                default: return 'Outside committee';
-                                              }
-                                            };
-                                            const prefix = donor.is_external_only ? 'via' : '+ via';
-                                            const label = external.length === 1
-                                              ? `${prefix} ${external[0].committee_name} · ${designationLabel(external[0].designation)}`
-                                              : `${prefix} ${external.length} outside committees`;
-                                            return (
-                                              <TooltipProvider>
-                                                <Tooltip>
-                                                  <TooltipTrigger asChild>
-                                                    <Badge
-                                                      variant="outline"
-                                                      className="text-[10px] border-amber-500/50 text-amber-700 bg-amber-500/10 dark:text-amber-400"
-                                                    >
-                                                      {label}
-                                                    </Badge>
-                                                  </TooltipTrigger>
-                                                  <TooltipContent className="max-w-xs">
-                                                    <p className="font-medium mb-1">Routed through outside committees</p>
-                                                    <ul className="text-xs space-y-0.5">
-                                                      {external.slice(0, 5).map(v => (
-                                                        <li key={v.committee_id}>
-                                                          • {v.committee_name} ({designationLabel(v.designation)}) — ${v.amount.toLocaleString()}
-                                                        </li>
-                                                      ))}
-                                                    </ul>
-                                                    <p className="text-xs mt-2 text-muted-foreground">
-                                                      Money to these committees supports the candidate but is not a direct contribution to their campaign.
-                                                    </p>
-                                                  </TooltipContent>
-                                                </Tooltip>
-                                              </TooltipProvider>
-                                            );
-                                          })()}
-                                          {donor.contributor_city && donor.contributor_state && (
-                                            <span className="text-xs text-muted-foreground">
-                                              {donor.contributor_city}, {donor.contributor_state}
-                                            </span>
-                                          )}
-                                          {donor.employer && (
-                                            <span className="text-xs text-muted-foreground">
-                                              • {donor.employer}
-                                            </span>
-                                          )}
-                                        </div>
-                                      </div>
-                                      <div className="text-right">
-                                        <p className="font-bold text-foreground">
-                                          {formatCurrency(donor.amount)}
-                                        </p>
-                                        <p className="text-xs text-muted-foreground">
-                                          {donor.transaction_count > 1
-                                            ? `${donor.transaction_count.toLocaleString()} contributions`
-                                            : donor.cycle}
-                                        </p>
-                                      </div>
-                                    </div>
-                                  </Link>
-                                );
-                              }
-
-                              // Render FEC aggregate sources
-                              const getBorderStyle = () => {
-                                switch (source.sourceType) {
-                                  case 'small_donors': return 'border-primary/30 bg-primary/5';
-                                  case 'candidate_loan':
-                                  case 'candidate_contribution': return 'border-blue-500/30 bg-blue-500/5';
-                                  case 'committee_transfer': return 'border-purple-500/30 bg-purple-500/5';
-                                  case 'earmark_org': return 'border-amber-500/30 bg-amber-500/5';
-                                  default: return 'border-border';
-                                }
-                              };
-
-                              const getAmountColor = () => {
-                                switch (source.sourceType) {
-                                  case 'candidate_loan':
-                                  case 'candidate_contribution': return 'text-blue-600';
-                                  case 'committee_transfer': return 'text-purple-600';
-                                  case 'earmark_org': return 'text-amber-700';
-                                  default: return 'text-foreground';
-                                }
-                              };
-                              
-                              const content = (
-                                <div className={cn(
-                                  "flex items-center justify-between p-4 rounded-lg border",
-                                  getBorderStyle(),
-                                  source.linkTo && "cursor-pointer hover:border-primary/50 hover:shadow-sm transition-all group"
-                                )}>
-                                  <div>
-                                    <div className="flex items-center gap-2">
-                                      <p className={cn(
-                                        "font-medium text-foreground",
-                                        source.linkTo && "group-hover:text-primary transition-colors"
-                                      )}>{source.name}</p>
-                                      {source.badgeLabel && (
-                                        <Badge variant="outline" className={cn("text-[10px]", source.badgeStyle)}>
-                                          {source.badgeLabel}
-                                        </Badge>
-                                      )}
-                                      {source.sourceType === 'earmark_org' && source.donorType && (() => {
-                                        const cause = getDonorCause(donorCauseMap, source.name, source.donorType);
-                                        return cause ? <CauseBadge cause={cause} /> : null;
-                                      })()}
-                                    </div>
-                                    {source.description && (
-                                      <p className="text-xs text-muted-foreground mt-1">{source.description}</p>
-                                    )}
-                                  </div>
-                                  <div className="text-right">
-                                    <p className={cn("font-bold", getAmountColor())}>
-                                      {formatCurrency(source.amount)}
-                                    </p>
-                                    {source.subLabel && (
-                                      <p className="text-xs text-muted-foreground">{source.subLabel}</p>
-                                    )}
-                                  </div>
-                                </div>
-                              );
-                              
-                              // Wrap in Link if linkTo is set
-                              if (source.linkTo) {
-                                return (
-                                  <Link key={source.id} to={source.linkTo} className="block">
-                                    {content}
-                                  </Link>
-                                );
-                              }
-                              
-                              return <div key={source.id}>{content}</div>;
-                            })}
-                            
-                            {/* Load More Button */}
-                            {remaining > 0 && (
-                              <div className="flex justify-center pt-4">
-                                <Button
-                                  variant="outline"
-                                  onClick={() => setVisibleDonorCount(prev => prev + 20)}
-                                >
-                                  Show 20 more ({remaining} remaining)
-                                </Button>
-                              </div>
-                            )}
-                          </>
-                        );
-                      })()}
-                    </div>
-                    
-                    {/* Conduit explanation — no aggregated conduit amounts are shown anywhere */}
-                    {conduitDonors.length > 0 && (
-                      <div className="mt-4 p-3 rounded-lg bg-muted/50 border border-border text-xs text-muted-foreground">
-                        <div className="flex items-start gap-2">
-                          <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                          <span>
-                            Donations made via payment processors (ActBlue, WinRed, Democracy Engine) are
-                            credited to the individual donors listed above; the processors themselves are
-                            not donors and are not shown.
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                    
-                    <p className="text-xs text-muted-foreground mt-4 flex items-center gap-1">
-                      <ExternalLink className="w-3 h-3" />
-                      Itemized contributions from FEC Schedule A filings (line 11*/12*). 
-                      Does not include unitemized small-dollar donations or other receipts.
-                    </p>
-                  </>
-                ) : (
-                  <p className="text-muted-foreground text-center py-8">
-                    Contribution data not available for this candidate.
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-            <div className="mt-6"><CandidateIESection candidateId={candidate.id} /></div>
-          </TabsContent>
-
-
-          <TabsContent value="votes">
             <VotingRecordSection
               votes={votes}
               userTopicScores={userTopicScores}
@@ -1510,149 +712,219 @@ export const CandidateProfile = () => {
               candidateState={candidate.state}
               candidateOffice={candidate.office}
             />
-          </TabsContent>
-
-          <TabsContent value="legislation">
-            <Card className="shadow-elevated">
-              <CardHeader>
-                <CardTitle className="font-display">Sponsored & Cosponsored Legislation</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {billsLoading ? (
-                  <div className="flex justify-center py-8">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
-                  </div>
-                ) : sponsoredBills.length > 0 ? (
-                  <div className="space-y-4">
-                    {/* Summary badges */}
-                    <div className="flex gap-2 mb-4">
-                      <Badge className="bg-primary/10 text-primary border-primary/30">
-                        Sponsored: {sponsoredBills.filter(b => b.is_sponsor).length}
-                      </Badge>
-                      <Badge variant="outline">
-                        Cosponsored: {sponsoredBills.filter(b => !b.is_sponsor).length}
-                      </Badge>
-                    </div>
-                    
-                    {/* Bill list */}
-                    <div className="divide-y divide-border">
-                      {sponsoredBills.slice(0, visibleBillCount).map(bill => (
-                        <div key={bill.bill_id} className="py-3 flex items-start gap-3">
-                          <Badge 
-                            variant={bill.is_sponsor ? "default" : "outline"} 
-                            className={cn(
-                              "shrink-0 text-xs",
-                              bill.is_sponsor && "bg-primary text-primary-foreground"
-                            )}
-                          >
-                            {bill.is_sponsor ? "Sponsor" : "Cosponsor"}
-                          </Badge>
-                          <div className="flex-1 min-w-0">
-                            <a 
-                              href={bill.url || `https://congress.gov/bill/${bill.congress}th-congress/${(bill.bill_type || 'hr').toLowerCase()}/${bill.bill_number}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="font-medium hover:text-primary transition-colors line-clamp-2"
-                            >
-                              {bill.bill_type} {bill.bill_number}: {bill.bill_name}
-                            </a>
-                            <div className="mt-2">
-                              {user && <BillAIAnalysisDialog
-                                billId={bill.bill_id}
-                                billType={bill.bill_type}
-                                billNumber={bill.bill_number}
-                                billName={bill.bill_name}
-                                congress={bill.congress}
-                                topic={bill.topic}
-                                status={bill.status}
-                                billUrl={bill.url}
-                                sponsorshipDate={bill.sponsorship_date}
-                                candidateName={candidate.name}
-                                candidateParty={candidate.party}
-                                candidateOffice={candidate.office}
-                                candidateState={candidate.state}
-                                isSponsor={bill.is_sponsor}
-                                trigger={
-                                  <Button size="sm" variant="outline" className="h-7 text-xs">
-                                    <Sparkles className="w-3 h-3 mr-1" />
-                                    Dig Deeper AI Analysis
-                                  </Button>
-                                }
-                              />}
-                            </div>
-                            <div className="flex flex-wrap gap-2 mt-2 text-sm text-muted-foreground">
-                              {bill.topic && (
-                                <Badge variant="secondary" className="text-xs">{bill.topic}</Badge>
-                              )}
-                              {bill.status && <span>{bill.status}</span>}
-                              {bill.sponsorship_date && (
-                                <span className="text-xs">({new Date(bill.sponsorship_date).toLocaleDateString()})</span>
-                              )}
-                            </div>
-                          </div>
-                          <ExternalLink className="w-4 h-4 text-muted-foreground shrink-0 mt-1" />
-                        </div>
-                      ))}
-                    </div>
-                    
-                    {/* Load more */}
-                    {sponsoredBills.length > visibleBillCount && (
-                      <Button 
-                        variant="outline" 
-                        className="w-full"
-                        onClick={() => setVisibleBillCount(prev => prev + 20)}
-                      >
-                        Show More ({sponsoredBills.length - visibleBillCount} remaining)
-                      </Button>
-                    )}
-                  </div>
-                ) : (
-                  <p className="text-muted-foreground text-center py-8">
-                    No sponsored or cosponsored legislation found for this legislator.
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
-
-
-        {/* Report Issue & Feedback */}
-        <div className="mt-6 flex items-center justify-center gap-4">
-          <ReportIssueButton 
-            candidateId={candidate.id} 
-            candidateName={candidate.name}
-          />
-        </div>
-
-        {/* AI Disclaimer */}
-        <div className="mt-8 p-4 rounded-lg bg-secondary/50 border border-border text-center">
-          <p className="text-sm text-muted-foreground">
-            <strong>Score Version:</strong> {candidate.score_version || 'v1.0'} • This is not voting advice. Data is provided for informational purposes only.
-          </p>
-        </div>
-
-        {/* Admin Edit Dialog */}
-        {isAdmin && candidate && (
-          <CandidateEditDialog
-            open={isEditDialogOpen}
-            onOpenChange={setIsEditDialogOpen}
-            candidateId={candidate.id}
-            candidateName={candidate.name}
-            currentData={{
-              name: candidate.name,
-              party: candidate.party,
-              office: candidate.office,
-              state: candidate.state,
-              district: candidate.district,
-              image_url: candidate.image_url,
-              overall_score: resolvedScore,
-              coverage_tier: candidate.coverage_tier || 'tier_3',
-              confidence: candidate.confidence || 'medium',
-            }}
-          />
+            <Link to={`/candidate/${id}/votes`} className="block mt-3">
+              <button className="w-full border border-[rgba(20,23,58,0.14)] text-poli-navy font-bold text-sm rounded-[14px] py-3.5">
+                See all {votes.length} votes →
+              </button>
+            </Link>
+          </div>
         )}
-      </main>
+
+        {/* BILLS TAB */}
+        {activeTab === 'bills' && (
+          <div>
+            <div className="bg-white rounded-[18px] border border-[rgba(20,23,58,0.08)] p-4 shadow-sm">
+              <p className="font-mono-label text-[10px] tracking-[2px] text-poli-red mb-3">SPONSORED BILLS</p>
+              {sponsoredBills.slice(0, visibleBillCount).map((bill) => (
+                <div key={bill.bill_id} className="py-3 border-t border-[rgba(20,23,58,0.07)] first:border-t-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <span className="font-mono-label text-[11px] text-poli-muted block mb-0.5">
+                        {bill.bill_type} {bill.bill_number}
+                      </span>
+                      <p className="text-[13px] font-semibold text-poli-navy leading-snug">{bill.bill_name}</p>
+                    </div>
+                    <StatusBadge status={bill.status} />
+                  </div>
+                </div>
+              ))}
+              {sponsoredBills.length > visibleBillCount && (
+                <button
+                  onClick={() => setVisibleBillCount(prev => prev + 20)}
+                  className="mt-3 w-full border border-[rgba(20,23,58,0.14)] text-poli-navy font-bold text-sm rounded-[14px] py-3"
+                >
+                  Show {sponsoredBills.length - visibleBillCount} more
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* MONEY TAB */}
+        {activeTab === 'money' && (
+          <div>
+            {/* Cycle selector chips */}
+            <div className="flex gap-2 mb-3">
+              {(cycleInfo?.cycles ?? []).filter(c => c !== 'all').slice(0, 3).map(cy => (
+                <button
+                  key={cy}
+                  onClick={() => setSelectedCycle(cy)}
+                  className={cn(
+                    'font-sans font-bold text-[12px] px-4 py-[7px] rounded-[20px]',
+                    effectiveCycle === cy
+                      ? 'bg-poli-navy text-white'
+                      : 'bg-poli-surface text-poli-body',
+                  )}
+                >
+                  {cy}
+                </button>
+              ))}
+            </div>
+            {/* Summary card */}
+            {fecTotalReceipts && (
+              <div className="bg-gradient-to-br from-poli-navy to-poli-dark rounded-[18px] p-4 mb-3 text-white">
+                <p className="font-mono-label text-[9px] tracking-[2px] text-white/55 mb-1">TOTAL RAISED</p>
+                <p className="font-sans font-black text-[36px] leading-none">{formatCurrency(fecTotalReceipts)}</p>
+                {fecTotalDisbursements && (
+                  <div className="flex gap-4 mt-3">
+                    <div>
+                      <p className="font-mono-label text-[9px] text-white/55">SPENT</p>
+                      <p className="font-bold text-[16px]">{formatCurrency(fecTotalDisbursements)}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            {/* Funding sources breakdown */}
+            {fundingBreakdownComputed && (
+              <div className="bg-white rounded-[18px] border border-[rgba(20,23,58,0.08)] p-4 mb-3 shadow-sm">
+                <p className="font-mono-label text-[10px] tracking-[2px] text-poli-red mb-3">SOURCE OF FUNDS</p>
+                <FundingSourcesBreakdown input={fundingInput} />
+              </div>
+            )}
+            {/* Top donors preview (3) */}
+            {donors.filter(d => !isConduitDonor(d)).slice(0, 3).length > 0 && (
+              <div className="bg-white rounded-[18px] border border-[rgba(20,23,58,0.08)] p-4 shadow-sm">
+                <p className="font-mono-label text-[10px] tracking-[2px] text-poli-red mb-3">TOP DONORS</p>
+                {donors.filter(d => !isConduitDonor(d)).slice(0, 3).map((donor, i) => (
+                  <div key={i} className="flex items-center justify-between py-2.5 border-t border-[rgba(20,23,58,0.07)] first:border-t-0">
+                    <div>
+                      <span className="font-mono-label text-[11px] text-poli-muted mr-2">#{i + 1}</span>
+                      <span className="text-[13px] font-bold text-poli-body">{donor.display_name || donor.name}</span>
+                      {donor.type && <p className="text-[11px] text-poli-muted">{donor.type}</p>}
+                    </div>
+                    <span className="font-mono-label text-[13px] font-semibold text-poli-navy">
+                      {formatCurrency(donor.amount ?? 0)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* CTA to full donors page */}
+            <Link to={`/candidate/${id}/donors`} className="block mt-3">
+              <button className="w-full bg-poli-navy text-white font-bold text-sm rounded-[14px] py-3.5">
+                Funding & donor details →
+              </button>
+            </Link>
+            {/* State-legislator campaign finance. Each section self-gates: it
+                renders only for legislators in its state that have synced
+                contribution data, so they're no-ops for everyone else. */}
+            <div className="mt-3 space-y-3">
+              <NjStateFinanceSection
+                name={candidate.name}
+                district={candidate.district}
+                office={candidate.office}
+                state={candidate.state}
+                level={(candidate as { level?: string }).level}
+              />
+              <FlStateFinanceSection
+                name={candidate.name}
+                district={candidate.district}
+                office={candidate.office}
+                state={candidate.state}
+                level={(candidate as { level?: string }).level}
+              />
+              <NyStateFinanceSection
+                name={candidate.name}
+                district={candidate.district}
+                office={candidate.office}
+                state={candidate.state}
+                level={(candidate as { level?: string }).level}
+              />
+              <TxStateFinanceSection
+                name={candidate.name}
+                district={candidate.district}
+                office={candidate.office}
+                state={candidate.state}
+                level={(candidate as { level?: string }).level}
+              />
+            </div>
+            {/* Top spenders — outside groups making independent expenditures for/against.
+                Use the resolved candidate.id (not the raw route id) so synthetic
+                executive routes like /candidate/federal_president still match IE rows. */}
+            <div className="mt-3">
+              <CandidateIESection candidateId={candidate.id} preferredCycle={effectiveCycle} />
+            </div>
+          </div>
+        )}
+
+        {/* NEWS TAB — Latest News + Latest from X */}
+        {activeTab === 'news' && (
+          <div className="space-y-3">
+            <RelevantNewsFeed
+              people={[{
+                name: candidate.name,
+                office: candidate.office,
+                state: candidate.state,
+                district: candidate.district,
+              }]}
+              topics={userTopicScores.map(uts => (uts as { topic_id?: string }).topic_id).filter(Boolean) as string[]}
+              state={candidate.state}
+              district={candidate.district}
+              title={`Latest News about ${candidate.name}`}
+              maxItems={8}
+            />
+            <RepresentativeSocialFeed candidateId={candidate.id} />
+          </div>
+        )}
+
+        {/* CONTACT TAB */}
+        {activeTab === 'contact' && (
+          <div>
+            <div className="bg-white rounded-[18px] border border-[rgba(20,23,58,0.08)] p-4 shadow-sm">
+              <p className="font-mono-label text-[10px] tracking-[2px] text-poli-red mb-3">OFFICES</p>
+              {representativeDetails ? (
+                <ContactInfoCard representative={representativeDetails} />
+              ) : (
+                <p className="text-sm text-poli-muted">Contact information unavailable</p>
+              )}
+            </div>
+            <div className="flex gap-2.5 mt-3">
+              {representativeDetails?.phone && (
+                <a href={`tel:${representativeDetails.phone}`} className="flex-1">
+                  <button className="w-full bg-poli-navy text-white font-bold text-sm rounded-[14px] py-3.5">
+                    Call office
+                  </button>
+                </a>
+              )}
+              <button className="flex-1 bg-poli-red text-white font-bold text-sm rounded-[14px] py-3.5">
+                Town halls
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Admin Edit Dialog */}
+      {isAdmin && candidate && (
+        <CandidateEditDialog
+          open={isEditDialogOpen}
+          onOpenChange={setIsEditDialogOpen}
+          candidateId={candidate.id}
+          candidateName={candidate.name}
+          currentData={{
+            name: candidate.name,
+            party: candidate.party,
+            office: candidate.office,
+            state: candidate.state,
+            district: candidate.district,
+            image_url: candidate.image_url,
+            overall_score: resolvedScore,
+            coverage_tier: candidate.coverage_tier || 'tier_3',
+            confidence: candidate.confidence || 'medium',
+          }}
+        />
+      )}
     </div>
   );
 };

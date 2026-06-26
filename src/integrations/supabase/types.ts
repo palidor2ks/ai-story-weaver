@@ -347,6 +347,64 @@ export type Database = {
         }
         Relationships: []
       }
+      answer_source_audit: {
+        Row: {
+          answer_value: number | null
+          attempts: number
+          candidate_id: string
+          checked_at: string | null
+          created_at: string
+          question_id: string
+          reason: string | null
+          updated_at: string
+          verdict: string
+        }
+        Insert: {
+          answer_value?: number | null
+          attempts?: number
+          candidate_id: string
+          checked_at?: string | null
+          created_at?: string
+          question_id: string
+          reason?: string | null
+          updated_at?: string
+          verdict?: string
+        }
+        Update: {
+          answer_value?: number | null
+          attempts?: number
+          candidate_id?: string
+          checked_at?: string | null
+          created_at?: string
+          question_id?: string
+          reason?: string | null
+          updated_at?: string
+          verdict?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "answer_source_audit_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "candidate_voting_coverage"
+            referencedColumns: ["candidate_id"]
+          },
+          {
+            foreignKeyName: "answer_source_audit_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "candidates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "answer_source_audit_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       badge_definitions: {
         Row: {
           active: boolean
@@ -541,6 +599,7 @@ export type Database = {
           description: string | null
           id: string
           introduced_date: string | null
+          jurisdiction: string | null
           last_action_date: string | null
           last_ai_scan_at: string | null
           latest_action_date: string | null
@@ -584,6 +643,7 @@ export type Database = {
           description?: string | null
           id: string
           introduced_date?: string | null
+          jurisdiction?: string | null
           last_action_date?: string | null
           last_ai_scan_at?: string | null
           latest_action_date?: string | null
@@ -627,6 +687,7 @@ export type Database = {
           description?: string | null
           id?: string
           introduced_date?: string | null
+          jurisdiction?: string | null
           last_action_date?: string | null
           last_ai_scan_at?: string | null
           latest_action_date?: string | null
@@ -732,6 +793,75 @@ export type Database = {
           },
         ]
       }
+      candidate_answers_audit_backup: {
+        Row: {
+          answer_value: number
+          candidate_id: string
+          confidence: string | null
+          created_at: string
+          discrepancy_note: string | null
+          evidence_type: string | null
+          has_discrepancy: boolean | null
+          id: string
+          public_statement_summary: string | null
+          question_id: string
+          relevance_flag: string | null
+          source_description: string | null
+          source_titles: string[] | null
+          source_type: string | null
+          source_url: string | null
+          source_urls: string[] | null
+          swept_at: string
+          topic_flag: string | null
+          updated_at: string
+          voting_record_summary: string | null
+        }
+        Insert: {
+          answer_value: number
+          candidate_id: string
+          confidence?: string | null
+          created_at: string
+          discrepancy_note?: string | null
+          evidence_type?: string | null
+          has_discrepancy?: boolean | null
+          id: string
+          public_statement_summary?: string | null
+          question_id: string
+          relevance_flag?: string | null
+          source_description?: string | null
+          source_titles?: string[] | null
+          source_type?: string | null
+          source_url?: string | null
+          source_urls?: string[] | null
+          swept_at?: string
+          topic_flag?: string | null
+          updated_at: string
+          voting_record_summary?: string | null
+        }
+        Update: {
+          answer_value?: number
+          candidate_id?: string
+          confidence?: string | null
+          created_at?: string
+          discrepancy_note?: string | null
+          evidence_type?: string | null
+          has_discrepancy?: boolean | null
+          id?: string
+          public_statement_summary?: string | null
+          question_id?: string
+          relevance_flag?: string | null
+          source_description?: string | null
+          source_titles?: string[] | null
+          source_type?: string | null
+          source_url?: string | null
+          source_urls?: string[] | null
+          swept_at?: string
+          topic_flag?: string | null
+          updated_at?: string
+          voting_record_summary?: string | null
+        }
+        Relationships: []
+      }
       candidate_answers_history: {
         Row: {
           answer_value: number | null
@@ -780,6 +910,72 @@ export type Database = {
           source_urls?: string[] | null
           superseded_at?: string
           superseded_reason?: string | null
+        }
+        Relationships: []
+      }
+      candidate_answers_inversion_backup2_20260620: {
+        Row: {
+          answer_value: number
+          candidate_id: string
+          confidence: string | null
+          created_at: string
+          discrepancy_note: string | null
+          evidence_type: string | null
+          has_discrepancy: boolean | null
+          id: string
+          public_statement_summary: string | null
+          question_id: string
+          relevance_flag: string | null
+          source_description: string | null
+          source_titles: string[] | null
+          source_type: string | null
+          source_url: string | null
+          source_urls: string[] | null
+          topic_flag: string | null
+          updated_at: string
+          voting_record_summary: string | null
+        }
+        Insert: {
+          answer_value: number
+          candidate_id: string
+          confidence?: string | null
+          created_at?: string
+          discrepancy_note?: string | null
+          evidence_type?: string | null
+          has_discrepancy?: boolean | null
+          id?: string
+          public_statement_summary?: string | null
+          question_id: string
+          relevance_flag?: string | null
+          source_description?: string | null
+          source_titles?: string[] | null
+          source_type?: string | null
+          source_url?: string | null
+          source_urls?: string[] | null
+          topic_flag?: string | null
+          updated_at?: string
+          voting_record_summary?: string | null
+        }
+        Update: {
+          answer_value?: number
+          candidate_id?: string
+          confidence?: string | null
+          created_at?: string
+          discrepancy_note?: string | null
+          evidence_type?: string | null
+          has_discrepancy?: boolean | null
+          id?: string
+          public_statement_summary?: string | null
+          question_id?: string
+          relevance_flag?: string | null
+          source_description?: string | null
+          source_titles?: string[] | null
+          source_type?: string | null
+          source_url?: string | null
+          source_urls?: string[] | null
+          topic_flag?: string | null
+          updated_at?: string
+          voting_record_summary?: string | null
         }
         Relationships: []
       }
@@ -1126,8 +1322,10 @@ export type Database = {
           action_type: string
           bill_id: string
           candidate_id: string
+          chamber: string | null
           created_at: string | null
           id: string
+          jurisdiction: string | null
           position: string
           vote_number: number
         }
@@ -1136,8 +1334,10 @@ export type Database = {
           action_type: string
           bill_id: string
           candidate_id: string
+          chamber?: string | null
           created_at?: string | null
           id?: string
+          jurisdiction?: string | null
           position: string
           vote_number?: number
         }
@@ -1146,8 +1346,10 @@ export type Database = {
           action_type?: string
           bill_id?: string
           candidate_id?: string
+          chamber?: string | null
           created_at?: string | null
           id?: string
+          jurisdiction?: string | null
           position?: string
           vote_number?: number
         }
@@ -3474,6 +3676,319 @@ export type Database = {
         }
         Relationships: []
       }
+      nc_contributions: {
+        Row: {
+          account_code: string | null
+          amount: number | null
+          candidate_first_name: string | null
+          candidate_full_name: string | null
+          candidate_last_name: string | null
+          city: string | null
+          committee_name: string | null
+          contributor: string | null
+          contributor_type: string | null
+          date_occurred: string | null
+          district: number | null
+          election_year: number | null
+          employer: string | null
+          id: string
+          is_individual: boolean | null
+          jurisdiction: string | null
+          office_code: string | null
+          office_raw: string | null
+          party: string | null
+          report_name: string | null
+          source_year: number
+          state: string | null
+          synced_at: string
+          zip: string | null
+        }
+        Insert: {
+          account_code?: string | null
+          amount?: number | null
+          candidate_first_name?: string | null
+          candidate_full_name?: string | null
+          candidate_last_name?: string | null
+          city?: string | null
+          committee_name?: string | null
+          contributor?: string | null
+          contributor_type?: string | null
+          date_occurred?: string | null
+          district?: number | null
+          election_year?: number | null
+          employer?: string | null
+          id: string
+          is_individual?: boolean | null
+          jurisdiction?: string | null
+          office_code?: string | null
+          office_raw?: string | null
+          party?: string | null
+          report_name?: string | null
+          source_year: number
+          state?: string | null
+          synced_at?: string
+          zip?: string | null
+        }
+        Update: {
+          account_code?: string | null
+          amount?: number | null
+          candidate_first_name?: string | null
+          candidate_full_name?: string | null
+          candidate_last_name?: string | null
+          city?: string | null
+          committee_name?: string | null
+          contributor?: string | null
+          contributor_type?: string | null
+          date_occurred?: string | null
+          district?: number | null
+          election_year?: number | null
+          employer?: string | null
+          id?: string
+          is_individual?: boolean | null
+          jurisdiction?: string | null
+          office_code?: string | null
+          office_raw?: string | null
+          party?: string | null
+          report_name?: string | null
+          source_year?: number
+          state?: string | null
+          synced_at?: string
+          zip?: string | null
+        }
+        Relationships: []
+      }
+      nc_leg_bills: {
+        Row: {
+          bill_id: string
+          chamber_origin: string | null
+          classification: string[] | null
+          identifier: string
+          latest_action_at: string | null
+          os_bill_id: string | null
+          raw: Json | null
+          session: string
+          synced_at: string
+          title: string | null
+          topic: string | null
+        }
+        Insert: {
+          bill_id: string
+          chamber_origin?: string | null
+          classification?: string[] | null
+          identifier: string
+          latest_action_at?: string | null
+          os_bill_id?: string | null
+          raw?: Json | null
+          session: string
+          synced_at?: string
+          title?: string | null
+          topic?: string | null
+        }
+        Update: {
+          bill_id?: string
+          chamber_origin?: string | null
+          classification?: string[] | null
+          identifier?: string
+          latest_action_at?: string | null
+          os_bill_id?: string | null
+          raw?: Json | null
+          session?: string
+          synced_at?: string
+          title?: string | null
+          topic?: string | null
+        }
+        Relationships: []
+      }
+      nc_leg_sync_runs: {
+        Row: {
+          bills_upserted: number | null
+          error: string | null
+          finished_at: string | null
+          id: number
+          mode: string | null
+          pages_fetched: number | null
+          session: string | null
+          started_at: string
+          status: string
+          unmatched_count: number | null
+          vote_events_upserted: number | null
+          vote_records_upserted: number | null
+        }
+        Insert: {
+          bills_upserted?: number | null
+          error?: string | null
+          finished_at?: string | null
+          id?: never
+          mode?: string | null
+          pages_fetched?: number | null
+          session?: string | null
+          started_at?: string
+          status?: string
+          unmatched_count?: number | null
+          vote_events_upserted?: number | null
+          vote_records_upserted?: number | null
+        }
+        Update: {
+          bills_upserted?: number | null
+          error?: string | null
+          finished_at?: string | null
+          id?: never
+          mode?: string | null
+          pages_fetched?: number | null
+          session?: string | null
+          started_at?: string
+          status?: string
+          unmatched_count?: number | null
+          vote_events_upserted?: number | null
+          vote_records_upserted?: number | null
+        }
+        Relationships: []
+      }
+      nc_leg_vote_events: {
+        Row: {
+          bill_id: string
+          chamber: string | null
+          counts: Json | null
+          is_final_passage: boolean | null
+          motion_text: string | null
+          raw: Json | null
+          result: string | null
+          start_date: string | null
+          synced_at: string
+          vote_event_id: string
+        }
+        Insert: {
+          bill_id: string
+          chamber?: string | null
+          counts?: Json | null
+          is_final_passage?: boolean | null
+          motion_text?: string | null
+          raw?: Json | null
+          result?: string | null
+          start_date?: string | null
+          synced_at?: string
+          vote_event_id: string
+        }
+        Update: {
+          bill_id?: string
+          chamber?: string | null
+          counts?: Json | null
+          is_final_passage?: boolean | null
+          motion_text?: string | null
+          raw?: Json | null
+          result?: string | null
+          start_date?: string | null
+          synced_at?: string
+          vote_event_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nc_leg_vote_events_bill_id_fkey"
+            columns: ["bill_id"]
+            isOneToOne: false
+            referencedRelation: "nc_leg_bills"
+            referencedColumns: ["bill_id"]
+          },
+        ]
+      }
+      nc_leg_vote_records: {
+        Row: {
+          candidate_id: string | null
+          match_method: string | null
+          option: string | null
+          vote_event_id: string
+          voter_name_raw: string
+        }
+        Insert: {
+          candidate_id?: string | null
+          match_method?: string | null
+          option?: string | null
+          vote_event_id: string
+          voter_name_raw: string
+        }
+        Update: {
+          candidate_id?: string | null
+          match_method?: string | null
+          option?: string | null
+          vote_event_id?: string
+          voter_name_raw?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nc_leg_vote_records_vote_event_id_fkey"
+            columns: ["vote_event_id"]
+            isOneToOne: false
+            referencedRelation: "nc_leg_vote_events"
+            referencedColumns: ["vote_event_id"]
+          },
+        ]
+      }
+      nc_sync_progress: {
+        Row: {
+          error: string | null
+          last_run_at: string | null
+          rows_done: number
+          rows_upserted: number
+          status: string
+          year: number
+        }
+        Insert: {
+          error?: string | null
+          last_run_at?: string | null
+          rows_done?: number
+          rows_upserted?: number
+          status?: string
+          year: number
+        }
+        Update: {
+          error?: string | null
+          last_run_at?: string | null
+          rows_done?: number
+          rows_upserted?: number
+          status?: string
+          year?: number
+        }
+        Relationships: []
+      }
+      nc_sync_runs: {
+        Row: {
+          contributions_upserted: number | null
+          error: string | null
+          finished_at: string | null
+          id: number
+          mode: string | null
+          notes: Json | null
+          remaining: number | null
+          started_at: string
+          status: string
+          years_processed: number[] | null
+        }
+        Insert: {
+          contributions_upserted?: number | null
+          error?: string | null
+          finished_at?: string | null
+          id?: never
+          mode?: string | null
+          notes?: Json | null
+          remaining?: number | null
+          started_at?: string
+          status?: string
+          years_processed?: number[] | null
+        }
+        Update: {
+          contributions_upserted?: number | null
+          error?: string | null
+          finished_at?: string | null
+          id?: never
+          mode?: string | null
+          notes?: Json | null
+          remaining?: number | null
+          started_at?: string
+          status?: string
+          years_processed?: number[] | null
+        }
+        Relationships: []
+      }
       news_article_questions: {
         Row: {
           article_id: string
@@ -4302,6 +4817,7 @@ export type Database = {
           lean: string
           neutral_description: string
           score_version: string
+          senate_vote_id: string | null
           source_url: string
           title: string | null
           topic_id: string
@@ -4315,6 +4831,7 @@ export type Database = {
           lean: string
           neutral_description: string
           score_version?: string
+          senate_vote_id?: string | null
           source_url: string
           title?: string | null
           topic_id: string
@@ -4328,6 +4845,7 @@ export type Database = {
           lean?: string
           neutral_description?: string
           score_version?: string
+          senate_vote_id?: string | null
           source_url?: string
           title?: string | null
           topic_id?: string
@@ -4335,6 +4853,53 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "poliscore_key_votes_topic_id_fkey"
+            columns: ["topic_id"]
+            isOneToOne: false
+            referencedRelation: "topics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      poliscore_nc_key_votes: {
+        Row: {
+          bill_id: string
+          created_at: string
+          id: string
+          lean: string
+          neutral_description: string
+          score_version: string
+          session: string
+          source_url: string
+          title: string | null
+          topic_id: string
+        }
+        Insert: {
+          bill_id: string
+          created_at?: string
+          id?: string
+          lean: string
+          neutral_description: string
+          score_version?: string
+          session?: string
+          source_url: string
+          title?: string | null
+          topic_id: string
+        }
+        Update: {
+          bill_id?: string
+          created_at?: string
+          id?: string
+          lean?: string
+          neutral_description?: string
+          score_version?: string
+          session?: string
+          source_url?: string
+          title?: string | null
+          topic_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "poliscore_nc_key_votes_topic_id_fkey"
             columns: ["topic_id"]
             isOneToOne: false
             referencedRelation: "topics"
@@ -4650,6 +5215,9 @@ export type Database = {
         Row: {
           address: string | null
           age: number | null
+          ai_analysis_cache: Json | null
+          ai_analysis_cached_at: string | null
+          ai_analysis_score: number | null
           avatar_url: string | null
           birth_date: string | null
           created_at: string | null
@@ -4679,6 +5247,9 @@ export type Database = {
         Insert: {
           address?: string | null
           age?: number | null
+          ai_analysis_cache?: Json | null
+          ai_analysis_cached_at?: string | null
+          ai_analysis_score?: number | null
           avatar_url?: string | null
           birth_date?: string | null
           created_at?: string | null
@@ -4708,6 +5279,9 @@ export type Database = {
         Update: {
           address?: string | null
           age?: number | null
+          ai_analysis_cache?: Json | null
+          ai_analysis_cached_at?: string | null
+          ai_analysis_score?: number | null
           avatar_url?: string | null
           birth_date?: string | null
           created_at?: string | null
@@ -5448,6 +6022,171 @@ export type Database = {
           created_at?: string
           label?: string | null
           owner_key?: string
+        }
+        Relationships: []
+      }
+      tx_cf_contributions: {
+        Row: {
+          contribution_amount: number | null
+          contribution_descr: string | null
+          contribution_dt: string | null
+          contribution_info_id: number
+          contributor_name_last: string | null
+          contributor_name_organization: string | null
+          contributor_persent_type_cd: string | null
+          filer_ident: string
+          filer_name: string | null
+          itemize_flag: boolean | null
+          raw: Json | null
+          report_info_ident: number | null
+          source_file: string | null
+          synced_at: string
+        }
+        Insert: {
+          contribution_amount?: number | null
+          contribution_descr?: string | null
+          contribution_dt?: string | null
+          contribution_info_id: number
+          contributor_name_last?: string | null
+          contributor_name_organization?: string | null
+          contributor_persent_type_cd?: string | null
+          filer_ident: string
+          filer_name?: string | null
+          itemize_flag?: boolean | null
+          raw?: Json | null
+          report_info_ident?: number | null
+          source_file?: string | null
+          synced_at?: string
+        }
+        Update: {
+          contribution_amount?: number | null
+          contribution_descr?: string | null
+          contribution_dt?: string | null
+          contribution_info_id?: number
+          contributor_name_last?: string | null
+          contributor_name_organization?: string | null
+          contributor_persent_type_cd?: string | null
+          filer_ident?: string
+          filer_name?: string | null
+          itemize_flag?: boolean | null
+          raw?: Json | null
+          report_info_ident?: number | null
+          source_file?: string | null
+          synced_at?: string
+        }
+        Relationships: []
+      }
+      tx_cf_filers: {
+        Row: {
+          filer_ident: string
+          filer_name: string
+          filer_persent_type_cd: string | null
+          filer_type_cd: string | null
+          first_seen_at: string
+          last_synced_at: string
+          office_cd: string | null
+          office_descr: string | null
+          office_district: string | null
+          office_place: string | null
+          raw: Json | null
+        }
+        Insert: {
+          filer_ident: string
+          filer_name: string
+          filer_persent_type_cd?: string | null
+          filer_type_cd?: string | null
+          first_seen_at?: string
+          last_synced_at?: string
+          office_cd?: string | null
+          office_descr?: string | null
+          office_district?: string | null
+          office_place?: string | null
+          raw?: Json | null
+        }
+        Update: {
+          filer_ident?: string
+          filer_name?: string
+          filer_persent_type_cd?: string | null
+          filer_type_cd?: string | null
+          first_seen_at?: string
+          last_synced_at?: string
+          office_cd?: string | null
+          office_descr?: string | null
+          office_district?: string | null
+          office_place?: string | null
+          raw?: Json | null
+        }
+        Relationships: []
+      }
+      tx_cf_shard_progress: {
+        Row: {
+          error: string | null
+          last_run_at: string | null
+          rows_done: number
+          rows_upserted: number | null
+          source_file: string
+          status: string
+          zip_last_modified: string | null
+        }
+        Insert: {
+          error?: string | null
+          last_run_at?: string | null
+          rows_done?: number
+          rows_upserted?: number | null
+          source_file: string
+          status?: string
+          zip_last_modified?: string | null
+        }
+        Update: {
+          error?: string | null
+          last_run_at?: string | null
+          rows_done?: number
+          rows_upserted?: number | null
+          source_file?: string
+          status?: string
+          zip_last_modified?: string | null
+        }
+        Relationships: []
+      }
+      tx_cf_sync_runs: {
+        Row: {
+          contributions_upserted: number | null
+          error: string | null
+          filers_upserted: number | null
+          finished_at: string | null
+          id: number
+          mode: string | null
+          notes: Json | null
+          shards_processed: string[] | null
+          started_at: string
+          status: string
+          zip_last_modified: string | null
+        }
+        Insert: {
+          contributions_upserted?: number | null
+          error?: string | null
+          filers_upserted?: number | null
+          finished_at?: string | null
+          id?: never
+          mode?: string | null
+          notes?: Json | null
+          shards_processed?: string[] | null
+          started_at?: string
+          status?: string
+          zip_last_modified?: string | null
+        }
+        Update: {
+          contributions_upserted?: number | null
+          error?: string | null
+          filers_upserted?: number | null
+          finished_at?: string | null
+          id?: never
+          mode?: string | null
+          notes?: Json | null
+          shards_processed?: string[] | null
+          started_at?: string
+          status?: string
+          zip_last_modified?: string | null
         }
         Relationships: []
       }
@@ -6231,6 +6970,8 @@ export type Database = {
         Args: { _id: string; _source: string }
         Returns: undefined
       }
+      answer_audit_detect: { Args: never; Returns: undefined }
+      answer_audit_fix: { Args: never; Returns: undefined }
       assign_statement_topics: { Args: { p_text: string }; Returns: string[] }
       auto_merge_obvious_persons: { Args: never; Returns: number }
       backfill_candidate_scores: {
@@ -6252,9 +6993,11 @@ export type Database = {
       check_fl_sync_secret: { Args: { p_token: string }; Returns: boolean }
       check_ie_sync_secret: { Args: { p_token: string }; Returns: boolean }
       check_import_sync_secret: { Args: { p_token: string }; Returns: boolean }
+      check_nc_sync_secret: { Args: { p_token: string }; Returns: boolean }
       check_nj_sync_secret: { Args: { p_token: string }; Returns: boolean }
       check_ny_sync_secret: { Args: { p_token: string }; Returns: boolean }
       check_photo_enrich_secret: { Args: { p_token: string }; Returns: boolean }
+      check_tx_sync_secret: { Args: { p_token: string }; Returns: boolean }
       check_vote_sync_secret: { Args: { p_token: string }; Returns: boolean }
       claim_anon_poll_responses: {
         Args: { p_anon_session_id: string }
@@ -6604,6 +7347,20 @@ export type Database = {
           vote_position: string
         }[]
       }
+      get_poliscore_record_nc: {
+        Args: { p_candidate_id: string }
+        Returns: {
+          bill_id: string
+          key_vote_id: string
+          lean: string
+          neutral_description: string
+          session: string
+          source_url: string
+          title: string
+          topic_id: string
+          vote_position: string
+        }[]
+      }
       get_poll_tally: {
         Args: { p_poll_id: string }
         Returns: {
@@ -6763,6 +7520,10 @@ export type Database = {
         Args: { from_id: string; into_id: string }
         Returns: undefined
       }
+      nc_legislator_finance: {
+        Args: { p_district?: string; p_name: string; p_office?: string }
+        Returns: Json
+      }
       nj_legislator_finance: {
         Args: { p_district?: string; p_name: string; p_office?: string }
         Returns: Json
@@ -6905,6 +7666,11 @@ export type Database = {
         Returns: string
       }
       sweep_stalled_import_sessions: { Args: never; Returns: number }
+      tx_legislator_finance: {
+        Args: { p_district?: string; p_name: string; p_office?: string }
+        Returns: Json
+      }
+      unaccent: { Args: { "": string }; Returns: string }
       undo_donor_import: { Args: { p_session_id: string }; Returns: Json }
       undo_ie_import: { Args: { p_session_id: string }; Returns: Json }
     }

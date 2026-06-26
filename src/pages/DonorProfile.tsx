@@ -621,10 +621,10 @@ const DonorProfile = () => {
 
   if (isLoading) {
     return (
-    <div className="min-h-screen bg-background overflow-x-hidden">
+    <div className="min-h-screen bg-poli-surface overflow-x-hidden">
         <Header />
         <div className="flex items-center justify-center py-20">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <Loader2 className="h-8 w-8 animate-spin text-poli-navy" />
         </div>
       </div>
     );
@@ -632,17 +632,17 @@ const DonorProfile = () => {
 
   if (!donor) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-poli-surface">
         <Header />
         <main className="container py-8 px-4 text-center">
-          <p className="text-muted-foreground mb-4">Donor not found.</p>
+          <p className="text-poli-muted mb-4">Donor not found.</p>
         </main>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-poli-surface">
       <Seo
         title={`${displayName} — Donor Profile — Pulse`}
         description={`Contributions, recipients, and giving history for donor ${displayName}.`}
@@ -657,13 +657,28 @@ const DonorProfile = () => {
       />
       <Header />
 
-      <main className="container py-8 px-4 space-y-8">
+      <div className="bg-gradient-to-br from-poli-navy to-poli-dark text-white px-4 pt-12 pb-10">
+        <p className="font-mono-label text-[10px] font-bold uppercase tracking-widest text-white/60 mb-1">
+          DONOR PROFILE
+        </p>
+        <h1 className="text-2xl font-black text-white leading-tight">
+          {displayName}
+        </h1>
+        <p className="text-sm text-white/70 mt-1">
+          {donor.type}
+          {donor.contributor_city && donor.contributor_state
+            ? ` · ${donor.contributor_city}, ${donor.contributor_state}`
+            : ''}
+        </p>
+      </div>
+
+      <main className="container py-8 px-4 space-y-8 pb-20">
         {/* Conduit explainer — only claim "$0" once the zeroing backfill has run */}
         {isConduitDonor(donor) && (
-          <div className="p-4 rounded-lg bg-muted/50 border border-border text-sm text-muted-foreground flex items-start gap-2">
+          <div className="p-4 rounded-lg bg-muted/50 border border-border text-sm text-poli-muted flex items-start gap-2">
             <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
             <span>
-              <span className="font-medium text-foreground">{displayName}</span> is a payment
+              <span className="font-medium text-poli-body">{displayName}</span> is a payment
               processor (an FEC “conduit”), not a donor. Donations made through it are credited
               to the individual donors who gave them and excluded from candidate donor lists
               {combinedTotal === 0 ? ', so the dollar totals on this page are intentionally $0' : ''}.
@@ -678,7 +693,7 @@ const DonorProfile = () => {
           </div>
           <div className="min-w-0 flex-1">
             <p className="font-display font-bold text-sm truncate">{displayName}</p>
-            <p className="text-xs text-muted-foreground truncate">{donor.type}{donor.contributor_state ? ` · ${donor.contributor_city ?? ''} ${donor.contributor_state}` : ''}</p>
+            <p className="text-xs text-poli-muted truncate">{donor.type}{donor.contributor_state ? ` · ${donor.contributor_city ?? ''} ${donor.contributor_state}` : ''}</p>
           </div>
         </div>
 
@@ -736,14 +751,14 @@ const DonorProfile = () => {
                     </Dialog>
                   )}
                   {donor.contributor_city && donor.contributor_state && (
-                    <span className="flex items-center gap-1 text-sm text-muted-foreground">
+                    <span className="flex items-center gap-1 text-sm text-poli-muted">
                       <MapPin className="w-3.5 h-3.5" />
                       {donor.contributor_city}, {donor.contributor_state}
                     </span>
                   )}
                 </div>
                 {(donor.employer || donor.occupation) && (
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-poli-muted">
                     {donor.occupation}{donor.occupation && donor.employer && ' at '}{donor.employer}
                   </p>
                 )}
@@ -777,40 +792,40 @@ const DonorProfile = () => {
                     <p className="text-base lg:text-lg font-bold text-foreground truncate">
                       {formatCompactAmount(combinedTotal)}
                     </p>
-                    <p className="text-xs text-muted-foreground">Total Given</p>
+                    <p className="text-xs text-poli-muted">Total Given</p>
                   </CardContent>
                 </Card>
                 <Card className="border-border min-w-0">
                   <CardContent className="p-3 text-center">
-                    <Hash className="w-4 h-4 mx-auto mb-1 text-primary" />
-                    <p className="text-base lg:text-lg font-bold text-foreground truncate">
+                    <Hash className="w-4 h-4 mx-auto mb-1 text-poli-navy" />
+                    <p className="text-base lg:text-lg font-bold text-poli-body truncate">
                       {formatCompactNumber(combinedTransactions)}
                     </p>
-                    <p className="text-xs text-muted-foreground">Donations</p>
+                    <p className="text-xs text-poli-muted">Donations</p>
                   </CardContent>
                 </Card>
                 <Card className="border-border min-w-0">
                   <CardContent className="p-3 text-center">
-                    <Users className="w-4 h-4 mx-auto mb-1 text-primary" />
-                    <p className="text-base lg:text-lg font-bold text-foreground truncate">
+                    <Users className="w-4 h-4 mx-auto mb-1 text-poli-navy" />
+                    <p className="text-base lg:text-lg font-bold text-poli-body truncate">
                       {formatCompactNumber(combinedRecipients)}
                     </p>
-                    <p className="text-xs text-muted-foreground">Recipients</p>
+                    <p className="text-xs text-poli-muted">Recipients</p>
                   </CardContent>
                 </Card>
                 <Card className="border-border min-w-0">
                   <CardContent className="p-3 text-center">
-                    <Calendar className="w-4 h-4 mx-auto mb-1 text-primary" />
-                    <p className="text-base lg:text-lg font-bold text-foreground truncate">
+                    <Calendar className="w-4 h-4 mx-auto mb-1 text-poli-navy" />
+                    <p className="text-base lg:text-lg font-bold text-poli-body truncate">
                       {combinedCycles}
                     </p>
-                    <p className="text-xs text-muted-foreground">Cycles</p>
+                    <p className="text-xs text-poli-muted">Cycles</p>
                   </CardContent>
                 </Card>
               </div>
               {(spansBoth || stateAmount > 0) && (
-                <div className="flex items-center justify-center lg:justify-end gap-2 text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground">Federal {formatCompactAmount(federalAmount)}</span>
+                <div className="flex items-center justify-center lg:justify-end gap-2 text-xs text-poli-muted">
+                  <span className="font-medium text-poli-body">Federal {formatCompactAmount(federalAmount)}</span>
                   <span>·</span>
                   <span className="inline-flex items-center gap-1 text-violet-700 dark:text-violet-400">
                     <Landmark className="h-3 w-3" /> NJ {formatCompactAmount(stateAmount)}
@@ -824,7 +839,7 @@ const DonorProfile = () => {
         {/* Shared cycle filter for Contributors + Recipients */}
         {profileAvailableCycles.length > 1 && (
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm font-medium text-muted-foreground">Filter by cycle</p>
+            <p className="text-sm font-medium text-poli-muted">Filter by cycle</p>
             <Select value={profileCycleFilter} onValueChange={setProfileCycleFilter}>
               <SelectTrigger className="w-full sm:w-[200px]">
                 <SelectValue />
@@ -843,14 +858,14 @@ const DonorProfile = () => {
         {(donor.type === 'PAC' || donor.type === 'Organization') && pacContributors.length > 0 && (
           <section>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-4 min-w-0">
-              <Users className="w-5 h-5 text-primary shrink-0" />
-              <h2 className="font-display text-xl font-bold">Top Contributors to this PAC</h2>
-              <span className="text-sm text-muted-foreground">({filteredPacContributors.length} {profileCycleFilter === 'all' ? 'total' : `in ${profileCycleFilter}`})</span>
+              <Users className="w-5 h-5 text-poli-navy shrink-0" />
+              <h2 className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest">Top Contributors to this PAC</h2>
+              <span className="text-sm text-poli-muted">({filteredPacContributors.length} {profileCycleFilter === 'all' ? 'total' : `in ${profileCycleFilter}`})</span>
             </div>
 
             {filteredPacContributors.length === 0 ? (
               <Card>
-                <CardContent className="py-8 text-center text-sm text-muted-foreground">
+                <CardContent className="py-8 text-center text-sm text-poli-muted">
                   No contributors in cycle {profileCycleFilter}.
                 </CardContent>
               </Card>
@@ -869,7 +884,7 @@ const DonorProfile = () => {
                             <p className="font-semibold text-foreground truncate group-hover:text-primary transition-colors">
                               {contributor.name}
                             </p>
-                            <p className="text-sm text-muted-foreground">
+                            <p className="text-sm text-poli-muted">
                               {formatCompactNumber(contributor.contributionCount)} contribution{contributor.contributionCount === 1 ? '' : 's'}
                             </p>
                           </div>
@@ -922,10 +937,10 @@ const DonorProfile = () => {
         {(donorRecords.length > 0 || stateAmount === 0) && (
         <section>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-4 min-w-0">
-            <TrendingUp className="w-5 h-5 text-primary shrink-0" />
-            <h2 className="font-display text-xl font-bold">Top Recipients</h2>
+            <TrendingUp className="w-5 h-5 text-poli-navy shrink-0" />
+            <h2 className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest">Top Recipients</h2>
             {profileCycleFilter !== 'all' && (
-              <span className="text-sm text-muted-foreground">({topRecipients.length} in {profileCycleFilter})</span>
+              <span className="text-sm text-poli-muted">({topRecipients.length} in {profileCycleFilter})</span>
             )}
           </div>
 
@@ -948,7 +963,7 @@ const DonorProfile = () => {
                           <p className="font-semibold text-foreground truncate group-hover:text-primary transition-colors">
                             {recipientName}
                           </p>
-                          <p className="text-sm text-muted-foreground">
+                          <p className="text-sm text-poli-muted">
                             {normalizeOfficeName(record.candidates?.office)} • {record.candidates?.state}
                           </p>
                         </div>
@@ -1003,7 +1018,7 @@ const DonorProfile = () => {
 
           {donorRecords.length === 0 && stateAmount === 0 && (
             <Card>
-              <CardContent className="py-10 text-center text-muted-foreground">
+              <CardContent className="py-10 text-center text-poli-muted">
                 No recipients found for this donor.
               </CardContent>
             </Card>
@@ -1022,9 +1037,9 @@ const DonorProfile = () => {
         <section>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
             <div className="flex items-center gap-3">
-              <DollarSign className="w-5 h-5 text-primary" />
-              <h2 className="font-display text-xl font-bold">Contribution History</h2>
-              <span className="text-sm text-muted-foreground">
+              <DollarSign className="w-5 h-5 text-poli-navy" />
+              <h2 className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest">Contribution History</h2>
+              <span className="text-sm text-poli-muted">
                 ({filteredStats.count} of {contributions.length} records)
               </span>
             </div>
@@ -1102,12 +1117,12 @@ const DonorProfile = () => {
               
               {/* Clear Filters and Stats Row */}
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-4 pt-4 border-t border-border">
-                <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                <div className="flex items-center gap-4 text-sm text-poli-muted">
                   <span>
-                    Total: <strong className="text-foreground">{formatAmount(filteredStats.total)}</strong>
+                    Total: <strong className="text-poli-body">{formatAmount(filteredStats.total)}</strong>
                   </span>
                   <span>
-                    Avg: <strong className="text-foreground">{formatAmount(Math.round(filteredStats.avg))}</strong>
+                    Avg: <strong className="text-poli-body">{formatAmount(Math.round(filteredStats.avg))}</strong>
                   </span>
                 </div>
                 
@@ -1116,7 +1131,7 @@ const DonorProfile = () => {
                     variant="ghost" 
                     size="sm"
                     onClick={clearAllFilters}
-                    className="text-muted-foreground hover:text-foreground"
+                    className="text-poli-muted hover:text-poli-body"
                   >
                     <X className="w-4 h-4 mr-1" />
                     Clear all filters
@@ -1132,16 +1147,16 @@ const DonorProfile = () => {
               <table className="w-full">
                 <thead>
                   <tr className="bg-muted/50 border-b border-border">
-                    <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wide px-4 py-3">
+                    <th className="text-left text-xs font-medium text-poli-muted uppercase tracking-wide px-4 py-3">
                       Recipient
                     </th>
-                    <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wide px-4 py-3 hidden sm:table-cell">
+                    <th className="text-left text-xs font-medium text-poli-muted uppercase tracking-wide px-4 py-3 hidden sm:table-cell">
                       Date
                     </th>
-                    <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wide px-4 py-3">
+                    <th className="text-left text-xs font-medium text-poli-muted uppercase tracking-wide px-4 py-3">
                       Cycle
                     </th>
-                    <th className="text-right text-xs font-medium text-muted-foreground uppercase tracking-wide px-4 py-3">
+                    <th className="text-right text-xs font-medium text-poli-muted uppercase tracking-wide px-4 py-3">
                       Amount
                     </th>
                   </tr>
@@ -1159,7 +1174,7 @@ const DonorProfile = () => {
                               <p className="font-medium text-foreground">
                                 {contribution.candidates.name}
                               </p>
-                              <p className="text-xs text-muted-foreground">
+                              <p className="text-xs text-poli-muted">
                                 {normalizeOfficeName(contribution.candidates.office)} • {contribution.candidates.state}
                               </p>
                             </Link>
@@ -1171,7 +1186,7 @@ const DonorProfile = () => {
                               <p className="font-medium text-foreground">
                                 {contribution.recipient_committee_name || 'Unknown Committee'}
                               </p>
-                              <p className="text-xs text-muted-foreground">
+                              <p className="text-xs text-poli-muted">
                                 {contribution.recipient_committee_id}
                               </p>
                             </Link>
@@ -1190,7 +1205,7 @@ const DonorProfile = () => {
                           )}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-sm text-muted-foreground hidden sm:table-cell">
+                      <td className="px-4 py-3 text-sm text-poli-muted hidden sm:table-cell">
                         {formatDate(contribution.receipt_date) || '—'}
                       </td>
                       <td className="px-4 py-3">
@@ -1210,7 +1225,7 @@ const DonorProfile = () => {
             </div>
 
             {filteredContributions.length === 0 && (
-              <div className="py-10 text-center text-muted-foreground">
+              <div className="py-10 text-center text-poli-muted">
                 No contribution records found.
               </div>
             )}
