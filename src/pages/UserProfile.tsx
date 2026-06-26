@@ -105,15 +105,18 @@ export const UserProfile = () => {
     return scoreMap?.get(id) ?? null;
   };
 
-  const topicScoresList = userTopicScores.map(ts => ({
-    topicId: ts.topic_id,
-    topicName: ts.topics?.name || ts.topic_id,
-    score: ts.score,
-  }));
+  const topicScoresList = useMemo(
+    () => userTopicScores.map(ts => ({
+      topicId: ts.topic_id,
+      topicName: ts.topics?.name || ts.topic_id,
+      score: ts.score,
+    })),
+    [userTopicScores]
+  );
 
-  // Fetch AI analysis
+  // Fetch AI analysis — stable key; edge function handles DB-level caching
   const { data: analysis, isLoading: analysisLoading } = useQuery<ProfileAnalysis>({
-    queryKey: ['profile-analysis', profile?.id, topicScoresList],
+    queryKey: ['profile-analysis', profile?.id, profile?.overall_score],
     queryFn: async () => {
       const { data, error } = await supabase.functions.invoke('user-profile-analysis', {
         body: {
@@ -127,7 +130,8 @@ export const UserProfile = () => {
       return data as ProfileAnalysis;
     },
     enabled: !!session && !!profile && topicScoresList.length > 0,
-    staleTime: 1000 * 60 * 10, // Cache for 10 minutes
+    staleTime: Infinity, // Edge function owns freshness; Refresh button forces regeneration
+    gcTime: 1000 * 60 * 30,
   });
 
   const handleSignOut = async () => {
@@ -187,7 +191,16 @@ export const UserProfile = () => {
   const handleRefreshPoliticalAnalysis = async () => {
     setIsRefreshingAnalysis(true);
     try {
-      await queryClient.invalidateQueries({ queryKey: ['profile-analysis'] });
+      const { data, error } = await supabase.functions.invoke('user-profile-analysis', {
+        body: {
+          overallScore: profile?.overall_score ?? 0,
+          topicScores: topicScoresList,
+          userName: profile?.name,
+          force: true,
+        },
+      });
+      if (error) throw error;
+      queryClient.setQueryData(['profile-analysis', profile?.id, profile?.overall_score], data);
       toast.success('Political analysis refreshed!');
     } catch (error) {
       console.error('Error refreshing analysis:', error);

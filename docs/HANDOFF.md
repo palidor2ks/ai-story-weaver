@@ -5,6 +5,51 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-26 — AI analysis DB cache (edge fn v653 + migration)
+
+**What happened & why**
+User reported the AI Political Analysis re-ran on every screen switch and login, burning Gemini API quota unnecessarily.
+
+Root causes fixed:
+1. `topicScoresList` in `UserProfile.tsx` was created fresh via `.map()` on every render, making
+   TanStack Query treat it as a new key and refetch on every mount.
+2. `staleTime: 1000 * 60 * 10` only cached in-memory — didn't survive page refresh or new login.
+
+Changes:
+- **Migration** (`add_ai_analysis_cache_to_profiles`): Added `ai_analysis_cache jsonb`,
+  `ai_analysis_cached_at timestamptz`, `ai_analysis_score numeric` to `profiles` table.
+- **`supabase/functions/user-profile-analysis/index.ts`** (v653): Before calling Gemini, reads
+  DB cache; serves it if < 30 days old and `overallScore` hasn't drifted > 1 point. After Gemini
+  runs, saves result to the new cache columns (best-effort, non-blocking). Accepts `force: true`
+  body param to bypass cache.
+- **`src/pages/UserProfile.tsx`**: Wrapped `topicScoresList` in `useMemo([userTopicScores])` to
+  stabilize the query key. Changed key from `[..., topicScoresList]` to `[..., profile.overall_score]`.
+  Set `staleTime: Infinity` (edge function owns freshness). Refresh button now calls the edge
+  function directly with `force: true` and writes result to the query cache via `setQueryData`.
+
+**State** (verified 2026-06-26)
+Edge function v653 deployed. Migration applied. PR pending. TS types check clean (no new errors introduced).
+
+**Next**
+Confirm analysis loads instantly on second visit / tab-switch in the live app.
+
+## 2026-06-25 — Combined support/oppose box; prominent alignment % (PR #583)
+
+**What happened & why**
+User wanted the 👍/👎 stat boxes merged and the alignment percentage made more prominent.
+
+Changes (PR #583, merged):
+- `CandidateProfile.tsx`: Replaced two separate support/oppose boxes with a single
+  `col-span-2` box showing both numbers side-by-side (green/red) with a divider.
+- `VotingRecordSection.tsx`: Alignment % now renders as `text-3xl font-black` inline with
+  "legislative alignment" label — much more visually dominant.
+
+**State** (verified 2026-06-25)
+PR #583 merged to main. All CI checks passed.
+
+**Next**
+User to confirm the combined box and large % look correct in the live app.
+
 ## 2026-06-25 — Stat grid + Political Compass removal (PR #582)
 
 **What happened & why**
