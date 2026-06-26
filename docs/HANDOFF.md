@@ -5,6 +5,29 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-26 — Politicians filter chips wrap on mobile (no longer cut off)
+
+**What happened & why**
+User reported (with a screenshot of the "All Politicians" page in mobile) that the filter tab row
+(`All / My Reps / Senate / House / Executive / State / Local`) was cut off — the last chips ran
+off-screen with no scrollbar. The row in `src/pages/Candidates.tsx` used
+`flex overflow-x-auto scrollbar-none`, so it scrolled horizontally but gave no affordance, reading
+as "cut off." Changed it to `flex flex-wrap` so all 7 chips reflow onto multiple lines and stay
+reachable on narrow screens, and made the chips slightly more compact on mobile
+(`px-3 py-1.5 text-xs sm:px-4 sm:text-sm`) so they pack tighter. Desktop is unchanged (the 7 short
+chips still fit one row).
+
+**State** (verified 2026-06-26)
+Preflight green: `eslint` 0 errors (pre-existing warnings only), `bun run build` passes,
+`bun test src` 52 pass / 0 fail. CSS-only layout change; not yet eyeballed in a running mobile
+viewport.
+
+**Next**
+Eyeball the Politicians page at ~375px width to confirm the chips wrap cleanly and nothing else on
+the search/filter row overflows.
+
+---
+
 ## 2026-06-26 — Top spenders (outside spending) on rep profile MONEY tab (PR #592)
 
 **What happened & why**
