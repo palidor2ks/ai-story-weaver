@@ -21,6 +21,7 @@ import { Candidate } from '@/types';
 import { cn } from '@/lib/utils';
 import { normalizeOfficeName, toDisplayName } from '@/lib/officeLabel';
 import { useCandidatesIE } from '@/hooks/useIndependentExpenditures';
+import { IESummaryInline } from '@/components/IESummaryInline';
 import { formatScore } from '@/lib/scoreFormat';
 import { OfficialAvatar } from '@/components/OfficialAvatar';
 import { Header } from '@/components/Header';
@@ -266,7 +267,7 @@ export const Candidates = () => {
     [pageCandidates],
   );
   const deferredVisibleIds = useDeferredValue(visibleIds);
-  useCandidatesIE(deferredVisibleIds);
+  const { data: ieMap } = useCandidatesIE(deferredVisibleIds);
 
   // Block on DB + Congress members so the full list renders in one pass (avoids
   // visible reorder when allPoliticians arrives as a second wave).
@@ -520,6 +521,8 @@ export const Candidates = () => {
                     Former
                   </span>
                 )}
+                {/* Outside money (independent expenditures) */}
+                <IESummaryInline totals={ieMap?.get(candidate.id)} size="xs" className="mt-1" />
               </div>
 
               {/* PoliScore */}
