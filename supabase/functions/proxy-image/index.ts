@@ -36,6 +36,8 @@ const ALLOWED_HOST_SUFFIXES = [
   'civicengine.com',
   // @unitedstates project — Congress member photos (congress.gov mirror)
   'unitedstates.github.io',
+  // Executive portraits (President, VP)
+  'whitehouse.gov',
 ];
 
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
