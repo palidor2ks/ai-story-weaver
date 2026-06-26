@@ -5,6 +5,31 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-26 — Top spenders (outside spending) on rep profile MONEY tab
+
+**What happened & why**
+User asked to "make sure top spenders is added onto rep profile page." The `CandidateIESection`
+component (Outside Spending: total/support/oppose stats + a "Top spending committees" table) was
+already built and imported into `CandidateProfile.tsx` (line 36) but never rendered — a half-wired
+feature. Completed the wiring: rendered `<CandidateIESection candidateId={id} />` in the MONEY tab,
+just below the "Funding & donor details" CTA. Reuses the existing `useCandidateIE` hook (one front
+door), and matches the existing pattern where the VOTES tab renders a shadcn `Card` section inside
+the mobile design. Component self-gates (returns null) when a candidate has no IE data, so no empty
+section appears.
+
+Verified IE data exists and app `candidates.id` == the FEC id used by `independent_expenditures`/
+`candidate_independent_expenditure_totals` (e.g. Harris P00009423 $1.21B), so the hook resolves
+without a mapping layer.
+
+**State** (verified 2026-06-26)
+Preflight green: `eslint` 0 errors (1 pre-existing warning unrelated to change), `bun run build`
+passes, `bun test src` 52 pass / 0 fail. Not yet manually viewed in a running app.
+
+**Next**
+Manually confirm the section renders on a candidate with IE data (e.g. Harris/Trump) and that the
+cycle dropdown + committee links behave. Optional: style the shadcn Card to better match the mobile
+poli- aesthetic if it looks out of place.
+
 ## 2026-06-26 — Mobile tab overflow fix (PR #588, merged)
 
 **What happened & why**

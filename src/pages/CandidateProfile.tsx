@@ -789,6 +789,10 @@ export const CandidateProfile = () => {
                 Funding & donor details →
               </button>
             </Link>
+            {/* Top spenders — outside groups making independent expenditures for/against */}
+            <div className="mt-3">
+              <CandidateIESection candidateId={id} />
+            </div>
           </div>
         )}
 
