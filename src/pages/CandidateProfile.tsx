@@ -793,7 +793,7 @@ export const CandidateProfile = () => {
                 Use the resolved candidate.id (not the raw route id) so synthetic
                 executive routes like /candidate/federal_president still match IE rows. */}
             <div className="mt-3">
-              <CandidateIESection candidateId={candidate.id} />
+              <CandidateIESection candidateId={candidate.id} preferredCycle={effectiveCycle} />
             </div>
           </div>
         )}

@@ -156,24 +156,25 @@ export const useCandidateIE = (
     queryFn: async () => {
       const filtered = !!cycle && cycle !== 'all';
 
+      // Fetch the candidate's raw IE filings and aggregate totals + top spenders
+      // client-side from a single cleaned rowset. We intentionally do NOT read
+      // candidate_independent_expenditure_totals: that view groups by
+      // target_fec_candidate_id, so an aliased candidate filed under multiple FEC
+      // IDs yields several rows and .maybeSingle() would collapse them to null
+      // (showing "No expenditures" despite real spending). The explicit high
+      // limit guards against the default page size silently truncating
+      // high-volume candidates/cycles.
       let rowsQ = supabase
         .from('independent_expenditures')
         .select(
           'id, expenditure_date, amount, support_oppose_indicator, purpose, spending_committee_fec_id, spending_committee_name, candidate_id, target_fec_candidate_id, target_candidate_name, cycle',
         )
         .eq('candidate_id', candidateId!)
-        .order('amount', { ascending: false });
+        .order('amount', { ascending: false })
+        .limit(50000);
       if (filtered) rowsQ = rowsQ.eq('cycle', cycle!);
-      else rowsQ = rowsQ.limit(50);
 
-      const [totalsRes, rowsRes, cyclesRes, excludedRes] = await Promise.all([
-        filtered
-          ? Promise.resolve({ data: null })
-          : supabase
-              .from('candidate_independent_expenditure_totals')
-              .select('expenditure_count, total_amount, support_amount, oppose_amount')
-              .eq('candidate_id', candidateId!)
-              .maybeSingle(),
+      const [rowsRes, cyclesRes, excludedRes] = await Promise.all([
         rowsQ,
         supabase
           .from('independent_expenditures')
@@ -181,40 +182,39 @@ export const useCandidateIE = (
           .eq('candidate_id', candidateId!)
           .not('cycle', 'is', null),
         // Admin-excluded IE committees are hidden everywhere else (Top Spenders
-        // page, rollup views); drop them here too so the profile agrees.
+        // page, rollup views); drop them here too so the profile agrees. We
+        // filter the full fetched set BEFORE ranking so excluded "junk"
+        // committees can't crowd real spenders out of the top list.
         supabase.from('ie_excluded_committees_public').select('fec_committee_id'),
       ]);
 
       const excluded = new Set(
         ((excludedRes.data ?? []) as Array<{ fec_committee_id: string }>).map((r) => r.fec_committee_id),
       );
-      const rawRows = (rowsRes.data ?? []) as IERow[];
-      const rows = rawRows.filter((r) => !excluded.has(r.spending_committee_fec_id));
+      const rows = ((rowsRes.data ?? []) as IERow[]).filter(
+        (r) => !excluded.has(r.spending_committee_fec_id),
+      );
 
-      let totals: IETotals;
-      if (filtered) {
-        totals = { expenditure_count: rows.length, total_amount: 0, support_amount: 0, oppose_amount: 0 };
-        rows.forEach((r) => {
-          const amt = num(r.amount);
-          totals.total_amount += amt;
-          if (r.support_oppose_indicator === 'S') totals.support_amount += amt;
-          else totals.oppose_amount += amt;
-        });
-      } else {
-        const t = (totalsRes as { data?: { expenditure_count?: number; total_amount?: number; support_amount?: number; oppose_amount?: number } | null }).data;
-        totals = {
-          expenditure_count: num(t?.expenditure_count),
-          total_amount: num(t?.total_amount),
-          support_amount: num(t?.support_amount),
-          oppose_amount: num(t?.oppose_amount),
-        };
-      }
+      // Totals and top spenders both come from the same cleaned rowset, so the
+      // summary card and the table can never disagree.
+      const totals: IETotals = {
+        expenditure_count: rows.length,
+        total_amount: 0,
+        support_amount: 0,
+        oppose_amount: 0,
+      };
+      rows.forEach((r) => {
+        const amt = num(r.amount);
+        totals.total_amount += amt;
+        if (r.support_oppose_indicator === 'S') totals.support_amount += amt;
+        else totals.oppose_amount += amt;
+      });
 
       const availableCycles = Array.from(
         new Set((cyclesRes.data ?? []).map((r) => String(r.cycle))),
       ).sort((a, b) => b.localeCompare(a));
 
-      // Aggregate top spenders from rows
+      // Aggregate top spenders from the full cleaned rowset.
       const spenderMap = new Map<
         string,
         { name: string; support: number; oppose: number; total: number; count: number }
