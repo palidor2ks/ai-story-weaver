@@ -5,6 +5,25 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-26 — Compact `$12M` format on FUNDING & DONORS page (PR #591, merged)
+
+**What happened & why**
+On the candidate **FUNDING & DONORS** page (`src/pages/CandidateDonors.tsx`), the top stat boxes
+(Total Raised / Cash on Hand / Total Spent / Debt) rendered full numbers like `$12,441,004`,
+which overflowed the stat row on narrow mobile screens — and were inconsistent with the
+funding-sources header on the same page (already `$12M`) and the rest of the app. Switched the
+page's local `fmt` helper from `toLocaleString()` to the shared `formatCompactCurrency`
+(`src/lib/utils.ts`). Follow-up in the same session: also made the individual top-donor line
+amounts compact (`$25K`) for full-page consistency.
+
+**State** (verified 2026-06-26)
+PR #591 merged. CI green (Lint, Build, Test, Typecheck, Lockfile guard, GitGuardian). Local
+`bun run lint` (0 errors) + `bun run build` pass.
+
+**Next**
+Still open from prior session: optionally add debt data (`debts_owed_by_committee`) to the
+`useFECTotals` hook — Debt currently always renders `—` (`fecDebt` is hardcoded `null`).
+
 ## 2026-06-26 — vote AI Analysis framed votes as "cosponsored" (branch claude/image-issue-2cfo9i)
 
 **What happened & why**
