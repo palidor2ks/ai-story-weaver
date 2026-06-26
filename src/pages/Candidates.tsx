@@ -324,14 +324,14 @@ export const Candidates = () => {
 
       <h2 className="sr-only">Politicians directory</h2>
 
-      {/* Filter chips row */}
-      <div className="flex gap-2 overflow-x-auto px-4 py-3 scrollbar-none">
+      {/* Filter chips row — wraps on mobile so every tab stays reachable */}
+      <div className="flex flex-wrap gap-2 px-4 py-3">
         {TAB_LABELS.map(({ key, label }) => (
           <button
             key={key}
             onClick={() => setActiveTab(key)}
             className={cn(
-              'flex-shrink-0 rounded-full px-4 py-1.5 text-sm font-semibold transition-colors',
+              'flex-shrink-0 rounded-full px-3 py-1.5 text-xs sm:px-4 sm:text-sm font-semibold transition-colors',
               activeTab === key
                 ? 'bg-[#14173A] text-white font-bold'
                 : 'bg-poli-surface text-poli-body'
