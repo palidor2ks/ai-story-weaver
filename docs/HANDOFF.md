@@ -5,6 +5,22 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-26 — Mobile tab overflow fix (PR #588, merged)
+
+**What happened & why**
+6 tabs in the candidate profile overflowed on narrow mobile screens — the last tab ("Contact")
+was cut off. Replaced the horizontal `flex overflow-x-auto` row with `grid grid-cols-6 gap-1`
+so all tabs always fit the viewport width. Reduced font to `text-[10px]` and padding to
+`py-[7px]` to keep labels legible. Also in this session: stat boxes replaced (PRs #585–587,
+merged earlier) — alignment %, total raised/spent/cash on hand in compact `$14M` format.
+
+**State** (verified 2026-06-26)
+PR #588 merged. CI green (Build, Typecheck, Lint, Test all pass).
+
+**Next**
+Optionally add debt data (`debts_owed_by_committee`) to `useFECTotals` hook — user asked about
+it; it's not currently in the data model.
+
 ## 2026-06-26 — AI analysis DB cache (edge fn v653 + migration)
 
 **What happened & why**
