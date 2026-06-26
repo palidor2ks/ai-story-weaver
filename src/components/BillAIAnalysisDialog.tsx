@@ -127,6 +127,7 @@ export const BillAIAnalysisDialog = ({
           candidate_office: candidateOffice ?? null,
           candidate_state: candidateState ?? null,
           is_sponsor: isSponsor,
+          vote_position: votePosition ?? null,
           force_refresh: force,
         },
       });

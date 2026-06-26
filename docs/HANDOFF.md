@@ -5,6 +5,28 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-26 — vote AI Analysis framed votes as "cosponsored" (branch claude/image-issue-2cfo9i)
+
+**What happened & why**
+The "AI Analysis" dialog on a roll-call vote in the Voting Record produced self-contradicting
+output: the header said "{candidate} voted No on it" while the deeper analysis said "there is no
+evidence {candidate} cosponsored this nomination." Root cause: `BillAIAnalysisDialog` sent only
+`is_sponsor: false` to the `ai-bill-analysis` edge function and never the vote direction, so the
+function always framed the analysis as `cosponsored`. That's nonsense for a vote — and doubly so
+for a judicial confirmation, which is a nomination you can't cosponsor.
+
+Fix: pass `vote_position` through to the edge function; the function now derives the real action
+(voted YES/NO/PRESENT vs sponsored/cosponsored), frames the whole prompt around it, treats the
+subject as a generic "measure (bill, resolution, nomination, or procedural motion)" for votes,
+and includes the action in the cache fingerprint so stale "cosponsored" entries are busted.
+
+**State** (verified 2026-06-26)
+`bun run lint` 0 errors, `bun run build` ✓, `bun run test` 139 pass. Edge function NOT yet
+redeployed — needs `supabase functions deploy ai-bill-analysis` after merge.
+
+**Next**
+Deploy the `ai-bill-analysis` edge function so the new framing takes effect in prod.
+
 ## 2026-06-26 — proxy-image allowlist: unitedstates.github.io (PR #589, merged)
 
 **What happened & why**
