@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useMyClaimForCandidate, useSubmitClaim } from '@/hooks/useProfileClaims';
 import { logBadgeEvent } from '@/lib/badges';
+import { Button } from '@/components/ui/button';
 import { IconActionButton } from '@/components/ui/icon-action-button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,6 +12,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -106,25 +108,18 @@ export function ClaimProfileDialog({
           icon={<UserCheck className="h-4 w-4" />}
         />
       </DialogTrigger>
-      <DialogContent className="bg-white rounded-2xl p-0 overflow-hidden border-0 gap-0">
-        <DialogHeader className="bg-poli-surface px-5 pt-5 pb-4">
-          <p className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest mb-1">
-            Claim Profile
-          </p>
-          <DialogTitle className="text-lg font-black text-poli-navy">
-            {candidateName}
-          </DialogTitle>
-          <DialogDescription className="text-sm text-poli-muted">
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Claim Profile: {candidateName}</DialogTitle>
+          <DialogDescription>
             Are you {candidateName} or their authorized representative? Submit a claim request
             and an admin will verify your identity.
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="px-5 pb-5 pt-4 space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="official-email" className="text-sm font-semibold text-poli-body">
-              Official Email
-            </Label>
+            <Label htmlFor="official-email">Official Email</Label>
             <Input
               id="official-email"
               type="email"
@@ -132,17 +127,14 @@ export function ClaimProfileDialog({
               value={officialEmail}
               onChange={(e) => setOfficialEmail(e.target.value)}
               required
-              className="border border-poli-surface rounded-xl h-12 px-4 w-full text-sm text-poli-body focus:ring-1 focus:ring-poli-navy"
             />
-            <p className="text-xs text-poli-muted">
+            <p className="text-xs text-muted-foreground">
               Your official government or campaign email for verification.
             </p>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="verification-info" className="text-sm font-semibold text-poli-body">
-              Verification Information
-            </Label>
+            <Label htmlFor="verification-info">Verification Information</Label>
             <Textarea
               id="verification-info"
               placeholder="Briefly explain how you can verify your identity (e.g., 'I am the representative for CA-12. I can verify via my official social media accounts.')"
@@ -150,28 +142,18 @@ export function ClaimProfileDialog({
               onChange={(e) => setVerificationInfo(e.target.value)}
               rows={4}
               required
-              className="border border-poli-surface rounded-xl px-4 w-full text-sm text-poli-body focus:ring-1 focus:ring-poli-navy"
             />
           </div>
 
-          <div className="flex flex-col gap-2 pt-2">
-            <button
-              type="submit"
-              disabled={submitClaim.isPending}
-              className="w-full h-12 rounded-xl font-bold text-white text-sm flex items-center justify-center gap-2 disabled:opacity-60"
-              style={{ background: 'linear-gradient(90deg, #182B7A, #B3122F)' }}
-            >
-              {submitClaim.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-              Submit Claim
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsOpen(false)}
-              className="text-sm text-poli-muted underline text-center py-1"
-            >
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>
               Cancel
-            </button>
-          </div>
+            </Button>
+            <Button type="submit" disabled={submitClaim.isPending}>
+              {submitClaim.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Submit Claim
+            </Button>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

@@ -49,11 +49,11 @@ export function BatchQueueModal({
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="flex items-center gap-2 p-2 bg-poli-surface/50 rounded text-sm">
-            <Info className="h-4 w-4 text-poli-muted shrink-0" />
+          <div className="flex items-center gap-2 p-2 bg-muted/50 rounded text-sm">
+            <Info className="h-4 w-4 text-muted-foreground shrink-0" />
             <div>
               <span className="font-medium">Order: </span>
-              <span className="text-poli-muted">{orderingRule}</span>
+              <span className="text-muted-foreground">{orderingRule}</span>
             </div>
           </div>
 
@@ -75,9 +75,9 @@ export function BatchQueueModal({
               {candidates.slice(0, batchSize).map((candidate, idx) => (
                 <div 
                   key={candidate.id}
-                  className="flex items-center gap-2 p-1.5 hover:bg-poli-surface/50 rounded text-sm"
+                  className="flex items-center gap-2 p-1.5 hover:bg-muted/50 rounded text-sm"
                 >
-                  <span className="text-poli-muted w-6 text-right text-xs">
+                  <span className="text-muted-foreground w-6 text-right text-xs">
                     {idx + 1}.
                   </span>
                   <span className="flex-1 truncate">{candidate.name}</span>
@@ -90,7 +90,7 @@ export function BatchQueueModal({
           </ScrollArea>
 
           {hasMore && (
-            <p className="text-xs text-poli-muted">
+            <p className="text-xs text-muted-foreground">
               After this batch completes, you can process the next {Math.min(batchSize, totalAvailable - batchSize)} candidates.
             </p>
           )}

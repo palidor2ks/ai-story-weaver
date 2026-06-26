@@ -99,7 +99,7 @@ export default function Issues() {
         jsonLd={jsonLd}
       />
       <Header />
-      <main className="container mx-auto py-10 max-w-5xl pb-20">
+      <main className="container mx-auto py-10 max-w-5xl">
         <section className="mb-10">
           <h1 className="font-display text-4xl md:text-5xl font-bold text-foreground mb-3">
             Political issues today

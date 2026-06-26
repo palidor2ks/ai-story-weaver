@@ -1,7 +1,10 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { Header } from '@/components/Header';
 import { Seo } from '@/components/Seo';
 import { ScoreText } from '@/components/ScoreText';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ShareCardModal } from '@/components/share/ShareCardModal';
 import { useProfile, useUserTopicScores, useUserTopics } from '@/hooks/useProfile';
@@ -20,6 +23,7 @@ import { useToast } from '@/hooks/use-toast';
 import { formatScore, getScoreLabel } from '@/lib/scoreFormat';
 import { Loader2, Sparkles, ArrowRight, BarChart3, Users, Share2, Building2, MapPin, Calendar, Vote } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { NolanChart } from '@/components/NolanChart';
 
 interface ProfileAnalysis {
   summary: string;
@@ -140,7 +144,7 @@ export const QuizResults = () => {
   useEffect(() => {
     const fetchProfileAnalysis = async () => {
       if (!session || !profile || userTopicScores.length === 0) return;
-
+      
       setIsLoadingAI(true);
       try {
         const topicScoresForAI = userTopicScores.map(ts => ({
@@ -176,8 +180,11 @@ export const QuizResults = () => {
 
   if (profileLoading) {
     return (
-      <div className="min-h-screen bg-[#F5F6FA] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-poli-navy" />
+      <div className="min-h-screen bg-background">
+        <Header />
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
       </div>
     );
   }
@@ -202,148 +209,154 @@ export const QuizResults = () => {
   const inviteUrl = typeof window !== 'undefined' ? window.location.origin : '';
   const brandHost = BRAND_HOST;
 
-  // Derive score label for the overlap card (e.g. "L8 Progressive")
-  const scoreLabel = getScoreLabel(profile.overall_score);
 
-  // Donut chart percentage — map overall_score (-100..100) to 0..100%
-  const donutPct = Math.round(((profile.overall_score ?? 0) + 100) / 2);
+
+
+
+
 
   return (
-    <div className="bg-[#F5F6FA] min-h-screen pb-20">
+    <div className="min-h-screen bg-background">
+      <Header />
+
       <Seo
         title="Your Political Profile — Pulse"
         description="See your personalized political profile based on your quiz responses, and compare your views with candidates and parties."
         path="/results"
         noIndex
       />
-
-      {/* Navy gradient header */}
-      <div className="bg-gradient-to-br from-poli-navy to-poli-dark pt-12 pb-16 px-4">
-        <div className="max-w-3xl mx-auto">
-          <p className="font-mono-label text-xs font-bold text-poli-red/80 uppercase tracking-widest">
-            Your Results
+      <main className="container py-8 px-4 max-w-3xl mx-auto">
+        {/* Hero Section */}
+        <div className="text-center mb-8 animate-fade-in">
+          <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground mb-2">
+            Your Political Profile
+          </h1>
+          <p className="text-muted-foreground mb-4">
+            Based on your quiz responses and topic priorities
           </p>
-          <h1 className="text-2xl font-black text-white mt-1">Pulse Score</h1>
-          <p className="text-sm text-white/60">Answers locked in — quiz complete</p>
 
-          {/* Share buttons in header */}
-          <div className="flex flex-wrap items-center gap-2 mt-4">
-            <button
+          {/* Share Buttons */}
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
               onClick={() => setResultsShareOpen(true)}
-              className="flex items-center gap-1.5 text-xs font-semibold text-white/80 border border-white/20 rounded-lg px-3 py-1.5"
             >
-              <Share2 className="w-3.5 h-3.5" />
-              Share results
-            </button>
-            <button
+              <Share2 className="w-4 h-4" />
+              Share my results
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
               onClick={() => setInviteShareOpen(true)}
-              className="flex items-center gap-1.5 text-xs font-semibold text-white/80 border border-white/20 rounded-lg px-3 py-1.5"
             >
-              <Users className="w-3.5 h-3.5" />
+              <Users className="w-4 h-4" />
               Invite others
-            </button>
+            </Button>
           </div>
-        </div>
-      </div>
 
-      <ShareCardModal
-        open={resultsShareOpen}
-        onOpenChange={setResultsShareOpen}
-        url={shareUrl}
-        data={{
-          kind: 'user-profile',
-          brandHost,
-          userName: profile?.name,
-          userScore: profile?.overall_score ?? null,
-          topTopics: topTopicsForShare,
-        }}
-        caption={{
-          surface: 'quiz_results',
-          kind: 'user-profile',
-          userName: profile?.name,
-          userScore: profile?.overall_score ?? null,
-          topTopics: topTopicsForShare,
-          url: shareUrl,
-        }}
-      />
-      <ShareCardModal
-        open={inviteShareOpen}
-        onOpenChange={setInviteShareOpen}
-        url={inviteUrl}
-        data={{
-          kind: 'invite',
-          brandHost,
-        }}
-        caption={{ kind: 'invite', url: inviteUrl, surface: 'quiz_results_invite' }}
-      />
-
-      {/* Score overlap card — -mt-6 pulls it up over the header */}
-      <div className="mx-4 max-w-3xl lg:mx-auto -mt-6 bg-white rounded-2xl shadow-lg p-5 flex items-center gap-4">
-        {/* Donut */}
-        <div
-          className="w-16 h-16 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-black text-poli-navy"
-          style={{
-            background: `conic-gradient(#182B7A ${donutPct}%, #F0EFF4 ${donutPct}%)`,
-          }}
-        >
-          <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-[10px] font-black text-poli-navy">
-            {profile.overall_score > 0 ? '+' : ''}{profile.overall_score}
-          </div>
+          <ShareCardModal
+            open={resultsShareOpen}
+            onOpenChange={setResultsShareOpen}
+            url={shareUrl}
+            data={{
+              kind: 'user-profile',
+              brandHost,
+              userName: profile?.name,
+              userScore: profile?.overall_score ?? null,
+              topTopics: topTopicsForShare,
+            }}
+            caption={{
+              surface: 'quiz_results',
+              kind: 'user-profile',
+              userName: profile?.name,
+              userScore: profile?.overall_score ?? null,
+              topTopics: topTopicsForShare,
+              url: shareUrl,
+            }}
+          />
+          <ShareCardModal
+            open={inviteShareOpen}
+            onOpenChange={setInviteShareOpen}
+            url={inviteUrl}
+            data={{
+              kind: 'invite',
+              brandHost,
+            }}
+            caption={{ kind: 'invite', url: inviteUrl, surface: 'quiz_results_invite' }}
+          />
         </div>
 
-        <div className="flex-1 min-w-0">
-          <p className="text-lg font-black text-poli-navy leading-tight">{scoreLabel}</p>
-          <p className="text-xs text-poli-muted mt-0.5">
-            Score Version: {profile.score_version || 'v1.0'}
-          </p>
-          <div className="flex gap-3 mt-3">
-            <button
-              onClick={() => navigate('/profile')}
-              className="flex items-center gap-1 text-xs font-bold text-white px-3 py-1.5 rounded-lg"
-              style={{ background: '#182B7A' }}
-            >
-              View full profile
-              <ArrowRight className="w-3 h-3" />
-            </button>
-            <Link
-              to="/quiz"
-              className="text-xs font-semibold text-poli-muted underline flex items-center"
-            >
-              Retake quiz
-            </Link>
-          </div>
-        </div>
-      </div>
+        {/* Overall Score Card */}
+        <Card className="mb-8 shadow-elevated border-primary/20 animate-slide-up">
+          <CardContent className="pt-8 pb-6 text-center">
+            <p className="text-sm text-muted-foreground mb-4">Your Overall Score</p>
+            <div className="mb-4">
+              <ScoreText score={profile.overall_score} size="lg" showLabel />
+            </div>
+            <p className="text-lg font-medium text-foreground">
+              {getScoreLabel(profile.overall_score)}
+            </p>
+            <p className="text-sm text-muted-foreground mt-2">
+              Score Version: {profile.score_version || 'v1.0'}
+            </p>
+          </CardContent>
+        </Card>
 
-      {/* Main content */}
-      <div className="max-w-3xl mx-auto mt-6 pb-12">
+        {/* Party Alignment — Nolan Chart */}
+        <Card className="mb-8 shadow-elevated animate-slide-up" style={{ animationDelay: '50ms' }}>
+          <CardHeader>
+            <CardTitle className="font-display flex items-center gap-2">
+              <Users className="w-5 h-5 text-primary" />
+              Political Compass
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isLoadingAI ? (
+              <div className="flex items-center gap-3 text-muted-foreground py-4">
+                <Loader2 className="w-5 h-5 animate-spin" />
+                <span>Calculating party alignment...</span>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <NolanChart />
+                {profileAnalysis?.partyComparison && (
+                  <p className="text-sm text-muted-foreground pt-2 border-t border-border">
+                    {profileAnalysis.partyComparison}
+                  </p>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* AI Profile Summary */}
-        <div className="mx-4 mb-3">
-          <p className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest mb-2">
-            AI Profile Summary
-          </p>
-          <div className="bg-white rounded-xl shadow-sm p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Sparkles className="w-4 h-4 text-poli-navy" />
-              <span className="text-sm font-bold text-poli-body">AI Profile Summary</span>
-            </div>
+        <Card className="mb-8 shadow-elevated animate-slide-up" style={{ animationDelay: '100ms' }}>
+          <CardHeader>
+            <CardTitle className="font-display flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-primary" />
+              AI Profile Summary
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
             {isLoadingAI ? (
-              <div className="flex items-center gap-3 text-poli-muted py-4">
+              <div className="flex items-center gap-3 text-muted-foreground py-4">
                 <Loader2 className="w-5 h-5 animate-spin" />
-                <span className="text-sm">Analyzing your political profile...</span>
+                <span>Analyzing your political profile...</span>
               </div>
             ) : profileAnalysis ? (
               <div className="space-y-4">
-                <p className="text-sm text-poli-body leading-relaxed">{profileAnalysis.summary}</p>
-
+                <p className="text-foreground leading-relaxed">{profileAnalysis.summary}</p>
+                
                 {profileAnalysis.keyInsights && profileAnalysis.keyInsights.length > 0 && (
-                  <div className="pt-4 border-t border-poli-surface">
-                    <h4 className="text-xs font-bold text-poli-body mb-3 uppercase tracking-wide">Key Insights</h4>
+                  <div className="pt-4 border-t border-border">
+                    <h4 className="text-sm font-semibold text-foreground mb-3">Key Insights</h4>
                     <ul className="space-y-2">
                       {profileAnalysis.keyInsights.map((insight, index) => (
-                        <li key={index} className="flex items-start gap-2 text-sm text-poli-muted">
-                          <span className="text-poli-navy mt-1">•</span>
+                        <li key={index} className="flex items-start gap-2 text-sm text-muted-foreground">
+                          <span className="text-primary mt-1">•</span>
                           <span>{insight}</span>
                         </li>
                       ))}
@@ -352,13 +365,13 @@ export const QuizResults = () => {
                 )}
 
                 {profileAnalysis.strongestPositions && profileAnalysis.strongestPositions.length > 0 && (
-                  <div className="pt-4 border-t border-poli-surface">
-                    <h4 className="text-xs font-bold text-poli-body mb-3 uppercase tracking-wide">Your Strongest Positions</h4>
+                  <div className="pt-4 border-t border-border">
+                    <h4 className="text-sm font-semibold text-foreground mb-3">Your Strongest Positions</h4>
                     <div className="flex flex-wrap gap-2">
                       {profileAnalysis.strongestPositions.map((position, index) => (
-                        <span
-                          key={index}
-                          className="px-3 py-1 bg-poli-navy/10 text-poli-navy text-xs rounded-full font-medium"
+                        <span 
+                          key={index} 
+                          className="px-3 py-1 bg-primary/10 text-primary text-sm rounded-full"
                         >
                           {position}
                         </span>
@@ -368,45 +381,40 @@ export const QuizResults = () => {
                 )}
               </div>
             ) : (
-              <p className="text-sm text-poli-muted italic">
+              <p className="text-muted-foreground italic">
                 AI summary unavailable. Your scores are displayed below.
               </p>
             )}
-          </div>
-        </div>
+          </CardContent>
+        </Card>
 
-        {/* Your Representatives */}
-        <div className="mx-4 mb-3">
-          <p className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest mb-2">
-            Your Representatives
-          </p>
-          <div className="bg-white rounded-xl shadow-sm p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Users className="w-4 h-4 text-poli-navy" />
-              <span className="text-sm font-bold text-poli-body">Your Representatives</span>
-            </div>
+        {/* Your Representatives Card — with AI comparison summaries */}
+        <Card className="mb-8 shadow-elevated animate-slide-up" style={{ animationDelay: '150ms' }}>
+          <CardHeader>
+            <CardTitle className="font-display flex items-center gap-2">
+              <Users className="w-5 h-5 text-primary" />
+              Your Representatives
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
             {!profile.address ? (
               <div className="text-center py-6">
-                <p className="text-sm text-poli-muted mb-4">
-                  Add your address in your profile to see your representatives and how they match with your views.
-                </p>
-                <button
-                  onClick={() => navigate('/profile')}
-                  className="border border-poli-navy text-poli-navy rounded-xl px-4 py-2 text-sm font-semibold"
-                >
+                <p className="text-muted-foreground mb-4">Add your address in your profile to see your representatives and how they match with your views.</p>
+                <Button variant="outline" onClick={() => navigate('/profile')}>
                   Go to Profile
-                </button>
+                </Button>
               </div>
             ) : allRepsLoading ? (
-              <div className="flex items-center gap-3 text-poli-muted py-4">
+              <div className="flex items-center gap-3 text-muted-foreground py-4">
                 <Loader2 className="w-5 h-5 animate-spin" />
-                <span className="text-sm">Finding your representatives...</span>
+                <span>Finding your representatives...</span>
               </div>
             ) : (federalReps.length > 0 || (civicData && (civicData.federalExecutive.length > 0 || civicData.stateExecutive.length > 0 || civicData.stateLegislative.length > 0 || civicData.local.length > 0))) ? (
               <div className="space-y-6">
+                {/* Federal Executive (President, VP) */}
                 {civicData && civicData.federalExecutive.length > 0 && (
                   <div>
-                    <h4 className="text-xs font-semibold text-poli-muted mb-3 flex items-center gap-2 uppercase tracking-wide">
+                    <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
                       <Building2 className="w-4 h-4" />
                       Federal Executive
                     </h4>
@@ -422,9 +430,10 @@ export const QuizResults = () => {
                   </div>
                 )}
 
+                {/* Federal Legislative (Congress) */}
                 {federalReps.length > 0 && (
                   <div>
-                    <h4 className="text-xs font-semibold text-poli-muted mb-3 flex items-center gap-2 uppercase tracking-wide">
+                    <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
                       <Building2 className="w-4 h-4" />
                       U.S. Congress
                     </h4>
@@ -456,9 +465,10 @@ export const QuizResults = () => {
                   </div>
                 )}
 
+                {/* State Executive (Governor, Lt. Governor) */}
                 {civicData && civicData.stateExecutive.length > 0 && (
                   <div>
-                    <h4 className="text-xs font-semibold text-poli-muted mb-3 flex items-center gap-2 uppercase tracking-wide">
+                    <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
                       <Building2 className="w-4 h-4" />
                       State Executive
                     </h4>
@@ -474,9 +484,10 @@ export const QuizResults = () => {
                   </div>
                 )}
 
+                {/* State Legislative */}
                 {civicData && civicData.stateLegislative.length > 0 && (
                   <div>
-                    <h4 className="text-xs font-semibold text-poli-muted mb-3 flex items-center gap-2 uppercase tracking-wide">
+                    <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
                       <Building2 className="w-4 h-4" />
                       State Legislature
                     </h4>
@@ -492,9 +503,10 @@ export const QuizResults = () => {
                   </div>
                 )}
 
+                {/* Local Officials */}
                 {civicData && civicData.local.length > 0 && (
                   <div>
-                    <h4 className="text-xs font-semibold text-poli-muted mb-3 flex items-center gap-2 uppercase tracking-wide">
+                    <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
                       <MapPin className="w-4 h-4" />
                       Local Officials
                     </h4>
@@ -511,28 +523,27 @@ export const QuizResults = () => {
                 )}
               </div>
             ) : (
-              <p className="text-sm text-poli-muted text-center py-4">
+              <p className="text-muted-foreground text-center py-4">
                 No representatives found for your address.
               </p>
             )}
-          </div>
-        </div>
+          </CardContent>
+        </Card>
 
-        {/* Candidates on Your Ballot */}
+        {/* Candidates on Your Ballot — upcoming elections */}
         {profile.address && (upcomingLoading || (upcomingElections && [...upcomingElections.federal, ...upcomingElections.state, ...upcomingElections.local].length > 0)) && (
-          <div className="mx-4 mb-3">
-            <p className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest mb-2">
-              Candidates on Your Ballot
-            </p>
-            <div className="bg-white rounded-xl shadow-sm p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <Vote className="w-4 h-4 text-poli-navy" />
-                <span className="text-sm font-bold text-poli-body">Candidates on Your Ballot</span>
-              </div>
+          <Card className="mb-8 shadow-elevated animate-slide-up" style={{ animationDelay: '175ms' }}>
+            <CardHeader>
+              <CardTitle className="font-display flex items-center gap-2">
+                <Vote className="w-5 h-5 text-primary" />
+                Candidates on Your Ballot
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
               {upcomingLoading ? (
-                <div className="flex items-center gap-3 text-poli-muted py-4">
+                <div className="flex items-center gap-3 text-muted-foreground py-4">
                   <Loader2 className="w-5 h-5 animate-spin" />
-                  <span className="text-sm">Finding upcoming elections...</span>
+                  <span>Finding upcoming elections...</span>
                 </div>
               ) : (
                 <div className="space-y-6">
@@ -547,7 +558,7 @@ export const QuizResults = () => {
                       });
                       return (
                         <div key={election.id}>
-                          <h4 className="text-xs font-semibold text-poli-muted mb-3 flex items-center gap-2 uppercase tracking-wide">
+                          <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
                             <Calendar className="w-4 h-4" />
                             {election.name} — {dateStr}
                           </h4>
@@ -592,57 +603,58 @@ export const QuizResults = () => {
                   )}
                 </div>
               )}
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         )}
 
-        {/* Topic Breakdown */}
-        <div className="mx-4 mb-3">
-          <p className="font-mono-label text-xs font-bold text-poli-red uppercase tracking-widest mb-2">
-            Topic Breakdown
-          </p>
-          <div className="bg-white rounded-xl shadow-sm p-4">
-            <div className="flex items-center gap-2 mb-1">
-              <BarChart3 className="w-4 h-4 text-poli-navy" />
-              <span className="text-sm font-bold text-poli-body">Topic Breakdown</span>
-            </div>
-            <p className="text-xs text-poli-muted mb-5">
+        {/* Topic Breakdown Card */}
+        <Card className="mb-8 shadow-elevated animate-slide-up" style={{ animationDelay: '200ms' }}>
+          <CardHeader>
+            <CardTitle className="font-display flex items-center gap-2">
+              <BarChart3 className="w-5 h-5 text-primary" />
+              Topic Breakdown
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground mb-6">
               Your scores across your top 5 priority topics
             </p>
-
+            
             <div className="space-y-4">
               {sortedTopicScores.slice(0, 5).map((ts, index) => {
                 const topicName = ts.topics?.name || ts.topic_id;
-
+                const weight = userTopics.find(ut => ut.topic_id === ts.topic_id)?.weight || 1;
+                
                 return (
                   <div key={ts.topic_id} className="space-y-2">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <span className="w-6 h-6 rounded-full bg-poli-navy/10 text-poli-navy text-xs font-bold flex items-center justify-center">
+                        <span className="w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center">
                           {index + 1}
                         </span>
-                        <span className="text-sm font-medium text-poli-body">{topicName}</span>
+                        <span className="font-medium text-foreground">{topicName}</span>
                       </div>
                       <span className={cn(
                         "font-mono text-sm font-semibold",
-                        ts.score < 0 ? "text-blue-600" : ts.score > 0 ? "text-red-600" : "text-poli-navy"
+                        ts.score < 0 ? "text-blue-600" : ts.score > 0 ? "text-red-600" : "text-purple-600"
                       )}>
                         {formatScore(ts.score)}
                       </span>
                     </div>
-
-                    <div className="relative h-2 bg-poli-surface rounded-full overflow-hidden">
+                    
+                    {/* Visual bar */}
+                    <div className="relative h-2 bg-secondary rounded-full overflow-hidden">
                       <div className="absolute inset-0 flex">
                         <div className="w-1/2 bg-blue-100" />
                         <div className="w-1/2 bg-red-100" />
                       </div>
-                      <div
-                        className="absolute top-0 bottom-0 w-1 bg-poli-body rounded-full transition-all"
+                      <div 
+                        className="absolute top-0 bottom-0 w-1 bg-foreground rounded-full transition-all"
                         style={{ left: `${getScoreBarWidth(ts.score)}%`, transform: 'translateX(-50%)' }}
                       />
                     </div>
-
-                    <div className="flex justify-between text-xs text-poli-muted">
+                    
+                    <div className="flex justify-between text-xs text-muted-foreground">
                       <span>Left</span>
                       <span>Center</span>
                       <span>Right</span>
@@ -651,24 +663,24 @@ export const QuizResults = () => {
                 );
               })}
             </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
 
         {/* CTA */}
-        <div className="mx-4 mt-6 flex flex-col items-center gap-3">
-          <button
+        <div className="text-center animate-slide-up" style={{ animationDelay: '300ms' }}>
+          <Button 
+            size="lg" 
             onClick={() => navigate('/profile')}
-            className="w-full h-12 rounded-xl font-bold text-white text-sm flex items-center justify-center gap-2"
-            style={{ background: 'linear-gradient(90deg, #182B7A, #B3122F)' }}
+            className="gap-2"
           >
             Find Your Candidates
             <ArrowRight className="w-4 h-4" />
-          </button>
-          <p className="text-xs text-poli-muted text-center">
+          </Button>
+          <p className="text-sm text-muted-foreground mt-4">
             Compare your positions with candidates in your district
           </p>
         </div>
-      </div>
+      </main>
     </div>
   );
 };

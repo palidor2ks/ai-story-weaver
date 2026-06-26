@@ -89,9 +89,9 @@ export const SharePreviewDialog = ({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="rounded-lg border border-[rgba(20,23,58,0.1)] bg-poli-surface/30 p-3 flex items-center justify-center min-h-[320px]">
+        <div className="rounded-lg border border-border bg-muted/30 p-3 flex items-center justify-center min-h-[320px]">
           {loading && (
-            <div className="flex flex-col items-center gap-2 text-poli-muted">
+            <div className="flex flex-col items-center gap-2 text-muted-foreground">
               <Loader2 className="w-6 h-6 animate-spin" />
               <span className="text-sm">Rendering and verifying export…</span>
             </div>

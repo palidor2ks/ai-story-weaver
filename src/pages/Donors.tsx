@@ -88,16 +88,17 @@ export const Donors = () => {
 
   if (optionsLoading) {
     return (
-      <div className="min-h-screen bg-poli-surface">
+      <div className="min-h-screen bg-background">
         <Header />
-        <div className="bg-gradient-to-br from-poli-navy to-poli-dark text-white px-4 pt-12 pb-8">
-          <p className="font-mono-label text-[10px] font-bold uppercase tracking-widest text-white/60 mb-1">DONORS</p>
-          <h1 className="text-2xl font-black text-white leading-tight">FEC Donor Database</h1>
-          <div className="h-4 w-64 bg-white/20 rounded animate-pulse mt-2" />
-        </div>
-        <main className="container py-8 px-4 pb-20">
+        <main className="container py-8 px-4">
+          <div className="mb-8">
+            <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground mb-2">
+              Campaign Donors
+            </h1>
+            <div className="h-5 w-96 bg-muted rounded animate-pulse" />
+          </div>
           <div className="flex items-center justify-center py-20">
-            <Loader2 className="h-8 w-8 animate-spin text-poli-navy" />
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
         </main>
       </div>
@@ -105,7 +106,7 @@ export const Donors = () => {
   }
 
   return (
-    <div className="min-h-screen bg-poli-surface">
+    <div className="min-h-screen bg-background">
       <Seo
         title="Campaign Donors — Pulse"
         description="Explore federal (FEC) and state (NJ ELEC, FL DOE) contributions to candidates. Filter by cycle, jurisdiction, state, and donor type to follow the money."
@@ -119,19 +120,18 @@ export const Donors = () => {
         }}
       />
       <Header />
-
-      {/* Navy gradient banner */}
-      <div className="bg-gradient-to-br from-poli-navy to-poli-dark text-white px-4 pt-12 pb-8">
-        <p className="font-mono-label text-[10px] font-bold uppercase tracking-widest text-white/60 mb-1">DONORS</p>
-        <h1 className="text-2xl font-black text-white leading-tight">FEC Donor Database</h1>
-        <p className="text-sm text-white/70 mt-1">
-          {totalCount > 0
-            ? `${totalCount.toLocaleString()} donors · federal, New Jersey, and Florida`
-            : 'Federal, New Jersey, and Florida campaign contributions'}
-        </p>
-      </div>
-
-      <main className="container py-8 px-4 pb-20">
+      
+      <main className="container py-8 px-4">
+        {/* Page header */}
+        <div className="mb-8">
+          <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground mb-2">
+            Campaign Donors
+          </h1>
+          <p className="text-muted-foreground">
+            Explore federal, New Jersey, and Florida state campaign contributions to political
+            candidates. Similar donors are automatically grouped across sources.
+          </p>
+        </div>
 
         <h2 className="sr-only">Donors directory</h2>
         {/* Filters */}
@@ -147,18 +147,18 @@ export const Donors = () => {
 
         {/* Results count */}
         <div className="flex items-center justify-between mb-6">
-          <p className="text-sm text-poli-muted">
+          <p className="text-sm text-muted-foreground">
             {isLoading ? (
               'Loading...'
             ) : (
               <>
                 Showing {((currentPage - 1) * pageSize) + 1}–{Math.min(currentPage * pageSize, totalCount)} of{' '}
-                <span className="font-medium text-poli-body">{totalCount.toLocaleString()}</span> donors
+                <span className="font-medium text-foreground">{totalCount.toLocaleString()}</span> donors
               </>
             )}
           </p>
           {totalPages > 1 && (
-            <p className="text-sm text-poli-muted hidden sm:block">
+            <p className="text-sm text-muted-foreground hidden sm:block">
               Page {currentPage} of {totalPages}
             </p>
           )}
@@ -228,7 +228,7 @@ export const Donors = () => {
         {/* Empty state */}
         {!isLoading && !error && donors.length === 0 && (
           <div className="text-center py-16">
-            <p className="text-poli-muted">No donors found matching your filters.</p>
+            <p className="text-muted-foreground">No donors found matching your filters.</p>
           </div>
         )}
 

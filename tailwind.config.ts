@@ -16,7 +16,6 @@ export default {
       fontFamily: {
         sans: ["Libre Franklin", "system-ui", "sans-serif"],
         display: ["Merriweather", "Georgia", "serif"],
-        "mono-label": ["Spline Sans Mono", "ui-monospace", "monospace"],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -83,19 +82,6 @@ export default {
           blue: "hsl(233 69% 30%)",
           red: "hsl(0 100% 38%)",
           white: "hsl(0 0% 100%)",
-        },
-        // Design B — "The Scorecard" tokens
-        poli: {
-          navy: "#182B7A",
-          dark: "#0C1A52",
-          red: "#C8102E",
-          green: "#1B7A4B",
-          gold: "#C19A3F",
-          muted: "#9A9EB5",
-          dim: "#5A5E78",
-          body: "#3A3E5C",
-          surface: "#F0EFF4",
-          card: "#F7F8FB",
         },
       },
       borderRadius: {

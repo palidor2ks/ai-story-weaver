@@ -20,11 +20,10 @@ interface CandidatePositionsProps {
   candidateId: string;
   candidateName: string;
   isUserRep?: boolean;
-  defaultOpen?: boolean;
 }
 
-export const CandidatePositions = ({ candidateId, candidateName, isUserRep = false, defaultOpen = false }: CandidatePositionsProps) => {
-  const [isOpen, setIsOpen] = useState(defaultOpen);
+export const CandidatePositions = ({ candidateId, candidateName, isUserRep = false }: CandidatePositionsProps) => {
+  const [isOpen, setIsOpen] = useState(false);
   const { data: candidateAnswers = [], isLoading, refetch } = useCandidateAnswers(candidateId);
   const generateAnswers = useGenerateCandidateAnswers();
   

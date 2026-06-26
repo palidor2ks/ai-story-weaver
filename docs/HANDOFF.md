@@ -5,6 +5,40 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-26 — ROLL BACK "Design B" frontend to pre-redesign June-24 baseline (user request)
+
+**What happened & why**
+User reported the app "reverts back to the new design every time I make a change." Root cause was
+**not** a code bug: the frontend is Lovable-hosted with two-way GitHub sync, and the user had used
+Lovable's **"Revert"** button to pin Lovable's internal state to the "Design B — The Scorecard"
+redesign. Lovable's preview renders *its own* internal state, so Claude's git commits to `main`
+never showed — looked like every change "reverted to the new design." User decided to **roll the
+whole frontend back** to before Design B.
+
+**The rollback (this branch `claude/app-reverts-new-design-yrn9wx`)**
+Baseline = `08ae3a26` (Merge PR #561, 2026-06-24 08:17 EDT) — the commit just before Phase 0
+(`5ffc2d94`, "add Spline Sans Mono + poli-* design tokens") started Design B. Restored the entire
+frontend to that baseline: `git checkout 08ae3a26 -- src index.html tailwind.config.ts`, then
+`git rm` the 7 files Design B *added* (BottomNav, useBill, BillDetail, CandidateOverview,
+CandidateVotes, CandidateDonors, CompareView). Backend (`supabase/`, only 5 files changed since
+baseline) left current. Frontend now matches the June-24 baseline byte-for-byte.
+
+**What this LOSES** (entangled in the redesigned files; user accepted). Pure-design reverts are
+expected, but several are real **bug/data fixes worth cherry-picking back later**: "Fix vote AI
+Analysis being framed as cosponsorship", share-card "don't show fake C/Moderate for unscored",
+"Harden candidate IE data path", "Filter excluded IE committees", "Cache AI political analysis in
+DB", "Show Challenger status for non-incumbent". Full list in the PR body.
+
+**State** (verified 2026-06-26)
+`bun run build` clean against current backend; `bun test src` 52/52 green. NOT yet visually
+exercised. **Git-only — does NOT fix the symptom by itself.**
+
+**Next — CRITICAL, user action required**
+The Lovable preview will KEEP showing Design B until **Lovable re-syncs FROM GitHub `main`** (and
+the user stops using Lovable's "Revert"). After this PR merges to `main`, the user must pull/sync
+in Lovable's GitHub settings so its internal state == `main`. Pick ONE source of truth going
+forward (Claude→git→Lovable mirrors, OR Lovable→git) — never interleave a Lovable Revert.
+
 ## 2026-06-26 — rep profile: dropped sections restored as tabs (News tab, PoliScore in Votes, state finance in Money)
 
 **What happened & why**
