@@ -191,6 +191,27 @@ analysis, Challenger status). Branch `claude/reapply-design-b-keep-ie`. No cherr
 choice). The outside-money (IE) line — which Design B had silently stopped rendering — was **re-added**
 and restyled to the poli-* palette.
 
+### 20. ☐ Verify the new "Positions & your match" list end-to-end (PR #604)
+**What:** PR #604 added the rep-profile Positions-tab list (AI one-liner + ALIGN/PARTIAL/DIFFER pill +
+spectrum bar + "+" deep-analysis dialog + dynamic "Compare all N issues"). Backend merged + edge
+functions deployed, but **runtime AI output was never smoke-tested** and the UI wasn't exercised live.
+**To do:**
+- Smoke `ai-policy-card-positions {candidateId, full:true}` for a federal rep → expect all ~6 topics
+  with a general-lean `detail`; and `ai-topic-analysis {candidateId, topicId}` → grounded paragraph,
+  `cached:true` on the 2nd call.
+- Eyeball the Positions tab: pills correct vs a logged-in user's quiz scores, bars colored by match/
+  lean, "+" dialog renders, footer count = 6 (federal/state) / 5 (local), logged-out fallback OK.
+**Where:** `src/components/PositionsMatchList.tsx`, `supabase/functions/ai-{policy-card-positions,topic-analysis}`.
+
+### 21. ☐ Provenance polish on the per-topic AI (content-provenance-reviewer P1, deferred from #604)
+**What:** Two minor anti-fabrication refinements the reviewer flagged but that weren't blockers:
+- `ai-topic-analysis`: when a topic has a score but **zero documented answers**, the model still
+  writes a paragraph from the number alone — widen the thin-data path to label it "inferred from the
+  overall score; no specific documented positions" rather than relying only on a prompt instruction.
+- Tighten the "+" dialog disclaimer wording for those score-only cases (currently "may not reflect
+  every nuance" undersells it).
+**Where:** `supabase/functions/ai-topic-analysis/index.ts`, `src/components/PositionsMatchList.tsx`.
+
 ## ⚪ Code health (deliberate, when bandwidth allows)
 
 ### 11. ☐ Add minimal test harness + CI — closes the "no automated tests" blocker (Phase H).
