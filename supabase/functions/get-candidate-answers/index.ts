@@ -1,5 +1,11 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { demoteUnverifiableVoteClaims, demoteUncitedWebResearch } from "../_shared/answer-label-guard.ts";
+import {
+  callGeminiGrounded,
+  extractJson,
+  resolveGroundedSources,
+  getGoogleAIKey,
+} from "../_shared/gemini-research.ts";
 
 // Declare EdgeRuntime for Supabase Edge Functions background processing
 declare const EdgeRuntime: {
@@ -11,16 +17,9 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-const PERPLEXITY_API_KEY = Deno.env.get('PERPLEXITY_API_KEY');
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const INTERNAL_CHAIN_HEADER = 'x-internal-chain-secret';
-
-// Rate limiting for Perplexity
-let perplexityCallCount = 0;
-const PERPLEXITY_BATCH_LIMIT = 100;
-const PERPLEXITY_DELAY_MS = 1200; // 1.2 seconds between calls
 
 // =============================================================================
 // BACKGROUND PROCESSING PROGRESS TRACKING
@@ -131,15 +130,6 @@ interface GeneratedAnswer {
   discrepancy_note?: string;
 }
 
-interface PerplexityAnswer {
-  answer_value: number;
-  confidence: 'high' | 'medium' | 'low';
-  evidence_type: string;
-  source_description: string;
-  primary_source?: { url: string; title: string; date?: string };
-  additional_sources?: { url: string; title: string }[];
-}
-
 // =============================================================================
 // UTILITY FUNCTIONS
 // =============================================================================
@@ -151,27 +141,6 @@ function smartTruncate(text: string, maxLength: number): string {
   const lastSpace = text.slice(0, maxLength).lastIndexOf(' ');
   if (lastSpace > maxLength * 0.7) return text.slice(0, lastSpace) + '...';
   return text.slice(0, maxLength - 3) + '...';
-}
-
-function extractKeyPhrase(questionText: string): string {
-  let phrase = questionText
-    .replace(/^(should (the )?(u\.?s\.?|federal government|congress|government|states?))/i, '')
-    .replace(/^(do you (support|believe|think))/i, '')
-    .replace(/^(what is your (position|view|stance) on)/i, '')
-    .replace(/\?$/, '')
-    .trim();
-  
-  if (phrase.length > 80) {
-    const clauses = phrase.split(/,|;|\band\b|\bor\b/i);
-    phrase = clauses[0].trim();
-  }
-  
-  if (phrase.length > 60) {
-    const words = phrase.split(' ').slice(0, 8);
-    phrase = words.join(' ');
-  }
-  
-  return phrase.slice(0, 60);
 }
 
 function buildOfficialSiteDomain(candidateName: string, candidateOffice: string): string | null {
@@ -193,82 +162,6 @@ function snapToValidValue(value: number): number {
   return validValues.reduce((prev, curr) => 
     Math.abs(curr - value) < Math.abs(prev - value) ? curr : prev
   );
-}
-
-function extractJsonFromText(text: string): any | null {
-  // Handle extremely long responses - trim to essential content first
-  let workingText = text;
-  if (text.length > 50000) {
-    console.log(`[JSON Extract] Large response (${text.length} chars), attempting to extract JSON subset`);
-    // Find the JSON object boundaries and extract just that section
-    const jsonStart = text.indexOf('{');
-    const jsonEnd = text.lastIndexOf('}');
-    if (jsonStart !== -1 && jsonEnd > jsonStart) {
-      workingText = text.slice(jsonStart, jsonEnd + 1);
-      console.log(`[JSON Extract] Trimmed to ${workingText.length} chars`);
-    }
-  }
-
-  // Try direct parse first (for clean JSON responses)
-  try {
-    return JSON.parse(workingText);
-  } catch {
-    // Continue to extraction methods
-  }
-
-  // Try to find JSON object in the text
-  const jsonMatch = workingText.match(/\{[\s\S]*?\}(?=\s*$|\s*```|\s*\n\n)/);
-  if (jsonMatch) {
-    try {
-      return JSON.parse(jsonMatch[0]);
-    } catch {
-      // Continue to other methods
-    }
-  }
-  
-  // Try to extract from markdown code blocks
-  const codeBlockMatch = workingText.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
-  if (codeBlockMatch) {
-    try {
-      return JSON.parse(codeBlockMatch[1]);
-    } catch {
-      // Continue
-    }
-  }
-  
-  // Look for JSON with required fields - more flexible matching for nested objects
-  const structuredMatch = workingText.match(/\{[^{}]*"answer_value"\s*:\s*-?\d+[^{}]*"evidence_type"\s*:\s*"[^"]+"/);
-  if (structuredMatch) {
-    // Try to find the complete object by matching braces
-    const startIdx = workingText.indexOf(structuredMatch[0]);
-    let braceCount = 0;
-    let endIdx = startIdx;
-    for (let i = startIdx; i < workingText.length; i++) {
-      if (workingText[i] === '{') braceCount++;
-      if (workingText[i] === '}') braceCount--;
-      if (braceCount === 0) {
-        endIdx = i;
-        break;
-      }
-    }
-    try {
-      return JSON.parse(workingText.slice(startIdx, endIdx + 1));
-    } catch {
-      // Continue
-    }
-  }
-  
-  // Last resort: find any JSON-like structure with answer_value
-  const anyJsonMatch = workingText.match(/\{[^{}]*"answer_value"[^{}]*\}/);
-  if (anyJsonMatch) {
-    try {
-      return JSON.parse(anyJsonMatch[0]);
-    } catch {
-      // Give up
-    }
-  }
-  
-  return null;
 }
 
 // =============================================================================
@@ -344,31 +237,18 @@ function detectEvidenceTypeFromDescription(description: string): GeneratedAnswer
 }
 
 // =============================================================================
-// PERPLEXITY DEEP RESEARCH (PRIMARY RESEARCH ENGINE)
+// GEMINI GROUNDED RESEARCH (PRIMARY + ONLY RESEARCH ENGINE)
 // =============================================================================
 
-async function researchPositionWithPerplexity(
+async function researchPositionWithGemini(
   candidateName: string,
   candidateOffice: string,
   candidateState: string,
   candidateParty: string,
   question: Question
 ): Promise<GeneratedAnswer | null> {
-  if (!PERPLEXITY_API_KEY) {
-    console.log('[Perplexity] API key not configured');
-    return null;
-  }
-
-  if (perplexityCallCount >= PERPLEXITY_BATCH_LIMIT) {
-    console.log('[Perplexity] Batch limit reached');
-    return null;
-  }
-
-  perplexityCallCount++;
-  
   const officialDomain = buildOfficialSiteDomain(candidateName, candidateOffice);
-  const keyPhrase = extractKeyPhrase(question.text);
-  
+
   // Build options context
   const optionsContext = question.question_options
     ?.sort((a, b) => a.value - b.value)
@@ -377,7 +257,7 @@ async function researchPositionWithPerplexity(
 
   const topicName = question.topic_id?.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'policy';
 
-  const systemPrompt = `You are a political research analyst finding concrete evidence of elected officials' positions.
+  const systemPrompt = `You are a political research analyst finding concrete evidence of elected officials' positions, using live Google Search results.
 
 ${TRUSTED_SOURCES}
 
@@ -403,7 +283,9 @@ OUTPUT RULES:
 - Include specific bill numbers (H.R.XXX, S.XXX) when citing legislation
 - Include dates when available
 - If evidence shows SUPPORT for the policy, use the positive option value
-- If evidence shows OPPOSITION, use the negative option value`;
+- If evidence shows OPPOSITION, use the negative option value
+- key_quote MUST be a short VERBATIM excerpt (10-200 chars) copied exactly from the cited source — do not paraphrase
+- source_url MUST be the MOST SPECIFIC deep link to the exact article, statement, bill, or section that supports the answer — NEVER a homepage or generic search/landing page`;
 
   const userPrompt = `Research ${candidateName} (${candidateParty} ${candidateOffice}, ${candidateState}) position on this question:
 
@@ -432,143 +314,81 @@ SEARCH FOR ALL OF THESE (in order):
    - Chamber of Commerce ratings
    - OpenSecrets voting analysis
 
+Return ONLY a JSON object with this exact shape:
+{
+  "answer_value": <integer value from OPTIONS>,
+  "confidence": "high" | "medium" | "low",
+  "evidence_type": "voting_record" | "public_statement" | "campaign_position" | "social_media" | "news_quote" | "organization_scorecard" | "inferred",
+  "source_description": "<evidence summary, starting with the evidence type in caps>",
+  "key_quote": "<short VERBATIM excerpt from the source>",
+  "source_url": "<most specific deep link to the exact supporting page or section>"
+}
+
 Return the answer_value from OPTIONS that best matches ALL evidence found. If multiple sources agree, confidence should be "high".`;
 
   try {
-    // Rate limiting delay
-    await new Promise(r => setTimeout(r, PERPLEXITY_DELAY_MS));
+    console.log(`[Gemini] Starting grounded research for ${question.id} (${candidateName})...`);
+    const startTime = Date.now();
 
-    console.log(`[Perplexity] Starting research for ${question.id} (${candidateName})...`);
-    const perplexityStartTime = Date.now();
-
-    const response = await fetch('https://api.perplexity.ai/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${PERPLEXITY_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'sonar-deep-research',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ],
-        response_format: {
-          type: 'json_schema',
-          json_schema: {
-            name: 'candidate_position',
-            schema: {
-              type: 'object',
-              properties: {
-                answer_value: { type: 'integer' },
-                confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
-                evidence_type: { 
-                  type: 'string', 
-                  enum: ['voting_record', 'public_statement', 'campaign_position', 
-                         'social_media', 'news_quote', 'organization_scorecard', 'inferred'] 
-                },
-                source_description: { type: 'string' },
-                primary_source: {
-                  type: 'object',
-                  properties: {
-                    url: { type: 'string' },
-                    title: { type: 'string' },
-                    date: { type: 'string' }
-                  }
-                },
-                additional_sources: {
-                  type: 'array',
-                  items: {
-                    type: 'object',
-                    properties: {
-                      url: { type: 'string' },
-                      title: { type: 'string' }
-                    }
-                  }
-                }
-              },
-              required: ['answer_value', 'confidence', 'evidence_type', 'source_description']
-            }
-          }
-        }
-      }),
+    const { text, finishReason, rawSources } = await callGeminiGrounded({
+      prompt: userPrompt,
+      systemInstruction: systemPrompt,
+      temperature: 0.2,
+      maxOutputTokens: 4096,
+      timeoutMs: 60_000,
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`[Perplexity] API error ${response.status}: ${errorText}`);
-      
-      if (response.status === 429) {
-        console.log('[Perplexity] Rate limited, will fall back to Gemini');
-        return null;
-      }
-      return null;
-    }
+    const elapsedSec = Math.round((Date.now() - startTime) / 1000);
+    console.log(`[Gemini] Completed ${question.id} in ${elapsedSec}s - finish=${finishReason}, ${rawSources.length} raw sources`);
 
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content || '';
-    const citations = data.citations || [];
-    
-    const elapsedSec = Math.round((Date.now() - perplexityStartTime) / 1000);
-    console.log(`[Perplexity] Completed ${question.id} in ${elapsedSec}s - ${content.length} chars, ${citations.length} citations`);
-
-    // Parse the response
-    const parsed = extractJsonFromText(content);
-    
+    const parsed = extractJson<any>(text);
     if (!parsed || typeof parsed.answer_value !== 'number') {
-      console.log(`[Perplexity] Failed to parse response for ${question.id}`);
+      console.log(`[Gemini] Failed to parse response for ${question.id}`);
       return null;
     }
 
     // Ensure confidence is valid
     const validConfidence = ['high', 'medium', 'low'].includes(parsed.confidence) ? parsed.confidence : 'medium';
-    
-    // Build source URLs from citations and parsed sources
-    const sourceUrls: string[] = [];
-    const sourceTitles: string[] = [];
-    
-    // Add citations from Perplexity
-    if (Array.isArray(citations)) {
-      citations.slice(0, 5).forEach((url: string) => {
-        if (url && !sourceUrls.includes(url)) {
-          sourceUrls.push(url);
-          sourceTitles.push(url.split('/')[2] || 'Source');
-        }
-      });
-    }
-    
-    // Add parsed primary source
-    if (parsed.primary_source?.url && !sourceUrls.includes(parsed.primary_source.url)) {
-      sourceUrls.unshift(parsed.primary_source.url);
-      sourceTitles.unshift(parsed.primary_source.title || 'Primary Source');
-    }
-    
-    // Add additional sources
-    if (Array.isArray(parsed.additional_sources)) {
-      parsed.additional_sources.forEach((src: any) => {
-        if (src.url && !sourceUrls.includes(src.url) && sourceUrls.length < 5) {
-          sourceUrls.push(src.url);
-          sourceTitles.push(src.title || 'Source');
-        }
-      });
+
+    // Smart evidence type detection - don't blindly trust what the model returns.
+    const modelEvidenceType = parsed.evidence_type;
+    const detectedEvidenceType = detectEvidenceTypeFromDescription(parsed.source_description || '');
+    const finalEvidenceType = detectedEvidenceType !== 'inferred'
+      ? detectedEvidenceType
+      : validateEvidenceType(modelEvidenceType);
+
+    // Resolve Gemini's opaque grounding redirects into real, validated, deep-linked
+    // source URLs; the best one gets a #:~:text= anchor for the verbatim key_quote.
+    const keyQuote = typeof parsed.key_quote === 'string' ? parsed.key_quote : '';
+    const resolved = await resolveGroundedSources(rawSources, { keyQuote });
+    const sourceUrls = resolved.map(s => s.url);
+    const sourceTitles = resolved.map(s => s.title);
+
+    // If the model returned a specific deep link not already covered by grounding, keep it first.
+    if (typeof parsed.source_url === 'string' && parsed.source_url.startsWith('http') && !sourceUrls.includes(parsed.source_url)) {
+      sourceUrls.unshift(parsed.source_url);
+      sourceTitles.unshift('Cited Source');
     }
 
-    // Smart evidence type detection - don't blindly trust what Perplexity returns
-    const perplexityEvidenceType = parsed.evidence_type;
-    const detectedEvidenceType = detectEvidenceTypeFromDescription(parsed.source_description || '');
-    
-    // Use detected type if it found concrete evidence, otherwise trust Perplexity's response
-    const finalEvidenceType = detectedEvidenceType !== 'inferred' 
-      ? detectedEvidenceType 
-      : validateEvidenceType(perplexityEvidenceType);
+    // Supplement with congress.gov deep links for any bills/amendments named in the
+    // description (Gemini's prose often cites bill numbers without linking them).
+    if (['voting_record', 'mixed'].includes(finalEvidenceType)) {
+      const extracted = extractSourcesFromDescription(parsed.source_description || '');
+      extracted.urls.forEach((url, idx) => {
+        if (!sourceUrls.includes(url)) {
+          sourceUrls.push(url);
+          sourceTitles.push(extracted.titles[idx] || 'Source');
+        }
+      });
+    }
 
     const answer: GeneratedAnswer = {
       question_id: question.id,
       answer_value: snapToValidValue(parsed.answer_value),
       source_description: smartTruncate(parsed.source_description || 'Research completed', 1000),
       source_url: sourceUrls[0] || null,
-      source_urls: sourceUrls,
-      source_titles: sourceTitles,
+      source_urls: sourceUrls.slice(0, 5),
+      source_titles: sourceTitles.slice(0, 5),
       source_type: mapEvidenceToSourceType(finalEvidenceType),
       confidence: validConfidence as 'high' | 'medium' | 'low',
       evidence_type: finalEvidenceType,
@@ -576,11 +396,11 @@ Return the answer_value from OPTIONS that best matches ALL evidence found. If mu
       public_statement_summary: ['public_statement', 'social_media', 'news_quote'].includes(finalEvidenceType) ? parsed.source_description : undefined,
     };
 
-    console.log(`[Perplexity] ${question.id}: score=${answer.answer_value}, perplexity_type=${perplexityEvidenceType}, detected_type=${detectedEvidenceType}, final_type=${finalEvidenceType}, confidence=${answer.confidence}`);
+    console.log(`[Gemini] ${question.id}: score=${answer.answer_value}, model_type=${modelEvidenceType}, detected_type=${detectedEvidenceType}, final_type=${finalEvidenceType}, confidence=${answer.confidence}, sources=${sourceUrls.length}`);
     return answer;
 
   } catch (e) {
-    console.error(`[Perplexity] Error for ${question.id}:`, e);
+    console.error(`[Gemini] Error for ${question.id}:`, e);
     return null;
   }
 }
@@ -605,126 +425,6 @@ function validateEvidenceType(type: string): GeneratedAnswer['evidence_type'] {
     'news_quote', 'organization_scorecard', 'inferred', 'mixed'
   ];
   return valid.includes(type as any) ? type as GeneratedAnswer['evidence_type'] : 'inferred';
-}
-
-// =============================================================================
-// GEMINI FALLBACK (Only used when Perplexity rate limited)
-// =============================================================================
-
-async function researchWithGeminiFallback(
-  candidateName: string,
-  candidateOffice: string,
-  candidateState: string,
-  candidateParty: string,
-  question: Question
-): Promise<GeneratedAnswer | null> {
-  if (!LOVABLE_API_KEY) return null;
-
-  const optionsContext = question.question_options
-    ?.sort((a, b) => a.value - b.value)
-    .map(opt => `(${opt.value}) ${opt.text}`)
-    .join('\n') || '';
-
-  const topicName = question.topic_id?.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'policy';
-  const keyPhrase = extractKeyPhrase(question.text);
-
-  const prompt = `Research ${candidateName} (${candidateParty} ${candidateOffice}, ${candidateState}) position on:
-
-TOPIC: ${topicName}
-QUESTION: "${question.text}"
-
-OPTIONS:
-${optionsContext}
-
-Find evidence from: voting records, official statements, campaign positions, social media, news quotes, organization scorecards (Heritage, LCV, NRA, etc.).
-
-Return JSON:
-{
-  "answer_value": <value from options>,
-  "confidence": "high"|"medium"|"low",
-  "evidence_type": "voting_record"|"public_statement"|"inferred",
-  "source_description": "<evidence summary>"
-}`;
-
-  try {
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
-          { role: 'system', content: 'You are a political research analyst. Return only valid JSON.' },
-          { role: 'user', content: prompt }
-        ],
-        max_tokens: 500,
-      }),
-    });
-
-    if (!response.ok) {
-      console.error(`[Gemini] API error: ${response.status}`);
-      return null;
-    }
-
-    let data;
-    try {
-      data = await response.json();
-    } catch (jsonError) {
-      console.error(`[Gemini] Failed to parse response as JSON`);
-      return null;
-    }
-    
-    const content = data.choices?.[0]?.message?.content || '';
-    const parsed = extractJsonFromText(content);
-
-    if (!parsed || typeof parsed.answer_value !== 'number') {
-      return null;
-    }
-
-    // Ensure confidence is valid
-    const validConfidence = ['high', 'medium', 'low'].includes(parsed.confidence) ? parsed.confidence : 'low';
-    
-    // CRITICAL: Apply smart evidence detection from description (same as Perplexity path)
-    const geminiEvidenceType = parsed.evidence_type || 'inferred';
-    const detectedEvidenceType = detectEvidenceTypeFromDescription(parsed.source_description || '');
-    const finalEvidenceType = detectedEvidenceType !== 'inferred' 
-      ? detectedEvidenceType 
-      : validateEvidenceType(geminiEvidenceType);
-    
-    // Log when detection overrides AI's evidence type
-    if (detectedEvidenceType !== 'inferred' && detectedEvidenceType !== geminiEvidenceType) {
-      console.log(`[Gemini] Evidence type override: ${geminiEvidenceType} → ${detectedEvidenceType} (detected from description)`);
-    }
-    
-    console.log(`[Gemini] ${question.id}: score=${parsed.answer_value}, gemini_type=${geminiEvidenceType}, detected_type=${detectedEvidenceType}, final_type=${finalEvidenceType}`);
-    
-    // Extract legislative sources from description text (Gemini doesn't return citations)
-    const extractedSources = (finalEvidenceType === 'voting_record' || finalEvidenceType === 'mixed')
-      ? extractSourcesFromDescription(parsed.source_description || '')
-      : { urls: [], titles: [] };
-    
-    if (extractedSources.urls.length > 0) {
-      console.log(`[Gemini] Extracted ${extractedSources.urls.length} sources from description: ${extractedSources.titles.join(', ')}`);
-    }
-    
-    return {
-      question_id: question.id,
-      answer_value: snapToValidValue(parsed.answer_value),
-      source_description: smartTruncate(parsed.source_description || 'Position inferred', 1000),
-      source_url: extractedSources.urls[0] || null,
-      source_urls: extractedSources.urls,
-      source_titles: extractedSources.titles,
-      source_type: mapEvidenceToSourceType(finalEvidenceType),
-      confidence: validConfidence as 'high' | 'medium' | 'low',
-      evidence_type: finalEvidenceType,
-    };
-
-  } catch (e) {
-    console.error(`[Gemini] Error:`, e);
-    return null;
-  }
 }
 
 // =============================================================================
@@ -803,8 +503,8 @@ async function inferFromPartyAlignment(
   candidateParty: string,
   question: Question
 ): Promise<GeneratedAnswer | null> {
-  if (!LOVABLE_API_KEY) {
-    console.log(`[Inference] Skipping ${question.id}: LOVABLE_API_KEY missing`);
+  if (!getGoogleAIKey()) {
+    console.log(`[Inference] Skipping ${question.id}: Google AI key missing`);
     return null;
   }
 
@@ -830,31 +530,17 @@ Party ideologies:
 Return JSON: {"score": <value>, "reasoning": "PARTY ALIGNMENT: <brief explanation>"}`;
 
   try {
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-3-flash-preview',
-        messages: [
-          { role: 'system', content: 'Return only valid JSON.' },
-          { role: 'user', content: prompt }
-        ],
-        temperature: 0.3,
-        max_tokens: 200,
-      }),
+    // Pure ideological inference — no web research needed, so grounding is disabled.
+    const { text } = await callGeminiGrounded({
+      prompt,
+      systemInstruction: 'Return only valid JSON.',
+      temperature: 0.3,
+      maxOutputTokens: 512,
+      grounding: false,
+      timeoutMs: 30_000,
     });
 
-    if (!response.ok) {
-      console.log(`[Inference] Skipping ${question.id}: party-alignment HTTP ${response.status}`);
-      return null;
-    }
-
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content || '';
-    const parsed = extractJsonFromText(content);
+    const parsed = extractJson<any>(text);
 
     if (!parsed || typeof parsed.score !== 'number') {
       console.log(`[Inference] Skipping ${question.id}: party-alignment returned unparseable output`);
@@ -904,37 +590,25 @@ async function researchQuestionPosition(
   candidateParty: string,
   question: Question
 ): Promise<GeneratedAnswer | null> {
-  // Step 1: Try Perplexity deep research (primary)
-  const perplexityAnswer = await researchPositionWithPerplexity(
+  // Step 1: Gemini with Google Search grounding (primary + only research engine)
+  const geminiAnswer = await researchPositionWithGemini(
     candidateName, candidateOffice, candidateState, candidateParty, question
   );
-  
-  // Accept if Perplexity found concrete evidence (not inferred) - score 0 is valid for neutral positions
-  if (perplexityAnswer && perplexityAnswer.evidence_type !== 'inferred') {
-    console.log(`[Research] Using Perplexity: evidence=${perplexityAnswer.evidence_type}, score=${perplexityAnswer.answer_value}`);
-    return perplexityAnswer;
-  }
 
-  // Log why Perplexity was rejected
-  if (perplexityAnswer) {
-    console.log(`[Research] Perplexity returned inferred for ${question.id}, trying Gemini...`);
-  } else {
-    console.log(`[Research] Perplexity failed for ${question.id}, trying Gemini...`);
-  }
-
-  // Step 2: Try Gemini fallback
-  const geminiAnswer = await researchWithGeminiFallback(
-    candidateName, candidateOffice, candidateState, candidateParty, question
-  );
-  
-  // Accept if Gemini found concrete evidence (not inferred)
+  // Accept only if Gemini found concrete evidence (not inferred) - score 0 is valid for neutral positions
   if (geminiAnswer && geminiAnswer.evidence_type !== 'inferred') {
     console.log(`[Research] Using Gemini: evidence=${geminiAnswer.evidence_type}, score=${geminiAnswer.answer_value}`);
     return geminiAnswer;
   }
 
-  // Step 3: Fall back to party inference (last resort)
-  console.log(`[Research] No evidence from Perplexity or Gemini for ${question.id}, using party alignment`);
+  // Log why Gemini was rejected
+  if (geminiAnswer) {
+    console.log(`[Research] Gemini returned inferred for ${question.id}, using party alignment...`);
+  } else {
+    console.log(`[Research] Gemini failed for ${question.id}, using party alignment...`);
+  }
+
+  // Step 2: Fall back to party inference (last resort)
   return inferFromPartyAlignment(candidateName, candidateParty, question);
 }
 
@@ -1142,7 +816,7 @@ async function processAnswersInBackground(
   };
 
   console.log(`[Background] Starting chunk: ${chunk.length} questions for ${officialInfo.name} (${remaining.length} remaining for next chunk)`);
-  console.log(`[Background] Using sonar-deep-research model (2-5 min per question)`);
+  console.log(`[Background] Using Gemini 2.5 Flash with Google Search grounding`);
 
   try {
     const { generated, failed, researched } = await generateAnswersForCandidate(
@@ -1320,12 +994,9 @@ Deno.serve(async (req) => {
       });
     }
 
-    if (!LOVABLE_API_KEY && !PERPLEXITY_API_KEY) {
-      throw new Error('No AI API keys configured (need LOVABLE_API_KEY or PERPLEXITY_API_KEY)');
+    if (!getGoogleAIKey()) {
+      throw new Error('No AI API key configured (need GOOGLE_AI_API_KEY or GOOGLE_GEMINI_API_KEY)');
     }
-
-    // Reset Perplexity counter for this request
-    perplexityCallCount = 0;
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
@@ -1442,19 +1113,19 @@ Deno.serve(async (req) => {
         SUPABASE_SERVICE_ROLE_KEY
       ));
 
-      // Estimate completion time (2-5 min per question with sonar-deep-research)
-      const estimatedMinutes = Math.ceil(missingBefore * 3); // ~3 min average per question
-      
+      // Estimate completion time (Gemini grounded research is ~1 min per question)
+      const estimatedMinutes = Math.ceil(missingBefore * 1); // ~1 min average per question
+
       // Return immediately with "processing" status
       return new Response(JSON.stringify({
         status: 'processing',
-        message: `Deep research started for ${officialInfo.name}. ${missingBefore} questions being processed in background using sonar-deep-research.`,
+        message: `Deep research started for ${officialInfo.name}. ${missingBefore} questions being processed in background using Gemini with Google Search grounding.`,
         candidateId,
         candidateName: officialInfo.name,
         questionsQueued: missingBefore,
         existingAnswers: existingCount,
         estimatedMinutes,
-        researchEngine: 'perplexity-sonar-deep-research',
+        researchEngine: 'gemini-grounded',
         logsUrl: `https://supabase.com/dashboard/project/ornnzinjrcyigazecctf/functions/get-candidate-answers/logs`,
         tips: [
           `Answers will be saved to database as they complete (expect ${estimatedMinutes} minutes)`,
@@ -1494,7 +1165,7 @@ Deno.serve(async (req) => {
       researched,
       missingBefore,
       totalQuestions,
-      researchEngine: 'perplexity-first',
+      researchEngine: 'gemini-grounded',
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (error: unknown) {

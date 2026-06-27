@@ -5,6 +5,41 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-27 — Migrate ALL answer/AI generation off Perplexity → Google Gemini + Search Grounding (with deep, anchored source URLs)
+
+**What & why**
+The rep-answer engine and ~10 other functions still used Perplexity (sonar*) as the PRIMARY research
+engine — the intended switch to Google had never been applied to the edge functions. Migrated all of
+them to direct Google Gemini (`gemini-2.5-flash`) with Google Search grounding. Also removed the
+secondary You.com (`you-search`) and Lovable-gateway (`ai.gateway.lovable.dev`) AI paths in these
+functions so generation is Google-only.
+
+**The change (branch `claude/rep-answers-cron-jobs-cr2ipg`)**
+1. **NEW `supabase/functions/_shared/gemini-research.ts`** — one front door for grounded research:
+   `callGeminiGrounded()` (Gemini + `googleSearch` tool), `extractJson()`, and a URL-quality pipeline
+   `resolveGroundedSources()` that fixes Gemini grounding's biggest weakness: its citations are opaque
+   `vertexaisearch…/grounding-api-redirect` links. The helper **resolves each redirect to the real
+   destination**, validates reachability, drops blocked/video/social domains, and appends a
+   `#:~:text=<verbatim quote>` **text fragment so the link deep-links to the exact spot on the page**.
+   (These URL helpers were lifted from `enrich-candidate-sources`, which already had them.)
+2. **11 functions migrated** to use it, Perplexity/You/Lovable removed: `get-candidate-answers`
+   (rep answers — Gemini primary, party-inference last resort kept), `populate-civic-answers`,
+   `populate-party-answers`, `enrich-candidate-sources`, `enrich-party-sources`, `ai-bill-analysis`,
+   `ai-donor-analysis`, `ai-recipient-analysis`, `generate-quiz-question`, `fetch-mayor`, and
+   `fetch-civic-officials` (comments only — it has no direct AI call; delegates to get-candidate-answers).
+   Prompts now ask for a verbatim key_quote + the MOST SPECIFIC deep URL (never a homepage).
+
+**State** (verified 2026-06-27)
+Residual grep clean (no `api.perplexity.ai`/`sonar`/`PERPLEXITY`/`you-search`/`lovable` in any of the 11);
+dangling-ref grep clean; all imports cross-check against the helper's exports. CAVEAT: edge functions
+can't be compiled here — Deno isn't installed and ESLint ignores `supabase/functions/**`. Not smoke-tested
+live. Requires `GOOGLE_AI_API_KEY` (or `GOOGLE_GEMINI_API_KEY`) set as an edge-function secret.
+
+**Next**
+After merge → auto-deploy. Smoke-test `get-candidate-answers` for one pending candidate (expect answers
+written + `answers_source` flips to `ai_generated`, source_urls are resolved deep links with `#:~:text=`
+anchors). Confirm `GOOGLE_AI_API_KEY` secret exists. Then watch the drain pipeline clear the 539 backlog.
+
 ## 2026-06-27 — Rep answers stopped: research drainer was silently jammed (+ self-heal so it can't recur)
 
 **What happened & why**
