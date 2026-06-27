@@ -50,6 +50,7 @@ import { ContactInfoCard } from '@/components/ContactInfoCard';
 import { RelevantNewsFeed } from '@/components/RelevantNewsFeed';
 import { RepresentativeSocialFeed } from '@/components/RepresentativeSocialFeed';
 import { CandidatePositions } from '@/components/CandidatePositions';
+import { PositionsMatchList } from '@/components/PositionsMatchList';
 import { CoverageTier, ConfidenceLevel } from '@/lib/scoreFormat';
 import { CandidateEditDialog } from '@/components/admin/CandidateEditDialog';
 import { ClaimProfileDialog } from '@/components/ClaimProfileDialog';
@@ -667,9 +668,20 @@ export const CandidateProfile = () => {
 
         {/* POSITIONS TAB */}
         {activeTab === 'positions' && (
-          <div className="bg-white rounded-[18px] border border-[rgba(20,23,58,0.08)] p-4 shadow-sm">
-            <p className="font-mono-label text-[10px] tracking-[2px] text-poli-red mb-3">POSITIONS & YOUR MATCH</p>
-            <CandidatePositions candidateId={candidate.id} candidateName={candidate.name} defaultOpen />
+          <div>
+            <div className="bg-white rounded-[18px] border border-[rgba(20,23,58,0.08)] p-4 shadow-sm">
+              <p className="font-mono-label text-[10px] tracking-[2px] text-poli-red mb-3">POSITIONS & YOUR MATCH</p>
+              <PositionsMatchList
+                candidateId={candidate.id}
+                candidateName={candidate.name}
+                candidateTopicScores={candidateTopicScores}
+                userTopicScores={userTopicScores}
+              />
+            </div>
+            {/* Sourced Q&A / provenance detail, collapsed by default below the match list */}
+            <div className="bg-white rounded-[18px] border border-[rgba(20,23,58,0.08)] p-4 shadow-sm mt-3">
+              <CandidatePositions candidateId={candidate.id} candidateName={candidate.name} />
+            </div>
           </div>
         )}
 

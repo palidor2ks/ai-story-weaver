@@ -8,6 +8,9 @@ const corsHeaders = {
 };
 
 const CACHE_CYCLE = 'policy-card-v3'; // v3: lower threshold (|score|>1), bar graph design
+// Profile "Positions & your match" list wants ALL of a candidate's topics (not just the top 4
+// the social card shows), so it caches under a separate cycle to avoid clobbering the card.
+const CACHE_CYCLE_FULL = 'profile-positions-v1';
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -34,7 +37,9 @@ serve(async (req) => {
       });
     }
 
-    const { candidateId, force_refresh } = await req.json();
+    const { candidateId, force_refresh, full } = await req.json();
+    // full=true → one position per topic for the profile list; default → top-4 social card.
+    const isFull = full === true;
     if (!candidateId) {
       return new Response(JSON.stringify({ error: 'Missing candidateId' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -44,7 +49,7 @@ serve(async (req) => {
     const cacheKey = {
       kind: 'candidate' as const,
       subject_id: String(candidateId),
-      cycle: CACHE_CYCLE,
+      cycle: isFull ? CACHE_CYCLE_FULL : CACHE_CYCLE,
       user_id: null,
       input_fingerprint: null,
     };
@@ -96,7 +101,15 @@ serve(async (req) => {
       })
       .join('\n');
 
-    const systemPrompt = `You are a non-partisan political analyst generating concise position summaries for a social media card.
+    const systemPrompt = isFull
+      ? `You are a non-partisan political analyst generating concise position summaries for a candidate profile.
+
+Rules:
+- Return exactly ONE position for EVERY topic listed in the user message — do not drop or add topics
+- stance must be exactly: "Supports", "Opposes", or "Mixed record on" (use "Mixed record on" when the lean is weak)
+- detail: one short phrase (max 55 chars) describing the GENERAL lean on this topic in plain language (e.g. "Consistently progressive record", "Moderate, mixed record"). You are given ONLY a directional score — do NOT name specific bills, programs, votes, or policy sub-positions you cannot see. Never start with the candidate name.
+- Return valid JSON only, no explanation`
+      : `You are a non-partisan political analyst generating concise position summaries for a social media card.
 
 Rules:
 - Only include a topic if |score| > 1.0 (any lean counts)
@@ -111,7 +124,7 @@ Rules:
 Topic scores (−10 = Far Progressive, +10 = Far Conservative):
 ${topicList}
 
-Return up to 4 positions as JSON:
+Return ${isFull ? 'one position for every topic above' : 'up to 4 positions'} as JSON:
 {
   "positions": [
     { "topic": "Healthcare", "stance": "Opposes", "detail": "Opposes government-run healthcare mandates" },
@@ -131,10 +144,11 @@ Return up to 4 positions as JSON:
 
     if (!aiResp.ok) {
       console.error('AI error', aiResp.status, await aiResp.text());
-      // Fallback: synthesize positions directly from the top 4 highest-|score| topics
+      // Fallback: synthesize positions directly from topic scores (all topics in full mode,
+      // top-4 highest-|score| for the social card).
       const fallbackPositions = topicScores
         .sort((a, b) => Math.abs(b.score) - Math.abs(a.score))
-        .slice(0, 4)
+        .slice(0, isFull ? topicScores.length : 4)
         .map((t) => ({
           topic: t.topic,
           stance: t.score < -1 ? 'Opposes' : t.score > 1 ? 'Supports' : 'Mixed record on',
@@ -166,7 +180,7 @@ Return up to 4 positions as JSON:
     const scoreByTopic = new Map(topicScores.map((t) => [t.topic.toLowerCase(), t.score]));
 
     const positions = (Array.isArray(parsed.positions) ? parsed.positions : [])
-      .slice(0, 4)
+      .slice(0, isFull ? topicScores.length : 4)
       .filter((p: any) => p && typeof p.topic === 'string' && typeof p.stance === 'string' && typeof p.detail === 'string')
       .map((p: any) => ({
         topic: p.topic as string,

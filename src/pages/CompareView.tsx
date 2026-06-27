@@ -6,6 +6,7 @@ import { formatScore } from '@/lib/scoreFormat';
 import { useProfile } from '@/hooks/useProfile';
 import { useCandidateScoreMap } from '@/hooks/useCandidateScoreMap';
 import { CandidateWithOverride } from '@/hooks/useCandidates';
+import { type StanceKind, compareStances, stanceBadgeClass } from '@/lib/stance';
 
 // ────────────────────────────────────────────────────────────
 // helpers
@@ -33,27 +34,6 @@ function scoreLabelColor(score: number | null | undefined): string {
   return 'text-purple-600';
 }
 
-type StanceKind = 'ALIGNS' | 'DIFFERS' | 'PARTIAL';
-
-function compareStances(scoreA: number, scoreB: number): StanceKind {
-  const signA = Math.sign(scoreA);
-  const signB = Math.sign(scoreB);
-  if (signA === 0 || signB === 0) return 'PARTIAL';
-  if (signA === signB) return 'ALIGNS';
-  if (signA !== signB) return 'DIFFERS';
-  return 'PARTIAL';
-}
-
-function stanceBadgeClass(kind: StanceKind): string {
-  switch (kind) {
-    case 'ALIGNS':
-      return 'bg-[#1B7A4B]/10 text-[#1B7A4B]';
-    case 'DIFFERS':
-      return 'bg-[#C8102E]/10 text-[#C8102E]';
-    case 'PARTIAL':
-      return 'bg-[#C19A3F]/10 text-[#C19A3F]';
-  }
-}
 
 // ────────────────────────────────────────────────────────────
 // sub-components
