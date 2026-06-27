@@ -5,6 +5,30 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-27 — Gemini pipeline LIVE; fix grounding-redirect stubs in source URLs
+
+**What & why**
+After the GOOGLE_AI key was confirmed in the project, the migrated Gemini pipeline went live and is
+healthy end-to-end: answers flowing (~334 in 30 min, 1,211 in 90 min), candidates flipping to
+`ai_generated`, backlog 539→521 and dropping. BUT a URL-quality spot-check found ~179/290 recent
+answers still carried opaque `vertexaisearch…/grounding-api-redirect` stubs — `resolveRedirectUrl`
+was failing in the edge runtime (the redirect 403s a bare HEAD). The model's OWN stated `source_url`s
+are excellent deep links (bills, scorecards, even PDFs with `#:~:text=` anchors); the stubs were pure noise.
+
+**The change (branch `claude/rep-answers-cron-jobs-cr2ipg`)** — `_shared/gemini-research.ts` only:
+1. `resolveRedirectUrl` now uses GET + a browser User-Agent (+ 8s timeout) and, if still unresolved,
+   parses the destination from a meta-refresh/anchor in the body. (Bare HEAD got 403'd → stub kept.)
+2. `resolveGroundedSources` now DROPS any source that's still an unresolved redirect stub
+   (`isUnresolvedRedirectStub`) — never store an opaque stub; rely on the model's deep URLs instead.
+
+**State** (verified 2026-06-27) Pipeline confirmed live via SQL (answers written seconds ago). Helper
+fix is forward-only — the 179 already-written stubs remain until those answers are re-researched (optional
+backfill). Same caveat: edge functions not compilable here (no Deno); validated by review + the prior
+Supabase Preview deploy success.
+
+**Next** After merge → redeploy → re-check the stub rate on NEW answers (expect ≈0 `vertexaisearch` URLs).
+Optional: backfill/re-resolve the existing stub URLs.
+
 ## 2026-06-27 — Migrate ALL answer/AI generation off Perplexity → Google Gemini + Search Grounding (with deep, anchored source URLs)
 
 **What & why**
