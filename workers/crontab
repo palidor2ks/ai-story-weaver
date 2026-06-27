@@ -42,3 +42,12 @@
 # ── Legislative votes ────────────────────────────────────────────────────────
 # Requires VOTE_SYNC_SECRET env var
 */15 * * * * sync_legislator_votes ?jobKey=sync_legislator_votes&jobKeyMode=preserve_run_at
+
+# ── Self-heal ────────────────────────────────────────────────────────────────
+# Revive scheduled jobs that exhausted their retries during a transient outage so a blip
+# (e.g. a 401 during a credential rotation) can't permanently jam the queue. graphile-worker
+# crontab ignores ?jobKey, so a maxed-out job is never retried and silently stalls its
+# pipeline — this is what froze drain_research_queue for ~5 days after the Railway cutover.
+# Grants one fresh attempt per cycle; persistent failures re-max and surface via last_error
+# rather than being hammered. See tasks/reset_stuck_cron_jobs.ts.
+*/15 * * * * reset_stuck_cron_jobs

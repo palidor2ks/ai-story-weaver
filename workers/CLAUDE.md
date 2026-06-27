@@ -22,11 +22,30 @@ round-trip through Supabase edge functions. Tasks will connect to Postgres direc
 ## Adding a new task
 
 1. Create `tasks/<task_name>.ts` exporting a default `Task` function.
-2. Add a crontab line to `crontab` with `?jobKey=<task_name>&jobKeyMode=preserve_run_at`.
-3. The `?jobKey` option ensures only one instance queues at a time (singleton behavior).
+2. Add a crontab line to `crontab`.
 
 Task naming: use underscores (`drain_fec_finance`), not hyphens. The filename is the
 task identifier used in the crontab and graphile_worker job table.
+
+> ⚠️ **`?jobKey` does NOT work in the crontab.** It's an `add_job` option, not a crontab
+> option — graphile-worker silently ignores it on crontab lines, so scheduled jobs get a
+> null `key` and there is **no singleton guard**. Existing entries still carry the param;
+> it's a harmless no-op. Tasks must therefore be idempotent (they already are — each just
+> re-fires an idempotent edge function). Real singleton/overlap control on the crontab is
+> via `?fill=` / `?max=` if ever needed.
+
+## Stuck-job self-heal (`reset_stuck_cron_jobs`)
+
+Because the crontab has no singleton guard and a job that exhausts its 25 retries is never
+run again, a *transient* outage can **permanently** jam a scheduled task: the cron keeps
+firing but produces no runnable work, and the stall is silent. This is what froze
+`drain_research_queue` for ~5 days after the 2026-06-22 cutover (a 401 during credential
+setup maxed it out; rep-answer generation stopped entirely).
+
+`tasks/reset_stuck_cron_jobs.ts` runs every 15 min, collapses duplicate maxed-out rows per
+scheduled task, and grants the survivor **one** fresh attempt — enough for a transient
+failure to recover, without hammering a genuinely-broken endpoint. Tune the "how long
+maxed before healing" window with `STUCK_HEAL_MIN_AGE` (default `50 minutes`).
 
 ## Commands
 
@@ -60,9 +79,10 @@ double-firing during transition is harmless).
 ## Concurrency
 
 Set `WORKER_CONCURRENCY` to match your Railway plan. Each slot runs one task at a time.
-The `?jobKey` crontab option already prevents more than one queued instance of each
-scheduled task, so the main risk is the 4 drains all firing simultaneously and saturating
-the edge function concurrency. Default of 5 is conservative.
+Note the crontab has no singleton guard (see "Adding a new task"), so overlapping runs of a
+slow task are possible — tasks are idempotent so this is safe, but the main risk is the
+drains all firing simultaneously and saturating the edge function concurrency. Default of 5
+is conservative.
 
 ## graphile-worker schema
 

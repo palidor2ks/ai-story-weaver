@@ -5,6 +5,46 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-27 — Rep answers stopped: research drainer was silently jammed (+ self-heal so it can't recur)
+
+**What happened & why**
+Investigated "are the answer crons working / how much/day." Rep-answer generation had been **dead
+since 2026-06-26 03:51 UTC** (0 added in the prior 24h+; 539 candidates stuck in `pending_research`).
+Daily volume had collapsed from a 06-20 peak of ~45k to 0. Root cause: the `drain-research-queue`
+engine was moved off pg_cron to the Railway graphile-worker on 2026-06-22
+(`20260622000000_retire_pg_cron_railway_workers.sql`). During that cutover it hit `HTTP 401` (the
+service-role bearer no longer authorizes cron-auth functions under the new API-key system — auth now
+rests on `x-cron-secret`/`CRON_SECRET`). It exhausted its 25 retries and **parked permanently**:
+graphile-worker crontab has no singleton guard (the `?jobKey` in the crontab is silently ignored), so
+a maxed-out job is never retried and the cron keeps firing into a no-op. `CRON_SECRET` was fixed soon
+after (sibling `drain-fec-finance` recovered) but the dead job stayed jammed for ~5 days.
+
+**The change**
+1. **Operational (already applied to Pulse Dev DB live):** reset the stuck `drain_research_queue`
+   job → it ran, authorized (200), and is draining again (get-candidate-answers firing 200s,
+   confirmed in edge logs). Also collapsed ~200 accumulated maxed-out duplicate rows
+   (156 `congress_donor_backfill`, 47 `fec_candidate_drain`) and granted survivors one fresh attempt.
+2. **`workers/tasks/reset_stuck_cron_jobs.ts`** (NEW) — self-heal task (every 15 min): collapses
+   duplicate maxed cron rows and grants the survivor exactly ONE fresh attempt (transient failures
+   recover within a cycle; genuinely-broken endpoints re-max instead of being hammered). Pure SQL over
+   `DATABASE_URL`, so the same auth failure it heals can't take it out. `STUCK_HEAL_MIN_AGE` (default
+   `50 minutes`) tunes the window.
+3. **`workers/crontab`** — scheduled `reset_stuck_cron_jobs`.
+4. **`workers/CLAUDE.md`** — corrected the false "`?jobKey` ensures singleton" claim (it's ignored on
+   crontab lines) and documented the self-heal.
+
+**State** (verified 2026-06-27)
+Pipeline confirmed live: `drain-research-queue` 200, dozens of `get-candidate-answers` 200s in edge
+logs, queue clean (1 row/task). `bunx tsc --noEmit` passes in `workers/`. The new task takes effect
+only after the Railway worker is redeployed from this branch.
+
+**Next**
+Deploy `workers/` to Railway so `reset_stuck_cron_jobs` runs. Secondary (separate): `nightly_bill_sync`
+also 401s (likely same cutover artifact, recovering slowly); `congress_donor_backfill`/`fec_candidate_drain`
+time out because `call-edge`'s 120s abort < the edge function's ~135s runtime (`fec_candidate_drain`
+already has a 240s override — apply the same to `congress_donor_backfill`); and `fetch-nj-elec-finance`
+returns intermittent 401s — all unrelated to rep answers.
+
 ## 2026-06-26 — Rep profile Positions tab: "Positions & your match" list (AI one-liner + per-topic deep dive)
 
 **What happened & why**
