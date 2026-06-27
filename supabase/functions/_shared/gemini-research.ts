@@ -238,15 +238,40 @@ export async function validateUrl(url: string, timeout = 5000): Promise<boolean>
   }
 }
 
+const REDIRECT_STUB = 'grounding-api-redirect';
+// A browser UA is required: Gemini's grounding redirect 403s a bare/HEAD fetch, which left
+// the opaque stub unresolved in production. GET + UA resolves it to the real destination.
+const BROWSER_UA =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+
+export function isUnresolvedRedirectStub(url: string): boolean {
+  return url.includes(REDIRECT_STUB);
+}
+
 /** Follow Gemini's grounding redirect to the real destination URL (deep link, not redirect). */
 export async function resolveRedirectUrl(url: string): Promise<string> {
   if (!url.includes('vertexaisearch.cloud.google.com/grounding-api-redirect')) return url;
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 5000);
-    const res = await fetch(url, { method: 'HEAD', redirect: 'follow', signal: controller.signal });
+    const timer = setTimeout(() => controller.abort(), 8000);
+    const res = await fetch(url, {
+      method: 'GET',
+      redirect: 'follow',
+      headers: { 'User-Agent': BROWSER_UA },
+      signal: controller.signal,
+    });
     clearTimeout(timer);
-    return res.url || url;
+
+    // Normal case: the HTTP redirect chain resolved to the real page.
+    if (res.url && !res.url.includes(REDIRECT_STUB)) {
+      try { await res.body?.cancel(); } catch { /* noop */ }
+      return res.url;
+    }
+    // Some redirects are delivered as a meta-refresh / anchor inside a 200 body rather than
+    // a 3xx — dig the destination out of the HTML.
+    const html = await res.text();
+    const m = html.match(/(?:url=|href=["'])(https?:\/\/[^"'\s>]+)/i);
+    return m?.[1] ?? url;
   } catch {
     return url;
   }
@@ -294,6 +319,9 @@ export async function resolveGroundedSources(
     seen.add(src.uri);
 
     const real = await resolveRedirectUrl(src.uri);
+    // Never store an opaque, unresolved grounding-redirect stub — it's a useless citation.
+    // Better to drop it and rely on the model's stated deep URLs.
+    if (isUnresolvedRedirectStub(real)) continue;
     if (isBlockedDomain(real)) continue;
     if (!skipValidation && !(await validateUrl(real))) continue;
 
