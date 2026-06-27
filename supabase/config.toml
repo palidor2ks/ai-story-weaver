@@ -79,6 +79,8 @@ project_id = "ornnzinjrcyigazecctf"
     verify_jwt = false
   [functions.drain-research-queue]
     verify_jwt = false
+  [functions.resolve-stub-source-urls]
+    verify_jwt = false
   [functions.generate-ai-bill-summaries]
     verify_jwt = false
   [functions.generate-party-comparison]
