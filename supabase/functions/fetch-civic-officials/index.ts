@@ -796,7 +796,7 @@ function applyTransitions(officials: OfficialInfo[], transitions: OfficialTransi
 // PERSIST OFFICIALS & TRIGGER AI RESEARCH (background)
 // =============================================================================
 
-// Max officials to trigger AI research per single request to avoid overloading Perplexity
+// Max officials to trigger AI research per single request to spread Gemini load
 const MAX_RESEARCH_PER_RUN = 3;
 const MAX_RETRIES = 3;
 const BASE_DELAY_MS = 2000; // 2s base, exponential backoff
@@ -901,7 +901,7 @@ async function persistAndResearchOfficials(officials: OfficialInfo[], authHeader
       return;
     }
 
-    // Cap to MAX_RESEARCH_PER_RUN to avoid Perplexity/function overload
+    // Cap to MAX_RESEARCH_PER_RUN to spread Gemini load and avoid function overload
     const toProcess = officialsNeedingResearch.slice(0, MAX_RESEARCH_PER_RUN);
     const skipped = officialsNeedingResearch.length - toProcess.length;
     
@@ -944,7 +944,7 @@ async function persistAndResearchOfficials(officials: OfficialInfo[], authHeader
           successCount++;
         }
 
-        // Stagger calls: 3s between triggers to spread Perplexity load
+        // Stagger calls: 3s between triggers to spread Gemini load
         if (toProcess.indexOf(official) < toProcess.length - 1) {
           await new Promise(resolve => setTimeout(resolve, 3000));
         }

@@ -1,5 +1,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  callGeminiGrounded,
+  extractJson,
+  getGoogleAIKey,
+  resolveGroundedSources,
+} from '../_shared/gemini-research.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -8,8 +14,6 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const PERPLEXITY_KEY = Deno.env.get('PERPLEXITY_API_KEY');
-const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
 
 type Official = {
   name: string | null;
@@ -57,135 +61,43 @@ For each official return:
 - role: "Mayor", "City Council Member", "Town Council Member", "Alderman", "Selectman", or similar
 - ward: ward/district/at-large designation if any, else null
 - party: "Democrat", "Republican", "Independent", or "Other" (use "Other" for nonpartisan)
-- official_website: their official city page URL, or null
+- official_website: their exact official city page URL (most specific deep link available), or null
 - photo_url: direct URL to an official portrait photo, or null
 
-Also return source_urls: 1-5 URLs you used (must include the city's official .gov site if available).
+Also return source_urls: 1-5 URLs you used (must include the city's official .gov site if available). Use the most specific deep link available for each source — link directly to the mayor or council page, not just the homepage.
 
-Only include officials you can verify from the city's official site or reputable news. Do not guess. If the city has no mayor, omit the mayor entry.`;
+Only include officials you can verify from the city's official site or reputable news. Do not guess. If the city has no mayor, omit the mayor entry.
 
-// ---------- Perplexity ----------
-async function researchViaPerplexity(state: string, city: string): Promise<RosterResult> {
-  if (!PERPLEXITY_KEY) throw new Error('PERPLEXITY_API_KEY not configured');
+Return ONLY a JSON object: { "officials": [...], "source_urls": [...] }`;
 
-  const res = await fetch('https://api.perplexity.ai/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${PERPLEXITY_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'sonar',
-      messages: [
-        { role: 'system', content: 'You are a precise civic-data researcher. Always reply with valid JSON only.' },
-        { role: 'user', content: PROMPT(state, city) + '\n\nReturn ONLY a JSON object: { "officials": [...], "source_urls": [...] }' },
-      ],
-      temperature: 0.1,
-      response_format: {
-        type: 'json_schema',
-        json_schema: {
-          name: 'roster',
-          schema: {
-            type: 'object',
-            properties: {
-              officials: {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  properties: {
-                    name: { type: ['string', 'null'] },
-                    role: { type: 'string' },
-                    ward: { type: ['string', 'null'] },
-                    party: { type: 'string' },
-                    official_website: { type: ['string', 'null'] },
-                    photo_url: { type: ['string', 'null'] },
-                  },
-                  required: ['name', 'role', 'party'],
-                },
-              },
-              source_urls: { type: 'array', items: { type: 'string' } },
-            },
-            required: ['officials', 'source_urls'],
-          },
-        },
-      },
-    }),
+// ---------- Gemini with Google Search grounding ----------
+async function researchViaGemini(state: string, city: string): Promise<RosterResult> {
+  const { text, rawSources } = await callGeminiGrounded({
+    prompt: PROMPT(state, city),
+    systemInstruction: 'You are a precise civic-data researcher. Always reply with valid JSON only.',
+    temperature: 0.1,
+    maxOutputTokens: 4096,
   });
 
-  if (!res.ok) {
-    const body = await res.text();
-    const err: any = new Error(`Perplexity ${res.status}: ${body.slice(0, 300)}`);
-    err.status = res.status;
-    throw err;
+  const parsed = extractJson<{ officials?: unknown; source_urls?: unknown }>(text);
+  if (!parsed) throw new Error('No JSON in Gemini response');
+
+  // Resolve grounding redirect URLs to real deep links
+  const resolved = await resolveGroundedSources(rawSources, { limit: 5 });
+  const groundedUrls = resolved.map(s => s.url);
+
+  // Merge model-stated source_urls with grounding-resolved URLs, deduping
+  const modelUrls: string[] = Array.isArray(parsed?.source_urls) ? parsed.source_urls as string[] : [];
+  const seen = new Set<string>();
+  const sourceUrls: string[] = [];
+  for (const u of [...groundedUrls, ...modelUrls]) {
+    if (u && !seen.has(u)) { seen.add(u); sourceUrls.push(u); }
   }
-  const data = await res.json();
-  const content = data?.choices?.[0]?.message?.content;
-  if (!content) throw new Error('Empty Perplexity response');
-  return parseRoster(content);
-}
 
-// ---------- Lovable AI (fallback) ----------
-async function researchViaLovable(state: string, city: string): Promise<RosterResult> {
-  if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY not configured');
-
-  const res = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'google/gemini-2.5-pro',
-      messages: [
-        { role: 'system', content: 'You are a precise civic-data researcher with broad knowledge of US local government. Use tool calling to return structured data.' },
-        { role: 'user', content: PROMPT(state, city) },
-      ],
-      tools: [{
-        type: 'function',
-        function: {
-          name: 'return_roster',
-          description: 'Return the local elected officials roster',
-          parameters: {
-            type: 'object',
-            properties: {
-              officials: {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  properties: {
-                    name: { type: 'string' },
-                    role: { type: 'string' },
-                    ward: { type: 'string' },
-                    party: { type: 'string', enum: ['Democrat', 'Republican', 'Independent', 'Other'] },
-                    official_website: { type: 'string' },
-                    photo_url: { type: 'string' },
-                  },
-                  required: ['name', 'role', 'party'],
-                  additionalProperties: false,
-                },
-              },
-              source_urls: { type: 'array', items: { type: 'string' } },
-            },
-            required: ['officials', 'source_urls'],
-            additionalProperties: false,
-          },
-        },
-      }],
-      tool_choice: { type: 'function', function: { name: 'return_roster' } },
-    }),
-  });
-
-  if (!res.ok) {
-    const body = await res.text();
-    const err: any = new Error(`Lovable AI ${res.status}: ${body.slice(0, 300)}`);
-    err.status = res.status;
-    throw err;
-  }
-  const data = await res.json();
-  const toolCall = data?.choices?.[0]?.message?.tool_calls?.[0];
-  const args = toolCall?.function?.arguments;
-  if (!args) throw new Error('Empty Lovable AI tool call');
-  return parseRoster(args);
+  return {
+    officials: Array.isArray(parsed?.officials) ? parsed.officials as Official[] : [],
+    source_urls: sourceUrls.slice(0, 5),
+  };
 }
 
 function parseRoster(content: string): RosterResult {
@@ -203,26 +115,10 @@ function parseRoster(content: string): RosterResult {
   };
 }
 
-// ---------- Orchestration with fallback ----------
+// ---------- Orchestration ----------
 async function researchRoster(state: string, city: string): Promise<{ result: RosterResult; provider: string }> {
-  // Try Perplexity first
-  if (PERPLEXITY_KEY) {
-    try {
-      const result = await researchViaPerplexity(state, city);
-      return { result, provider: 'perplexity' };
-    } catch (err: any) {
-      const status = err?.status;
-      const fallbackable = !status || status === 401 || status === 402 || status === 429 || status >= 500;
-      console.warn(`[fetch-mayor] Perplexity failed (status=${status}): ${err?.message?.slice(0, 200)}`);
-      if (!fallbackable) throw err;
-      console.log('[fetch-mayor] falling back to Lovable AI');
-    }
-  } else {
-    console.log('[fetch-mayor] no Perplexity key — using Lovable AI');
-  }
-
-  const result = await researchViaLovable(state, city);
-  return { result, provider: 'lovable-ai' };
+  const result = await researchViaGemini(state, city);
+  return { result, provider: 'gemini' };
 }
 
 async function processCity(supabase: ReturnType<typeof createClient>, state: string, city: string) {
@@ -368,6 +264,12 @@ serve(async (req) => {
     if (!roleRow) {
       return new Response(JSON.stringify({ error: 'Forbidden' }), {
         status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (!getGoogleAIKey()) {
+      return new Response(JSON.stringify({ error: 'GOOGLE_AI_API_KEY (or GOOGLE_GEMINI_API_KEY) not configured' }), {
+        status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 

@@ -1,6 +1,11 @@
 // AI-powered analysis of a specific bill and a candidate's sponsorship/cosponsorship
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import { callYouSmart, YouError, type YouCitation } from "../_shared/you-search.ts";
+import {
+  callGeminiGrounded,
+  resolveGroundedSources,
+  extractJson,
+  getGoogleAIKey,
+} from "../_shared/gemini-research.ts";
 import { computeDeterministicConfidence } from "../_shared/confidence.ts";
 import { readCache, writeCache, fingerprint } from "../_shared/ai-cache.ts";
 
@@ -37,21 +42,6 @@ function json(body: unknown, status = 200) {
   });
 }
 
-function extractJson(raw: string): any | null {
-  if (!raw) return null;
-  const cleaned = raw.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
-  const fence = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  const candidates = [
-    fence?.[1]?.trim(),
-    cleaned,
-    cleaned.slice(cleaned.indexOf("{"), cleaned.lastIndexOf("}") + 1),
-  ].filter(Boolean) as string[];
-  for (const c of candidates) {
-    try { return JSON.parse(c); } catch { /* try next */ }
-  }
-  return null;
-}
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -61,9 +51,6 @@ Deno.serve(async (req) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-    const perplexityKey = Deno.env.get("PERPLEXITY_API_KEY");
-    const youKey = Deno.env.get("YOU_API_KEY");
-    const lovableKey = Deno.env.get("LOVABLE_API_KEY");
 
     const userClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
@@ -71,8 +58,8 @@ Deno.serve(async (req) => {
     const { data: userData, error: userErr } = await userClient.auth.getUser();
     if (userErr || !userData?.user) return json({ error: "Unauthorized" }, 401);
 
-    if (!perplexityKey && !youKey && !lovableKey) {
-      return json({ error: "No AI provider configured (PERPLEXITY_API_KEY, YOU_API_KEY, or LOVABLE_API_KEY)" }, 500);
+    if (!getGoogleAIKey()) {
+      return json({ error: "No AI provider configured (GOOGLE_AI_API_KEY)" }, 500);
     }
 
     let body: RequestBody;
@@ -165,139 +152,27 @@ Output ONLY a JSON object, no prose:
   "confidence_rationale": string
 }`;
 
-    const systemPrompt =
-      "You are a nonpartisan legislative analyst. Ground every claim in the search results. Never invent vote counts, sponsor names, or quotes. Output strict JSON only.";
     const geminiSystemPrompt =
-      "You are a nonpartisan legislative analyst. You do not have live web search — ground every claim in the bill metadata provided in the user prompt and well-known public knowledge. Never invent vote counts, sponsor names, or quotes. If you cannot confidently identify the bill, set insufficient_information=true and cap confidence at 30. Output strict JSON only.";
+      "You are a nonpartisan legislative analyst. Ground every claim in the search results. Never invent vote counts, sponsor names, or quotes. Output strict JSON only.";
 
-    let provider: "perplexity" | "you" | "gemini" | null = null;
-    let content = "";
-    let citations: string[] = [];
-    let youCitations: YouCitation[] = [];
-    let lastError: { status: number; code: string; message: string } | null = null;
-    const providerErrors: { provider: string; status: number; code: string }[] = [];
+    const { text, rawSources } = await callGeminiGrounded({
+      prompt: searchPrompt,
+      systemInstruction: geminiSystemPrompt,
+      temperature: 0.2,
+    });
 
-    if (perplexityKey) {
-      const ppxResp = await fetch("https://api.perplexity.ai/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${perplexityKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "sonar-pro",
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: searchPrompt },
-          ],
-          temperature: 0.2,
-          search_domain_filter: [
-            "congress.gov", "govtrack.us", "propublica.org", "ballotpedia.org",
-            "votesmart.org", "nytimes.com", "washingtonpost.com", "politico.com",
-            "reuters.com", "apnews.com", "thehill.com", "rollcall.com", "wsj.com",
-          ],
-        }),
-      });
-
-      if (ppxResp.ok) {
-        const ppxJson = await ppxResp.json();
-        content = ppxJson?.choices?.[0]?.message?.content ?? "";
-        citations = Array.isArray(ppxJson?.citations) ? ppxJson.citations : [];
-        provider = "perplexity";
-      } else {
-        const t = await ppxResp.text();
-        console.error("Perplexity error", ppxResp.status, t);
-        const isAuth = ppxResp.status === 401 || ppxResp.status === 402 || ppxResp.status === 403;
-        const isRate = ppxResp.status === 429;
-        lastError = {
-          status: ppxResp.status,
-          code: isAuth ? "PERPLEXITY_AUTH" : isRate ? "PERPLEXITY_RATE_LIMIT" : "PERPLEXITY_ERROR",
-          message: isAuth
-            ? "AI analysis temporarily unavailable: Perplexity API key invalid or out of quota."
-            : isRate
-            ? "Perplexity rate limit reached. Try again shortly."
-            : `Perplexity service error (${ppxResp.status}).`,
-        };
-        providerErrors.push({ provider: "perplexity", status: ppxResp.status, code: lastError.code });
-      }
-    }
-
-    if (!provider && youKey) {
-      console.log("Trying You.com Smart as grounded-search fallback");
-      try {
-        const yres = await callYouSmart({ query: searchPrompt, apiKey: youKey, systemPrompt });
-        content = yres.content;
-        youCitations = yres.citations;
-        citations = yres.citations.map((c) => c.url);
-        provider = "you";
-      } catch (e) {
-        const ye = e as YouError;
-        console.error("You.com fallback error", ye?.status, ye?.message);
-        lastError = {
-          status: ye?.status ?? 500,
-          code: ye?.code ?? "YOU_ERROR",
-          message: ye?.message ?? "You.com fallback failed.",
-        };
-        providerErrors.push({ provider: "you", status: ye?.status ?? 500, code: ye?.code ?? "YOU_ERROR" });
-      }
-    }
-
-    if (!provider && lovableKey) {
-      console.log("Falling back to Lovable AI Gateway (Gemini)");
-      const gemResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${lovableKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-pro",
-          messages: [
-            { role: "system", content: geminiSystemPrompt },
-            { role: "user", content: searchPrompt },
-          ],
-        }),
-      });
-
-      if (gemResp.ok) {
-        const gJson = await gemResp.json();
-        content = gJson?.choices?.[0]?.message?.content ?? "";
-        citations = [];
-        provider = "gemini";
-      } else {
-        const gt = await gemResp.text();
-        console.error("Lovable AI fallback error", gemResp.status, gt);
-        if (gemResp.status === 402) {
-          lastError = { status: 402, code: "LOVABLE_AI_PAYMENT", message: "AI fallback unavailable: Lovable AI credits exhausted." };
-        } else if (gemResp.status === 429) {
-          lastError = { status: 429, code: "LOVABLE_AI_RATE_LIMIT", message: "AI fallback rate-limited. Try again shortly." };
-        } else if (!lastError) {
-          lastError = { status: gemResp.status, code: "LOVABLE_AI_ERROR", message: `AI fallback error (${gemResp.status}).` };
-        }
-        providerErrors.push({ provider: "gemini", status: gemResp.status, code: lastError.code });
-      }
-    }
-
-    if (!provider) {
-      const err = lastError ?? { code: "NO_PROVIDER", message: "No AI provider available." };
-      return json({ error: err.message, code: err.code }, 200);
-    }
-
-    const parsed = extractJson(content);
+    const parsed = extractJson(text);
     if (!parsed) {
-      console.error(`Could not parse ${provider} output`, content.slice(0, 500));
+      console.error("Could not parse Gemini output", text.slice(0, 500));
       return json({ error: "Could not parse AI response. Please regenerate." }, 500);
     }
 
-    const grounded: { title: string; url: string; citation_index?: number }[] =
-      provider === "you"
-        ? youCitations.map((c, i) => ({ title: c.title, url: c.url, citation_index: i + 1 }))
-        : citations.map((url, i) => {
-            try {
-              const host = new URL(url).hostname.replace(/^www\./, "");
-              return { title: host, url, citation_index: i + 1 };
-            } catch { return { title: url, url }; }
-          });
+    // Resolve Gemini's opaque redirect URIs to validated deep links.
+    const resolvedSources = await resolveGroundedSources(rawSources, {
+      keyQuote: typeof parsed.summary === "string" ? parsed.summary.slice(0, 80) : undefined,
+    });
+    const grounded = resolvedSources.map((s, i) => ({ title: s.title, url: s.url, citation_index: i + 1 }));
+
     const modelSources = Array.isArray(parsed.sources) ? parsed.sources : [];
     const sourceMap = new Map<string, { title: string; url: string }>();
     [...grounded, ...modelSources].forEach((s: any) => {
@@ -309,14 +184,11 @@ Output ONLY a JSON object, no prose:
     let insufficient = Boolean(parsed.insufficient_information);
     if (grounded.length === 0) insufficient = true;
     if (insufficient) confidence = Math.min(confidence, 20);
-    const groundedFailed = providerErrors.length > 0 && grounded.length === 0;
-    const confidence_rationale = groundedFailed
-      ? `Grounded search providers unavailable (${providerErrors.map(p => `${p.provider}:${p.status}`).join(", ")}). Fallback model (Gemini) cannot return external citations — treat as tentative.`
-      : `Deterministic score from ${grounded.length} verified provider citation(s); weighted 55% source count (saturating at 6) + 45% domain reliability.`;
+    const confidence_rationale = `Deterministic score from ${grounded.length} verified Gemini grounding citation(s); weighted 55% source count (saturating at 6) + 45% domain reliability.`;
 
     const responseBody = {
-      provider,
-      provider_errors: providerErrors,
+      provider: "gemini",
+      provider_errors: [],
       summary: String(parsed.summary ?? ""),
       analysis: String(parsed.analysis ?? ""),
       key_provisions: Array.isArray(parsed.key_provisions) ? parsed.key_provisions : [],
@@ -331,7 +203,7 @@ Output ONLY a JSON object, no prose:
       confidence_rationale,
       sources,
     };
-    const saved = await writeCache(cacheKey, responseBody, provider);
+    const saved = await writeCache(cacheKey, responseBody, "gemini");
     return json({ ...responseBody, cached: false, updated_at: saved?.updated_at });
   } catch (e) {
     console.error("ai-bill-analysis error", e);
