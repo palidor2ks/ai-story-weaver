@@ -47,8 +47,6 @@ import { AIExplanation } from '@/components/AIExplanation';
 
 import { AIFeedback, ReportIssueButton } from '@/components/AIFeedback';
 import { ContactInfoCard } from '@/components/ContactInfoCard';
-import { RelevantNewsFeed } from '@/components/RelevantNewsFeed';
-import { RepresentativeSocialFeed } from '@/components/RepresentativeSocialFeed';
 import { CandidatePositions } from '@/components/CandidatePositions';
 import { PositionsMatchList } from '@/components/PositionsMatchList';
 import { CoverageTier, ConfidenceLevel } from '@/lib/scoreFormat';
@@ -138,7 +136,7 @@ export const CandidateProfile = () => {
   const [visibleDonorCount, setVisibleDonorCount] = useState(20);
   const [visibleBillCount, setVisibleBillCount] = useState(20);
   const [donorSearch, setDonorSearch] = useState('');
-  const [activeTab, setActiveTab] = useState<'issues' | 'votes' | 'bills' | 'money' | 'news' | 'contact' | 'positions'>('issues');
+  const [activeTab, setActiveTab] = useState<'issues' | 'votes' | 'bills' | 'money' | 'contact' | 'positions'>('issues');
   const effectiveCycle = selectedCycle ?? cycleInfo?.defaultCycle;
   const { data: donors = [], refetch: refetchDonors } = useCandidateDonors(id, effectiveCycle);
   const { data: earmarkRollups = [] } = useCandidateEarmarkRollups(id, effectiveCycle);
@@ -620,8 +618,8 @@ export const CandidateProfile = () => {
 
       {/* TAB NAVIGATION */}
       <div className="mt-4 px-4">
-        <div className="grid grid-cols-7 gap-1">
-          {(['issues', 'positions', 'votes', 'bills', 'money', 'news', 'contact'] as const).map(tab => (
+        <div className="grid grid-cols-6 gap-1">
+          {(['issues', 'positions', 'votes', 'bills', 'money', 'contact'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -842,25 +840,6 @@ export const CandidateProfile = () => {
           </div>
         )}
 
-        {/* NEWS TAB — Latest News + Latest from X */}
-        {activeTab === 'news' && (
-          <div className="space-y-3">
-            <RelevantNewsFeed
-              people={[{
-                name: candidate.name,
-                office: candidate.office,
-                state: candidate.state,
-                district: candidate.district,
-              }]}
-              topics={userTopicScores.map(uts => (uts as { topic_id?: string }).topic_id).filter(Boolean) as string[]}
-              state={candidate.state}
-              district={candidate.district}
-              title={`Latest News about ${candidate.name}`}
-              maxItems={8}
-            />
-            <RepresentativeSocialFeed candidateId={candidate.id} />
-          </div>
-        )}
 
         {/* CONTACT TAB */}
         {activeTab === 'contact' && (
