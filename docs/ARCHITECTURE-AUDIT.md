@@ -273,12 +273,17 @@ matching reviewer from `CLAUDE.md`'s council. Ordered by ROI-to-risk.
     `QuestionManagementPanel` → `useQuestionManagement`, `SocialPosts` →
     `useSocialPosts` (queries as hooks; the multi-step writes + edge invokes as
     mutation hooks / plain data fns; useMutation wrappers kept where callbacks drive
-    component state). Allowlist: **55 files remaining**.
-  - **Sequencing (next):** the remaining smaller grandfathered files — mostly
-    dialogs, cards, and a few pages with 1–3 calls each (e.g. AI-analysis dialogs,
-    `ShareProfileButton`, `Quiz`/`QuizResults`, `Committees`, `Feed`, `Issues`,
-    `Unsubscribe`, `VerifyEmail`, the social connect callbacks). These go fast in
-    batches. Pattern is proven; route each batch to `frontend-reviewer`.
+    component state). Then a 20-file **edge-function** sweep: new
+    `src/lib/edgeFunctions.ts` (`invokeEdgeFunction` — one front door for
+    `functions.invoke`) with the 4 AI-analysis dialogs + 16 invoke-only files routed
+    through it. Allowlist: **34 files remaining**.
+  - **Sequencing (next):** the remaining 34 are `.from()`/auth/storage files. Note
+    some have **multi-line** `await supabase\n.from(...)` (ShareProfileButton,
+    BillSummaryDashboard, CivicOfficialsPanel, CommitteeBreakdown, SocialHandles,
+    BackfillAnswersControl) — reads/writes → hooks. A few use `supabase.auth.*`
+    (ChangePasswordDialog, AIFeedback, VerifyEmail) → needs a small auth helper.
+    Sweep in batches; route each to `frontend-reviewer`. When the allowlist is empty,
+    delete the ratchet's grandfather clause.
 
 ---
 

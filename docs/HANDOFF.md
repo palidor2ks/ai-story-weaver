@@ -5,6 +5,40 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-28 — Refactor Step 2 (cont.): edge-function front door (invokeEdgeFunction, 20 files)
+
+**What & why**
+Swept the invoke-only grandfathered files. Added a single seam for edge-function calls so
+components/pages stop importing the Supabase client just to call `functions.invoke`.
+
+**The change** (branch `claude/image-prompt-implementation-navk5j`, extends PR #626)
+- New `src/lib/edgeFunctions.ts`: `invokeEdgeFunction(name, options?)` — one front door for
+  `supabase.functions.invoke`. Generic defaults to `any` to match supabase-js's own
+  `invoke<T = any>`, so callers reading `data.foo` behave identically.
+- Migrated **20 invoke-only files** onto it: the 4 AI-analysis dialogs (candidate/bill/
+  recipient/donor) + 16 others (AddressAutocomplete, PositionsMatchList, VerificationBadges,
+  admin AnswerCoveragePanel/Bulk*/CommitteeTopicsPanel/IndependentExpenditure* cards/
+  LocalOfficialsImportPanel, Admin, QuizResults, Unsubscribe, SocialComposer, TikTok/X
+  OAuth connect callbacks). Each dropped its client import; removed from the eslint allowlist
+  (now **34 files remaining**).
+
+**Gotcha for next time**
+The invoke-only detector must catch **multi-line** `await supabase\n  .from(...)`. Files with
+those (ShareProfileButton, BillSummaryDashboard, CivicOfficialsPanel, CommitteeBreakdown,
+SocialHandles, BackfillAnswersControl) are NOT invoke-only — they need read/write hooks and
+were deliberately left for a later batch. Also: `supabase.functions.invoke<T>(...)` call sites
+need the helper's generic (handled).
+
+**State** (verified)
+`bunx tsc --noEmit` 0 · `bun run lint` 0 errors (155 warnings) · `bun run build` ✓ ·
+`bun test` 146/146. No behavior change.
+
+**Next**
+Remaining 34: a mix of `.from()`/auth/storage files (dialogs, cards, pages). Includes the 6
+mixed files noted above + auth-using files (ChangePasswordDialog, AIFeedback, VerifyEmail use
+`supabase.auth.*`). Migrate reads→query hooks, writes→mutation hooks/data fns, auth→a small
+auth helper/context. Sweep in batches; delete the ratchet grandfather clause when empty.
+
 ## 2026-06-28 — Refactor Step 2 (cont.): migrate the 3 heavy mutation panels
 
 **What & why**
