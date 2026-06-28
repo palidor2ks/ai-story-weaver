@@ -264,15 +264,16 @@ matching reviewer from `CLAUDE.md`'s council. Ordered by ROI-to-risk.
     (the "read-heavy" admin panels turned out to contain writes/RPCs, so clearing
     a file from the allowlist requires moving mutations too):
     `HiddenStatesPanel` → `useHiddenStatesAdmin`, `DuplicatePersonsPanel` →
-    `useDuplicatePersons`, `AdminUsersPanel` → `useAdminUsers`. Allowlist: **60
-    files remaining**.
-  - **Sequencing (next):** the remaining mixed read+write admin panels, smaller
-    first — `TopicReviewPanel` (746 LOC, 5 reads + 2 updates + 2 invoke) and
-    `DonorImportPanel` (1009 LOC) — then the heaviest mutation panels
-    (`CommitteeAliasesPanel`, `QuestionManagementPanel`, `SocialPosts`). Pattern is
-    proven: queries → query hooks, mutations → mutation hooks (or a plain data fn
-    when `onMutate`/`onSettled` drive component state). Route each to
-    `frontend-reviewer`.
+    `useDuplicatePersons`, `AdminUsersPanel` → `useAdminUsers`. Then the two larger
+    mixed panels: `TopicReviewPanel` → `useTopicReview` (queries as hooks; bills
+    update + scan invoke as plain data fns, useMutation wrappers kept in the panel)
+    and `DonorImportPanel` → `src/lib/donorImport.ts` (imperative importer, not
+    react-query, so plain async data helpers). Allowlist: **58 files remaining**.
+  - **Sequencing (next):** the heaviest mutation panels (`CommitteeAliasesPanel`,
+    `QuestionManagementPanel`, `SocialPosts`), then the remaining smaller
+    grandfathered files (dialogs, cards, other pages). Pattern is proven: queries →
+    query hooks, mutations → mutation hooks (or a plain data fn when
+    `onMutate`/`onSettled` drive component state). Route each to `frontend-reviewer`.
 
 ---
 

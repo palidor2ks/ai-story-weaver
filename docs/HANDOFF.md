@@ -5,6 +5,35 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-28 — Refactor Step 2 (cont.): migrate TopicReviewPanel + DonorImportPanel
+
+**What & why**
+Continuing the front-door migration with the two larger mixed read+write admin panels.
+Both have mutations/RPCs/invokes tightly coupled to component state, so reads became query
+hooks and the raw Supabase calls became plain data fns, keeping the orchestration
+(useMutation callbacks, the imperative batch loop) in the component.
+
+**The change** (branch `claude/image-prompt-implementation-navk5j`, extends PR #624)
+- `TopicReviewPanel` → `src/hooks/useTopicReview.ts`: 3 query hooks
+  (`useFlaggedBills`, `useTopicReviewStats`, `useTopicScanStats`) + `updateBillRecord`
+  and `scanBillTopics` data fns. The `useMutation` wrappers stay in the panel (optimistic
+  updates keyed on `filterType`, per-row spinner state). Deduped the two identical
+  bills-update sites onto `updateBillRecord`.
+- `DonorImportPanel` → `src/lib/donorImport.ts`: the browser-driven batch importer isn't
+  react-query, so its 6 calls became plain async helpers (session cancel/complete, committee
+  mappings, contribution count, candidate lookup, and `invokeImportFecReceiptsCsv` which
+  returns the raw `{data,error}` for the cycle-mismatch flow). Dropped an `as any[]` cast.
+- Removed both from the `eslint.config.js` allowlist (now **58 files remaining**).
+
+**State** (verified)
+`bun run lint` 0 errors (155 warnings) · `bunx tsc --noEmit` 0 · `bun run build` ✓ ·
+`bun test` 146/146. No behavior change.
+
+**Next**
+Heaviest mutation panels (`CommitteeAliasesPanel`, `QuestionManagementPanel`, `SocialPosts`),
+then the remaining smaller grandfathered files (dialogs, cards, other pages). Remove each
+from the allowlist as migrated.
+
 ## 2026-06-28 — Refactor Step 2 (cont.): migrate 3 admin panels (reads + mutations)
 
 **What & why**
