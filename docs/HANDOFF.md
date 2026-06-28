@@ -5,6 +5,31 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-28 — Refactor Step 2 (cont.): consolidate quiz_answers reads (4 files)
+
+**What & why**
+Next batch of the front-door sweep. Three screens ran the same `quiz_answers` read; pulled
+them into a shared hook, and removed a dead import.
+
+**The change** (branch `claude/image-prompt-implementation-navk5j`)
+- New `src/hooks/useQuizAnswers.ts`: one `fetchAnsweredQuestionIds` shared by
+  `useAnsweredQuestions` (QuizLibrary) and `useQuizAnswers` (Quiz) — **distinct query keys
+  preserved** (`['answered_questions', uid]` / `['quiz_answers', uid]`), because
+  `useProfile` invalidates both; plus `useRecentAnsweredQuestionIds` for Feed's deduped
+  recent-answers query.
+- `QuizLibrary`, `Quiz`, `Feed` migrated; `AIFeedback` had a **dead** client import (never
+  used) — removed. All 4 dropped from the eslint allowlist (now **30 files remaining**).
+
+**State** (verified)
+`bunx tsc --noEmit` 0 · `bun run lint` 0 errors (155 warnings) · `bun run build` ✓ ·
+`bun test` 146/146. No behavior change.
+
+**Next**
+30 left: read/write `.from()` files (admin dialogs/cards, PartyProfile, PoliticianDashboard,
+Committees, Issues, etc.), `supabase.auth.*` files (ChangePasswordDialog, VerifyEmail, Poll,
+UserProfile, CandidatePositions — want a small auth helper), and `AvatarUpload` (storage).
+Sweep in batches; delete the ratchet grandfather clause when empty.
+
 ## 2026-06-28 — Refactor Step 2 (cont.): edge-function front door (invokeEdgeFunction, 20 files)
 
 **What & why**
