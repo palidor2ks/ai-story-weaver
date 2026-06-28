@@ -223,7 +223,9 @@ const AnalysisBody = ({ text }: { text: string }) => {
   const bullets = lines.filter((l) => /^[-•]\s/.test(l)).map((l) => l.replace(/^[-•]\s*/, ''));
   const lead = lines.filter((l) => !/^[-•]\s/.test(l)).join(' ');
 
-  const matchIdx = bullets.findIndex((b) => /^your match\b/i.test(b));
+  // Tolerate leading markdown emphasis (e.g. "**Your match:** …") so the line is still
+  // detected and pulled into the highlighted footer rather than the ordinary bullet list.
+  const matchIdx = bullets.findIndex((b) => /^[*_]*\s*your match\b/i.test(b));
   const matchLine = matchIdx >= 0 ? bullets.splice(matchIdx, 1)[0] : null;
 
   return (
