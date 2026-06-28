@@ -5,6 +5,32 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-28 — Removed the News tab from the candidate profile
+
+**What & why**
+User asked (with a screenshot circling the **News** tab) to remove the News section from the
+candidate profile. The tab rendered `RelevantNewsFeed` ("Latest News about …") and
+`RepresentativeSocialFeed` ("Latest from X"), both of which were effectively empty in practice
+("No relevant news yet" / "No X posts ingested yet"), so removing it declutters the tab bar.
+
+**The change** (#614, squash-merged to `main` as `5e29ec51`)
+- `src/pages/CandidateProfile.tsx`: dropped `'news'` from the tab list and the `activeTab` type
+  union, deleted the News tab content block, and changed the tab grid from `grid-cols-7` →
+  `grid-cols-6` for the remaining 6 tabs (Issues, Positions, Votes, Bills, Money, Contact).
+  Removed the now-unused `RelevantNewsFeed` / `RepresentativeSocialFeed` imports.
+- The `RelevantNewsFeed` and `RepresentativeSocialFeed` components themselves were **left in
+  place** (not deleted) in case they're reused elsewhere — only the candidate-profile usage was
+  removed.
+
+**State** (verified locally before push)
+`bun run lint` — 0 errors (pre-existing warnings only) · `bun run build` — succeeds ·
+`bun run test` — 144 pass / 0 fail. PR #614 merged after all CI checks passed (Lint, Typecheck,
+Build, Test, Lockfile guard, GitGuardian green; Supabase Preview skipped — no `supabase/` changes).
+
+**Next**
+Nothing required. If the News feature is wanted back later, the underlying components still exist;
+re-wiring would mean re-adding the tab + restoring the data pipeline that populates them.
+
 ## 2026-06-28 — Forward stub gap closed + full stub backfill done (Gemini source-URL cleanup complete)
 
 **What happened & why**
