@@ -87,6 +87,17 @@ the `service_role` key, `cron_secret`, the 5 `*_sync_secret`s, the DB password, 
 Lovable API keys. Update Railway env (and Vault) to match after rotating.
 **History:** Worker go-live session 2026-06-23; user intentionally deferred until the worker was stable.
 **State:** Not started — owner action. The DB password + `service_role` key are highest-value.
+**Update (2026-06-28):** the **Perplexity + Lovable keys are no longer used** by any edge function
+(all 11 migrated to Google Gemini) — they can simply be **deleted** rather than rotated.
+
+### 22. ☐ Two edge-fn issues surfaced during the Gemini migration (not rep-answers)
+**What:** (a) `nightly_bill_sync` intermittently 401s (likely the same Railway-cutover credential
+artifact as the old drain jam — confirm it's sending `x-cron-secret`). (b) `congress_donor_backfill`
+times out because `call-edge`'s 120s abort < the edge fn's runtime — give it a `timeoutMs: 240_000`
+override like `fec_candidate_drain` already has (`workers/tasks/`). (c) `fetch-nj-elec-finance` still
+401-flaps from a non-worker caller (see #21a).
+**History:** Observed 2026-06-27/28 while verifying the rep-answer pipeline.
+**State:** Not started — low urgency; none affect rep answers.
 
 ### 21. ☐ Railway worker — two low-priority post-go-live watch items
 **What:** (a) `fetch-nj/fl/ny-finance` edge logs show 401 flapping from a **non-worker** caller (the
@@ -236,6 +247,17 @@ Mac casing that the old `formatCandidateName` lacked.
 ---
 
 ## ✅ Recently done (prune after ~2 weeks)
+- ✅ **2026-06-27/28** **Rep-answer pipeline restored & moved fully to Google Gemini.** (a) `drain-research-queue`
+  was silently jammed ~5 days after the Railway cutover (a transient 401 maxed its 25 retries; graphile
+  crontab has no singleton guard) → reset live + added `reset_stuck_cron_jobs` self-heal (PR #606).
+  (b) Migrated all 11 answer/AI-gen edge fns off Perplexity → direct Gemini 2.5 Flash + Google Search
+  grounding via new `_shared/gemini-research.ts`; You.com + Lovable gateway also removed (PR #607).
+  (c) Deep, validated source URLs with `#:~:text=` anchors; `resolveRedirectUrl` GET+UA, drop unresolved
+  stubs (PR #608). (d) Backfilled ~2,100 legacy redirect-stub URLs to real links (PR #609 one-shot, since
+  removed in #611/#612). (e) Closed the forward gap — Gemini cites its own grounding-redirect URL as
+  `source_url`; now routed through the resolve-or-drop pipeline in `get-candidate-answers` +
+  `generate-legislator-answers` (PR #610). Final whole-table stub count **2,326 → 4** (expired tokens);
+  0 new stubs created post-fix. Full story in HANDOFF 2026-06-27/28.
 - ✅ **2026-06-23** Railway graphile-worker migration **fully live + cleaned up**. Four stacked
   failures fixed (PRs #538/#542 + Railway config): `.ts` task loading (graphile-worker's default
   `fileExtensions` excludes `.ts`), DB connection (transaction pooler `:6543` → session pooler `:5432`
