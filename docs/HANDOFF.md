@@ -5,6 +5,33 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-28 — Refactor Step 2 (cont.): 5 read screens behind query hooks
+
+**What & why**
+Next front-door batch — read-only screens. New/extended hooks; each screen drops its direct
+client import and leaves the allowlist.
+
+**The change** (branch `claude/image-prompt-implementation-navk5j`, fresh PR off main)
+- `src/hooks/useQuizAnswers.ts`: added `useUserAnswerCount` (AdminUserProfileView),
+  `useUserAnswersWithDetails` (RepresentativeComparisonCard), `useUserAnswersWithQuestions`
+  (PartyComparisonCard).
+- New `src/hooks/usePartyAnswers.ts` (PartyComparisonCard), `src/hooks/useIssues.ts`
+  (`useIssuesTopics`/`useIssuesPolls` → Issues), `src/hooks/useCommitteeIeTotals.ts`
+  (Committees).
+- Removed the dead `Topic`/`Poll` interfaces from Issues. Allowlist: **~26 files remaining**.
+
+**State** (verified)
+`bunx tsc --noEmit` 0 · `bun run lint` 0 errors (155 warnings) · `bun run build` ✓ ·
+`bun test` 146/146. No behavior change.
+
+**Next**
+Remaining ~26: admin read/write dialogs+cards (CandidateAnswersDialog, DonorAliasesPanel,
+CivicOfficialsPanel, CommitteeBreakdown, BillSummaryDashboard, BulkAnswerValidation,
+VendorRefundsPanel, the two import-history components w/ undo RPCs, …), pages PartyProfile/
+PoliticianDashboard, ShareProfileButton, AvatarUpload (storage), and the `supabase.auth.*`
+files (ChangePasswordDialog, VerifyEmail, Poll, UserProfile, CandidatePositions — want a
+small auth helper). Sweep in batches; delete the ratchet grandfather clause when empty.
+
 ## 2026-06-28 — Refactor Step 2 (cont.): consolidate quiz_answers reads (4 files)
 
 **What & why**
