@@ -30,7 +30,7 @@ const EXCLUDED_DESIGNATIONS = new Set(['J', 'U', 'B', 'D']);
  */
 export function useCompareFinanceSnapshots(
   candidateIds: string[],
-  cycle: number | string | undefined,
+  cycle: string | undefined,
   includeDonorDetail: boolean,
 ) {
   return useQuery({
