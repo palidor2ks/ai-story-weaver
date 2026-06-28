@@ -126,7 +126,6 @@ export default tseslint.config(
       "src/components/admin/IndependentExpenditureImportHistory.tsx",
       "src/components/admin/IngestStatusPanel.tsx",
       "src/components/admin/LocalOfficialsImportPanel.tsx",
-      "src/components/admin/QuestionManagementPanel.tsx",
       "src/components/admin/VendorRefundsPanel.tsx",
       "src/pages/Admin.tsx",
       "src/pages/AdminUserProfileView.tsx",

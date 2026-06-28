@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -18,45 +17,17 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2, ChevronDown, ChevronRight, AlertTriangle, CheckCircle2, Plus, Search, Pencil, Sparkles, XCircle, Users, BookOpen, Newspaper } from "lucide-react";
 import { toast } from "sonner";
 import { useQuestionAnswerCounts } from "@/hooks/useQuestionUpdateNotifications";
-interface QuestionOption {
-  id: string;
-  question_id: string;
-  text: string;
-  value: number;
-  display_order: number | null;
-  is_skip_option: boolean | null;
-}
-
-interface Question {
-  id: string;
-  text: string;
-  topic_id: string;
-  is_onboarding_canonical: boolean | null;
-  onboarding_slot: number | null;
-  question_options: QuestionOption[];
-}
-
-interface Topic {
-  id: string;
-  name: string;
-  icon: string;
-}
-
-interface QuestionFormData {
-  id: string;
-  text: string;
-  topic_id: string;
-  is_onboarding_canonical: boolean;
-  onboarding_slot: number | null;
-  options: {
-    id: string;
-    value: number;
-    text: string;
-    label: string;
-    is_skip_option: boolean;
-    display_order: number;
-  }[];
-}
+import {
+  useAdminQuestions,
+  useTopics,
+  createQuestionWithOptions,
+  updateQuestionWithOptions,
+  generateQuizQuestion,
+  insertGeneratedQuestion,
+  type Question,
+  type Topic,
+  type QuestionFormData,
+} from "@/hooks/useQuestionManagement";
 
 const DEFAULT_OPTIONS = [
   { value: -10, text: "", label: "Far Left (L10)" },
@@ -331,79 +302,14 @@ export function QuestionManagementPanel() {
   });
 
   // Fetch all questions with their options
-  const { data: questions, isLoading: questionsLoading } = useQuery({
-    queryKey: ['admin-questions'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('questions')
-        .select('*, question_options(*)')
-        .order('topic_id')
-        .order('id');
-
-      if (error) throw error;
-      return data as Question[];
-    },
-  });
+  const { data: questions, isLoading: questionsLoading } = useAdminQuestions();
 
   // Fetch topics for filtering
-  const { data: topics } = useQuery({
-    queryKey: ['topics'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('topics')
-        .select('*')
-        .order('name');
-      if (error) throw error;
-      return data as Topic[];
-    },
-  });
+  const { data: topics } = useTopics();
 
   // Create question mutation
   const createQuestionMutation = useMutation({
-    mutationFn: async (form: QuestionFormData) => {
-      const { error: questionError } = await supabase
-        .from('questions')
-        .insert({
-          id: form.id,
-          text: form.text,
-          topic_id: form.topic_id,
-          is_onboarding_canonical: form.is_onboarding_canonical,
-          onboarding_slot: form.onboarding_slot,
-        });
-
-      if (questionError) throw questionError;
-
-      const optionsToInsert = form.options
-        .filter(opt => !opt.is_skip_option)
-        .map((opt, index) => ({
-          id: `${form.id}-opt-${index + 1}`,
-          question_id: form.id,
-          text: opt.text,
-          value: opt.value,
-          display_order: index + 1,
-          is_skip_option: false,
-        }));
-
-      optionsToInsert.push({
-        id: `${form.id}-skip`,
-        question_id: form.id,
-        text: "Not important to me",
-        value: 0,
-        display_order: 6,
-        is_skip_option: true,
-      });
-
-      const { error: optionsError } = await supabase
-        .from('question_options')
-        .insert(optionsToInsert);
-
-      if (optionsError) {
-        await supabase.from('questions').delete().eq('id', form.id);
-        throw optionsError;
-      }
-
-      return form.id;
-    },
+    mutationFn: (form: QuestionFormData) => createQuestionWithOptions(form),
     onSuccess: (questionId) => {
       queryClient.invalidateQueries({ queryKey: ['admin-questions'] });
       toast.success(`Question "${questionId}" created successfully`);
@@ -418,110 +324,7 @@ export function QuestionManagementPanel() {
 
   // Update question mutation
   const updateQuestionMutation = useMutation({
-    mutationFn: async (form: QuestionFormData) => {
-      const originalQuestion = editingQuestion;
-      const textChanged = originalQuestion?.text !== form.text;
-      
-      // Update the question
-      const { error: questionError } = await supabase
-        .from('questions')
-        .update({
-          text: form.text,
-          topic_id: form.topic_id,
-          is_onboarding_canonical: form.is_onboarding_canonical,
-          onboarding_slot: form.onboarding_slot,
-        })
-        .eq('id', form.id);
-
-      if (questionError) throw questionError;
-
-      // Update each option
-      for (const opt of form.options) {
-        if (opt.id) {
-          const { error: optionError } = await supabase
-            .from('question_options')
-            .update({
-              text: opt.text,
-              value: opt.value,
-              display_order: opt.display_order,
-            })
-            .eq('id', opt.id);
-
-          if (optionError) throw optionError;
-        }
-      }
-
-      // If text changed, create notifications for affected entities
-      if (textChanged && originalQuestion) {
-        try {
-          // Get affected user IDs
-          const { data: userAnswers } = await supabase
-            .from('quiz_answers')
-            .select('user_id')
-            .eq('question_id', form.id);
-          
-          // Get affected candidate IDs
-          const { data: candidateAnswers } = await supabase
-            .from('candidate_answers')
-            .select('candidate_id')
-            .eq('question_id', form.id);
-          
-          // Get affected party IDs
-          const { data: partyAnswers } = await supabase
-            .from('party_answers')
-            .select('party_id')
-            .eq('question_id', form.id);
-
-          // Create unique lists
-          const uniqueUserIds = [...new Set(userAnswers?.map(a => a.user_id) || [])];
-          const uniqueCandidateIds = [...new Set(candidateAnswers?.map(a => a.candidate_id) || [])];
-          const uniquePartyIds = [...new Set(partyAnswers?.map(a => a.party_id) || [])];
-
-          // Prepare notifications
-          const notifications = [
-            ...uniqueUserIds.map(id => ({
-              question_id: form.id,
-              entity_type: 'user' as const,
-              entity_id: id,
-              old_question_text: originalQuestion.text,
-              new_question_text: form.text,
-            })),
-            ...uniqueCandidateIds.map(id => ({
-              question_id: form.id,
-              entity_type: 'candidate' as const,
-              entity_id: id,
-              old_question_text: originalQuestion.text,
-              new_question_text: form.text,
-            })),
-            ...uniquePartyIds.map(id => ({
-              question_id: form.id,
-              entity_type: 'party' as const,
-              entity_id: id,
-              old_question_text: originalQuestion.text,
-              new_question_text: form.text,
-            })),
-          ];
-
-          if (notifications.length > 0) {
-            const { error: notifyError } = await supabase
-              .from('question_update_notifications')
-              .insert(notifications);
-
-            if (notifyError) {
-              console.error('Failed to create notifications:', notifyError);
-              // Don't throw - we still want the update to succeed
-            } else {
-              console.log(`Created ${notifications.length} update notifications`);
-            }
-          }
-        } catch (e) {
-          console.error('Error creating notifications:', e);
-          // Don't throw - notification failure shouldn't block the update
-        }
-      }
-
-      return form.id;
-    },
+    mutationFn: (form: QuestionFormData) => updateQuestionWithOptions(form, editingQuestion),
     onSuccess: (questionId) => {
       queryClient.invalidateQueries({ queryKey: ['admin-questions'] });
       toast.success(`Question "${questionId}" updated successfully`);
@@ -636,13 +439,11 @@ export function QuestionManagementPanel() {
 
     setIsGenerating(true);
     try {
-      const { data, error } = await supabase.functions.invoke('generate-quiz-question', {
-        body: { 
-          topicId: formData.topic_id, 
-          topicName: topic.name, 
-          existingQuestions: existingQuestionTexts,
-          questionType: questionType
-        }
+      const { data, error } = await generateQuizQuestion({
+        topicId: formData.topic_id,
+        topicName: topic.name,
+        existingQuestions: existingQuestionTexts,
+        questionType: questionType
       });
 
       if (error) throw error;
@@ -715,13 +516,11 @@ export function QuestionManagementPanel() {
         const existingQuestionTexts = [...topicQuestions.map(q => q.text), ...sessionGeneratedQuestions];
 
         // Generate question with AI
-        const { data, error } = await supabase.functions.invoke('generate-quiz-question', {
-          body: { 
-            topicId: topic.id, 
-            topicName: topic.name, 
-            existingQuestions: existingQuestionTexts,
-            questionType: bulkQuestionType
-          }
+        const { data, error } = await generateQuizQuestion({
+          topicId: topic.id,
+          topicName: topic.name,
+          existingQuestions: existingQuestionTexts,
+          questionType: bulkQuestionType
         });
 
         if (error || data.error) {
@@ -732,37 +531,8 @@ export function QuestionManagementPanel() {
         const questionId = generateQuestionId(topic.id, existingIds);
         existingIds.push(questionId);
 
-        // Create question in database
-        const { error: questionError } = await supabase
-          .from('questions')
-          .insert({
-            id: questionId,
-            text: data.questionText,
-            topic_id: topic.id,
-            is_onboarding_canonical: false,
-            onboarding_slot: null,
-          });
-
-        if (questionError) throw questionError;
-
-        // Create options
-        const optionsToInsert = [
-          { id: `${questionId}-opt-1`, question_id: questionId, text: data.options.L10, value: -10, display_order: 1, is_skip_option: false },
-          { id: `${questionId}-opt-2`, question_id: questionId, text: data.options.L5, value: -5, display_order: 2, is_skip_option: false },
-          { id: `${questionId}-opt-3`, question_id: questionId, text: data.options.C, value: 0, display_order: 3, is_skip_option: false },
-          { id: `${questionId}-opt-4`, question_id: questionId, text: data.options.R5, value: 5, display_order: 4, is_skip_option: false },
-          { id: `${questionId}-opt-5`, question_id: questionId, text: data.options.R10, value: 10, display_order: 5, is_skip_option: false },
-          { id: `${questionId}-skip`, question_id: questionId, text: "Not important to me", value: 0, display_order: 6, is_skip_option: true },
-        ];
-
-        const { error: optionsError } = await supabase
-          .from('question_options')
-          .insert(optionsToInsert);
-
-        if (optionsError) {
-          await supabase.from('questions').delete().eq('id', questionId);
-          throw optionsError;
-        }
+        // Create question + options in the database (rolls back on options failure)
+        await insertGeneratedQuestion(questionId, topic.id, data);
 
         setBulkGenerateProgress(prev => ({
           ...prev,
