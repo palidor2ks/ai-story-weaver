@@ -27,6 +27,7 @@ import {
   dropStanceInconsistent,
 } from "../_shared/answer-label-guard.ts";
 import { isCronAuthorized } from "../_shared/cron-auth.ts";
+import { resolveRedirectUrl, isUnresolvedRedirectStub } from "../_shared/gemini-research.ts";
 
 declare const EdgeRuntime: { waitUntil: (promise: Promise<unknown>) => void };
 
@@ -255,8 +256,14 @@ async function processCandidate(
       if (typeof raw.answer_value !== 'number' && typeof raw.answer_value !== 'string') continue;
 
       const evidenceType = validEvidenceType(raw.evidence_type);
-      const sourceUrl = typeof raw.source_url === 'string' && raw.source_url.startsWith('http')
-        ? raw.source_url : null;
+      // Gemini often cites its opaque vertexaisearch grounding-redirect URL as source_url;
+      // resolve it to the real page, and drop it if unresolvable rather than storing a stub.
+      // (These rows are never source_type='web_research', so a null URL is allowed.)
+      let sourceUrl: string | null = null;
+      if (typeof raw.source_url === 'string' && raw.source_url.startsWith('http')) {
+        const real = await resolveRedirectUrl(raw.source_url);
+        sourceUrl = isUnresolvedRedirectStub(real) ? null : real;
+      }
 
       parsedRows.push({
         candidate_id: candidate.id,

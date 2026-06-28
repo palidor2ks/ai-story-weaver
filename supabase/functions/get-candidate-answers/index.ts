@@ -357,18 +357,18 @@ Return the answer_value from OPTIONS that best matches ALL evidence found. If mu
       ? detectedEvidenceType
       : validateEvidenceType(modelEvidenceType);
 
-    // Resolve Gemini's opaque grounding redirects into real, validated, deep-linked
-    // source URLs; the best one gets a #:~:text= anchor for the verbatim key_quote.
+    // Resolve Gemini's opaque grounding redirects into real, validated, deep-linked source
+    // URLs; the best one gets a #:~:text= anchor for the verbatim key_quote. The model's OWN
+    // cited source_url is run through the SAME pipeline (listed first) — Gemini frequently
+    // returns its opaque vertexaisearch grounding-redirect URL here, which must be resolved
+    // to the real page or dropped, never stored raw.
     const keyQuote = typeof parsed.key_quote === 'string' ? parsed.key_quote : '';
-    const resolved = await resolveGroundedSources(rawSources, { keyQuote });
+    const modelCitation = typeof parsed.source_url === 'string' && parsed.source_url.startsWith('http')
+      ? [{ uri: parsed.source_url, title: 'Cited Source' }]
+      : [];
+    const resolved = await resolveGroundedSources([...modelCitation, ...rawSources], { keyQuote });
     const sourceUrls = resolved.map(s => s.url);
     const sourceTitles = resolved.map(s => s.title);
-
-    // If the model returned a specific deep link not already covered by grounding, keep it first.
-    if (typeof parsed.source_url === 'string' && parsed.source_url.startsWith('http') && !sourceUrls.includes(parsed.source_url)) {
-      sourceUrls.unshift(parsed.source_url);
-      sourceTitles.unshift('Cited Source');
-    }
 
     // Supplement with congress.gov deep links for any bills/amendments named in the
     // description (Gemini's prose often cites bill numbers without linking them).
