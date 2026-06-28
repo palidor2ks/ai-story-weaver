@@ -8,7 +8,14 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2, Copy, ExternalLink, XCircle, Users } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import {
+  markImportSessionCancelled,
+  markImportSessionCompleted,
+  fetchCommitteeCandidateMappings,
+  countContributionsForCommittee,
+  fetchCandidateIdForCommittee,
+  invokeImportFecReceiptsCsv,
+} from '@/lib/donorImport';
 import { toast } from 'sonner';
 import Papa from 'papaparse';
 import { DonorImportHistory } from './DonorImportHistory';
@@ -76,11 +83,7 @@ export function DonorImportPanel() {
   // terminal status itself (nothing on the backend does).
   const markSessionCancelled = useCallback(async (sessionId: string) => {
     try {
-      await supabase
-        .from('donor_import_sessions')
-        .update({ status: 'cancelled', completed_at: new Date().toISOString() })
-        .eq('id', sessionId)
-        .eq('status', 'running');
+      await markImportSessionCancelled(sessionId);
     } catch (e) { /* non-fatal */ }
   }, []);
 
@@ -174,12 +177,9 @@ export function DonorImportPanel() {
               }
               const distinctIds = Array.from(counts.keys());
               if (distinctIds.length > 0) {
-                const { data: mappings } = await supabase
-                  .from('candidate_committees')
-                  .select('fec_committee_id, candidate_id, candidates:candidate_id(name)')
-                  .in('fec_committee_id', distinctIds);
+                const mappings = await fetchCommitteeCandidateMappings(distinctIds);
                 const mapByCid = new Map<string, { candidate_id: string; name: string | null }>();
-                for (const m of (mappings || []) as any[]) {
+                for (const m of mappings) {
                   if (m.candidate_id) {
                     mapByCid.set(m.fec_committee_id, {
                       candidate_id: m.candidate_id,
@@ -205,22 +205,12 @@ export function DonorImportPanel() {
               setDetectedCommittee(detectedName || detectedId);
 
               // Check existing contributions for this committee
-              const { count } = await supabase
-                .from('contributions')
-                .select('*', { count: 'exact', head: true })
-                .eq('recipient_committee_id', detectedId);
-
-              setExistingCount(count || 0);
+              setExistingCount(await countContributionsForCommittee(detectedId));
 
               // Try to find candidate_id from committee
-              const { data: committee } = await supabase
-                .from('candidate_committees')
-                .select('candidate_id')
-                .eq('fec_committee_id', detectedId)
-                .single();
-
-              if (committee?.candidate_id) {
-                setCandidateId(committee.candidate_id);
+              const candidateIdForCommittee = await fetchCandidateIdForCommittee(detectedId);
+              if (candidateIdForCommittee) {
+                setCandidateId(candidateIdForCommittee);
               }
             }
           }
@@ -325,18 +315,16 @@ export function DonorImportPanel() {
             
             while (!success && retryCount < MAX_RETRIES) {
               try {
-                const { data, error } = await supabase.functions.invoke('import-fec-receipts-csv', {
-                  body: {
-                    rows: batch,
-                    cycle,
-                    candidateId: multiCommittee ? null : (candidateId || null),
-                    committeeId: multiCommittee ? null : (committeeId || null),
-                    multiCommittee,
-                    sessionId,
-                    filename: file?.name || null,
-                    isFirstBatch: i === 0,
-                    force: (window as any).__force_cycle_mismatch === sessionId
-                  }
+                const { data, error } = await invokeImportFecReceiptsCsv({
+                  rows: batch,
+                  cycle,
+                  candidateId: multiCommittee ? null : (candidateId || null),
+                  committeeId: multiCommittee ? null : (committeeId || null),
+                  multiCommittee,
+                  sessionId,
+                  filename: file?.name || null,
+                  isFirstBatch: i === 0,
+                  force: (window as any).__force_cycle_mismatch === sessionId
                 });
 
                 // Handle cycle-mismatch confirmation.
@@ -536,10 +524,7 @@ export function DonorImportPanel() {
 
             // Mark session completed
             try {
-              await supabase
-                .from('donor_import_sessions')
-                .update({ status: errors.length > 0 ? 'completed_with_errors' : 'completed', completed_at: new Date().toISOString() })
-                .eq('id', sessionId);
+              await markImportSessionCompleted(sessionId, errors.length > 0);
             } catch (e) { /* non-fatal */ }
             delete (window as any).__force_cycle_mismatch;
             setHistoryKey(k => k + 1);

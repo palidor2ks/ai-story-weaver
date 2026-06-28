@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,20 +10,12 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Loader2, ShieldCheck, CheckCircle2, ShieldOff, ShieldPlus, ChevronLeft, ChevronRight, ChevronsRight } from "lucide-react";
-
-interface ProfileRow {
-  id: string;
-  name: string | null;
-  email: string | null;
-  location: string | null;
-  voter_state: string | null;
-  political_party: string | null;
-  age: number | null;
-  overall_score: number | null;
-  identity_verified: boolean | null;
-  voter_verified: boolean | null;
-  created_at: string;
-}
+import {
+  useAdminProfiles,
+  useAdminUserRoles,
+  useAdminUserLastSignins,
+  setUserAdminRole,
+} from "@/hooks/useAdminUsers";
 
 const PAGE_SIZE = 50;
 
@@ -40,21 +31,7 @@ export function AdminUsersPanel() {
   const [pendingUserId, setPendingUserId] = useState<string | null>(null);
 
   const toggleAdmin = useMutation({
-    mutationFn: async ({ userId, makeAdmin }: { userId: string; makeAdmin: boolean }) => {
-      if (makeAdmin) {
-        const { error } = await supabase
-          .from("user_roles")
-          .insert({ user_id: userId, role: "admin" });
-        if (error && !error.message.includes("duplicate")) throw error;
-      } else {
-        const { error } = await supabase
-          .from("user_roles")
-          .delete()
-          .eq("user_id", userId)
-          .eq("role", "admin");
-        if (error) throw error;
-      }
-    },
+    mutationFn: setUserAdminRole,
     onMutate: ({ userId }) => setPendingUserId(userId),
     onSettled: () => setPendingUserId(null),
     onSuccess: (_d, vars) => {
@@ -66,38 +43,9 @@ export function AdminUsersPanel() {
   });
 
 
-  const { data: profiles, isLoading, error } = useQuery({
-    queryKey: ["admin", "profiles"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select(
-          "id, name, email, location, voter_state, political_party, age, overall_score, identity_verified, voter_verified, created_at",
-        )
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return (data || []) as ProfileRow[];
-    },
-  });
-
-  const { data: roles } = useQuery({
-    queryKey: ["admin", "user_roles_all"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("user_roles").select("user_id, role");
-      if (error) throw error;
-      return data as { user_id: string; role: string }[];
-    },
-  });
-
-  const { data: lastSignins } = useQuery({
-    queryKey: ["admin", "user_last_signins"],
-    queryFn: async () => {
-      const { data, error } = await supabase.rpc("get_admin_user_last_signins");
-      if (error) throw error;
-      return (data || []) as { user_id: string; last_sign_in_at: string | null }[];
-    },
-    staleTime: 1000 * 60,
-  });
+  const { data: profiles, isLoading, error } = useAdminProfiles();
+  const { data: roles } = useAdminUserRoles();
+  const { data: lastSignins } = useAdminUserLastSignins();
 
   const lastSigninMap = useMemo(() => {
     const m = new Map<string, string | null>();
