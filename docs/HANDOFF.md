@@ -37,6 +37,25 @@ Continue Step 2, read-only user-facing files first: `CandidateProfile` (1 read),
 (`CommitteeAliasesPanel`, `QuestionManagementPanel`, `SocialPosts`) come last — they need
 `useMutation` + invalidation. Remove each file from the eslint allowlist as it's migrated.
 
+## 2026-06-28 — Render markdown emphasis in the analysis (no more literal `*oppose*`)
+
+**What & why**
+User saw literal asterisks in the brief — e.g. "you would likely \*oppose\*". The model wraps
+emphasis words in single/double asterisks; the previous strip only removed `**` (bold), so single
+`*word*` (italic) leaked through as raw text.
+
+**The change** (frontend-only — `src/components/PositionsMatchList.tsx`)
+- Added `renderInline()`: converts `*word*` / `**word**` into real `<strong>` bold instead of
+  showing asterisks, applied to the lead line, each bullet, and the "Your match" line. So
+  support/oppose now render as clean emphasis. Removed the old `.replace(/\*\*/g,'')`.
+- Pure render change: fixes existing cached analyses too (no edge redeploy, no cache bump).
+
+**State** (verified locally)
+`bun run lint` 0 errors · `bun run build` succeeds · `bun run test` 144/144.
+
+**Next**
+Deploy (frontend build) + reopen a topic: emphasis words appear bold, no stray asterisks.
+
 ## 2026-06-28 — Refactor Step 1: conduit-list cross-runtime drift guard (no behavior change)
 
 **What & why**
