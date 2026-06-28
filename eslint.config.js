@@ -134,7 +134,6 @@ export default tseslint.config(
       "src/pages/Admin.tsx",
       "src/pages/AdminUserProfileView.tsx",
       "src/pages/Committees.tsx",
-      "src/pages/DonorProfile.tsx",
       "src/pages/Feed.tsx",
       "src/pages/Issues.tsx",
       "src/pages/PartyProfile.tsx",
