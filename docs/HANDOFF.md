@@ -5,6 +5,38 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-28 — Refactor Step 2 (proof PR): data front-door ratchet + ComparePanel migrated
+
+**What & why**
+Start of the audit's Step 2 (the "one front door for data" rule: 201 raw `.from()` calls
+across 67 files import the Supabase client directly in components/pages). Rather than a
+big-bang migration, this lands the mechanism + one migration as a reviewable proof.
+
+**The change** (branch `claude/image-prompt-implementation-navk5j`)
+- `eslint.config.js`: new **ratchet guard** — `no-restricted-imports` errors on any direct
+  `@/integrations/supabase/client` import in `src/components/**`/`src/pages/**`, with a
+  grandfather allowlist of the 66 files that predate the rule. New files can't add raw
+  queries; the allowlist shrinks one entry per migration PR. Verified the guard fires on a
+  throwaway component and that all 66 grandfathered files still pass.
+- `src/hooks/useCompareFinance.ts` (new): `useCompareFinanceSnapshots(candidateIds, cycle,
+  includeDonorDetail)` — extracts ComparePanel's 3 inline reads (`candidate_committees`,
+  `committee_finance_rollups`, `donors`) verbatim. Query key kept identical to preserve
+  caching behavior exactly.
+- `src/components/ComparePanel.tsx`: replaced the inline `useQuery`/`supabase` block with the
+  hook; dropped the client import; removed from the eslint allowlist. **No behavior change.**
+- `docs/ARCHITECTURE-AUDIT.md`: Step 2 marked in-progress with the ratchet + sequencing.
+
+**State** (verified)
+`bun run lint` 0 errors (157 pre-existing `any` warnings) · `bun run build` ✓ · `bun test`
+146/146 · guard confirmed firing on a new direct import. Pure extraction — no functionality
+touched.
+
+**Next**
+Continue Step 2, read-only user-facing files first: `CandidateProfile` (1 read), then
+`TopSpenders` (7), then `DonorProfile` (9). Admin mutation panels
+(`CommitteeAliasesPanel`, `QuestionManagementPanel`, `SocialPosts`) come last — they need
+`useMutation` + invalidation. Remove each file from the eslint allowlist as it's migrated.
+
 ## 2026-06-28 — Render markdown emphasis in the analysis (no more literal `*oppose*`)
 
 **What & why**
