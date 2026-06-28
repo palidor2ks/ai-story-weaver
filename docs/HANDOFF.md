@@ -5,6 +5,32 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-28 — Refactor Step 2 (cont.): migrate the 3 read-only user-facing pages
+
+**What & why**
+Continuing the front-door migration after the ratchet landed. Moved the read-only,
+user-facing pages' inline Supabase queries into hooks, one commit per file, removing each
+from the eslint allowlist. All pure extraction — query keys, filters, and logic verbatim.
+
+**The change** (branch `claude/image-prompt-implementation-navk5j`)
+- `CandidateProfile` → `src/hooks/useDonorAliasNames.ts` (the `donor_alias_members` lookup).
+- `TopSpenders` → `src/hooks/useTopSpenders.ts` (`useTopSpenders`, `useIECycles`,
+  `useTopSpendersRaised`, `useTopSpendersCauses` + the `resolveDisplayNames` helper).
+- `DonorProfile` → `src/hooks/useDonorProfile.ts` (7 interdependent hooks: donor record,
+  alias info, name variations, donor records, contributions, active committee aliases, PAC
+  contributors + shared row types).
+- Each removed from the `eslint.config.js` allowlist (now **63 files remaining**).
+
+**State** (verified)
+`bun run lint` 0 errors (157 pre-existing `any` warnings) · `bunx tsc --noEmit` 0 ·
+`bun run build` ✓ · `bun test` 146/146. No functionality changed.
+
+**Next**
+Admin read-heavy panels (`TopicReviewPanel`, `HiddenStatesPanel`, `DuplicatePersonsPanel`,
+`AdminUsersPanel`, `DonorImportPanel`), then the admin mutation panels
+(`CommitteeAliasesPanel`, `QuestionManagementPanel`, `SocialPosts`) last — those need
+`useMutation` + cache invalidation. Remove each from the allowlist as migrated.
+
 ## 2026-06-28 — Refactor Step 2 (proof PR): data front-door ratchet + ComparePanel migrated
 
 **What & why**

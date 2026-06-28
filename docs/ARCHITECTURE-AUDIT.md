@@ -257,14 +257,17 @@ matching reviewer from `CLAUDE.md`'s council. Ordered by ROI-to-risk.
   `@/integrations/supabase/client` import in `src/components/**`/`src/pages/**`,
   with a grandfather allowlist of the files that predate the rule. New files can't
   add raw queries; the allowlist shrinks by one entry per migration PR.
-  - **Done:** the guard itself + `ComparePanel.tsx` migrated (its 3 inline reads
-    extracted into `src/hooks/useCompareFinance.ts`; removed from the allowlist).
-    Allowlist: **66 files remaining**.
-  - **Sequencing:** read-only user-facing files first (`CandidateProfile`,
-    `TopSpenders`, `DonorProfile`), then admin read-heavy panels, then the admin
-    mutation panels (`CommitteeAliasesPanel`, `QuestionManagementPanel`,
-    `SocialPosts`) last (they need `useMutation` + cache invalidation — highest
-    behavior-change risk). Route each diff to `frontend-reviewer`.
+  - **Done:** the guard itself + the three read-only user-facing pages migrated —
+    `ComparePanel` → `useCompareFinance`, `CandidateProfile` →
+    `useDonorAliasNames`, `TopSpenders` → `useTopSpenders`, `DonorProfile` →
+    `useDonorProfile`. Each removed from the allowlist. Allowlist: **63 files
+    remaining**.
+  - **Sequencing (next):** admin read-heavy panels (`TopicReviewPanel`,
+    `HiddenStatesPanel`, `DuplicatePersonsPanel`, `AdminUsersPanel`,
+    `DonorImportPanel`), then the admin mutation panels (`CommitteeAliasesPanel`,
+    `QuestionManagementPanel`, `SocialPosts`) last (they need `useMutation` + cache
+    invalidation — highest behavior-change risk). Route each diff to
+    `frontend-reviewer`.
 
 ---
 
