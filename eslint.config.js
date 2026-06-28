@@ -143,7 +143,6 @@ export default tseslint.config(
       "src/pages/Quiz.tsx",
       "src/pages/QuizLibrary.tsx",
       "src/pages/QuizResults.tsx",
-      "src/pages/TopSpenders.tsx",
       "src/pages/Unsubscribe.tsx",
       "src/pages/UserProfile.tsx",
       "src/pages/VerifyEmail.tsx",
