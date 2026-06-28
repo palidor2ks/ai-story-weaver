@@ -5,6 +5,45 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-28 — Deepened the per-topic "AI Analysis" (+ button) on the candidate profile
+
+**What & why**
+User sent a screenshot of the **AI ANALYSIS** popup (A.J. Louderback · Environment & Energy)
+saying it "is not very deep or detailed." The shown text was the one-line fallback
+("…conservative record… score 5.0… Documented record is limited."). Root cause: the
+`ai-topic-analysis` edge function grounded the analysis on ONLY the topic score +
+`candidate_answers`, ignoring the candidate's real **votes/sponsorships**, and capped the prompt
+at "~90 words". So even when data existed, the output stayed shallow; when answers were empty it
+collapsed to a curt sentence.
+
+**The change** (branch `claude/analysis-depth-detail-bnulzg`) — `supabase/functions/ai-topic-analysis/index.ts` only:
+- **New evidence source:** now also fetches `candidate_votes` ⋈ `bills(name, topic, description)`,
+  maps each bill's free-text `topic` onto the 6 consolidated topic IDs (a `BILL_TOPIC_TO_ID`
+  table mirroring `topicNameToId` in `VotingRecordSection.tsx` — keep in sync), filters to the
+  requested topic, and feeds the top 10 votes/sponsorships into the prompt as
+  `[legislative record, sourced]` evidence. This is what makes the analysis cite concrete bills
+  instead of restating the score.
+- **Deeper prompt:** 2–3 short paragraphs (~130–180 words), structured as lean → specific
+  evidence walk-through (prefers votes over inferred answers) → honest note on record completeness.
+  Anti-fabrication rules kept/strengthened (no invented bills/votes/dates/quotes; if only the
+  score exists, explain it's a modeled lean and say the record is limited rather than padding).
+- **Cache bust + freshness:** cache key now includes an `input_fingerprint` (hash of
+  score+evidence, `v:2`), so old thin analyses regenerate once and future ones refresh only when
+  new evidence lands. Fallback string also now reflects vote/answer counts.
+
+**State** (verified locally)
+`bun install` + `bun run lint` — 0 errors (pre-existing warnings only). No `src/` files changed,
+so build/test surface is unaffected; the edge function is Deno (not covered by the app's
+eslint/vitest). Not yet deployed — the function must be redeployed to Supabase to take effect,
+and live output depends on the Lovable AI gateway. Could not exercise the live function from here.
+
+**Next**
+Deploy the `ai-topic-analysis` edge function and spot-check the popup for an *incumbent* with a
+real voting record (e.g. open a House member's profile → Positions → tap **+** on a topic) to
+confirm it now cites specific bills. Note: A.J. Louderback is a challenger with no congressional
+votes, so his Environment & Energy analysis will legitimately stay short — the win shows up where
+vote data exists.
+
 ## 2026-06-28 — Removed the News tab from the candidate profile
 
 **What & why**
