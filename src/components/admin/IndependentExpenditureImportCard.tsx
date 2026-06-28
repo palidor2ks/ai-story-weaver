@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Loader2, Megaphone, Upload, XCircle } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { invokeEdgeFunction } from '@/lib/edgeFunctions';
 import { toast } from 'sonner';
 import Papa from 'papaparse';
 
@@ -135,7 +135,7 @@ export function IndependentExpenditureImportCard({ onImportComplete }: { onImpor
           let retry = 0;
           while (retry < MAX_RETRIES) {
             try {
-              const { data, error } = await supabase.functions.invoke('import-fec-schedule-e-csv', {
+              const { data, error } = await invokeEdgeFunction('import-fec-schedule-e-csv', {
                 body: {
                   rows: batch,
                   cycle,
@@ -209,7 +209,7 @@ export function IndependentExpenditureImportCard({ onImportComplete }: { onImpor
         // Finalize session if user cancelled before the last batch fired isLastBatch
         if (cancelRef.current) {
           try {
-            await supabase.functions.invoke('import-fec-schedule-e-csv', {
+            await invokeEdgeFunction('import-fec-schedule-e-csv', {
               body: { sessionId, finalize: true, failed: s.inserted === 0 },
             });
           } catch (_e) { /* ignore */ }

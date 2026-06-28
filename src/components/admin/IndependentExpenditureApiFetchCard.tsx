@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Cloud, Loader2, Megaphone } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { invokeEdgeFunction } from '@/lib/edgeFunctions';
 import { toast } from 'sonner';
 
 interface ApiResult {
@@ -29,7 +29,7 @@ export function IndependentExpenditureApiFetchCard({ onImportComplete }: { onImp
     setIsFetching(true);
     setResult(null);
     try {
-      const { data, error } = await supabase.functions.invoke('import-independent-expenditures', {
+      const { data, error } = await invokeEdgeFunction('import-independent-expenditures', {
         body: { cycle, min_amount: minAmount, max_pages: maxPages },
       });
       if (error) {

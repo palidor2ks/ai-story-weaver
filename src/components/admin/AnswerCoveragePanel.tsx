@@ -72,7 +72,7 @@ import { DataAccuracyScoreboard } from "@/components/admin/DataAccuracyScoreboar
 import { ScoreTextInline } from "@/components/ScoreText";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from '@/lib/edgeFunctions';
 import { useBackgroundProcessing } from "@/context/BackgroundProcessingContext";
 
 
@@ -316,7 +316,7 @@ export function AnswerCoveragePanel() {
   const handleCivicResearch = async (candidateId: string, name: string) => {
     setCivicResearchingIds(prev => new Set(prev).add(candidateId));
     try {
-      const { error } = await supabase.functions.invoke('populate-civic-answers', {
+      const { error } = await invokeEdgeFunction('populate-civic-answers', {
         body: { candidateId },
       });
       if (error) throw error;
@@ -1604,7 +1604,7 @@ export function AnswerCoveragePanel() {
                       onClick={async () => {
                         toast.info('Syncing Senate LIS IDs...', { description: 'Fetching LIS member IDs from GitHub' });
                         try {
-                          const { data, error } = await supabase.functions.invoke('sync-lis-member-ids');
+                          const { data, error } = await invokeEdgeFunction('sync-lis-member-ids');
                           if (error) throw error;
                           toast.success(`LIS sync complete: ${data.updated} updated, ${data.alreadySet} already set`);
                           refetchCandidates();

@@ -8,8 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { useTopics, useQuestions } from '@/hooks/useCandidates';
 import { useUserTopicScores } from '@/hooks/useProfile';
 import { useAuth } from '@/context/AuthContext';
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { useAnsweredQuestions } from '@/hooks/useQuizAnswers';
 import { ScoreText } from '@/components/ScoreText';
 import { BookOpen, CheckCircle, ArrowRight, PlayCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -22,19 +21,7 @@ export const QuizLibrary = () => {
   const { data: userTopicScores = [] } = useUserTopicScores();
 
   // Fetch user's answered questions
-  const { data: answeredQuestions = [] } = useQuery({
-    queryKey: ['answered_questions', user?.id],
-    queryFn: async () => {
-      if (!user) return [];
-      const { data, error } = await supabase
-        .from('quiz_answers')
-        .select('question_id')
-        .eq('user_id', user.id);
-      if (error) throw error;
-      return data.map(a => a.question_id);
-    },
-    enabled: !!user,
-  });
+  const { data: answeredQuestions = [] } = useAnsweredQuestions(user?.id);
 
   // Get question count per topic
   const getQuestionCount = (topicId: string) => {

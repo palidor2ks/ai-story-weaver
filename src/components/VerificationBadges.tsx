@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ShieldCheck, Vote, ExternalLink, Loader2 } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { invokeEdgeFunction } from '@/lib/edgeFunctions';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
 import { logBadgeEvent } from '@/lib/badges';
@@ -82,7 +82,7 @@ export const VerificationBadges = ({ profile }: VerificationBadgesProps) => {
     try {
       const redirectUri = `${window.location.origin}/profile?idme_callback=true`;
       
-      const { data, error } = await supabase.functions.invoke('verify-identity-idme', {
+      const { data, error } = await invokeEdgeFunction('verify-identity-idme', {
         body: { 
           action: 'get_auth_url',
           redirect_uri: redirectUri
@@ -132,7 +132,7 @@ export const VerificationBadges = ({ profile }: VerificationBadgesProps) => {
         }
       }
 
-      const { data, error } = await supabase.functions.invoke('verify-voter-registration', {
+      const { data, error } = await invokeEdgeFunction('verify-voter-registration', {
         body: {
           first_name: voterForm.firstName,
           last_name: voterForm.lastName,

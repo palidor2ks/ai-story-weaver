@@ -268,12 +268,22 @@ matching reviewer from `CLAUDE.md`'s council. Ordered by ROI-to-risk.
     mixed panels: `TopicReviewPanel` → `useTopicReview` (queries as hooks; bills
     update + scan invoke as plain data fns, useMutation wrappers kept in the panel)
     and `DonorImportPanel` → `src/lib/donorImport.ts` (imperative importer, not
-    react-query, so plain async data helpers). Allowlist: **58 files remaining**.
-  - **Sequencing (next):** the heaviest mutation panels (`CommitteeAliasesPanel`,
-    `QuestionManagementPanel`, `SocialPosts`), then the remaining smaller
-    grandfathered files (dialogs, cards, other pages). Pattern is proven: queries →
-    query hooks, mutations → mutation hooks (or a plain data fn when
-    `onMutate`/`onSettled` drive component state). Route each to `frontend-reviewer`.
+    react-query, so plain async data helpers). Then the three heaviest mutation
+    panels: `CommitteeAliasesPanel` → `useCommitteeAliases`,
+    `QuestionManagementPanel` → `useQuestionManagement`, `SocialPosts` →
+    `useSocialPosts` (queries as hooks; the multi-step writes + edge invokes as
+    mutation hooks / plain data fns; useMutation wrappers kept where callbacks drive
+    component state). Then a 20-file **edge-function** sweep: new
+    `src/lib/edgeFunctions.ts` (`invokeEdgeFunction` — one front door for
+    `functions.invoke`) with the 4 AI-analysis dialogs + 16 invoke-only files routed
+    through it. Allowlist: **34 files remaining**.
+  - **Sequencing (next):** the remaining 34 are `.from()`/auth/storage files. Note
+    some have **multi-line** `await supabase\n.from(...)` (ShareProfileButton,
+    BillSummaryDashboard, CivicOfficialsPanel, CommitteeBreakdown, SocialHandles,
+    BackfillAnswersControl) — reads/writes → hooks. A few use `supabase.auth.*`
+    (ChangePasswordDialog, AIFeedback, VerifyEmail) → needs a small auth helper.
+    Sweep in batches; route each to `frontend-reviewer`. When the allowlist is empty,
+    delete the ratchet's grandfather clause.
 
 ---
 

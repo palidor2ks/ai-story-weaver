@@ -36,7 +36,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { Loader2, Plus, Pencil, Trash2, Shield, Users, FileEdit, UserCheck, Building2, BarChart3, DollarSign, HelpCircle, ExternalLink, AlertTriangle, FileText, Tags, CheckCircle2, Upload, Sparkles, Activity } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from '@/lib/edgeFunctions';
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { QuestionManagementPanel } from "@/components/admin/QuestionManagementPanel";
@@ -174,7 +174,7 @@ export default function Admin() {
   const handleScrapePiscataway = async () => {
     setScrapingPiscataway(true);
     try {
-      const { data, error } = await supabase.functions.invoke('scrape-piscataway-officials', {});
+      const { data, error } = await invokeEdgeFunction('scrape-piscataway-officials', {});
       if (error) throw error;
       const updated = data?.updated ?? 0;
       const total = data?.processed ?? 0;

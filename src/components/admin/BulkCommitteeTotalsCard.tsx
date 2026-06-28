@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Loader2, Landmark } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { invokeEdgeFunction } from '@/lib/edgeFunctions';
 import { toast } from 'sonner';
 
 interface SyncResult {
@@ -42,7 +42,7 @@ export function BulkCommitteeTotalsCard() {
       : [roleSel];
     const toastId = toast.loading(`Syncing FEC totals for up to ${limit} committees (cycle ${cycle})…`);
     try {
-      const { data, error } = await supabase.functions.invoke('sync-committee-totals', {
+      const { data, error } = await invokeEdgeFunction('sync-committee-totals', {
         body: { cycle, limit, roles, onlyMissing },
       });
       if (error) throw error;

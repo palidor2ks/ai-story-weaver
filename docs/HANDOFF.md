@@ -5,6 +5,95 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-28 — Refactor Step 2 (cont.): consolidate quiz_answers reads (4 files)
+
+**What & why**
+Next batch of the front-door sweep. Three screens ran the same `quiz_answers` read; pulled
+them into a shared hook, and removed a dead import.
+
+**The change** (branch `claude/image-prompt-implementation-navk5j`)
+- New `src/hooks/useQuizAnswers.ts`: one `fetchAnsweredQuestionIds` shared by
+  `useAnsweredQuestions` (QuizLibrary) and `useQuizAnswers` (Quiz) — **distinct query keys
+  preserved** (`['answered_questions', uid]` / `['quiz_answers', uid]`), because
+  `useProfile` invalidates both; plus `useRecentAnsweredQuestionIds` for Feed's deduped
+  recent-answers query.
+- `QuizLibrary`, `Quiz`, `Feed` migrated; `AIFeedback` had a **dead** client import (never
+  used) — removed. All 4 dropped from the eslint allowlist (now **30 files remaining**).
+
+**State** (verified)
+`bunx tsc --noEmit` 0 · `bun run lint` 0 errors (155 warnings) · `bun run build` ✓ ·
+`bun test` 146/146. No behavior change.
+
+**Next**
+30 left: read/write `.from()` files (admin dialogs/cards, PartyProfile, PoliticianDashboard,
+Committees, Issues, etc.), `supabase.auth.*` files (ChangePasswordDialog, VerifyEmail, Poll,
+UserProfile, CandidatePositions — want a small auth helper), and `AvatarUpload` (storage).
+Sweep in batches; delete the ratchet grandfather clause when empty.
+
+## 2026-06-28 — Refactor Step 2 (cont.): edge-function front door (invokeEdgeFunction, 20 files)
+
+**What & why**
+Swept the invoke-only grandfathered files. Added a single seam for edge-function calls so
+components/pages stop importing the Supabase client just to call `functions.invoke`.
+
+**The change** (branch `claude/image-prompt-implementation-navk5j`, extends PR #626)
+- New `src/lib/edgeFunctions.ts`: `invokeEdgeFunction(name, options?)` — one front door for
+  `supabase.functions.invoke`. Generic defaults to `any` to match supabase-js's own
+  `invoke<T = any>`, so callers reading `data.foo` behave identically.
+- Migrated **20 invoke-only files** onto it: the 4 AI-analysis dialogs (candidate/bill/
+  recipient/donor) + 16 others (AddressAutocomplete, PositionsMatchList, VerificationBadges,
+  admin AnswerCoveragePanel/Bulk*/CommitteeTopicsPanel/IndependentExpenditure* cards/
+  LocalOfficialsImportPanel, Admin, QuizResults, Unsubscribe, SocialComposer, TikTok/X
+  OAuth connect callbacks). Each dropped its client import; removed from the eslint allowlist
+  (now **34 files remaining**).
+
+**Gotcha for next time**
+The invoke-only detector must catch **multi-line** `await supabase\n  .from(...)`. Files with
+those (ShareProfileButton, BillSummaryDashboard, CivicOfficialsPanel, CommitteeBreakdown,
+SocialHandles, BackfillAnswersControl) are NOT invoke-only — they need read/write hooks and
+were deliberately left for a later batch. Also: `supabase.functions.invoke<T>(...)` call sites
+need the helper's generic (handled).
+
+**State** (verified)
+`bunx tsc --noEmit` 0 · `bun run lint` 0 errors (155 warnings) · `bun run build` ✓ ·
+`bun test` 146/146. No behavior change.
+
+**Next**
+Remaining 34: a mix of `.from()`/auth/storage files (dialogs, cards, pages). Includes the 6
+mixed files noted above + auth-using files (ChangePasswordDialog, AIFeedback, VerifyEmail use
+`supabase.auth.*`). Migrate reads→query hooks, writes→mutation hooks/data fns, auth→a small
+auth helper/context. Sweep in batches; delete the ratchet grandfather clause when empty.
+
+## 2026-06-28 — Refactor Step 2 (cont.): migrate the 3 heavy mutation panels
+
+**What & why**
+Migrated the three heaviest mixed read+write admin panels — the highest-risk remaining
+Step 2 work. Reads → query hooks; multi-step writes/RPCs/edge-invokes → mutation hooks or
+plain data fns; useMutation wrappers + handlers kept in the components where their callbacks
+drive component state (spinners, optimistic edits, dialog/progress).
+
+**The change** (branch `claude/image-prompt-implementation-navk5j`)
+- `CommitteeAliasesPanel` → `src/hooks/useCommitteeAliases.ts` (2 queries + 4 mutations +
+  `classifyCommitteeTopic` invoke fn). Hook added to no-explicit-any warn list (untyped
+  committee_aliases/external_pacs tables, `(supabase as any)`).
+- `QuestionManagementPanel` → `src/hooks/useQuestionManagement.ts` (2 queries +
+  create/update data fns incl. the change-notification fan-out + bulk
+  `generateQuizQuestion`/`insertGeneratedQuestion`).
+- `SocialPosts` → `src/hooks/useSocialPosts.ts` (5 queries + 9 data fns for edge invokes
+  and table writes). Hook in warn list (untyped `stat_payload`).
+- Each removed from the `eslint.config.js` import allowlist (now **55 files remaining**).
+
+**State** (verified)
+`bun run lint` 0 errors (155 warnings) · `bunx tsc --noEmit` 0 · `bun run build` ✓ ·
+`bun test` 146/146. No behavior change. NOTE: not yet pushed / no PR opened yet at time of
+writing — push the branch and open a draft PR.
+
+**Next**
+The remaining ~55 grandfathered files are mostly small (1–3 calls each): AI-analysis dialogs,
+ShareProfileButton, Quiz/QuizResults, Committees, Feed, Issues, Unsubscribe, VerifyEmail, the
+social connect callbacks, etc. Sweep them in batches, removing each from the allowlist, until
+the list is empty (then the ratchet's grandfather clause can be deleted entirely).
+
 ## 2026-06-28 — Refactor Step 2 (cont.): migrate TopicReviewPanel + DonorImportPanel
 
 **What & why**
