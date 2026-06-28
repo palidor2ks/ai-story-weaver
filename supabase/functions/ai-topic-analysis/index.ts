@@ -196,7 +196,7 @@ serve(async (req) => {
 
     // Cache per (candidate, topic) AND per (evidence + viewer-stance) fingerprint, so the
     // analysis regenerates once when new evidence lands or for a different viewer stance.
-    const evidenceFingerprint = await fingerprint({ v: 3, topicScore, evidence, viewerBucket });
+    const evidenceFingerprint = await fingerprint({ v: 4, topicScore, evidence, viewerBucket });
     const cacheKey = {
       kind: 'candidate' as const,
       subject_id: String(candidateId),
@@ -229,20 +229,23 @@ serve(async (req) => {
       });
     }
 
-    const comparisonBlock = viewerScore === null
-      ? `The viewer has not taken the quiz, so do NOT include a personal-alignment paragraph.`
-      : `The viewer's own lean on this topic is ${viewerScore.toFixed(1)} (${viewerLean}). Our match verdict vs. this candidate is ${verdict}. In the final paragraph, address the reader as "you", state plainly whether they ALIGN, DIFFER, or PARTIALLY align with ${candidateName} on this topic, and explain WHY using the specific positions/votes above (e.g. which side each takes), not just the numbers.`;
+    // The optional final "Your match" bullet only when we know the viewer's lean.
+    const matchBulletSpec = viewerScore === null
+      ? ''
+      : `\n- A FINAL bullet starting with "- Your match:" that states ${verdict} and the single main reason (which specific positions drive it), addressing the reader as "you".`;
 
-    const systemInstruction = `You are a non-partisan political analyst writing for a voter deciding how well a candidate matches them on ONE issue. Be detailed, specific, and factual.
+    const systemInstruction = `You are a non-partisan political analyst writing a SHORT, scannable brief for a voter deciding how well a candidate matches them on ONE issue.
 
-Use ONLY: (a) the structured evidence provided in the prompt, and (b) what you can confirm via Google Search about this specific candidate's record or public statements on this topic — prioritising the candidate's official campaign site, government pages, and reputable news. When you use a searched fact, it must be about THIS candidate and THIS topic.
+Use ONLY: (a) the structured evidence in the prompt, and (b) facts you can confirm via Google Search about THIS candidate's record or public statements on THIS topic — prioritise the official campaign site, government pages, and reputable news.
+
+Output EXACTLY this, nothing else:
+- One short lead line (≤ 16 words) stating the candidate's lean on this topic in plain terms. Do NOT put a "-" at the start of this first line.
+- Then 3 to 5 bullets, each on its own line starting with "- " and ≤ 18 words, each citing ONE specific piece of evidence (a vote, sponsorship, public statement, or documented position).${matchBulletSpec}
 
 Hard rules:
 - Do NOT invent or guess bills, votes, vote counts, dates, or quotes. If you cannot verify a specific, describe the documented lean instead.
-- Distinguish concrete record (votes, sponsorships, direct quotes/statements) from inferred/modeled lean. Say which is which.
-- If evidence is thin, say so plainly rather than padding. A shorter honest answer beats an embellished one.
-- Neutral, descriptive tone. Never tell the reader how to vote.
-- Plain prose. No markdown headers, no bullet lists. ~160–220 words.`;
+- Keep the WHOLE brief under ~100 words. No intro or outro paragraphs, no headers, no bold/markdown.
+- Neutral, descriptive tone. Never tell the reader how to vote.`;
 
     const prompt = `Candidate: ${candidateName}, ${candidateOffice}${candidateState ? ', ' + candidateState : ''}, ${candidateParty}
 Topic: ${resolvedTopicName}
@@ -250,11 +253,9 @@ Candidate's overall lean on this topic: ${topicScore === null ? 'unknown' : topi
 
 Structured evidence (${evidenceCount} item${evidenceCount === 1 ? '' : 's'}):
 ${evidence || '(no individually documented positions, votes, or statements — rely on the overall lean and on what Google Search confirms about this candidate; if little is verifiable, say the record is limited.)'}
-
-Write the analysis in three short paragraphs:
-1. What the candidate's lean means in concrete policy terms for ${resolvedTopicName}.
-2. The specific evidence — name the actual votes/sponsorships, public statements (paraphrase, with the source), and documented positions, noting sourced vs. inferred.
-3. ${comparisonBlock}`;
+${viewerScore === null
+  ? '\nWrite the brief now in the required format (one lead line + 3–5 evidence bullets).'
+  : `\nThe viewer's own lean on this topic is ${viewerScore.toFixed(1)} (${viewerLean}); the match verdict vs. this candidate is ${verdict}. Write the brief now in the required format, ending with the "Your match:" bullet.`}`;
 
     let analysis = '';
     let sources: { url: string; title: string }[] = [];

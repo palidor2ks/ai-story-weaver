@@ -5,6 +5,36 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-28 — Per-topic AI analysis confirmed WORKING live; made it concise + bulleted
+
+**What & why**
+After the token-starvation fix deployed (v9), the popup verified working end-to-end (real
+cosponsored bills, votes, public statements, LCV score, and the "You ALIGN with … because"
+comparison, with sources). User feedback: it's too long (overran the prose target and needed
+scrolling) and should be a **concise bullet list**, not a wall of text.
+
+**The change** (branch `claude/analysis-depth-detail-bnulzg`)
+- `supabase/functions/ai-topic-analysis/index.ts`: reworked the prompt from "3 short paragraphs,
+  160–220 words" to a **short lead line + 3–5 bullets (≤18 words each) + an optional
+  "- Your match:" bullet**, whole brief under ~100 words. Bumped cache fingerprint `v:3→v:4` so
+  existing prose analyses regenerate as bullets.
+- `src/components/PositionsMatchList.tsx`: new `AnalysisBody` component parses the brief —
+  lead line as a `<p>`, `- `/`• ` lines as a bulleted `<ul>` (red dots), and the "Your match:"
+  line pulled out into a highlighted navy footer chip. Falls back to plain text if no bullets
+  (e.g. the data-only fallback string).
+
+**State** (verified locally)
+`bun run lint` 0 errors · `bun run build` succeeds · `bun run test` 144/144. Pending deploy
+(merge → auto-deploy). The function is confirmed working in prod as of v9; this is purely a
+format/length change. The scroll container in the dialog is unchanged — concise content just
+means far less scrolling.
+
+**Next**
+Deploy + re-open a topic popup: expect a tight bulleted brief with a highlighted "Your match"
+line. If the model occasionally returns prose without "- " markers, `AnalysisBody` still renders
+it as a paragraph (no breakage). Possible future polish: cap source-resolution latency
+(skipValidation) since generation still takes ~10–25s first time.
+
 ## 2026-06-28 — Fixed the real cause (token starvation) + migrated ai-policy-card-positions to direct Gemini
 
 **What & why**
