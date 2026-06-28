@@ -197,6 +197,39 @@ interface TopicAnalysis {
   sources?: Array<{ url: string; title: string }>;
 }
 
+// Render the model's brief: a short lead line + bullet list. The "Your match:" bullet (if any)
+// is pulled out and shown as a highlighted footer line. Falls back to plain text if the model
+// didn't return bullets (e.g. the data-only fallback string).
+const AnalysisBody = ({ text }: { text: string }) => {
+  const lines = text.split('\n').map((l) => l.trim().replace(/\*\*/g, '')).filter(Boolean);
+  const bullets = lines.filter((l) => /^[-•]\s/.test(l)).map((l) => l.replace(/^[-•]\s*/, ''));
+  const lead = lines.filter((l) => !/^[-•]\s/.test(l)).join(' ');
+
+  const matchIdx = bullets.findIndex((b) => /^your match\b/i.test(b));
+  const matchLine = matchIdx >= 0 ? bullets.splice(matchIdx, 1)[0] : null;
+
+  return (
+    <div className="py-1 space-y-2.5">
+      {lead && <p className="text-[14px] text-poli-body leading-relaxed">{lead}</p>}
+      {bullets.length > 0 && (
+        <ul className="space-y-1.5">
+          {bullets.map((b, i) => (
+            <li key={i} className="relative pl-4 text-[14px] text-poli-body leading-relaxed">
+              <span className="absolute left-0 top-0 text-poli-red">•</span>
+              {b}
+            </li>
+          ))}
+        </ul>
+      )}
+      {matchLine && (
+        <p className="mt-1 rounded-lg bg-poli-navy/5 px-3 py-2 text-[13px] font-medium text-poli-navy leading-relaxed">
+          {matchLine}
+        </p>
+      )}
+    </div>
+  );
+};
+
 const TopicAnalysisDialog = ({ candidateId, candidateName, topic, onClose }: TopicAnalysisDialogProps) => {
   const { data, isLoading, isError } = useQuery({
     // userScore is part of the key so the comparison re-fetches if the viewer's stance changes.
@@ -235,9 +268,7 @@ const TopicAnalysisDialog = ({ candidateId, candidateName, topic, onClose }: Top
           <p className="text-sm text-poli-dim py-4">Couldn&apos;t load the analysis. Please try again.</p>
         ) : (
           <>
-            <p className="text-[14px] text-poli-body leading-relaxed whitespace-pre-wrap py-1">
-              {data?.analysis}
-            </p>
+            <AnalysisBody text={data?.analysis ?? ''} />
             {data?.sources && data.sources.length > 0 && (
               <div className="mt-3 pt-3 border-t border-[rgba(20,23,58,0.08)]">
                 <p className="font-mono-label text-[10px] tracking-[1.5px] text-poli-muted mb-1.5">
