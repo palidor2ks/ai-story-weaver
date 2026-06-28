@@ -5,6 +5,34 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-28 — Refactor Step 2 (cont.): migrate 3 admin panels (reads + mutations)
+
+**What & why**
+Continuing the front-door migration. The audit's "admin read-heavy" panels turned out to
+contain writes/RPCs — and clearing a file from the allowlist requires moving ALL its
+Supabase usage (the guard bans the client import outright). So these moved reads AND
+mutations into hooks. Did the three smaller, self-contained panels first.
+
+**The change** (branch `claude/image-prompt-implementation-navk5j`, extends PR #624)
+- `HiddenStatesPanel` → `src/hooks/useHiddenStatesAdmin.ts` (2 queries + toggle/bulk
+  mutations; moved the `STATES` list; dropped an `(e: any)` → `Error`).
+- `DuplicatePersonsPanel` → `src/hooks/useDuplicatePersons.ts` (2 queries + 4 RPC mutations
+  with shared invalidation helper).
+- `AdminUsersPanel` → `src/hooks/useAdminUsers.ts` (3 queries + a plain `setUserAdminRole`
+  data fn; the `useMutation` wrapper stays in the panel because its `onMutate`/`onSettled`
+  set the per-row pending state — keeps that UX identical).
+- Removed all three from the `eslint.config.js` allowlist (now **60 files remaining**).
+
+**State** (verified)
+`bun run lint` 0 errors (156 warnings, one fewer after the `any` removal) ·
+`bunx tsc --noEmit` 0 · `bun run build` ✓ · `bun test` 146/146. No behavior change.
+
+**Next**
+Remaining mixed read+write admin panels, smaller first: `TopicReviewPanel`,
+`DonorImportPanel`, then the heaviest (`CommitteeAliasesPanel`, `QuestionManagementPanel`,
+`SocialPosts`). Pattern proven: queries → hooks, mutations → mutation hooks (or plain data
+fn when callbacks drive component state). Remove each from the allowlist as migrated.
+
 ## 2026-06-28 — Refactor Step 2 (cont.): migrate the 3 read-only user-facing pages
 
 **What & why**

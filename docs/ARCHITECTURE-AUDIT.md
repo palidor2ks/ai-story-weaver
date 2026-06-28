@@ -260,13 +260,18 @@ matching reviewer from `CLAUDE.md`'s council. Ordered by ROI-to-risk.
   - **Done:** the guard itself + the three read-only user-facing pages migrated —
     `ComparePanel` → `useCompareFinance`, `CandidateProfile` →
     `useDonorAliasNames`, `TopSpenders` → `useTopSpenders`, `DonorProfile` →
-    `useDonorProfile`. Each removed from the allowlist. Allowlist: **63 files
-    remaining**.
-  - **Sequencing (next):** admin read-heavy panels (`TopicReviewPanel`,
-    `HiddenStatesPanel`, `DuplicatePersonsPanel`, `AdminUsersPanel`,
-    `DonorImportPanel`), then the admin mutation panels (`CommitteeAliasesPanel`,
-    `QuestionManagementPanel`, `SocialPosts`) last (they need `useMutation` + cache
-    invalidation — highest behavior-change risk). Route each diff to
+    `useDonorProfile`. Then 3 admin panels migrated **including their mutations**
+    (the "read-heavy" admin panels turned out to contain writes/RPCs, so clearing
+    a file from the allowlist requires moving mutations too):
+    `HiddenStatesPanel` → `useHiddenStatesAdmin`, `DuplicatePersonsPanel` →
+    `useDuplicatePersons`, `AdminUsersPanel` → `useAdminUsers`. Allowlist: **60
+    files remaining**.
+  - **Sequencing (next):** the remaining mixed read+write admin panels, smaller
+    first — `TopicReviewPanel` (746 LOC, 5 reads + 2 updates + 2 invoke) and
+    `DonorImportPanel` (1009 LOC) — then the heaviest mutation panels
+    (`CommitteeAliasesPanel`, `QuestionManagementPanel`, `SocialPosts`). Pattern is
+    proven: queries → query hooks, mutations → mutation hooks (or a plain data fn
+    when `onMutate`/`onSettled` drive component state). Route each to
     `frontend-reviewer`.
 
 ---
