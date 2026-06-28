@@ -14,7 +14,7 @@ import { RepresentativeComparisonCard } from '@/components/RepresentativeCompari
 import { unifiedCandidateNameKey } from '@/hooks/useUnifiedCandidates';
 import { formatRunningForOffice } from '@/lib/officeLabel';
 import { BRAND_HOST } from '@/lib/brand';
-import { supabase } from '@/integrations/supabase/client';
+import { invokeEdgeFunction } from '@/lib/edgeFunctions';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { formatScore, getScoreLabel } from '@/lib/scoreFormat';
@@ -149,7 +149,7 @@ export const QuizResults = () => {
           score: ts.score,
         }));
 
-        const { data, error } = await supabase.functions.invoke('user-profile-analysis', {
+        const { data, error } = await invokeEdgeFunction('user-profile-analysis', {
           body: {
             overallScore: profile.overall_score,
             topicScores: topicScoresForAI,

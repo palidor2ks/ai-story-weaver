@@ -3,7 +3,7 @@ import { Navigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useAdminRole } from "@/hooks/useAdminRole";
 import { LoadingScreen } from "@/components/LoadingScreen";
-import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from '@/lib/edgeFunctions';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -52,7 +52,7 @@ export default function SocialComposer() {
     setIsGenerating(true);
     try {
       const prompt = `${promptsByType[contentType]}\nTopic: ${topic}\nTone: ${tone}\nReturn plain text only.`;
-      const { data: res, error } = await supabase.functions.invoke("generate-poll-questions", {
+      const { data: res, error } = await invokeEdgeFunction("generate-poll-questions", {
         body: { prompt, type: "mc", topic },
       });
       if (error) throw error;
@@ -83,7 +83,7 @@ export default function SocialComposer() {
     try {
       const results = await Promise.all(selectedPlatforms.map(async (platform) => {
         if (platform === "x") {
-          const { data: res, error } = await supabase.functions.invoke("x-post-tweet", {
+          const { data: res, error } = await invokeEdgeFunction("x-post-tweet", {
             body: { text: generated.trim() },
           });
           if (error) throw new Error(`x: ${error.message}`);
@@ -91,7 +91,7 @@ export default function SocialComposer() {
           return { platform, ok: true };
         }
 
-        const { data: res, error } = await supabase.functions.invoke("post-poll-to-social", {
+        const { data: res, error } = await invokeEdgeFunction("post-poll-to-social", {
           body: {
             caption: generated.trim(),
             mode: "manual",
