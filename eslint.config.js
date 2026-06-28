@@ -94,7 +94,6 @@ export default tseslint.config(
     // existed. Migrate one per PR (extract its queries into src/hooks/) and delete
     // its entry here. When this list is empty, the front-door migration is done.
     files: [
-      "src/components/AIFeedback.tsx",
       "src/components/AvatarUpload.tsx",
       "src/components/BadgeAwardToast.tsx",
       "src/components/CandidatePositions.tsx",
@@ -117,13 +116,10 @@ export default tseslint.config(
       "src/components/admin/VendorRefundsPanel.tsx",
       "src/pages/AdminUserProfileView.tsx",
       "src/pages/Committees.tsx",
-      "src/pages/Feed.tsx",
       "src/pages/Issues.tsx",
       "src/pages/PartyProfile.tsx",
       "src/pages/PoliticianDashboard.tsx",
       "src/pages/Poll.tsx",
-      "src/pages/Quiz.tsx",
-      "src/pages/QuizLibrary.tsx",
       "src/pages/UserProfile.tsx",
       "src/pages/VerifyEmail.tsx",
       "src/pages/admin/SocialHandles.tsx",
