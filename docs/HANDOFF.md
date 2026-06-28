@@ -5,6 +5,33 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-28 — Architecture audit + ranked refactoring roadmap (docs only, no code changed)
+
+**What & why**
+User shared the "senior engineer joins an unfamiliar codebase" prompt and asked to implement it.
+Reverse-engineered the architecture/data flow and identified bad-architecture / duplicate-logic /
+perf / scalability / maintainability issues. When asked for scope, user chose **written audit
+only** (prioritize before touching code), so this session changed **no functionality and no app
+code** — it added one doc.
+
+**The change** (branch `claude/image-prompt-implementation-navk5j`)
+- New `docs/ARCHITECTURE-AUDIT.md`: clean architecture breakdown, evidence-backed problem areas,
+  and a ranked, all-or-nothing-safe refactoring roadmap. Every claim has a reproduce-it command.
+- Headline findings: (P1) "one front door" broken — **67 files / 201 raw `.from()`** + 26
+  useEffect-fetch components + direct `functions.invoke` in render paths; (P1) `conduits.ts` and
+  `candidateName.ts` are duplicated in `src/lib` **and** `_shared` and have **already drifted**
+  (different export names/scope — live data-accuracy hazard); (P2) god-files (AnswerCoveragePanel
+  3,530 LOC, fetch-fec-donors 1,834 LOC, etc.); (P3) 259 `console.*`, 46 `: any`.
+
+**State** (verified)
+Docs-only change; no lint/build/test impact (nothing in `src/` or `supabase/` touched). Evidence
+numbers in the audit are reproducible via the Appendix commands.
+
+**Next**
+Implement **Step 1** from the roadmap: converge the drifted `conduits.ts` / `candidateName.ts`
+into one canonical source (re-export or generate the Deno copy) + a test that fails if they
+diverge. Route that diff to `data-accuracy-verifier` (conduit rules gate donor dollars).
+
 ## 2026-06-28 — Per-topic AI analysis confirmed WORKING live; made it concise + bulleted
 
 **What & why**
