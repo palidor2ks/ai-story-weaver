@@ -6,9 +6,11 @@
 // donor lists — the individuals behind the money are listed instead, and no
 // aggregated conduit amount is shown (product decision, 2026-06-12).
 //
-// Keep the list in sync with supabase/functions/_shared/conduits.ts (edge
-// runtime copy — Vite and Deno cannot share a module).
-
+// The edge runtime keeps its own copy of this list (KNOWN_CONDUITS in
+// supabase/functions/_shared/conduits.ts) because Vite and Deno cannot share a
+// module. The two lists MUST cover the same set of processors — a drift-guard
+// test in src/lib/conduits.test.ts locks them together so CI fails if they
+// diverge.
 export const CONDUIT_NAMES = ['WINRED', 'ACTBLUE', 'DEMOCRACY ENGINE'];
 
 export interface ConduitCheckable {

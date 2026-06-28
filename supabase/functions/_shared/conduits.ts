@@ -11,9 +11,10 @@
 //      Conduits are payment processors: the money belongs to the individual
 //      donors, who are itemized on their own countable lines.
 //
-// Keep this list in sync with src/lib/conduits.ts (frontend copy — Vite and
-// Deno cannot share a module).
-
+// The frontend keeps its own copy of this list (CONDUIT_NAMES in
+// src/lib/conduits.ts) because Vite and Deno cannot share a module. The two
+// lists MUST cover the same set of processors — a drift-guard test in
+// src/lib/conduits.test.ts locks them together so CI fails if they diverge.
 export const KNOWN_CONDUITS = ['ACTBLUE', 'WINRED', 'DEMOCRACY ENGINE'];
 
 export function isKnownConduitOrg(name: string | null | undefined): boolean {

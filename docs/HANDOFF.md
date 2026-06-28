@@ -5,6 +5,63 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-28 — Refactor Step 1: conduit-list cross-runtime drift guard (no behavior change)
+
+**What & why**
+First implementation step off the architecture audit. Reading the duplicated modules in
+full corrected the audit's earlier overstatement: `candidateName.ts` is NOT drifting —
+its two runtime copies are byte-identical in logic and already locked by a drift-guard
+test in `candidateName.test.ts`. The genuine gap was `conduits.ts`: the frontend
+(`CONDUIT_NAMES`) and edge (`KNOWN_CONDUITS`) copies of the conduit-org name list had no
+test locking them together, so adding a processor to one would silently skip the other
+(UI hides a donor the ETL still counts, or vice-versa).
+
+**The change** (branch `claude/image-prompt-implementation-navk5j`)
+- `src/lib/conduits.test.ts`: new drift-guard test — imports both runtime copies, asserts
+  `CONDUIT_NAMES` and `KNOWN_CONDUITS` cover the same set and that
+  `isConduitName`/`isKnownConduitOrg` agree across a fixture set (mirrors candidateName).
+- `src/lib/conduits.ts` + `supabase/functions/_shared/conduits.ts`: replaced the manual
+  "keep in sync" comments with pointers to the drift-guard test. **No logic changed.**
+- `docs/ARCHITECTURE-AUDIT.md`: corrected the duplicate-logic finding (P1→P2), noted
+  candidateName was already guarded, marked Step 1 done, pointed Next at Step 2.
+
+**State** (verified)
+`bun run lint` 0 errors · `bun run build` ✓ · `bun test` 146/146 (was 144; +2 new). Pure
+test + comment + doc change — no functionality touched.
+
+**Next**
+Step 2 from the audit: establish the data front door — migrate the worst raw-`.from()`
+offenders (`CommitteeAliasesPanel`, `DonorProfile`, `QuestionManagementPanel`, …) behind
+hooks one file per commit, plus an eslint guard banning new raw queries in
+`components/`/`pages/`. Route to `frontend-reviewer`.
+
+## 2026-06-28 — Architecture audit + ranked refactoring roadmap (docs only, no code changed)
+
+**What & why**
+User shared the "senior engineer joins an unfamiliar codebase" prompt and asked to implement it.
+Reverse-engineered the architecture/data flow and identified bad-architecture / duplicate-logic /
+perf / scalability / maintainability issues. When asked for scope, user chose **written audit
+only** (prioritize before touching code), so this session changed **no functionality and no app
+code** — it added one doc.
+
+**The change** (branch `claude/image-prompt-implementation-navk5j`)
+- New `docs/ARCHITECTURE-AUDIT.md`: clean architecture breakdown, evidence-backed problem areas,
+  and a ranked, all-or-nothing-safe refactoring roadmap. Every claim has a reproduce-it command.
+- Headline findings: (P1) "one front door" broken — **67 files / 201 raw `.from()`** + 26
+  useEffect-fetch components + direct `functions.invoke` in render paths; (P1) `conduits.ts` and
+  `candidateName.ts` are duplicated in `src/lib` **and** `_shared` and have **already drifted**
+  (different export names/scope — live data-accuracy hazard); (P2) god-files (AnswerCoveragePanel
+  3,530 LOC, fetch-fec-donors 1,834 LOC, etc.); (P3) 259 `console.*`, 46 `: any`.
+
+**State** (verified)
+Docs-only change; no lint/build/test impact (nothing in `src/` or `supabase/` touched). Evidence
+numbers in the audit are reproducible via the Appendix commands.
+
+**Next**
+Implement **Step 1** from the roadmap: converge the drifted `conduits.ts` / `candidateName.ts`
+into one canonical source (re-export or generate the Deno copy) + a test that fails if they
+diverge. Route that diff to `data-accuracy-verifier` (conduit rules gate donor dollars).
+
 ## 2026-06-28 — Per-topic analysis: drop inline citation noise + tie each bullet to the user's lean
 
 **What & why**
