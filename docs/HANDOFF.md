@@ -5,6 +5,46 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-28 — Per-topic "AI Analysis": switched to direct Google Gemini (grounding + URL context), added statements + viewer comparison
+
+**What & why**
+After the previous PR (#614/#616) users STILL saw only the one-line fallback (screenshot:
+Frank Pallone · Economy & Work → "…Based on 10 votes/sponsorships on record."). Root cause found
+by inspection + DB check: `ai_analysis_cache` has **zero** `topic-deep` rows, i.e. the AI call
+**never once succeeded** — every view falls through to the (uncached) fallback. The function
+called the **Lovable AI gateway** with model `google/gemini-3-flash-preview` (a *preview* model,
+also used by `ai-policy-card-positions`); that path was failing for every call. The repo already
+has a **direct Google Gemini** front door (`supabase/functions/_shared/gemini-research.ts`,
+`callGeminiGrounded`, using `GOOGLE_AI_API_KEY`) with Google Search **grounding** + **URL
+context** — which is what the user wanted ("use google… grounding and url… deep and sourced").
+
+**The change** (branch `claude/analysis-depth-detail-bnulzg`)
+- `supabase/functions/ai-topic-analysis/index.ts` — rewritten to call `callGeminiGrounded`
+  (model `gemini-2.5-flash`, `grounding:true`, `urlContext:true`, maxOutputTokens 2048) instead
+  of the Lovable gateway. Now also pulls **`member_statements`** (5,681 rows; `topic_tags` use
+  the same consolidated topic IDs) filtered to candidate+topic as cited public-statement
+  evidence, alongside the existing votes + answers. Accepts the viewer's `userScore` and adds a
+  3rd paragraph explaining **ALIGN/DIFFER/PARTIAL vs. you and why** (verdict mirrors
+  `src/lib/stance.ts`). Returns resolved/validated **`sources[]`** (deep links). Cache key
+  fingerprint bumped to `v:3` and includes a coarse viewer-stance bucket (prog/mod/cons/none) so
+  cost stays bounded. Anti-fabrication rules kept/strengthened.
+- `src/components/PositionsMatchList.tsx` — passes the viewer's topic `userScore` into the
+  dialog + request, keys the query on it, and renders a **SOURCES** list of citation links.
+
+**State** (verified locally)
+`bun run lint` 0 errors · `bun run build` succeeds · `bun run test` 144/144 pass. NOT yet
+deployed to prod — needs the `ai-topic-analysis` edge function redeployed (merge-to-main
+auto-deploy, or `deploy_edge_function`). Could not exercise the live Gemini call from here.
+Depends on `GOOGLE_AI_API_KEY` (or `GOOGLE_GEMINI_API_KEY`) being set — already used by ~10 other
+functions, so it should be present.
+
+**Next**
+Deploy + open an incumbent's profile → Positions → tap **+**: expect a 3-paragraph, sourced
+analysis with a "you align/differ because…" paragraph and a SOURCES list. This is AI + live web
+grounding on political claims — worth a content-provenance / data-accuracy review pass before
+fully trusting it. Note the Lovable-gateway/`gemini-3-flash-preview` failure likely also breaks
+`ai-policy-card-positions` (the one-line summaries) — consider migrating it the same way.
+
 ## 2026-06-28 — Deepened the per-topic "AI Analysis" (+ button) on the candidate profile
 
 **What & why**
