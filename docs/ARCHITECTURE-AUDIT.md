@@ -98,28 +98,40 @@ are scattered across the UI; caching is inconsistent (some data cached by Query,
 some refetched on every mount); and there's no single place to add Zod validation
 of returned rows. This is the biggest scalability/maintainability tax in the repo.
 
-### 🔴 P1 — Duplicate logic that has already drifted (duplicate logic + correctness risk)
+### 🟠 P2 — Cross-runtime duplicated modules, only partially guarded (duplicate logic)
 
-Two modules exist in **both** `src/lib/` and `supabase/functions/_shared/` because
-Vite and Deno can't share a module — but the copies have **diverged**, not just
-lagged:
+> **Correction (2026-06-28, after reading the files in full):** an earlier draft of
+> this audit listed this as P1 and claimed *both* duplicated modules had silently
+> drifted. That was based on a crude `diff`/export-list comparison and overstated
+> the risk. The accurate picture is below; the one genuine gap has since been
+> closed (see "Resolved").
 
-- **`conduits.ts`** — the frontend copy exports `CONDUIT_NAMES`
-  (`['WINRED','ACTBLUE','DEMOCRACY ENGINE']`) with an `isConduitName` helper and a
-  `ConduitCheckable` interface; the edge copy exports `KNOWN_CONDUITS`
-  (`['ACTBLUE','WINRED','DEMOCRACY ENGINE']`) and adds memo-line / "EARMARKED" /
-  "SEE BELOW" rules. **Same concern, different names, different scope.** A change to
-  conduit handling on one side silently won't apply on the other — a live
-  data-accuracy hazard (priority #1 in the roadmap).
-- **`candidateName.ts`** — `src/lib` copy is 118 LOC and exports
-  `formatCandidateName` **plus** a `toDisplayName` alias; the `_shared` copy is 88
-  LOC and exports only `formatCandidateName`. Display formatting can differ between
-  what the UI shows and what edge functions persist/caption.
+Two concerns are duplicated across `src/lib/` and `supabase/functions/_shared/`
+because Vite and Deno can't share a module without a build step:
 
-There is also intra-`src` duplication (e.g. `conduits.ts` + `conduits.test.ts`
-appear in both `src/lib/` and are referenced from `src/lib` while logic overlaps
-`lib/candidateName.ts` ↔ `lib/`), and the comment "keep in sync manually" is doing
-load-bearing work no tooling enforces.
+- **`candidateName.ts` — NOT actually drifting.** The two copies are byte-identical
+  in logic; the only difference is a frontend-only `toDisplayName` alias (the edge
+  runtime doesn't need it). Crucially, `src/lib/candidateName.test.ts` already
+  contains a **drift guard** that imports *both* copies and asserts identical output
+  across a shared fixture table — so CI fails if they ever diverge. This is the
+  pattern to copy, not a problem to fix.
+- **`conduits.ts` — genuinely two different modules** that happen to share a name.
+  The frontend copy (`CONDUIT_NAMES` + `isConduitName` + `isConduitDonor`) is for
+  donor *display*; the edge copy (`KNOWN_CONDUITS` + `isKnownConduitOrg` + memo /
+  "EARMARKED" / "SEE BELOW" rules + `shouldCountDonorLine`) is for FEC
+  *aggregation*. Each has its own test file. The real gap was the **shared
+  conduit-org name list**: it lived in both files with no test locking them
+  together, so adding a new processor to one list would silently skip the other —
+  the UI could hide a donor the ETL still counts (or vice-versa).
+
+**Resolved (this branch):** added a drift-guard test in `src/lib/conduits.test.ts`
+(mirroring `candidateName.test.ts`) asserting `CONDUIT_NAMES` and `KNOWN_CONDUITS`
+cover the same set and that `isConduitName`/`isKnownConduitOrg` agree across a
+fixture set. Sync comments in both files now point to that test instead of relying
+on a manual "keep in sync" note. **No logic changed.**
+
+**Remaining principle:** any *new* cross-runtime copy should ship with a drift
+guard like these two, rather than a hand-sync comment no tooling enforces.
 
 ### 🟠 P2 — God-files (maintainability + review risk + render performance)
 
@@ -235,12 +247,16 @@ matching reviewer from `CLAUDE.md`'s council. Ordered by ROI-to-risk.
 
 ---
 
-## 5. Suggested next action
+## 5. Progress & suggested next action
 
-Pick **Step 1** (converge the drifted `conduits.ts`/`candidateName.ts`) as the first
-implementation PR: it's small, fully testable, removes a live data-accuracy hazard,
-and proves the "no functionality change" discipline before tackling the larger
-front-door migration in Step 2.
+- **Step 1 — DONE (this branch).** Added the missing conduit-list drift guard
+  (`src/lib/conduits.test.ts`) + sync-comment fixes; confirmed `candidateName.ts`
+  was already drift-guarded and needed no change. No functionality changed.
+- **Next: Step 2** — establish the data front door and migrate the worst offenders
+  one file per commit (`CommitteeAliasesPanel`, `DonorProfile`,
+  `QuestionManagementPanel`, …), plus an eslint guard so new raw queries can't enter
+  `components/`/`pages/`. This is the highest-leverage scalability fix; route to
+  `frontend-reviewer`.
 
 ---
 
