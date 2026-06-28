@@ -56,6 +56,8 @@ export default tseslint.config(
       "src/hooks/useDonorAliases.ts",
       "src/hooks/useDonorsPaginated.ts",
       "src/hooks/usePolls.ts",
+      // SocialPost.stat_payload is an untyped JSON column (any), like the hooks above.
+      "src/hooks/useSocialPosts.ts",
       "src/hooks/useRepComparison.ts",
     ],
     rules: {
@@ -143,7 +145,6 @@ export default tseslint.config(
       "src/pages/VerifyEmail.tsx",
       "src/pages/admin/SocialComposer.tsx",
       "src/pages/admin/SocialHandles.tsx",
-      "src/pages/admin/SocialPosts.tsx",
       "src/pages/admin/TikTokConnect.tsx",
       "src/pages/admin/TikTokConnectCallback.tsx",
       "src/pages/admin/XComposer.tsx",

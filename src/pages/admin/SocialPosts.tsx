@@ -1,10 +1,31 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, Link } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Loader2, Send, Sparkles, X, ImageIcon, ExternalLink, RefreshCw, CheckCircle2, Clock, Play } from 'lucide-react';
 
-import { supabase } from '@/integrations/supabase/client';
+import {
+  PLATFORMS,
+  useSettings,
+  useSocialPosts,
+  usePlatformRows,
+  useRaceOptions,
+  useRaceCandidates,
+  draftRaceComparison,
+  pickDailyStatCard,
+  generateSocialCaption,
+  renderSocialCard,
+  postSocialCard,
+  updateSocialPostSettings,
+  updateSocialPostPlatform,
+  updateSocialPostShare,
+  rejectSocialPost,
+  type Platform,
+  type SocialPost,
+  type PlatformRow,
+  type Settings,
+  type RaceCandidate,
+} from '@/hooks/useSocialPosts';
 import { useAuth } from '@/context/AuthContext';
 import { useAdminRole } from '@/hooks/useAdminRole';
 import { Header } from '@/components/Header';
@@ -26,24 +47,6 @@ import { uploadShareCard } from '@/lib/shareUpload';
 import { useCandidateShareCardData } from '@/hooks/useCandidateShareCardData';
 import { usePolicyCardPositions } from '@/hooks/usePolicyCardPositions';
 import { useAllCandidateTopicScores } from '@/hooks/useAllCandidateTopicScores';
-
-const PLATFORMS = ['x', 'facebook', 'instagram', 'tiktok'] as const;
-type Platform = (typeof PLATFORMS)[number];
-
-interface SocialPost {
-  id: string;
-  subject_type: string;
-  subject_id: string;
-  subject_label: string | null;
-  stat_key: string | null;
-  stat_payload: any;
-  image_url: string | null;
-  share_url: string | null;
-  status: string;
-  posted_at: string | null;
-  created_at: string;
-  rejected_reason: string | null;
-}
 
 const SUBJECT_TYPE_LABELS: Record<string, string> = {
   rep_profile: 'Rep Profile',
@@ -67,31 +70,6 @@ const isServerRenderedType = (t: string | null | undefined): boolean =>
 const isSignupTeaserType = (t: string | null | undefined): boolean => t === 'signup_teaser';
 const isPolicyPositionsType = (t: string | null | undefined): boolean => t === 'policy_positions';
 
-interface PlatformRow {
-  id: string;
-  post_id: string;
-  platform: Platform;
-  caption: string | null;
-  enabled: boolean;
-  status: string;
-  external_url: string | null;
-  error_message: string | null;
-  posted_at: string | null;
-}
-
-interface Settings {
-  id: number;
-  mode: 'manual' | 'auto';
-  post_time_local: string;
-  timezone: string;
-  auto_approve_after_hours: number;
-  x_enabled: boolean;
-  facebook_enabled: boolean;
-  instagram_enabled: boolean;
-  tiktok_enabled: boolean;
-  recent_skip_days: number;
-}
-
 // ---------- Offscreen card capture ----------
 
 
@@ -109,86 +87,6 @@ async function captureAndUpload(
     targetUrl: profileUrl,
     ogTitle: `${data.candidateName} — PoliPulse`,
     ogDescription: `${data.candidateOffice}${data.candidateParty ? ' • ' + data.candidateParty : ''}`,
-  });
-}
-
-// ---------- Hooks ----------
-function useSettings() {
-  return useQuery({
-    queryKey: ['social-post-settings'],
-    queryFn: async (): Promise<Settings> => {
-      const { data, error } = await supabase.from('social_post_settings').select('*').eq('id', 1).single();
-      if (error) throw error;
-      return data as Settings;
-    },
-  });
-}
-
-function useSocialPosts(status: 'pending_review' | 'posted_or_failed') {
-  return useQuery({
-    queryKey: ['social-posts', status],
-    queryFn: async () => {
-      let q = supabase.from('social_posts').select('*').order('created_at', { ascending: false });
-      if (status === 'pending_review') q = q.eq('status', 'pending_review');
-      else q = q.in('status', ['posted', 'failed', 'rejected']);
-      const { data, error } = await q.limit(50);
-      if (error) throw error;
-      return (data ?? []) as SocialPost[];
-    },
-    refetchInterval: 30_000,
-  });
-}
-
-function usePlatformRows(postIds: string[]) {
-  return useQuery({
-    queryKey: ['social-post-platforms', postIds],
-    enabled: postIds.length > 0,
-    queryFn: async () => {
-      const { data, error } = await supabase.from('social_post_platforms').select('*').in('post_id', postIds);
-      if (error) throw error;
-      return (data ?? []) as PlatformRow[];
-    },
-  });
-}
-
-interface RaceOption {
-  state: string;
-  office: string;
-  year: number;
-  candidate_count: number;
-}
-
-interface RaceCandidate {
-  id: string;
-  name: string;
-  party: string;
-  incumbent: boolean;
-  raised: number;
-  has_image: boolean;
-}
-
-function useRaceOptions() {
-  return useQuery({
-    queryKey: ['race-options'],
-    queryFn: async (): Promise<RaceOption[]> => {
-      const { data, error } = await supabase.rpc('get_race_options');
-      if (error) throw error;
-      return (data ?? []) as RaceOption[];
-    },
-    staleTime: 5 * 60_000,
-  });
-}
-
-function useRaceCandidates(state: string, office: string, year: string, enabled: boolean) {
-  return useQuery({
-    queryKey: ['race-candidates', state, office, year],
-    enabled: enabled && !!state && !!office && !!year,
-    queryFn: async (): Promise<RaceCandidate[]> => {
-      const { data, error } = await supabase.rpc('get_race_candidates', { _state: state, _office: office, _year: Number(year) });
-      if (error) throw error;
-      return (data ?? []) as RaceCandidate[];
-    },
-    staleTime: 5 * 60_000,
   });
 }
 
@@ -233,7 +131,7 @@ function RaceComparisonGenerator() {
     mutationFn: async () => {
       const body: Record<string, unknown> = { state, office, year: Number(year), mode };
       if (mode === 'pick') { body.candidate_a = candA; body.candidate_b = candB; }
-      const { data, error } = await supabase.functions.invoke('draft-race-comparison', { body });
+      const { data, error } = await draftRaceComparison(body);
       if (error) throw error;
       if ((data as { error?: string } | undefined)?.error) throw new Error(JSON.stringify((data as { error: unknown }).error));
       return data as { ok?: boolean; created?: { label: string }; skipped?: string };
@@ -342,31 +240,14 @@ function SettingsTab() {
   useEffect(() => { if (settings) setLocal(settings); }, [settings]);
 
   const save = useMutation({
-    mutationFn: async (s: Settings) => {
-      const { error } = await supabase.from('social_post_settings').update({
-        mode: s.mode,
-        post_time_local: s.post_time_local,
-        timezone: s.timezone,
-        auto_approve_after_hours: s.auto_approve_after_hours,
-        x_enabled: s.x_enabled,
-        facebook_enabled: s.facebook_enabled,
-        instagram_enabled: s.instagram_enabled,
-        tiktok_enabled: s.tiktok_enabled,
-        recent_skip_days: s.recent_skip_days,
-      }).eq('id', 1);
-      if (error) throw error;
-    },
+    mutationFn: (s: Settings) => updateSocialPostSettings(s),
     onSuccess: () => { toast.success('Settings saved'); qc.invalidateQueries({ queryKey: ['social-post-settings'] }); },
     onError: (e: Error) => toast.error(e.message),
   });
 
   const generate = useMutation({
     mutationFn: async (subjectType: string) => {
-      // Use functions.invoke so the admin's session token is attached — the
-      // function authorizes cron/service callers OR an authenticated admin.
-      const { data, error } = await supabase.functions.invoke('pick-daily-stat-card', {
-        body: { force: true, subject_type: subjectType },
-      });
+      const { data, error } = await pickDailyStatCard(subjectType);
       if (error) throw error;
       if ((data as { error?: string } | undefined)?.error) throw new Error((data as { error: string }).error);
       return data as { ok?: boolean; created?: { subject_type: string; subject_id: string }[]; skipped?: { subject_type: string; reason: string }[] };
@@ -526,15 +407,13 @@ function PostCard({ post, platforms, onChanged }: { post: SocialPost; platforms:
 
   const updatePlatform = async (id: string, patch: Partial<PlatformRow>) => {
     setLocalPlatforms((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
-    await supabase.from('social_post_platforms').update(patch).eq('id', id);
+    await updateSocialPostPlatform(id, patch);
   };
 
   const regenerate = async (platform: Platform) => {
     setBusy(`gen-${platform}`);
     try {
-      const { data, error } = await supabase.functions.invoke('generate-social-caption', {
-        body: { post_id: post.id, platform, style: captionStyle },
-      });
+      const { data, error } = await generateSocialCaption({ post_id: post.id, platform, style: captionStyle });
       if (error) throw error;
       const row = localPlatforms.find((p) => p.platform === platform);
       if (row) await updatePlatform(row.id, { caption: data.caption });
@@ -552,7 +431,7 @@ function PostCard({ post, platforms, onChanged }: { post: SocialPost; platforms:
       // Money cards (committee_spender / top_donor) have no offscreen React template;
       // render them server-side as bespoke SVGs via the render-social-card function.
       if (isServerRenderedType(post.subject_type)) {
-        const { data, error } = await supabase.functions.invoke('render-social-card', { body: { post_id: post.id } });
+        const { data, error } = await renderSocialCard(post.id);
         if (error) throw error;
         if ((data as { error?: string } | undefined)?.error) throw new Error((data as { error: string }).error);
         toast.success('Card rendered');
@@ -588,11 +467,7 @@ function PostCard({ post, platforms, onChanged }: { post: SocialPost; platforms:
           candidateParty: liveData.candidateParty,
         },
       );
-      const { error } = await supabase
-        .from('social_posts')
-        .update({ share_url: shareUrl, share_card_id: id, image_url: imageUrl ?? null })
-        .eq('id', post.id);
-      if (error) throw error;
+      await updateSocialPostShare(post.id, { share_url: shareUrl, share_card_id: id, image_url: imageUrl ?? null });
       toast.success('Card rendered');
       onChanged();
     } catch (e) {
@@ -606,7 +481,7 @@ function PostCard({ post, platforms, onChanged }: { post: SocialPost; platforms:
     if (!post.share_url) { toast.error('Render image first'); return; }
     setBusy('post');
     try {
-      const { data, error } = await supabase.functions.invoke('post-social-card', { body: { post_id: post.id } });
+      const { data, error } = await postSocialCard(post.id);
       if (error) throw error;
       const failed = Object.entries(data.results ?? {}).filter(([, r]: any) => !r.ok);
       if (failed.length) toast.warning(`Some platforms failed: ${failed.map(([p]) => p).join(', ')}`);
@@ -621,7 +496,7 @@ function PostCard({ post, platforms, onChanged }: { post: SocialPost; platforms:
 
   const reject = async () => {
     if (!confirm('Reject this draft?')) return;
-    await supabase.from('social_posts').update({ status: 'rejected' }).eq('id', post.id);
+    await rejectSocialPost(post.id);
     onChanged();
   };
 
