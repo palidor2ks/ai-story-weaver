@@ -5,6 +5,42 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-28 — Fixed the real cause (token starvation) + migrated ai-policy-card-positions to direct Gemini
+
+**What & why**
+After #617 deployed, the popup STILL showed the fallback (screenshot: Andy Kim · Health, Education
+& Welfare → "…1 public statement on record. You broadly align…" — note that's the *new* fallback,
+so the new code WAS live). Edge logs gave the smoking gun: an `ai-topic-analysis` call ran **8.8s
+and returned 200** — i.e. Gemini DID run (key + grounding work), but produced **empty text**. Cause:
+`maxOutputTokens: 2048` — gemini-2.5-flash spends a large "thinking" budget before any visible
+text, and at 2048 the thinking alone hit `MAX_TOKENS`, leaving the answer empty → fallback. Raised
+to **8192** (the helper default the other working grounded callers use). NOT urlContext, NOT the key.
+
+Also, per user request, migrated **`ai-policy-card-positions`** (the one-line topic summaries +
+social card) off the same failing Lovable-gateway / `gemini-3-flash-preview` path to direct Google
+Gemini via `callGeminiGrounded` (`grounding:false` — it's a pure score→JSON transform, no web
+needed; parsed with `extractJson`; maxOutputTokens 8192). Bumped its cache cycles
+(`policy-card-v3→v4`, `profile-positions-v1→v2`) because the old cycles had cached the gateway's
+empty/detail-less fallback and would otherwise serve it forever.
+
+**The change** (branch `claude/analysis-depth-detail-bnulzg`, both edge functions only)
+- `ai-topic-analysis/index.ts`: `maxOutputTokens` 2048 → 8192.
+- `ai-policy-card-positions/index.ts`: Lovable gateway → `callGeminiGrounded` (gemini-2.5-flash,
+  no grounding), `getGoogleAIKey()` gate, `extractJson` parse, fallback no longer cached, cache
+  cycles bumped.
+
+**State** (verified locally)
+`bun run lint` 0 errors · `bun run test` 144/144. No `src/` changes this round. Pending deploy.
+Watch: the grounded topic call may now take ~10–25s (thinking + search + source validation) — a
+slowish popup; optimize later (e.g. skipValidation, trim maxOutputTokens once thinking budget known)
+if it's a problem. `ai_analysis_cache` had zero `topic-deep` rows before, so no stale busting needed
+there; the policy-card cache bump handles its stale fallbacks.
+
+**Next**
+Deploy + re-open the same Andy Kim topic: expect the full 3-paragraph sourced analysis now (not the
+one-liner), and the topic rows' one-line details populated from real AI. If still empty, check
+`get_logs` for finishReason / a Gemini 4xx.
+
 ## 2026-06-28 — Per-topic "AI Analysis": switched to direct Google Gemini (grounding + URL context), added statements + viewer comparison
 
 **What & why**
