@@ -49,6 +49,9 @@ export default tseslint.config(
       // PollResults consumes a Supabase join (question_options) that the generated
       // types resolve to a SelectQueryError, so its rows can't be cleanly typed yet.
       "src/components/poll/PollResults.tsx",
+      // Wraps untyped Supabase tables (committee_aliases, external_pacs) that the
+      // generated types don't include yet — same reason as the hooks below.
+      "src/hooks/useCommitteeAliases.ts",
       "src/hooks/useCommitteeTopics.ts",
       "src/hooks/useDonorAliases.ts",
       "src/hooks/useDonorsPaginated.ts",
@@ -114,7 +117,6 @@ export default tseslint.config(
       "src/components/admin/CandidateAnswersDialog.tsx",
       "src/components/admin/CandidateAnswersPopover.tsx",
       "src/components/admin/CivicOfficialsPanel.tsx",
-      "src/components/admin/CommitteeAliasesPanel.tsx",
       "src/components/admin/CommitteeBreakdown.tsx",
       "src/components/admin/CommitteeTopicsPanel.tsx",
       "src/components/admin/DonorAliasesPanel.tsx",
