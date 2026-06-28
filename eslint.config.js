@@ -133,7 +133,6 @@ export default tseslint.config(
       "src/components/admin/VendorRefundsPanel.tsx",
       "src/pages/Admin.tsx",
       "src/pages/AdminUserProfileView.tsx",
-      "src/pages/CandidateProfile.tsx",
       "src/pages/Committees.tsx",
       "src/pages/DonorProfile.tsx",
       "src/pages/Feed.tsx",
