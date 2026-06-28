@@ -55,7 +55,6 @@ export const CandidateDonors = () => {
   const fecTotalReceipts =
     financeReconciliation?.fec_total_receipts ?? fecTotals?.total_receipts ?? null;
   const fecTotalDisbursements = fecTotals?.total_disbursements ?? null;
-  const fecCashOnHand = fecTotals?.cash_on_hand_end_period ?? null;
   // Debt is not available in current data sources
   const fecDebt: number | null = null;
 
@@ -130,8 +129,8 @@ export const CandidateDonors = () => {
         {/* Summary card — overlaps header */}
         <div className="bg-white rounded-2xl shadow-lg px-6 py-5 -mt-4 mb-4">
           {donorsLoading ? (
-            <div className="grid grid-cols-4 gap-2 animate-pulse">
-              {[...Array(4)].map((_, i) => (
+            <div className="grid grid-cols-3 gap-2 animate-pulse">
+              {[...Array(3)].map((_, i) => (
                 <div key={i} className="space-y-1.5">
                   <div className="h-5 bg-poli-surface rounded w-16 mx-auto" />
                   <div className="h-3 bg-poli-surface rounded w-20 mx-auto" />
@@ -139,21 +138,13 @@ export const CandidateDonors = () => {
               ))}
             </div>
           ) : (
-            <div className="grid grid-cols-4 divide-x divide-poli-surface text-center">
+            <div className="grid grid-cols-3 divide-x divide-poli-surface text-center">
               <div className="pr-2">
                 <div className="text-base font-bold text-poli-body leading-tight">
                   {fmt(fecTotalReceipts)}
                 </div>
                 <div className="text-[9px] text-poli-muted leading-tight mt-0.5 uppercase tracking-wide">
                   Total Raised
-                </div>
-              </div>
-              <div className="px-2">
-                <div className="text-base font-bold text-poli-body leading-tight">
-                  {fmt(fecCashOnHand)}
-                </div>
-                <div className="text-[9px] text-poli-muted leading-tight mt-0.5 uppercase tracking-wide">
-                  Cash on Hand
                 </div>
               </div>
               <div className="px-2">

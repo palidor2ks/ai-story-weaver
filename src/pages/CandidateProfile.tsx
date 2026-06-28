@@ -589,11 +589,10 @@ export const CandidateProfile = () => {
       </div>
 
       {/* STAT GRID */}
-      <div className="mx-4 mt-3 grid grid-cols-3 gap-2">
+      <div className="mx-4 mt-3 grid grid-cols-2 gap-2">
         {[
           { value: fecTotalReceipts ? formatCurrency(fecTotalReceipts) : '—', label: 'Total raised' },
           { value: fecTotalDisbursements ? formatCurrency(fecTotalDisbursements) : '—', label: 'Spent' },
-          { value: fecTotals?.cash_on_hand_end_period ? formatCurrency(fecTotals.cash_on_hand_end_period) : '—', label: 'Cash on hand' },
         ].map(stat => (
           <div key={stat.label} className="border border-[rgba(20,23,58,0.1)] rounded-[14px] p-2.5 bg-white">
             <p className="font-sans font-black text-[18px] text-poli-navy leading-none">{String(stat.value)}</p>
@@ -601,7 +600,7 @@ export const CandidateProfile = () => {
           </div>
         ))}
         {/* Legislative alignment % box */}
-        <div className="col-span-2 border border-[rgba(20,23,58,0.1)] rounded-[14px] p-2.5 bg-white flex items-center justify-center">
+        <div className="border border-[rgba(20,23,58,0.1)] rounded-[14px] p-2.5 bg-white flex items-center justify-center">
           <div className="text-center">
             <p className={cn(
               "font-sans font-black text-[18px] leading-none",
