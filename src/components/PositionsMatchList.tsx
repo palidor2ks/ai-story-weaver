@@ -205,10 +205,20 @@ interface TopicAnalysis {
 const stripCitations = (s: string) =>
   s.replace(/\s*\[[^\]]*\]/g, '').replace(/\s{2,}/g, ' ').replace(/\s+([.,;:])/g, '$1').trim();
 
+// Render the model's lightweight markdown emphasis (*word* or **word**) as real bold instead
+// of leaking literal asterisks into the UI. Keeps support/oppose etc. visually emphasised.
+const renderInline = (text: string) =>
+  text.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g).map((part, i) => {
+    const m = part.match(/^\*\*?([^*]+)\*\*?$/);
+    return m
+      ? <strong key={i} className="font-semibold">{m[1]}</strong>
+      : <span key={i}>{part}</span>;
+  });
+
 const AnalysisBody = ({ text }: { text: string }) => {
   const lines = text
     .split('\n')
-    .map((l) => stripCitations(l.trim().replace(/\*\*/g, '')))
+    .map((l) => stripCitations(l.trim()))
     .filter(Boolean);
   const bullets = lines.filter((l) => /^[-•]\s/.test(l)).map((l) => l.replace(/^[-•]\s*/, ''));
   const lead = lines.filter((l) => !/^[-•]\s/.test(l)).join(' ');
@@ -218,20 +228,20 @@ const AnalysisBody = ({ text }: { text: string }) => {
 
   return (
     <div className="py-1 space-y-2.5">
-      {lead && <p className="text-[14px] text-poli-body leading-relaxed">{lead}</p>}
+      {lead && <p className="text-[14px] text-poli-body leading-relaxed">{renderInline(lead)}</p>}
       {bullets.length > 0 && (
         <ul className="space-y-1.5">
           {bullets.map((b, i) => (
             <li key={i} className="relative pl-4 text-[14px] text-poli-body leading-relaxed">
               <span className="absolute left-0 top-0 text-poli-red">•</span>
-              {b}
+              {renderInline(b)}
             </li>
           ))}
         </ul>
       )}
       {matchLine && (
         <p className="mt-1 rounded-lg bg-poli-navy/5 px-3 py-2 text-[13px] font-medium text-poli-navy leading-relaxed">
-          {matchLine}
+          {renderInline(matchLine)}
         </p>
       )}
     </div>
