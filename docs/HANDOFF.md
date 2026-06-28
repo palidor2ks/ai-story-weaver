@@ -5,6 +5,27 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-28 — Remove "Cash on hand" & "Party unity" stat cards from rep profile
+
+**What & why**
+Per request (annotated screenshot), the two empty/placeholder metric cards on the candidate
+(rep) profile header were removed: **Cash on hand** (often `—`) and **Party unity** (hardcoded
+`—`, never wired to data). They added clutter without information.
+
+**The change** (branch `claude/remove-cash-party-rep-profile-dc8rje`)
+- `src/pages/CandidateProfile.tsx` STAT GRID: dropped the `Cash on hand` entry and the
+  separate hardcoded `Party unity` box. Changed the grid from `grid-cols-3` to `grid-cols-2`
+  so the remaining cards lay out cleanly: **Total raised** + **Spent** on the top row,
+  **legislative alignment** (`col-span-2`) spanning the full width below. `fecTotals` is still
+  used elsewhere on the page, so no dead code.
+
+**State** (verified)
+`bun run lint` 0 errors (157 pre-existing `any` warnings) · `bun run build` ✓ · `bun test`
+59/59. UI-only change; no data/logic touched.
+
+**Next**
+None required. (Pre-existing Step 2 front-door refactor remains the open thread below.)
+
 ## 2026-06-28 — Refactor Step 2 (proof PR): data front-door ratchet + ComparePanel migrated
 
 **What & why**
