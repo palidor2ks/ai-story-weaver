@@ -5,6 +5,51 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-28 — Forward stub gap closed + full stub backfill done (Gemini source-URL cleanup complete)
+
+**What happened & why**
+Finished the Gemini source-URL work end to end. After the helper fix (#608) deployed, a URL-quality
+check showed answers were *still* getting `vertexaisearch…/grounding-api-redirect` stubs. Root cause:
+**Gemini returns its own grounding-redirect URL as the `source_url` in its JSON**, and that path
+bypassed `resolveGroundedSources` (the guard only checked `startsWith('http')`). Fixed forward, then
+backfilled the historical stubs.
+
+**The changes (all merged to `main`)**
+- **#609** — one-shot `resolve-stub-source-urls` edge function (cursor-paged, self-chaining) +
+  `get_stub_source_answers` RPC, to follow already-stored redirect tokens to their real URLs.
+- **#610 (the real forward fix)** — `get-candidate-answers` now feeds the model's `parsed.source_url`
+  *through* `resolveGroundedSources` (resolve-or-drop) instead of unshifting it raw;
+  `generate-legislator-answers` resolves `raw.source_url` and drops it if still a stub (its rows are
+  never `web_research`, so null is constraint-safe). Other writers verified clean.
+- **#611/#612** — removed the throwaway resolver function, its `config.toml` entry, and the helper RPC
+  migration (NOTE: #611 squash-merged but its deletions did NOT land on `main` due to branch-reuse
+  divergence across the stacked squash-merges — redone in #612). Live function also deleted from the
+  Supabase dashboard by the user.
+
+**State** (verified live via SQL, 2026-06-28)
+Forward fix confirmed: **0 new stubs** created (6-min window) post-deploy. Backfill: original ~2,119
+old stubs → resolved to real URLs; whole-table stub count **2,326 → 4** (the 4 are expired tokens kept
+to satisfy `chk_web_research_has_url`). `/sorry` rate-limit artifacts stripped. URL quality spot-checked
+good (real bills/scorecards/PDFs, many with `#:~:text=` anchors). All helper objects (RPC, snapshot
+table `_stub_backfill_ids`, monitor crons, prod function) torn down. CI green on every PR; **edge
+functions still can't be compiled locally** (no Deno; ESLint ignores `supabase/functions/**`) — verified
+by review + Supabase Preview deploys + live SQL.
+
+**Process note / watch-out:** this branch (`claude/rep-answers-cron-jobs-cr2ipg`) was reused across ~6
+stacked squash-merges, which caused divergence (e.g. #611's deletions silently not landing). After each
+squash-merge, **reset the branch to `origin/main`** before stacking the next change, or use a fresh
+branch per PR.
+
+**Next**
+Nothing required — pipeline is healthy and self-sustaining. If desired, spot-check the rep Positions UI
+to confirm the new deep/anchored source links render well for a logged-in user.
+
+**Deferred** (unrelated, surfaced this session — not rep-answers)
+- `nightly_bill_sync` intermittently 401s (likely same Railway-cutover credential artifact).
+- `congress_donor_backfill` times out (`call-edge` 120s < the edge fn's runtime); give it a 240s
+  override like `fec_candidate_drain` already has.
+- `fetch-nj-elec-finance` returns intermittent 401s.
+
 ## 2026-06-27 — Gemini pipeline LIVE; fix grounding-redirect stubs in source URLs
 
 **What & why**
