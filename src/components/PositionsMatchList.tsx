@@ -62,7 +62,7 @@ export const PositionsMatchList = ({
   userTopicScores,
 }: PositionsMatchListProps) => {
   const hasUserScores = userTopicScores.length > 0;
-  const [openTopic, setOpenTopic] = useState<{ topicId: string; topicName: string } | null>(null);
+  const [openTopic, setOpenTopic] = useState<{ topicId: string; topicName: string; userScore?: number } | null>(null);
 
   // AI one-liner per topic (grounded + cached server-side). Full mode = one per topic.
   const { data: aiPositions } = useQuery({
@@ -143,7 +143,7 @@ export const PositionsMatchList = ({
                   <button
                     type="button"
                     aria-label={`Analyze ${candidateName}'s position on ${t.topicName}`}
-                    onClick={() => setOpenTopic({ topicId: t.topicId, topicName: t.topicName })}
+                    onClick={() => setOpenTopic({ topicId: t.topicId, topicName: t.topicName, userScore })}
                     className="w-7 h-7 rounded-full bg-poli-surface text-poli-navy flex items-center justify-center hover:bg-poli-navy/10 transition-colors"
                   >
                     <Plus className="w-4 h-4" />
@@ -188,19 +188,30 @@ export const PositionsMatchList = ({
 interface TopicAnalysisDialogProps {
   candidateId: string;
   candidateName: string;
-  topic: { topicId: string; topicName: string } | null;
+  topic: { topicId: string; topicName: string; userScore?: number } | null;
   onClose: () => void;
+}
+
+interface TopicAnalysis {
+  analysis: string;
+  sources?: Array<{ url: string; title: string }>;
 }
 
 const TopicAnalysisDialog = ({ candidateId, candidateName, topic, onClose }: TopicAnalysisDialogProps) => {
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['topic-analysis', candidateId, topic?.topicId],
+    // userScore is part of the key so the comparison re-fetches if the viewer's stance changes.
+    queryKey: ['topic-analysis', candidateId, topic?.topicId, topic?.userScore ?? null],
     queryFn: async () => {
       const { data, error } = await supabase.functions.invoke('ai-topic-analysis', {
-        body: { candidateId, topicId: topic!.topicId, topicName: topic!.topicName },
+        body: {
+          candidateId,
+          topicId: topic!.topicId,
+          topicName: topic!.topicName,
+          userScore: topic!.userScore,
+        },
       });
       if (error) throw error;
-      return data as { analysis: string };
+      return data as TopicAnalysis;
     },
     enabled: !!topic,
     staleTime: Infinity,
@@ -223,12 +234,35 @@ const TopicAnalysisDialog = ({ candidateId, candidateName, topic, onClose }: Top
         ) : isError ? (
           <p className="text-sm text-poli-dim py-4">Couldn&apos;t load the analysis. Please try again.</p>
         ) : (
-          <p className="text-[14px] text-poli-body leading-relaxed whitespace-pre-wrap py-1">
-            {data?.analysis}
-          </p>
+          <>
+            <p className="text-[14px] text-poli-body leading-relaxed whitespace-pre-wrap py-1">
+              {data?.analysis}
+            </p>
+            {data?.sources && data.sources.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-[rgba(20,23,58,0.08)]">
+                <p className="font-mono-label text-[10px] tracking-[1.5px] text-poli-muted mb-1.5">
+                  SOURCES
+                </p>
+                <ul className="space-y-1">
+                  {data.sources.map((s, i) => (
+                    <li key={`${s.url}-${i}`}>
+                      <a
+                        href={s.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[12px] text-poli-navy hover:underline break-words"
+                      >
+                        {s.title || s.url}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </>
         )}
         <p className="text-[11px] text-poli-muted mt-2">
-          AI-generated from this candidate&apos;s scored positions. May not reflect every nuance.
+          AI-generated from this candidate&apos;s record and live sources. May not reflect every nuance.
         </p>
       </DialogContent>
     </Dialog>
