@@ -1,28 +1,11 @@
-import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { Header } from '@/components/Header';
 import { Seo } from '@/components/Seo';
-import { supabase } from '@/integrations/supabase/client';
+import { useIssuesTopics, useIssuesPolls } from '@/hooks/useIssues';
 import { TOPIC_DESCRIPTIONS } from '@/lib/topicDescriptions';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-
-interface Topic {
-  id: string;
-  name: string;
-  icon: string;
-  scope: string;
-}
-
-interface Poll {
-  id: string;
-  slug: string;
-  title: string;
-  description: string | null;
-  topic_id: string | null;
-  published_at: string | null;
-}
 
 const FAQS = [
   {
@@ -40,32 +23,8 @@ const FAQS = [
 ];
 
 export default function Issues() {
-  const { data: topics = [] } = useQuery({
-    queryKey: ['issues', 'topics'],
-    queryFn: async (): Promise<Topic[]> => {
-      const { data, error } = await supabase
-        .from('topics')
-        .select('id,name,icon,scope')
-        .order('scope', { ascending: true })
-        .order('name', { ascending: true });
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
-
-  const { data: polls = [] } = useQuery({
-    queryKey: ['issues', 'polls'],
-    queryFn: async (): Promise<Poll[]> => {
-      const { data, error } = await supabase
-        .from('polls')
-        .select('id,slug,title,description,topic_id,published_at')
-        .eq('status', 'published')
-        .order('published_at', { ascending: false })
-        .limit(24);
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
+  const { data: topics = [] } = useIssuesTopics();
+  const { data: polls = [] } = useIssuesPolls();
 
   const federal = topics.filter((t) => t.scope !== 'local');
   const local = topics.filter((t) => t.scope === 'local');
