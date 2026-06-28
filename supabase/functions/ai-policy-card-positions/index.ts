@@ -1,16 +1,20 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { readCache, writeCache } from "../_shared/ai-cache.ts";
+import { callGeminiGrounded, extractJson, getGoogleAIKey } from "../_shared/gemini-research.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const CACHE_CYCLE = 'policy-card-v3'; // v3: lower threshold (|score|>1), bar graph design
+// v4 / v2: bumped when this function moved off the failing Lovable gateway to direct Google
+// Gemini — old cycles had cached the gateway's empty/detail-less fallback, so they must rotate
+// to force one clean regeneration on the working path.
+const CACHE_CYCLE = 'policy-card-v4';
 // Profile "Positions & your match" list wants ALL of a candidate's topics (not just the top 4
 // the social card shows), so it caches under a separate cycle to avoid clobbering the card.
-const CACHE_CYCLE_FULL = 'profile-positions-v1';
+const CACHE_CYCLE_FULL = 'profile-positions-v2';
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -84,8 +88,7 @@ serve(async (req) => {
       .map((r: any) => ({ topic: r.topics?.name as string | undefined, score: Number(r.score) }))
       .filter((t): t is { topic: string; score: number } => !!t.topic && Number.isFinite(t.score));
 
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY || topicScores.length === 0) {
+    if (!getGoogleAIKey() || topicScores.length === 0) {
       const result = { positions: [] };
       await writeCache(cacheKey, result, null);
       return new Response(JSON.stringify(result), {
@@ -132,20 +135,24 @@ Return ${isFull ? 'one position for every topic above' : 'up to 4 positions'} as
   ]
 }`;
 
-    const aiResp = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${LOVABLE_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'google/gemini-3-flash-preview',
-        messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
-        response_format: { type: 'json_object' },
-      }),
-    });
-
-    if (!aiResp.ok) {
-      console.error('AI error', aiResp.status, await aiResp.text());
+    // Pure score→JSON transform: run on Google Gemini directly (no web grounding needed — the
+    // model is told NOT to name specifics beyond the directional score). Mirrors the move off
+    // the (failing) Lovable gateway / gemini-3-flash-preview that left this returning [].
+    let parsed: { positions?: unknown[] } = {};
+    try {
+      const { text } = await callGeminiGrounded({
+        prompt: `${userPrompt}\n\nReturn ONLY the raw JSON object, no markdown fences.`,
+        systemInstruction: systemPrompt,
+        model: 'gemini-2.5-flash',
+        temperature: 0.2,
+        maxOutputTokens: 8192, // headroom for gemini-2.5-flash "thinking" before the JSON
+        grounding: false,
+      });
+      parsed = extractJson<{ positions?: unknown[] }>(text) ?? {};
+    } catch (e) {
+      console.error('ai-policy-card-positions Gemini error', e);
       // Fallback: synthesize positions directly from topic scores (all topics in full mode,
-      // top-4 highest-|score| for the social card).
+      // top-4 highest-|score| for the social card). Not cached, so a later call can retry AI.
       const fallbackPositions = topicScores
         .sort((a, b) => Math.abs(b.score) - Math.abs(a.score))
         .slice(0, isFull ? topicScores.length : 4)
@@ -155,25 +162,9 @@ Return ${isFull ? 'one position for every topic above' : 'up to 4 positions'} as
           detail: '',
           score: t.score,
         }));
-      const result = { positions: fallbackPositions };
-      await writeCache(cacheKey, result, null);
-      return new Response(JSON.stringify(result), {
+      return new Response(JSON.stringify({ positions: fallbackPositions }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
-    }
-
-    const aiData = await aiResp.json();
-    const raw = aiData.choices?.[0]?.message?.content ?? '';
-
-    let parsed: { positions?: unknown[] } = {};
-    try {
-      let s = raw.trim();
-      const fence = s.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
-      if (fence) s = fence[1].trim();
-      parsed = JSON.parse(s);
-    } catch {
-      const f = raw.indexOf('{'), l = raw.lastIndexOf('}');
-      if (f !== -1 && l > f) { try { parsed = JSON.parse(raw.slice(f, l + 1)); } catch { /* ignore */ } }
     }
 
     // Build a lookup so we can attach the actual numeric score to each position
@@ -190,7 +181,7 @@ Return ${isFull ? 'one position for every topic above' : 'up to 4 positions'} as
       }));
 
     const result = { positions };
-    await writeCache(cacheKey, result, 'google/gemini-3-flash-preview');
+    await writeCache(cacheKey, result, 'gemini-2.5-flash');
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

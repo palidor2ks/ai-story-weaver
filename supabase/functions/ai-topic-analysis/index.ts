@@ -264,9 +264,11 @@ Write the analysis in three short paragraphs:
         systemInstruction,
         model: 'gemini-2.5-flash',
         temperature: 0.3,
-        // Headroom: gemini-2.5-flash spends tokens on "thinking" before the answer, so keep
-        // this well above the ~300-token prose target or the visible text comes back empty.
-        maxOutputTokens: 2048,
+        // gemini-2.5-flash spends a large, variable "thinking" budget BEFORE any visible text.
+        // At 2048 the thinking alone exhausted the budget (finishReason MAX_TOKENS) and the
+        // answer came back empty → every call fell to the fallback. Match the proven default
+        // (8192) used by the other grounded callers so thinking + the ~220-word answer both fit.
+        maxOutputTokens: 8192,
         grounding: true,   // Google Search grounding → live, cited record
         urlContext: true,  // URL-context tool → let it read the candidate's own statement/site URLs
         timeoutMs: 55_000,
