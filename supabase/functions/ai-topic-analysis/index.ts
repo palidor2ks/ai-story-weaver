@@ -196,7 +196,7 @@ serve(async (req) => {
 
     // Cache per (candidate, topic) AND per (evidence + viewer-stance) fingerprint, so the
     // analysis regenerates once when new evidence lands or for a different viewer stance.
-    const evidenceFingerprint = await fingerprint({ v: 4, topicScore, evidence, viewerBucket });
+    const evidenceFingerprint = await fingerprint({ v: 5, topicScore, evidence, viewerBucket });
     const cacheKey = {
       kind: 'candidate' as const,
       subject_id: String(candidateId),
@@ -229,22 +229,27 @@ serve(async (req) => {
       });
     }
 
-    // The optional final "Your match" bullet only when we know the viewer's lean.
+    // Each bullet ties the candidate's action back to the reader's own lean (when known).
+    const relationClause = viewerScore === null
+      ? `After naming the action, add a short clause on what it shows about the candidate's approach to this issue.`
+      : `After naming the action, explain in the SAME sentence how it relates to YOU (the reader leans ${viewerScore.toFixed(1)}, ${viewerLean}): say plainly whether you'd likely SUPPORT or OPPOSE that action and the concrete reason why, given your lean.`;
+
     const matchBulletSpec = viewerScore === null
       ? ''
-      : `\n- A FINAL bullet starting with "- Your match:" that states ${verdict} and the single main reason (which specific positions drive it), addressing the reader as "you".`;
+      : `\n- A FINAL bullet starting with "- Your match:" that states ${verdict} and sums up in one sentence the main reason you and the candidate align or differ on this topic.`;
 
-    const systemInstruction = `You are a non-partisan political analyst writing a SHORT, scannable brief for a voter deciding how well a candidate matches them on ONE issue.
+    const systemInstruction = `You are a non-partisan political analyst writing a SHORT, scannable brief that helps a voter see how a candidate's record on ONE issue lines up with THEIR OWN views.
 
 Use ONLY: (a) the structured evidence in the prompt, and (b) facts you can confirm via Google Search about THIS candidate's record or public statements on THIS topic — prioritise the official campaign site, government pages, and reputable news.
 
 Output EXACTLY this, nothing else:
-- One short lead line (≤ 16 words) stating the candidate's lean on this topic in plain terms. Do NOT put a "-" at the start of this first line.
-- Then 3 to 5 bullets, each on its own line starting with "- " and ≤ 18 words, each citing ONE specific piece of evidence (a vote, sponsorship, public statement, or documented position).${matchBulletSpec}
+- One short lead line (≤ 16 words) stating the candidate's lean on this topic in plain terms. Do NOT start this first line with "-".
+- Then 3 to 4 bullets, each on its own line starting with "- " (≤ 30 words). Each names ONE specific action (a vote, sponsorship, or public statement), THEN connects it to the reader. ${relationClause}${matchBulletSpec}
 
 Hard rules:
-- Do NOT invent or guess bills, votes, vote counts, dates, or quotes. If you cannot verify a specific, describe the documented lean instead.
-- Keep the WHOLE brief under ~100 words. No intro or outro paragraphs, no headers, no bold/markdown.
+- Do NOT invent or guess bills, votes, dates, or quotes. If you cannot verify a specific, describe the documented lean instead.
+- Do NOT output any source tags, bracketed labels, or citation numbers — never write "[legislative record, sourced]", "[sourced]", or "[1, 2]". Write clean sentences only.
+- Keep the whole brief under ~140 words. No intro or outro paragraphs, no headers, no bold/markdown.
 - Neutral, descriptive tone. Never tell the reader how to vote.`;
 
     const prompt = `Candidate: ${candidateName}, ${candidateOffice}${candidateState ? ', ' + candidateState : ''}, ${candidateParty}
