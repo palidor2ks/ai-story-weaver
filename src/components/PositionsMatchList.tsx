@@ -200,8 +200,16 @@ interface TopicAnalysis {
 // Render the model's brief: a short lead line + bullet list. The "Your match:" bullet (if any)
 // is pulled out and shown as a highlighted footer line. Falls back to plain text if the model
 // didn't return bullets (e.g. the data-only fallback string).
+// Strip leaked evidence tags / orphan citation markers like "[legislative record, sourced]"
+// or "[1, 2, 3]" — real sources live in the clickable SOURCES list, not inline numbers.
+const stripCitations = (s: string) =>
+  s.replace(/\s*\[[^\]]*\]/g, '').replace(/\s{2,}/g, ' ').replace(/\s+([.,;:])/g, '$1').trim();
+
 const AnalysisBody = ({ text }: { text: string }) => {
-  const lines = text.split('\n').map((l) => l.trim().replace(/\*\*/g, '')).filter(Boolean);
+  const lines = text
+    .split('\n')
+    .map((l) => stripCitations(l.trim().replace(/\*\*/g, '')))
+    .filter(Boolean);
   const bullets = lines.filter((l) => /^[-•]\s/.test(l)).map((l) => l.replace(/^[-•]\s*/, ''));
   const lead = lines.filter((l) => !/^[-•]\s/.test(l)).join(' ');
 

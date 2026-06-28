@@ -5,6 +5,35 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-28 — Per-topic analysis: drop inline citation noise + tie each bullet to the user's lean
+
+**What & why**
+Live feedback on the bulleted brief (Andy Kim · Environment & Energy): (1) every bullet echoed the
+internal evidence tag `[legislative record, sourced]`, and one had orphan inline citation numbers
+`[…, 1, 2, 3, 4]` that mapped to nothing (no SOURCES list rendered when grounding citations
+resolve to empty). User: don't cite that way — make text clickable or leave it out. (2) Each bullet
+only stated the rep's action; it should explain how that action relates to the USER's position
+(why they'd support/oppose it).
+
+**The change** (branch `claude/analysis-depth-detail-bnulzg`)
+- `supabase/functions/ai-topic-analysis/index.ts`: prompt reworked so each of 3–4 bullets names a
+  specific action AND, in the same sentence, says whether the reader (given their lean) would
+  likely SUPPORT or OPPOSE it and why. Explicitly forbids source tags / bracketed labels /
+  citation numbers in the output. Word budget ~140. Cache fingerprint `v:4→v:5`.
+- `src/components/PositionsMatchList.tsx`: `AnalysisBody` now runs `stripCitations()` on every line
+  (removes `[...]` groups + tidies spacing) as a safety net even if the model slips. The clickable
+  **SOURCES** list at the bottom is unchanged — that's the "make it clickable" path; inline numbers
+  are gone.
+
+**State** (verified locally)
+`bun run lint` 0 errors · `bun run build` succeeds · `bun run test` 144/144. Pending deploy.
+
+**Next**
+Deploy + reopen a topic: expect clean bullets (no "[...]" tags), each ending with a "you'd
+support/oppose because…" clause, and a clickable SOURCES list only when real sources resolve.
+Open question if the user still wants inline clickable citations: would require mapping Gemini
+`groundingSupports` offsets to resolved URLs and rendering inline anchors (non-trivial).
+
 ## 2026-06-28 — Per-topic AI analysis confirmed WORKING live; made it concise + bulleted
 
 **What & why**
