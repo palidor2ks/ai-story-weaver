@@ -5,6 +5,36 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-28 — Refactor Step 2 (cont.): migrate the 3 heavy mutation panels
+
+**What & why**
+Migrated the three heaviest mixed read+write admin panels — the highest-risk remaining
+Step 2 work. Reads → query hooks; multi-step writes/RPCs/edge-invokes → mutation hooks or
+plain data fns; useMutation wrappers + handlers kept in the components where their callbacks
+drive component state (spinners, optimistic edits, dialog/progress).
+
+**The change** (branch `claude/image-prompt-implementation-navk5j`)
+- `CommitteeAliasesPanel` → `src/hooks/useCommitteeAliases.ts` (2 queries + 4 mutations +
+  `classifyCommitteeTopic` invoke fn). Hook added to no-explicit-any warn list (untyped
+  committee_aliases/external_pacs tables, `(supabase as any)`).
+- `QuestionManagementPanel` → `src/hooks/useQuestionManagement.ts` (2 queries +
+  create/update data fns incl. the change-notification fan-out + bulk
+  `generateQuizQuestion`/`insertGeneratedQuestion`).
+- `SocialPosts` → `src/hooks/useSocialPosts.ts` (5 queries + 9 data fns for edge invokes
+  and table writes). Hook in warn list (untyped `stat_payload`).
+- Each removed from the `eslint.config.js` import allowlist (now **55 files remaining**).
+
+**State** (verified)
+`bun run lint` 0 errors (155 warnings) · `bunx tsc --noEmit` 0 · `bun run build` ✓ ·
+`bun test` 146/146. No behavior change. NOTE: not yet pushed / no PR opened yet at time of
+writing — push the branch and open a draft PR.
+
+**Next**
+The remaining ~55 grandfathered files are mostly small (1–3 calls each): AI-analysis dialogs,
+ShareProfileButton, Quiz/QuizResults, Committees, Feed, Issues, Unsubscribe, VerifyEmail, the
+social connect callbacks, etc. Sweep them in batches, removing each from the allowlist, until
+the list is empty (then the ratchet's grandfather clause can be deleted entirely).
+
 ## 2026-06-28 — Refactor Step 2 (cont.): migrate TopicReviewPanel + DonorImportPanel
 
 **What & why**

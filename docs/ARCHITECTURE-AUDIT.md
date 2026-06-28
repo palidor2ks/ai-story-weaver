@@ -268,12 +268,17 @@ matching reviewer from `CLAUDE.md`'s council. Ordered by ROI-to-risk.
     mixed panels: `TopicReviewPanel` → `useTopicReview` (queries as hooks; bills
     update + scan invoke as plain data fns, useMutation wrappers kept in the panel)
     and `DonorImportPanel` → `src/lib/donorImport.ts` (imperative importer, not
-    react-query, so plain async data helpers). Allowlist: **58 files remaining**.
-  - **Sequencing (next):** the heaviest mutation panels (`CommitteeAliasesPanel`,
-    `QuestionManagementPanel`, `SocialPosts`), then the remaining smaller
-    grandfathered files (dialogs, cards, other pages). Pattern is proven: queries →
-    query hooks, mutations → mutation hooks (or a plain data fn when
-    `onMutate`/`onSettled` drive component state). Route each to `frontend-reviewer`.
+    react-query, so plain async data helpers). Then the three heaviest mutation
+    panels: `CommitteeAliasesPanel` → `useCommitteeAliases`,
+    `QuestionManagementPanel` → `useQuestionManagement`, `SocialPosts` →
+    `useSocialPosts` (queries as hooks; the multi-step writes + edge invokes as
+    mutation hooks / plain data fns; useMutation wrappers kept where callbacks drive
+    component state). Allowlist: **55 files remaining**.
+  - **Sequencing (next):** the remaining smaller grandfathered files — mostly
+    dialogs, cards, and a few pages with 1–3 calls each (e.g. AI-analysis dialogs,
+    `ShareProfileButton`, `Quiz`/`QuizResults`, `Committees`, `Feed`, `Issues`,
+    `Unsubscribe`, `VerifyEmail`, the social connect callbacks). These go fast in
+    batches. Pattern is proven; route each batch to `frontend-reviewer`.
 
 ---
 
