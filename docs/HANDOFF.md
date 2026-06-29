@@ -5,6 +5,33 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-28 — Refactor Step 2 (cont.): auth front door + 4 auth/mixed files
+
+**What & why**
+Migrated the `supabase.auth.*` callers. New `src/lib/auth.ts` is the front door for auth.
+
+**The change** (branch `claude/image-prompt-implementation-navk5j`, extends PR #627)
+- New `src/lib/auth.ts`: `updateUserPassword`, `resendSignupVerification`, `refreshSession`,
+  `getCurrentUser`, `signInWithGoogle` (redirects baked in, behavior identical).
+- `ChangePasswordDialog`, `VerifyEmail` → auth helpers (pure auth).
+- `CandidatePositions` → new `useUserQuizAnswersForComparison` (getUser + quiz_answers read
+  moved into the hook).
+- `Poll` → new `submitPollResponse` data fn in `usePolls.ts` + `signInWithGoogle`.
+- All 4 dropped from the eslint allowlist (now **22 files remaining**).
+
+**State** (verified)
+`bunx tsc --noEmit` 0 · `bun run lint` 0 errors (155 warnings) · `bun run build` ✓ ·
+`bun test` 146/146. No behavior change.
+
+**Next**
+22 left: admin read/write dialogs+cards (CandidateAnswersDialog, DonorAliasesPanel,
+CivicOfficialsPanel, CommitteeBreakdown, BillSummaryDashboard, BulkAnswerValidation,
+VendorRefundsPanel, AdminUserDetailDialog, CandidateAnswersPopover, IngestStatusPanel,
+BackfillAnswersControl, the two import-history components w/ undo RPCs), `SocialHandles`,
+`TikTokConnect`, `XComposer`, pages `PartyProfile`/`PoliticianDashboard`/`UserProfile`
+(1065 LOC, invokes+getUser+writes), `ShareProfileButton`, `BadgeAwardToast`, `AvatarUpload`
+(storage). Sweep in batches; delete the ratchet grandfather clause when empty.
+
 ## 2026-06-28 — Refactor Step 2 (cont.): 5 read screens behind query hooks
 
 **What & why**
