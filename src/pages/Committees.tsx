@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
 import { Header } from '@/components/Header';
 import { Seo } from '@/components/Seo';
 import { Card, CardContent } from '@/components/ui/card';
@@ -11,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useCommitteesPaginated, useCommitteeFilterOptions } from '@/hooks/useCommittees';
 import { Loader2, Landmark, Users, DollarSign, ArrowRight, Search, SlidersHorizontal, Inbox, Megaphone } from 'lucide-react';
 import { cn, formatCompactCurrency as formatCurrency, formatFullCurrency as formatCurrencyFull } from '@/lib/utils';
-import { supabase } from '@/integrations/supabase/client';
+import { useCommitteeIeTotals } from '@/hooks/useCommitteeIeTotals';
 import { CommitteesViewSwitcher } from '@/components/CommitteesViewSwitcher';
 import { CommitteeTopicBadge } from '@/components/CommitteeTopicBadge';
 import { useCommitteeTopicsMap } from '@/hooks/useCommitteeTopics';
@@ -104,22 +103,7 @@ export const Committees = () => {
     () => committees.map((c) => c.fecCommitteeId).filter(Boolean).slice(0, 200),
     [committees],
   );
-  const { data: ieMap } = useQuery({
-    queryKey: ['committees-ie-totals', visibleIds],
-    enabled: visibleIds.length > 0,
-    staleTime: 1000 * 60 * 10,
-    queryFn: async () => {
-      const { data: rows } = await supabase
-        .from('committee_independent_expenditure_totals')
-        .select('spending_committee_fec_id, total_amount')
-        .in('spending_committee_fec_id', visibleIds);
-      const map = new Map<string, number>();
-      (rows ?? []).forEach((r) => {
-        if (r.spending_committee_fec_id) map.set(r.spending_committee_fec_id, Number(r.total_amount ?? 0));
-      });
-      return map;
-    },
-  });
+  const { data: ieMap } = useCommitteeIeTotals(visibleIds);
 
   const { data: topicsMap } = useCommitteeTopicsMap(visibleIds);
   const { data: candidateMap } = useCommitteePrimaryCandidatesMap(visibleIds);

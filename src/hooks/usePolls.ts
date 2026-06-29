@@ -299,3 +299,14 @@ export const useTogglePollLibraryInclusion = () => {
     onError: (e: Error) => toast.error(e.message),
   });
 };
+
+// Record a poll response (anonymous or authenticated) via the RPC.
+export function submitPollResponse(params: {
+  p_poll_id: string;
+  p_anon_session_id: string | null;
+  p_referrer: string | null;
+  p_user_agent: string;
+  p_answers: unknown;
+}) {
+  return supabase.rpc('submit_poll_response', params as never);
+}

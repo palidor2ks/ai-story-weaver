@@ -49,3 +49,144 @@ export function useRecentAnsweredQuestionIds() {
     staleTime: 5 * 60 * 1000,
   });
 }
+
+// Count of a user's quiz answers (admin user-profile view).
+export function useUserAnswerCount(userId: string | undefined) {
+  return useQuery({
+    queryKey: ['admin', 'user-answer-count', userId],
+    enabled: !!userId,
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from('quiz_answers')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId);
+      if (error) throw error;
+      return count ?? 0;
+    },
+  });
+}
+
+// A user's answers joined with question text + topic name (representative
+// comparison card). Returns the raw joined rows.
+export function useUserAnswersWithDetails(userId: string | undefined) {
+  return useQuery({
+    queryKey: ['user-quiz-answers-with-details', userId],
+    queryFn: async () => {
+      if (!userId) return [];
+
+      const { data, error } = await supabase
+        .from('quiz_answers')
+        .select(`
+          question_id,
+          value,
+          questions:question_id (
+            text,
+            topics:topic_id (name)
+          )
+        `)
+        .eq('user_id', userId);
+
+      if (error) {
+        console.error('Error fetching user answers:', error);
+        return [];
+      }
+
+      return data || [];
+    },
+    enabled: !!userId,
+    staleTime: 1000 * 60 * 5,
+  });
+}
+
+export interface UserAnswerWithQuestion {
+  question_id: string;
+  value: number;
+  question_text: string;
+  topic_name: string;
+  is_skipped: boolean;
+}
+
+// A user's answers flattened to { value, question_text, topic_name, is_skipped }
+// (party comparison card).
+export function useUserAnswersWithQuestions(userId: string | undefined) {
+  return useQuery({
+    queryKey: ['quiz-answers-with-questions', userId],
+    queryFn: async (): Promise<UserAnswerWithQuestion[]> => {
+      if (!userId) return [];
+
+      const { data, error } = await supabase
+        .from('quiz_answers')
+        .select(`
+          question_id,
+          value,
+          selected_option_id,
+          questions!inner (
+            text,
+            topics!inner (name)
+          ),
+          question_options!quiz_answers_selected_option_id_fkey (
+            is_skip_option
+          )
+        `)
+        .eq('user_id', userId);
+
+      if (error) {
+        console.error('Error fetching user answers:', error);
+        return [];
+      }
+
+      return (data as unknown as Array<{
+        question_id: string;
+        value: number;
+        questions: { text: string; topics: { name: string } };
+        question_options?: { is_skip_option?: boolean } | null;
+      }>).map((a) => ({
+        question_id: a.question_id,
+        value: a.value,
+        question_text: a.questions.text,
+        topic_name: a.questions.topics.name,
+        is_skipped: a.question_options?.is_skip_option ?? false,
+      }));
+    },
+    enabled: !!userId,
+    staleTime: 1000 * 60 * 5,
+  });
+}
+
+export interface QuizAnswerForComparison {
+  question_id: string;
+  value: number;
+  selected_option: { id: string; text: string; value: number; is_skip_option: boolean | null } | null;
+}
+
+// The current user's answers with their selected option text, for comparing
+// against a candidate's positions. Resolves the user from the session itself.
+export function useUserQuizAnswersForComparison() {
+  return useQuery({
+    queryKey: ['user-quiz-answers-for-comparison'],
+    queryFn: async (): Promise<QuizAnswerForComparison[]> => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return [];
+
+      const { data, error } = await supabase
+        .from('quiz_answers')
+        .select(`
+          question_id,
+          value,
+          selected_option:question_options (
+            id,
+            text,
+            value,
+            is_skip_option
+          )
+        `)
+        .eq('user_id', user.id);
+
+      if (error) {
+        console.error('Error fetching user answers:', error);
+        return [];
+      }
+      return data as QuizAnswerForComparison[];
+    },
+  });
+}
