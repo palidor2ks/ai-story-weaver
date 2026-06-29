@@ -152,3 +152,41 @@ export function useUserAnswersWithQuestions(userId: string | undefined) {
     staleTime: 1000 * 60 * 5,
   });
 }
+
+export interface QuizAnswerForComparison {
+  question_id: string;
+  value: number;
+  selected_option: { id: string; text: string; value: number; is_skip_option: boolean | null } | null;
+}
+
+// The current user's answers with their selected option text, for comparing
+// against a candidate's positions. Resolves the user from the session itself.
+export function useUserQuizAnswersForComparison() {
+  return useQuery({
+    queryKey: ['user-quiz-answers-for-comparison'],
+    queryFn: async (): Promise<QuizAnswerForComparison[]> => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return [];
+
+      const { data, error } = await supabase
+        .from('quiz_answers')
+        .select(`
+          question_id,
+          value,
+          selected_option:question_options (
+            id,
+            text,
+            value,
+            is_skip_option
+          )
+        `)
+        .eq('user_id', user.id);
+
+      if (error) {
+        console.error('Error fetching user answers:', error);
+        return [];
+      }
+      return data as QuizAnswerForComparison[];
+    },
+  });
+}

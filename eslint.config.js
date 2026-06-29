@@ -96,8 +96,6 @@ export default tseslint.config(
     files: [
       "src/components/AvatarUpload.tsx",
       "src/components/BadgeAwardToast.tsx",
-      "src/components/CandidatePositions.tsx",
-      "src/components/ChangePasswordDialog.tsx",
       "src/components/ShareProfileButton.tsx",
       "src/components/admin/AdminUserDetailDialog.tsx",
       "src/components/admin/BackfillAnswersControl.tsx",
@@ -114,9 +112,7 @@ export default tseslint.config(
       "src/components/admin/VendorRefundsPanel.tsx",
       "src/pages/PartyProfile.tsx",
       "src/pages/PoliticianDashboard.tsx",
-      "src/pages/Poll.tsx",
       "src/pages/UserProfile.tsx",
-      "src/pages/VerifyEmail.tsx",
       "src/pages/admin/SocialHandles.tsx",
       "src/pages/admin/TikTokConnect.tsx",
       "src/pages/admin/XComposer.tsx",

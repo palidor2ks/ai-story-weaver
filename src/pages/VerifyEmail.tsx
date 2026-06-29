@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
+import { resendSignupVerification, refreshSession } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
@@ -15,11 +15,7 @@ export default function VerifyEmail() {
   const handleResend = async () => {
     if (!user?.email) return;
     setResending(true);
-    const { error } = await supabase.auth.resend({
-      type: 'signup',
-      email: user.email,
-      options: { emailRedirectTo: `${window.location.origin}/` },
-    });
+    const { error } = await resendSignupVerification(user.email);
     setResending(false);
     if (error) toast.error(error.message);
     else toast.success('Verification email sent. Check your inbox.');
@@ -27,7 +23,7 @@ export default function VerifyEmail() {
 
   const handleCheck = async () => {
     setChecking(true);
-    const { data, error } = await supabase.auth.refreshSession();
+    const { data, error } = await refreshSession();
     setChecking(false);
     if (error) {
       toast.error('Could not refresh session. Try signing out and back in.');

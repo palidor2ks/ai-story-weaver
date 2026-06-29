@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
-import { usePollBySlug, usePollTally } from '@/hooks/usePolls';
+import { usePollBySlug, usePollTally, submitPollResponse } from '@/hooks/usePolls';
+import { signInWithGoogle } from '@/lib/auth';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -77,7 +77,7 @@ export default function Poll() {
         };
       });
 
-      const { error } = await supabase.rpc('submit_poll_response', {
+      const { error } = await submitPollResponse({
         p_poll_id: poll.id,
         p_anon_session_id: user ? null : anonId,
         p_referrer: document.referrer || null,
@@ -215,10 +215,7 @@ function PollSignupPrompt({ anonSessionId, pollType }: { anonSessionId: string; 
     setBusy(true);
     // Persist anon id so we can claim after redirect
     localStorage.setItem('polipulse_pending_claim', anonSessionId);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: `${window.location.origin}/` },
-    });
+    const { error } = await signInWithGoogle();
     if (error) {
       toast.error(error.message);
       setBusy(false);
