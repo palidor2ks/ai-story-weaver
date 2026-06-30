@@ -5,6 +5,15 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-30 — Refactor Step 2 (cont.): 3 write files (Vendor/Avatar/Committee)
+
+**What &** First write-path migrations. New: useVendorRefunds (query + add/setActive/delete/retag
+data fns; panel keeps useMutation wrappers), src/lib/avatarUpload.ts (uploadUserAvatar storage
+fold), src/lib/committeeBreakdown.ts (fetch + setActive; invoke via invokeEdgeFunction). All 3
+off the allowlist (now **8 remaining**). tsc 0 / lint 0 / build OK / test 146. No behavior change.
+Next: BillSummaryDashboard, BulkAnswerValidation, CandidateAnswersDialog, CandidateAnswersPopover,
+CivicOfficialsPanel, DonorAliasesPanel, UserProfile, SocialHandles. Then delete the grandfather clause.
+
 ## 2026-06-30 — Refactor Step 2 (cont.): 4 read screens (PartyProfile reuse)
 
 **What & why**
