@@ -5,6 +5,33 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-30 — Refactor Step 2 (cont.): 4 read screens (PartyProfile reuse)
+
+**What & why**
+Next front-door batch — read-only screens. Notably PartyProfile reused existing hooks.
+
+**The change** (branch `claude/image-prompt-implementation-navk5j`, fresh PR off main)
+- `PartyProfile`: its two queries were byte-identical to existing hooks → reuses
+  `useUserAnswersWithQuestions` + `usePartyAnswers` (no new code).
+- New `src/hooks/usePoliticianDashboard.ts` (`usePoliticianQuestions`/`usePoliticianTopics`,
+  + types aliased back to `Question`/`Topic` in the page) → `PoliticianDashboard`.
+- New `src/hooks/useShareProfileData.ts` (`useShareProfileSpenderCauses`) → `ShareProfileButton`;
+  its 3 edge invokes go through `invokeEdgeFunction`.
+- New `src/hooks/useBackfillAnswers.ts` (`useBackfillAnswersProgress` + `BackfillProgress`) →
+  `BackfillAnswersControl`; its 2 invokes through `invokeEdgeFunction`.
+- All 4 dropped from the eslint allowlist (now **11 files remaining**).
+
+**State** (verified)
+`bunx tsc --noEmit` 0 · `bun run lint` 0 errors (154 warnings) · `bun run build` ✓ ·
+`bun test` 146/146. No behavior change.
+
+**Next**
+11 left, the read+write tail: admin `BillSummaryDashboard`, `BulkAnswerValidation`,
+`CandidateAnswersDialog`, `CandidateAnswersPopover`, `CivicOfficialsPanel`, `CommitteeBreakdown`,
+`DonorAliasesPanel`, `VendorRefundsPanel`, `SocialHandles`; page `UserProfile` (1065 LOC);
+`AvatarUpload` (storage). These need mutation hooks/data fns alongside reads. When the allowlist
+hits zero, DELETE the ratchet grandfather clause so the rule is unconditional.
+
 ## 2026-06-29 — Refactor Step 2 (cont.): 4 admin read panels/dialogs
 
 **What & why**
