@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Navigate, Link } from "react-router-dom";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { fetchTikTokAccounts, deleteTikTokAccount } from "@/lib/socialConnect";
+import { invokeEdgeFunction } from "@/lib/edgeFunctions";
 import { useAdminRole } from "@/hooks/useAdminRole";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { Button } from "@/components/ui/button";
@@ -24,10 +25,7 @@ export default function TikTokConnect() {
 
   const loadAccounts = async () => {
     setLoadingAccounts(true);
-    const { data: rows, error } = await supabase
-      .from("tiktok_account_tokens")
-      .select("id, open_id, display_name, avatar_url, expires_at, updated_at")
-      .order("updated_at", { ascending: false });
+    const { data: rows, error } = await fetchTikTokAccounts();
     if (error) {
       toast.error("Failed to load TikTok accounts", { description: error.message });
     } else {
@@ -47,7 +45,7 @@ export default function TikTokConnect() {
     setConnecting(true);
     try {
       const redirect_to = `${window.location.origin}/admin/tiktok-connect/callback`;
-      const { data: res, error } = await supabase.functions.invoke("tiktok-oauth-start", { body: { redirect_to } });
+      const { data: res, error } = await invokeEdgeFunction("tiktok-oauth-start", { body: { redirect_to } });
       if (error) throw error;
       if (res?.error) throw new Error(typeof res.error === "string" ? res.error : JSON.stringify(res.error));
       if (!res?.authorize_url) throw new Error("missing authorize_url");
@@ -61,7 +59,7 @@ export default function TikTokConnect() {
 
   const handleDisconnect = async (id: string, label: string) => {
     if (!confirm(`Disconnect ${label}?`)) return;
-    const { error } = await supabase.from("tiktok_account_tokens").delete().eq("id", id);
+    const { error } = await deleteTikTokAccount(id);
     if (error) {
       toast.error("Disconnect failed", { description: error.message });
       return;

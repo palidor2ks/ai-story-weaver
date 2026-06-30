@@ -5,6 +5,59 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-29 — Refactor Step 2 (cont.): 4 admin read panels/dialogs
+
+**What & why**
+Next front-door batch — admin read-heavy panels/dialogs (extends PR #628).
+
+**The change** (branch `claude/image-prompt-implementation-navk5j`)
+- New `src/lib/importHistory.ts`: `fetchDonorImportSessions`/`undoDonorImport`,
+  `fetchIeImportSessions`/`undoIeImport` (raw results; IE table/RPC `as any` casts kept here
+  with eslint-disable). `DonorImportHistory` + `IndependentExpenditureImportHistory` use it.
+- New `src/hooks/useCandidateIngest.ts`: `useCandidateIngestStatus`/`useCandidateIngestCounts`
+  (+ exported `IngestRow`, `REFRESH_MS`) → `IngestStatusPanel`.
+- New `src/hooks/useAdminUserDetail.ts`: the 5-way `Promise.all` aggregate →
+  `AdminUserDetailDialog`.
+- All 4 dropped from the eslint allowlist (now **15 files remaining**); the two untyped-table
+  modules joined the no-explicit-any warn list.
+
+**State** (verified)
+`bunx tsc --noEmit` 0 · `bun run lint` 0 errors (154 warnings) · `bun run build` ✓ ·
+`bun test` 146/146. No behavior change.
+
+**Next**
+15 left: admin `BackfillAnswersControl`, `BillSummaryDashboard`, `BulkAnswerValidation`,
+`CandidateAnswersDialog`, `CandidateAnswersPopover`, `CivicOfficialsPanel`, `CommitteeBreakdown`,
+`DonorAliasesPanel`, `VendorRefundsPanel`, `SocialHandles`; pages `PartyProfile`,
+`PoliticianDashboard`, `UserProfile` (1065 LOC); `ShareProfileButton`; `AvatarUpload` (storage).
+Delete the ratchet grandfather clause when empty.
+
+## 2026-06-29 — Refactor Step 2 (cont.): social-connect pages + BadgeAwardToast
+
+**What & why**
+Next front-door batch — the OAuth token pages + the badge toast poller.
+
+**The change** (branch `claude/image-prompt-implementation-navk5j`, fresh PR off main)
+- New `src/lib/socialConnect.ts`: `fetchTikTokAccounts`/`deleteTikTokAccount`,
+  `fetchXAccounts`/`deleteXAccount` (raw results; callers keep `{ data, error }`). TikTokConnect
+  + XComposer use it + `invokeEdgeFunction` for oauth-start / post-tweet.
+- New `src/lib/badgeNotifications.ts`: fetch pending + definitions + delete (the `as never`
+  untyped-table casts live here). BadgeAwardToast's poller uses it.
+- All 3 dropped from the eslint allowlist (now **19 files remaining**).
+
+**State** (verified)
+`bunx tsc --noEmit` 0 · `bun run lint` 0 errors (155 warnings) · `bun run build` ✓ ·
+`bun test` 146/146. No behavior change.
+
+**Next**
+19 left, mostly admin read/write dialogs+cards (AdminUserDetailDialog, BackfillAnswersControl,
+BillSummaryDashboard, BulkAnswerValidation, CandidateAnswersDialog, CandidateAnswersPopover,
+CivicOfficialsPanel, CommitteeBreakdown, DonorAliasesPanel, DonorImportHistory,
+IndependentExpenditureImportHistory, IngestStatusPanel, VendorRefundsPanel), `SocialHandles`,
+pages `PartyProfile`/`PoliticianDashboard`/`UserProfile` (1065 LOC), `ShareProfileButton`,
+`AvatarUpload` (storage). Detector caveat: watch multi-line `await supabase\n.from(...)` and
+`Array.from()` false positives. Delete the ratchet grandfather clause when empty.
+
 ## 2026-06-28 — Rep profile header: drop "Cash on hand"/"Party unity", add "Outside spend"
 
 **What & why**

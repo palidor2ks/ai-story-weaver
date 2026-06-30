@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Undo2, Loader2, RefreshCw } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { fetchIeImportSessions, undoIeImport } from '@/lib/importHistory';
 import { toast } from 'sonner';
 import {
   AlertDialog,
@@ -42,11 +42,7 @@ export function IndependentExpenditureImportHistory({ refreshKey, onUndo }: Prop
 
   const load = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('ie_import_sessions' as any)
-      .select('*')
-      .order('started_at', { ascending: false })
-      .limit(15);
+    const { data, error } = await fetchIeImportSessions();
     if (error) {
       console.error('[IEImportHistory] load error', error);
       toast.error('Failed to load IE import history');
@@ -61,7 +57,7 @@ export function IndependentExpenditureImportHistory({ refreshKey, onUndo }: Prop
   const handleUndo = async (s: IESession) => {
     setUndoingId(s.id);
     try {
-      const { data, error } = await supabase.rpc('undo_ie_import' as any, { p_session_id: s.id });
+      const { data, error } = await undoIeImport(s.id);
       if (error) throw error;
       const summary = data as { deleted_rows: number };
       toast.success(`Undone: ${summary.deleted_rows.toLocaleString()} expenditures removed`);

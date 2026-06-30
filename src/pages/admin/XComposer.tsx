@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { fetchXAccounts, deleteXAccount } from "@/lib/socialConnect";
+import { invokeEdgeFunction } from "@/lib/edgeFunctions";
 import { useAdminRole } from "@/hooks/useAdminRole";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { Button } from "@/components/ui/button";
@@ -30,10 +31,7 @@ export default function XComposer() {
 
   const loadAccounts = async () => {
     setLoadingAccounts(true);
-    const { data: rows, error } = await supabase
-      .from("x_account_tokens")
-      .select("id, account_handle, expires_at, updated_at")
-      .order("updated_at", { ascending: false });
+    const { data: rows, error } = await fetchXAccounts();
     if (error) {
       toast.error("Failed to load X accounts", { description: error.message });
     } else {
@@ -56,7 +54,7 @@ export default function XComposer() {
     setConnecting(true);
     try {
       const redirect_to = `${window.location.origin}/admin/x-connect/callback`;
-      const { data: res, error } = await supabase.functions.invoke("x-oauth-start", { body: { redirect_to } });
+      const { data: res, error } = await invokeEdgeFunction("x-oauth-start", { body: { redirect_to } });
       if (error) throw error;
       if (res?.error) throw new Error(typeof res.error === "string" ? res.error : JSON.stringify(res.error));
       if (!res?.authorize_url) throw new Error("missing authorize_url");
@@ -70,7 +68,7 @@ export default function XComposer() {
 
   const handleDisconnect = async (id: string, h: string) => {
     if (!confirm(`Disconnect @${h}?`)) return;
-    const { error } = await supabase.from("x_account_tokens").delete().eq("id", id);
+    const { error } = await deleteXAccount(id);
     if (error) {
       toast.error("Disconnect failed", { description: error.message });
       return;
@@ -84,7 +82,7 @@ export default function XComposer() {
     if (disabled) return;
     setSubmitting(true);
     try {
-      const { data: res, error } = await supabase.functions.invoke("x-post-tweet", {
+      const { data: res, error } = await invokeEdgeFunction("x-post-tweet", {
         body: {
           text: text.trim(),
           ...(handle.trim() ? { account_handle: handle.trim() } : {}),
