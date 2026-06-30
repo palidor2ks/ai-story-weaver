@@ -14,26 +14,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
 import { Loader2, Search, User, FileText, CheckCircle2, Clock, ExternalLink, Filter } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
-import { useQuery } from '@tanstack/react-query';
+import {
+  usePoliticianQuestions,
+  usePoliticianTopics,
+  type PoliticianQuestion as Question,
+  type PoliticianTopic as Topic,
+} from '@/hooks/usePoliticianDashboard';
 import { cn } from '@/lib/utils';
 import { logBadgeEvent } from '@/lib/badges';
-
-interface Question {
-  id: string;
-  text: string;
-  topic_id: string;
-  topics?: {
-    id: string;
-    name: string;
-  };
-}
-
-interface Topic {
-  id: string;
-  name: string;
-  icon: string;
-}
 
 export default function PoliticianDashboard() {
   const { user, loading: authLoading } = useAuth();
@@ -60,43 +48,10 @@ export default function PoliticianDashboard() {
   }, [claimedProfile?.office]);
 
   // Fetch questions scoped to this official's level
-  const { data: questions = [], isLoading: questionsLoading } = useQuery({
-    queryKey: ['politician-questions', officeScope],
-    enabled: !!officeScope,
-    queryFn: async () => {
-      const { data: scopedTopics, error: tErr } = await supabase
-        .from('topics')
-        .select('id')
-        .eq('scope', officeScope!);
-      if (tErr) throw tErr;
-      const topicIds = (scopedTopics || []).map(t => t.id);
-      if (topicIds.length === 0) return [] as Question[];
-      const { data, error } = await supabase
-        .from('questions')
-        .select('id, text, topic_id, topics(id, name)')
-        .in('topic_id', topicIds)
-        .order('topic_id');
-
-      if (error) throw error;
-      return data as Question[];
-    },
-  });
+  const { data: questions = [], isLoading: questionsLoading } = usePoliticianQuestions(officeScope);
 
   // Fetch topics scoped to this official's level
-  const { data: topics = [] } = useQuery({
-    queryKey: ['politician-topics', officeScope],
-    enabled: !!officeScope,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('topics')
-        .select('id, name, icon')
-        .eq('scope', officeScope!)
-        .order('name');
-
-      if (error) throw error;
-      return data as Topic[];
-    },
-  });
+  const { data: topics = [] } = usePoliticianTopics(officeScope);
 
   // Create a map of answers by question ID
   const answersMap = useMemo(() => {

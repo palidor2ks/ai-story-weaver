@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { useBackfillAnswersProgress, type BackfillProgress } from "@/hooks/useBackfillAnswers";
+import { invokeEdgeFunction } from "@/lib/edgeFunctions";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
@@ -18,38 +18,10 @@ import {
 import { Brain, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-type BackfillProgress = {
-  status: "running" | "complete" | "error" | "cancelled";
-  processed: number;
-  total: number;
-  successful: number;
-  failed: number;
-  currentCandidate?: string;
-  startedAt?: string;
-  completedAt?: string;
-  elapsedMinutes?: number;
-  error?: string;
-  failures?: { id: string; name: string; error: string }[];
-};
-
 export function BackfillAnswersControl() {
   const [showFailures, setShowFailures] = useState(false);
 
-  const { data: progress } = useQuery({
-    queryKey: ["backfill-answers-progress"],
-    queryFn: async (): Promise<BackfillProgress | null> => {
-      const { data } = await supabase
-        .from("admin_stats_cache")
-        .select("stat_value")
-        .eq("stat_key", "backfill_answers_progress")
-        .maybeSingle();
-      return (data?.stat_value as BackfillProgress) ?? null;
-    },
-    refetchInterval: (q) => {
-      const v = q.state.data as BackfillProgress | null;
-      return v?.status === "running" ? 5000 : 30000;
-    },
-  });
+  const { data: progress } = useBackfillAnswersProgress();
 
   const isRunning = progress?.status === "running";
   const pct = progress && progress.total > 0
@@ -57,7 +29,7 @@ export function BackfillAnswersControl() {
     : 0;
 
   const startBackfill = async () => {
-    const { data, error } = await supabase.functions.invoke("batch-regenerate-answers", {
+    const { data, error } = await invokeEdgeFunction("batch-regenerate-answers", {
       body: { visibleStatesOnly: true, batchSize: 5, delayBetweenCandidates: 3000 },
     });
     if (error) {
@@ -69,7 +41,7 @@ export function BackfillAnswersControl() {
   };
 
   const cancelBackfill = async () => {
-    const { error } = await supabase.functions.invoke("batch-regenerate-answers", {
+    const { error } = await invokeEdgeFunction("batch-regenerate-answers", {
       body: { action: "cancel" },
     });
     if (error) {

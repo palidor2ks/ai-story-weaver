@@ -32,8 +32,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { useUserAnswersWithQuestions } from '@/hooks/useQuizAnswers';
+import { usePartyAnswers } from '@/hooks/usePartyAnswers';
 import { useMemo } from 'react';
 
 const iconMap: Record<string, typeof Building2> = {
@@ -53,91 +53,10 @@ export default function PartyProfile() {
   const generateComparison = useGeneratePartyComparison();
 
   // Fetch user's quiz answers for AI comparison
-  const { data: userAnswers = [] } = useQuery({
-    queryKey: ['quiz-answers-with-questions', user?.id],
-    queryFn: async () => {
-      if (!user?.id) return [];
-      
-      const { data, error } = await supabase
-        .from('quiz_answers')
-        .select(`
-          question_id,
-          value,
-          selected_option_id,
-          questions!inner (
-            text,
-            topics!inner (name)
-          ),
-          question_options!quiz_answers_selected_option_id_fkey (
-            is_skip_option
-          )
-        `)
-        .eq('user_id', user.id);
-
-      if (error) {
-        console.error('Error fetching user answers:', error);
-        return [];
-      }
-
-      return (data as unknown as Array<{
-        question_id: string;
-        value: number;
-        questions: { text: string; topics: { name: string } };
-        question_options?: { is_skip_option?: boolean } | null;
-      }>).map((a) => ({
-        question_id: a.question_id,
-        value: a.value,
-        question_text: a.questions.text,
-        topic_name: a.questions.topics.name,
-        is_skipped: a.question_options?.is_skip_option ?? false,
-      }));
-    },
-    enabled: !!user?.id,
-    staleTime: 1000 * 60 * 5,
-  });
+  const { data: userAnswers = [] } = useUserAnswersWithQuestions(user?.id);
 
   // Fetch party's answers for AI comparison
-  const { data: partyAnswersForAI = [] } = useQuery({
-    queryKey: ['party-answers-with-questions', id],
-    queryFn: async () => {
-      if (!id) return [];
-      const { data, error } = await supabase
-        .from('party_answers')
-        .select(`
-          question_id,
-          answer_value,
-          source_url,
-          source_description,
-          questions!inner (
-            text,
-            topics!inner (name)
-          )
-        `)
-        .eq('party_id', id);
-
-      if (error) {
-        console.error('Error fetching party answers:', error);
-        return [];
-      }
-
-      return (data as unknown as Array<{
-        question_id: string;
-        answer_value: number;
-        source_url: string | null;
-        source_description: string | null;
-        questions: { text: string; topics: { name: string } };
-      }>).map((a) => ({
-        question_id: a.question_id,
-        value: a.answer_value,
-        source_url: a.source_url,
-        source_description: a.source_description,
-        question_text: a.questions.text,
-        topic_name: a.questions.topics.name,
-      }));
-    },
-    enabled: !!id,
-    staleTime: 1000 * 60 * 10,
-  });
+  const { data: partyAnswersForAI = [] } = usePartyAnswers(id ?? '');
 
   // Check if comparison is stale
   const isStale = useMemo(() => {

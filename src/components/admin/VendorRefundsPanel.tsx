@@ -1,6 +1,12 @@
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  useVendorRefunds,
+  addVendorRefund,
+  setVendorRefundActive,
+  deleteVendorRefund,
+  retagVendorRefunds,
+} from '@/hooks/useVendorRefunds';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,14 +15,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { toast } from 'sonner';
 import { Loader2, Trash2, RefreshCw, Plus } from 'lucide-react';
 
-interface Vendor {
-  id: string;
-  name: string;
-  category: string | null;
-  notes: string | null;
-  is_active: boolean;
-}
-
 export function VendorRefundsPanel() {
   const qc = useQueryClient();
   const [name, setName] = useState('');
@@ -24,23 +22,11 @@ export function VendorRefundsPanel() {
   const [notes, setNotes] = useState('');
   const [retagging, setRetagging] = useState(false);
 
-  const { data: vendors = [], isLoading } = useQuery({
-    queryKey: ['vendor-refund-orgs'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('vendor_refund_organizations')
-        .select('*')
-        .order('name');
-      if (error) throw error;
-      return (data as Vendor[]) || [];
-    },
-  });
+  const { data: vendors = [], isLoading } = useVendorRefunds();
 
   const addMutation = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase
-        .from('vendor_refund_organizations')
-        .insert({ name: name.trim().toUpperCase(), category, notes: notes || null });
+      const { error } = await addVendorRefund({ name: name.trim().toUpperCase(), category, notes: notes || null });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -53,10 +39,7 @@ export function VendorRefundsPanel() {
 
   const toggleMutation = useMutation({
     mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) => {
-      const { error } = await supabase
-        .from('vendor_refund_organizations')
-        .update({ is_active })
-        .eq('id', id);
+      const { error } = await setVendorRefundActive(id, is_active);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['vendor-refund-orgs'] }),
@@ -65,7 +48,7 @@ export function VendorRefundsPanel() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('vendor_refund_organizations').delete().eq('id', id);
+      const { error } = await deleteVendorRefund(id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -78,7 +61,7 @@ export function VendorRefundsPanel() {
   const handleRetag = async () => {
     setRetagging(true);
     try {
-      const { data, error } = await (supabase as any).rpc('retag_vendor_refunds');
+      const { data, error } = await retagVendorRefunds();
       if (error) throw error;
       toast.success(`Re-tagged ${data ?? 0} donor rows`);
       qc.invalidateQueries({ queryKey: ['committee-donors'] });

@@ -63,6 +63,7 @@ export default tseslint.config(
       // generated types yet — same untyped-table reason as the entries above.
       "src/hooks/useCandidateIngest.ts",
       "src/lib/importHistory.ts",
+      "src/hooks/useVendorRefunds.ts",
     ],
     rules: {
       "@typescript-eslint/no-explicit-any": "warn",
@@ -98,19 +99,12 @@ export default tseslint.config(
     // existed. Migrate one per PR (extract its queries into src/hooks/) and delete
     // its entry here. When this list is empty, the front-door migration is done.
     files: [
-      "src/components/AvatarUpload.tsx",
-      "src/components/ShareProfileButton.tsx",
-      "src/components/admin/BackfillAnswersControl.tsx",
       "src/components/admin/BillSummaryDashboard.tsx",
       "src/components/admin/BulkAnswerValidation.tsx",
       "src/components/admin/CandidateAnswersDialog.tsx",
       "src/components/admin/CandidateAnswersPopover.tsx",
       "src/components/admin/CivicOfficialsPanel.tsx",
-      "src/components/admin/CommitteeBreakdown.tsx",
       "src/components/admin/DonorAliasesPanel.tsx",
-      "src/components/admin/VendorRefundsPanel.tsx",
-      "src/pages/PartyProfile.tsx",
-      "src/pages/PoliticianDashboard.tsx",
       "src/pages/UserProfile.tsx",
       "src/pages/admin/SocialHandles.tsx",
     ],

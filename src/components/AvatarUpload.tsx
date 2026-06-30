@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { User, Camera, Loader2 } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { uploadUserAvatar } from '@/lib/avatarUpload';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { logBadgeEvent } from '@/lib/badges';
@@ -37,32 +37,7 @@ export const AvatarUpload = ({ userId, currentAvatarUrl, userName, onAvatarChang
     setIsUploading(true);
 
     try {
-      // Create a unique filename
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${userId}/avatar.${fileExt}`;
-
-      // Upload to Supabase Storage
-      const { error: uploadError } = await supabase.storage
-        .from('avatars')
-        .upload(fileName, file, { upsert: true });
-
-      if (uploadError) throw uploadError;
-
-      // Get the public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('avatars')
-        .getPublicUrl(fileName);
-
-      // Add cache-busting query param
-      const urlWithCacheBust = `${publicUrl}?t=${Date.now()}`;
-
-      // Update profile with new avatar URL
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({ avatar_url: urlWithCacheBust })
-        .eq('id', userId);
-
-      if (updateError) throw updateError;
+      const urlWithCacheBust = await uploadUserAvatar(userId, file);
 
       setPreviewUrl(urlWithCacheBust);
       onAvatarChange(urlWithCacheBust);
