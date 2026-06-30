@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { readCache, writeCache } from "../_shared/ai-cache.ts";
-import { callGeminiGrounded, extractJson, getGoogleAIKey } from "../_shared/gemini-research.ts";
+import { callGeminiGrounded, extractJson, GeminiQuotaError, getGoogleAIKey } from "../_shared/gemini-research.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -187,6 +187,13 @@ Return ${isFull ? 'one position for every topic above' : 'up to 4 positions'} as
     });
 
   } catch (error: unknown) {
+    if (error instanceof GeminiQuotaError) {
+      console.warn('ai-policy-card-positions: Google AI quota exceeded');
+      return new Response(
+        JSON.stringify({ error: 'AI analysis temporarily unavailable (quota limit). Please try again later.', positions: [] }),
+        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
     console.error('ai-policy-card-positions error', error);
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error', positions: [] }),

@@ -3,6 +3,7 @@ import { demoteUnverifiableVoteClaims, demoteUncitedWebResearch } from "../_shar
 import {
   callGeminiGrounded,
   extractJson,
+  GeminiQuotaError,
   resolveGroundedSources,
   getGoogleAIKey,
 } from "../_shared/gemini-research.ts";
@@ -671,6 +672,10 @@ async function generateAnswersForCandidate(
       console.log(`[Generate] Saved ${totalGenerated}/${questions.length}`);
 
     } catch (e) {
+      if (e instanceof GeminiQuotaError) {
+        console.warn(`[Generate] Google AI quota exceeded — stopping early after ${totalGenerated} answers.`);
+        break;
+      }
       console.error(`[Generate] Error for ${question.id}:`, e);
       failedCount++;
       // Do not persist a placeholder row on error; leave the question unanswered.

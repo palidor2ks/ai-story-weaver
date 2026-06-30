@@ -1,6 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { callGeminiGrounded, getGoogleAIKey } from '../_shared/gemini-research.ts';
+import { callGeminiGrounded, GeminiQuotaError, getGoogleAIKey } from '../_shared/gemini-research.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -180,8 +180,8 @@ Return JSON:
     text = result.text;
   } catch (err: any) {
     console.error('Gemini generation error:', err);
-    if (err?.message?.includes('429')) {
-      return { success: false, error: 'Rate limit exceeded. Please try again later.', status: 429 };
+    if (err instanceof GeminiQuotaError) {
+      return { success: false, error: 'AI quota limit reached. Please try again later.', status: 429 };
     }
     return { success: false, error: 'AI service error', status: 500 };
   }
