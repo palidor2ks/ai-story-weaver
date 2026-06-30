@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import {
   callGeminiGrounded,
+  GeminiQuotaError,
   resolveGroundedSources,
 } from '../_shared/gemini-research.ts';
 
@@ -157,10 +158,15 @@ KEY_QUOTE: ""`;
     const err = e instanceof Error ? e : new Error(String(e));
     console.error('Gemini grounding error:', err.message);
 
+    if (e instanceof GeminiQuotaError) {
+      console.warn('Google AI quota exceeded — skipping source enrichment.');
+      return { sourceDescription: '', sourceUrls: [], sourceTitles: [], keyQuote: '', success: false };
+    }
+
     if (retryCount < maxRetries) {
-      const isRateLimitOrServer = err.message.includes('429') || err.message.match(/5\d\d/);
+      const isServerError = err.message.match(/5\d\d/);
       const delay = Math.pow(2, retryCount + 1) * 1000;
-      if (isRateLimitOrServer) {
+      if (isServerError) {
         console.log(`Retrying in ${delay}ms (attempt ${retryCount + 1}/${maxRetries})`);
         await new Promise(r => setTimeout(r, delay));
         return researchSources(partyId, partyName, questionText, answerValue, retryCount + 1);

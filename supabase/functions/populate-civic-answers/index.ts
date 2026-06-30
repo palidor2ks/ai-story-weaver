@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import {
   callGeminiGrounded,
   extractJson,
+  GeminiQuotaError,
   getGoogleAIKey,
   resolveGroundedSources,
 } from '../_shared/gemini-research.ts';
@@ -186,6 +187,11 @@ async function processOfficial(
         officialName, office, state, party, batch,
       ));
     } catch (e) {
+      if (e instanceof GeminiQuotaError) {
+        console.warn(`[${officialName}] Google AI quota exceeded — stopping early to avoid waste.`);
+        errors.push('quota_exceeded');
+        break;
+      }
       console.error(`[${officialName}] Gemini error on batch ${i / BATCH_SIZE_PER_AI_CALL + 1}:`, e);
       errors.push(`batch_${i}: ${e instanceof Error ? e.message : String(e)}`);
       continue;

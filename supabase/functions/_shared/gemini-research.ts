@@ -108,6 +108,36 @@ export interface GeminiCallOptions {
 }
 
 /**
+ * Thrown when the Google AI quota is exhausted or the API is rate-limiting (HTTP 429/503).
+ * Callers can catch this specifically to skip/defer work without treating it as a bug.
+ */
+export class GeminiQuotaError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'GeminiQuotaError';
+  }
+}
+
+/**
+ * Like `callGeminiGrounded` but returns `null` on quota/rate-limit errors instead of throwing.
+ * Use this when hitting the budget limit should silently skip the work rather than crash.
+ */
+export async function callGeminiGroundedSafe(
+  opts: GeminiCallOptions,
+  onQuota?: (err: GeminiQuotaError) => void,
+): Promise<GroundedResult | null> {
+  try {
+    return await callGeminiGrounded(opts);
+  } catch (err) {
+    if (err instanceof GeminiQuotaError) {
+      onQuota?.(err);
+      return null;
+    }
+    throw err;
+  }
+}
+
+/**
  * Call Gemini with Google Search grounding and return the text + raw citations.
  * Throws on HTTP error or missing key so callers can fall back / retry.
  */
@@ -158,6 +188,11 @@ export async function callGeminiGrounded(opts: GeminiCallOptions): Promise<Groun
 
   if (!res.ok) {
     const msg = await res.text().catch(() => '');
+    // 429 = quota exhausted / rate limited; 503 = service overloaded.
+    // Surface as a typed error so callers can degrade gracefully instead of crashing.
+    if (res.status === 429 || res.status === 503) {
+      throw new GeminiQuotaError(`Gemini ${res.status}: ${msg.slice(0, 300)}`);
+    }
     throw new Error(`Gemini ${res.status}: ${msg.slice(0, 300)}`);
   }
 
