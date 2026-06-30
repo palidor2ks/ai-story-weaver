@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Undo2, Loader2, RefreshCw } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { fetchDonorImportSessions, undoDonorImport } from '@/lib/importHistory';
 import { toast } from 'sonner';
 import { isStalledImport } from './donorImportStatus';
 import {
@@ -51,11 +51,7 @@ export function DonorImportHistory({ refreshKey, onUndo }: Props) {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('donor_import_sessions')
-      .select('*')
-      .order('started_at', { ascending: false })
-      .limit(15);
+    const { data, error } = await fetchDonorImportSessions();
     if (error) {
       console.error('[DonorImportHistory] load error', error);
       toast.error('Failed to load import history');
@@ -70,7 +66,7 @@ export function DonorImportHistory({ refreshKey, onUndo }: Props) {
   const handleUndo = async (s: ImportSession) => {
     setUndoingId(s.id);
     try {
-      const { data, error } = await supabase.rpc('undo_donor_import', { p_session_id: s.id });
+      const { data, error } = await undoDonorImport(s.id);
       if (error) throw error;
       const summary = data as { deleted_contributions: number; deleted_donors: number };
       toast.success(`Undone: ${summary.deleted_contributions.toLocaleString()} contributions, ${summary.deleted_donors.toLocaleString()} donors removed`);

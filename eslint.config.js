@@ -59,6 +59,10 @@ export default tseslint.config(
       // SocialPost.stat_payload is an untyped JSON column (any), like the hooks above.
       "src/hooks/useSocialPosts.ts",
       "src/hooks/useRepComparison.ts",
+      // candidate_ingest_status / ie_import_sessions / undo_ie_import aren't in the
+      // generated types yet — same untyped-table reason as the entries above.
+      "src/hooks/useCandidateIngest.ts",
+      "src/lib/importHistory.ts",
     ],
     rules: {
       "@typescript-eslint/no-explicit-any": "warn",
@@ -96,7 +100,6 @@ export default tseslint.config(
     files: [
       "src/components/AvatarUpload.tsx",
       "src/components/ShareProfileButton.tsx",
-      "src/components/admin/AdminUserDetailDialog.tsx",
       "src/components/admin/BackfillAnswersControl.tsx",
       "src/components/admin/BillSummaryDashboard.tsx",
       "src/components/admin/BulkAnswerValidation.tsx",
@@ -105,9 +108,6 @@ export default tseslint.config(
       "src/components/admin/CivicOfficialsPanel.tsx",
       "src/components/admin/CommitteeBreakdown.tsx",
       "src/components/admin/DonorAliasesPanel.tsx",
-      "src/components/admin/DonorImportHistory.tsx",
-      "src/components/admin/IndependentExpenditureImportHistory.tsx",
-      "src/components/admin/IngestStatusPanel.tsx",
       "src/components/admin/VendorRefundsPanel.tsx",
       "src/pages/PartyProfile.tsx",
       "src/pages/PoliticianDashboard.tsx",

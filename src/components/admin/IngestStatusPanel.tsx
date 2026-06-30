@@ -1,26 +1,16 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  useCandidateIngestStatus,
+  useCandidateIngestCounts,
+  REFRESH_MS,
+  type IngestRow,
+} from "@/hooks/useCandidateIngest";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Loader2, RefreshCw, Activity } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
-
-interface IngestRow {
-  source: string;
-  status: string;
-  last_started_at: string | null;
-  last_completed_at: string | null;
-  last_total_fetched: number | null;
-  last_total_new: number | null;
-  last_page: number | null;
-  error_message: string | null;
-  cursor: Record<string, unknown> | null;
-  updated_at: string | null;
-}
-
-const REFRESH_MS = 15000;
 
 function statusVariant(status: string): "default" | "secondary" | "destructive" {
   if (status === "error") return "destructive";
@@ -55,32 +45,8 @@ function notes(r: IngestRow): string {
 export function IngestStatusPanel() {
   const qc = useQueryClient();
 
-  const { data: rows, isLoading, isFetching } = useQuery({
-    queryKey: ["candidate-ingest-status"],
-    queryFn: async () => {
-      // candidate_ingest_status isn't in the generated types yet, so cast the client.
-      const { data, error } = await (supabase as any)
-        .from("candidate_ingest_status")
-        .select("*")
-        .order("source");
-      if (error) throw error;
-      return (data ?? []) as IngestRow[];
-    },
-    refetchInterval: REFRESH_MS,
-  });
-
-  const { data: counts } = useQuery({
-    queryKey: ["candidate-ingest-counts"],
-    queryFn: async () => {
-      const total = await supabase.from("candidates").select("id", { count: "exact", head: true });
-      const pending = await supabase
-        .from("candidates")
-        .select("id", { count: "exact", head: true })
-        .eq("answers_source", "pending_research");
-      return { total: total.count ?? 0, pending: pending.count ?? 0 };
-    },
-    refetchInterval: REFRESH_MS,
-  });
+  const { data: rows, isLoading, isFetching } = useCandidateIngestStatus();
+  const { data: counts } = useCandidateIngestCounts();
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["candidate-ingest-status"] });
