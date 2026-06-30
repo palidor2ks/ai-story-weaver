@@ -5,6 +5,30 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-28 — Rep profile header: drop "Cash on hand"/"Party unity", add "Outside spend"
+
+**What & why**
+Per request (annotated screenshot + follow-up): removed the two empty/placeholder metric cards
+on the candidate (rep) profile header — **Cash on hand** (often `—`) and **Party unity**
+(hardcoded `—`, never wired to data) — and added an **Outside spend** box showing independent
+expenditures **For** (green) and **Against** (red) in a single box.
+
+**The change** (branch `claude/remove-cash-party-rep-profile-dc8rje`)
+- `src/pages/CandidateProfile.tsx` STAT GRID: dropped `Cash on hand` and the hardcoded
+  `Party unity` box. Grid stays `grid-cols-2`: **Total raised** + **Spent** on the top row,
+  **legislative alignment** + **Outside spend** on the second row.
+- Outside spend pulls from the existing `useCandidateIE(id, effectiveCycle)` hook
+  (`totals.support_amount` / `oppose_amount`) — the same canonical IE source already powering
+  the Money-tab IE section, so the header figure can't disagree with it. No new data path.
+  `fecTotals` is still used elsewhere on the page, so no dead code.
+
+**State** (verified)
+`bun run lint` 0 errors (157 pre-existing `any` warnings) · `bun run build` ✓ · `bun test`
+59/59. UI-only change reusing an existing data hook.
+
+**Next**
+None required. (Pre-existing Step 2 front-door refactor remains the open thread below.)
+
 ## 2026-06-28 — Refactor Step 2 (cont.): auth front door + 4 auth/mixed files
 
 **What & why**
