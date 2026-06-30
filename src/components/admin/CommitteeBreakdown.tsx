@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { fetchCandidateCommittees, setCommitteeActive } from '@/lib/committeeBreakdown';
+import { invokeEdgeFunction } from '@/lib/edgeFunctions';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
@@ -67,11 +68,7 @@ export function CommitteeBreakdown({
   const EXTERNAL_DESIGNATIONS = ['J', 'U', 'B', 'D'];
 
   const fetchCommittees = async () => {
-    const { data, error } = await supabase
-      .from('candidate_committees')
-      .select('id, fec_committee_id, name, designation, designation_full, role, active, local_itemized_total, fec_itemized_total, last_sync_completed_at, last_sync_started_at, last_index, has_more, cycles, is_terminated, last_contribution_date')
-      .eq('candidate_id', candidateId)
-      .order('role', { ascending: true });
+    const { data, error } = await fetchCandidateCommittees(candidateId);
 
     if (error) {
       console.error('[CommitteeBreakdown] Error:', error);
@@ -142,7 +139,7 @@ export function CommitteeBreakdown({
   const handleRefreshCommittees = async () => {
     setRefreshing(true);
     try {
-      const { data, error } = await supabase.functions.invoke('fetch-fec-committees', {
+      const { data, error } = await invokeEdgeFunction('fetch-fec-committees', {
         body: { candidateId, fecCandidateId }
       });
 
@@ -166,10 +163,7 @@ export function CommitteeBreakdown({
   const handleToggleActive = async (committee: Committee) => {
     setTogglingIds(prev => new Set(prev).add(committee.id));
     try {
-      const { error } = await supabase
-        .from('candidate_committees')
-        .update({ active: !committee.active, updated_at: new Date().toISOString() })
-        .eq('id', committee.id);
+      const { error } = await setCommitteeActive(committee.id, !committee.active);
 
       if (error) throw error;
 
