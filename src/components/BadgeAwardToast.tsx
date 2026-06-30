@@ -1,7 +1,11 @@
 import { useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
+import {
+  fetchPendingBadgeNotifications,
+  fetchBadgeDefinitions,
+  deletePendingBadgeNotifications,
+} from '@/lib/badgeNotifications';
 import { useQueryClient } from '@tanstack/react-query';
 
 /**
@@ -20,19 +24,13 @@ export function BadgeAwardToast() {
     seen.current = new Set<string>();
 
     const poll = async () => {
-      const { data, error } = await supabase
-        .from('pending_badge_notifications' as never)
-        .select('id,badge_slug')
-        .eq('user_id', userId);
+      const { data, error } = await fetchPendingBadgeNotifications(userId);
       if (error || !data) return;
       const rows = data as unknown as Array<{ id: string; badge_slug: string }>;
       if (rows.length === 0) return;
 
       // Lookup names from catalog cache
-      const { data: defs } = await supabase
-        .from('badge_definitions' as never)
-        .select('slug,name,icon,description')
-        .in('slug', rows.map(r => r.badge_slug));
+      const { data: defs } = await fetchBadgeDefinitions(rows.map(r => r.badge_slug));
       const defMap = new Map<string, { name: string; icon: string | null; description: string }>(
         ((defs ?? []) as unknown as Array<{ slug: string; name: string; icon: string | null; description: string }>)
           .map(d => [d.slug, d])
@@ -50,7 +48,7 @@ export function BadgeAwardToast() {
         toDelete.push(row.id);
       }
       if (toDelete.length > 0) {
-        await supabase.from('pending_badge_notifications' as never).delete().in('id', toDelete);
+        await deletePendingBadgeNotifications(toDelete);
         queryClient.invalidateQueries({ queryKey: ['user_badges', userId] });
       }
     };

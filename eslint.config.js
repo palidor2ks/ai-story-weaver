@@ -95,7 +95,6 @@ export default tseslint.config(
     // its entry here. When this list is empty, the front-door migration is done.
     files: [
       "src/components/AvatarUpload.tsx",
-      "src/components/BadgeAwardToast.tsx",
       "src/components/ShareProfileButton.tsx",
       "src/components/admin/AdminUserDetailDialog.tsx",
       "src/components/admin/BackfillAnswersControl.tsx",
@@ -114,8 +113,6 @@ export default tseslint.config(
       "src/pages/PoliticianDashboard.tsx",
       "src/pages/UserProfile.tsx",
       "src/pages/admin/SocialHandles.tsx",
-      "src/pages/admin/TikTokConnect.tsx",
-      "src/pages/admin/XComposer.tsx",
     ],
     rules: {
       "no-restricted-imports": "off",
