@@ -5,6 +5,34 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-30 — donor alias in Top Donors: investigation only (no code change)
+
+**What happened & why**
+Looked into whether the donor alias is applied in the candidate page "TOP DONORS" card.
+Finding: the on-page card (`src/pages/CandidateProfile.tsx:776`) renders only
+`donor.display_name || donor.name` — i.e. it relies on the trigger-set `display_name`
+column and does NOT use the live `donorAliasNameMap` fetched in the same component
+(`CandidateProfile.tsx:190-211`, from `donor_alias_members → donor_aliases.canonical_name`).
+That live map is consumed ONLY by the Share card (`ShareProfileButton`). So the on-page
+card and the share image can disagree on aliased PAC/Org names. Individual donors are
+never aliased by design (lookup is gated to PAC/Organization at `CandidateProfile.tsx:182`),
+so names like "CAMPION, SONYA/TOM" are raw FEC contributor names regardless.
+A trial change was reverted — branch is back at main, clean.
+
+**State** (verified 2026-06-30)
+No files changed. Branch `claude/donor-alias-usage-qyh80a` == `origin/main` (b81ca55),
+working tree clean. Nothing built/linted/tested — no diff to verify. Finding is from
+code reading only, not confirmed against live data.
+
+**Next**
+Decide whether the Top Donors card should apply `donorAliasNameMap` like the Share card
+does (one-line change at CandidateProfile.tsx:776), so the two views stop disagreeing.
+
+**Deferred**
+- proxy-image edge function deploy + Texas share-card check (from prior entry, PR #596).
+
+---
+
 ## 2026-06-26 — proxy-image now allows .gov + state.XX.us hosts (Texas legislator photos) — PR #596
 
 **What happened & why**
