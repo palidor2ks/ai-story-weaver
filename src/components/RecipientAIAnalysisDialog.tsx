@@ -11,7 +11,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Loader2, ExternalLink, AlertTriangle, Database, Globe, BookOpen, RefreshCw, X } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { invokeEdgeFunction } from '@/lib/edgeFunctions';
 import { ShareAIAnalysisButton } from '@/components/ShareAIAnalysisButton';
 
 export interface RelatedEntity {
@@ -94,7 +94,7 @@ export const RecipientAIAnalysisDialog = ({
     setIsLoading(true);
     setError(null);
     try {
-      const { data, error: fnError } = await supabase.functions.invoke('ai-recipient-analysis', {
+      const { data, error: fnError } = await invokeEdgeFunction('ai-recipient-analysis', {
         body: {
           entity_kind: entityKind,
           entity_id: entityId,

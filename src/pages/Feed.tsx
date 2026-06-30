@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { Header } from '@/components/Header';
 import { Seo } from '@/components/Seo';
 import { CandidateCard } from '@/components/CandidateCard';
@@ -20,7 +20,7 @@ import { Candidate, GovernmentLevel } from '@/types';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
-import { supabase } from '@/integrations/supabase/client';
+import { useRecentAnsweredQuestionIds } from '@/hooks/useQuizAnswers';
 import { usePersonalizedScoreMap } from '@/hooks/usePersonalizedScoreMap';
 
 export const Feed = () => {
@@ -28,20 +28,7 @@ export const Feed = () => {
 
   const { data: profile, isLoading: profileLoading } = useProfile();
   const { data: userTopics = [] } = useUserTopics();
-  const { data: userQuestionIds = [] } = useQuery({
-    queryKey: ['feed-user-question-ids'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('quiz_answers')
-        .select('question_id')
-        .order('created_at', { ascending: false })
-        .limit(150);
-
-      if (error) throw error;
-      return Array.from(new Set((data ?? []).map((row) => row.question_id).filter(Boolean)));
-    },
-    staleTime: 5 * 60 * 1000,
-  });
+  const { data: userQuestionIds = [] } = useRecentAnsweredQuestionIds();
   const unified = useUnifiedCandidates({ address: profile?.address });
   const { data: upcomingElections } = useUpcomingElections(profile?.address);
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from '@/lib/edgeFunctions';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Loader2, CheckCircle2, AlertCircle } from "lucide-react";
@@ -53,7 +53,7 @@ export default function Unsubscribe() {
   const confirm = async () => {
     if (!token) return;
     setState({ status: "submitting" });
-    const { data, error } = await supabase.functions.invoke("handle-email-unsubscribe", {
+    const { data, error } = await invokeEdgeFunction("handle-email-unsubscribe", {
       body: { token },
     });
     if (error) {

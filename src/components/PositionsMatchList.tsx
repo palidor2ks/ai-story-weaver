@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, Loader2 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { invokeEdgeFunction } from '@/lib/edgeFunctions';
 import { getTopicDescription } from '@/lib/topicDescriptions';
 import { compareStances, stanceBadgeClass, stanceShortLabel } from '@/lib/stance';
 import { cn } from '@/lib/utils';
@@ -68,7 +68,7 @@ export const PositionsMatchList = ({
   const { data: aiPositions } = useQuery({
     queryKey: ['policy-positions-full', candidateId],
     queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke('ai-policy-card-positions', {
+      const { data, error } = await invokeEdgeFunction('ai-policy-card-positions', {
         body: { candidateId, full: true },
       });
       if (error) throw error;
@@ -255,7 +255,7 @@ const TopicAnalysisDialog = ({ candidateId, candidateName, topic, onClose }: Top
     // userScore is part of the key so the comparison re-fetches if the viewer's stance changes.
     queryKey: ['topic-analysis', candidateId, topic?.topicId, topic?.userScore ?? null],
     queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke('ai-topic-analysis', {
+      const { data, error } = await invokeEdgeFunction('ai-topic-analysis', {
         body: {
           candidateId,
           topicId: topic!.topicId,

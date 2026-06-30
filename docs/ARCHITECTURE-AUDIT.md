@@ -257,14 +257,33 @@ matching reviewer from `CLAUDE.md`'s council. Ordered by ROI-to-risk.
   `@/integrations/supabase/client` import in `src/components/**`/`src/pages/**`,
   with a grandfather allowlist of the files that predate the rule. New files can't
   add raw queries; the allowlist shrinks by one entry per migration PR.
-  - **Done:** the guard itself + `ComparePanel.tsx` migrated (its 3 inline reads
-    extracted into `src/hooks/useCompareFinance.ts`; removed from the allowlist).
-    Allowlist: **66 files remaining**.
-  - **Sequencing:** read-only user-facing files first (`CandidateProfile`,
-    `TopSpenders`, `DonorProfile`), then admin read-heavy panels, then the admin
-    mutation panels (`CommitteeAliasesPanel`, `QuestionManagementPanel`,
-    `SocialPosts`) last (they need `useMutation` + cache invalidation — highest
-    behavior-change risk). Route each diff to `frontend-reviewer`.
+  - **Done:** the guard itself + the three read-only user-facing pages migrated —
+    `ComparePanel` → `useCompareFinance`, `CandidateProfile` →
+    `useDonorAliasNames`, `TopSpenders` → `useTopSpenders`, `DonorProfile` →
+    `useDonorProfile`. Then 3 admin panels migrated **including their mutations**
+    (the "read-heavy" admin panels turned out to contain writes/RPCs, so clearing
+    a file from the allowlist requires moving mutations too):
+    `HiddenStatesPanel` → `useHiddenStatesAdmin`, `DuplicatePersonsPanel` →
+    `useDuplicatePersons`, `AdminUsersPanel` → `useAdminUsers`. Then the two larger
+    mixed panels: `TopicReviewPanel` → `useTopicReview` (queries as hooks; bills
+    update + scan invoke as plain data fns, useMutation wrappers kept in the panel)
+    and `DonorImportPanel` → `src/lib/donorImport.ts` (imperative importer, not
+    react-query, so plain async data helpers). Then the three heaviest mutation
+    panels: `CommitteeAliasesPanel` → `useCommitteeAliases`,
+    `QuestionManagementPanel` → `useQuestionManagement`, `SocialPosts` →
+    `useSocialPosts` (queries as hooks; the multi-step writes + edge invokes as
+    mutation hooks / plain data fns; useMutation wrappers kept where callbacks drive
+    component state). Then a 20-file **edge-function** sweep: new
+    `src/lib/edgeFunctions.ts` (`invokeEdgeFunction` — one front door for
+    `functions.invoke`) with the 4 AI-analysis dialogs + 16 invoke-only files routed
+    through it. Allowlist: **34 files remaining**.
+  - **Sequencing (next):** the remaining 34 are `.from()`/auth/storage files. Note
+    some have **multi-line** `await supabase\n.from(...)` (ShareProfileButton,
+    BillSummaryDashboard, CivicOfficialsPanel, CommitteeBreakdown, SocialHandles,
+    BackfillAnswersControl) — reads/writes → hooks. A few use `supabase.auth.*`
+    (ChangePasswordDialog, AIFeedback, VerifyEmail) → needs a small auth helper.
+    Sweep in batches; route each to `frontend-reviewer`. When the allowlist is empty,
+    delete the ratchet's grandfather clause.
 
 ---
 

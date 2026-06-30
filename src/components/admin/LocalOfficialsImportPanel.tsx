@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import Papa from 'papaparse';
 import { useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { invokeEdgeFunction } from '@/lib/edgeFunctions';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -86,7 +86,7 @@ export function LocalOfficialsImportPanel() {
     setBusy(true);
     setResult(null);
     try {
-      const { data, error } = await supabase.functions.invoke<ImportResult>('import-local-officials', {
+      const { data, error } = await invokeEdgeFunction<ImportResult>('import-local-officials', {
         body: { rows, dryRun },
       });
       if (error) throw error;

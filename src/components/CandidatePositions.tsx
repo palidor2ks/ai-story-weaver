@@ -11,8 +11,7 @@ import {
   useGenerateCandidateAnswers,
   CandidateAnswer 
 } from '@/hooks/useCandidateAnswers';
-import { supabase } from '@/integrations/supabase/client';
-import { useQuery } from '@tanstack/react-query';
+import { useUserQuizAnswersForComparison } from '@/hooks/useQuizAnswers';
 import { FileText, Sparkles, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -29,37 +28,7 @@ export const CandidatePositions = ({ candidateId, candidateName, isUserRep = fal
   const generateAnswers = useGenerateCandidateAnswers();
   
   // Get user's quiz answers to compare (with option text)
-  const { data: userQuizAnswers = [] } = useQuery({
-    queryKey: ['user-quiz-answers-for-comparison'],
-    queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return [];
-      
-      const { data, error } = await supabase
-        .from('quiz_answers')
-        .select(`
-          question_id, 
-          value,
-          selected_option:question_options (
-            id,
-            text,
-            value,
-            is_skip_option
-          )
-        `)
-        .eq('user_id', user.id);
-      
-      if (error) {
-        console.error('Error fetching user answers:', error);
-        return [];
-      }
-      return data as Array<{
-        question_id: string;
-        value: number;
-        selected_option: { id: string; text: string; value: number; is_skip_option: boolean | null } | null;
-      }>;
-    },
-  });
+  const { data: userQuizAnswers = [] } = useUserQuizAnswersForComparison();
 
   // Create a map of user answers for quick lookup
   // If the user picked the skip option ("Not important to me"), null out the text

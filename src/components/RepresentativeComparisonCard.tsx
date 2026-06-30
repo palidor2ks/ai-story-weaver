@@ -7,8 +7,7 @@ import { TransitionBadge } from '@/components/TransitionBadge';
 import { useRepComparison, useGenerateRepComparison, isComparisonStale } from '@/hooks/useRepComparison';
 import { useCandidateAnswers } from '@/hooks/useCandidateAnswers';
 import { useAuth } from '@/context/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
-import { useQuery } from '@tanstack/react-query';
+import { useUserAnswersWithDetails } from '@/hooks/useQuizAnswers';
 import { cn } from '@/lib/utils';
 import { CivicOfficial } from '@/hooks/useCivicOfficials';
 import { normalizeOfficeName } from '@/lib/officeLabel';
@@ -47,33 +46,7 @@ export function RepresentativeComparisonCard({ official, resolvedScore }: Repres
   const { data: repAnswersRaw } = useCandidateAnswers(official.id);
 
   // Fetch user's quiz answers with question details
-  const { data: userAnswersRaw } = useQuery({
-    queryKey: ['user-quiz-answers-with-details', user?.id],
-    queryFn: async () => {
-      if (!user?.id) return [];
-
-      const { data, error } = await supabase
-        .from('quiz_answers')
-        .select(`
-          question_id,
-          value,
-          questions:question_id (
-            text,
-            topics:topic_id (name)
-          )
-        `)
-        .eq('user_id', user.id);
-
-      if (error) {
-        console.error('Error fetching user answers:', error);
-        return [];
-      }
-
-      return data || [];
-    },
-    enabled: !!user?.id,
-    staleTime: 1000 * 60 * 5,
-  });
+  const { data: userAnswersRaw } = useUserAnswersWithDetails(user?.id);
 
   // Transform answers to the format needed by the edge function
   const userAnswers = ((userAnswersRaw || []) as unknown as Array<{

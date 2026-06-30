@@ -1,7 +1,14 @@
 import { useState, useRef } from 'react';
 import { stripHtml } from '@/lib/utils';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  useFlaggedBills,
+  useTopicReviewStats,
+  useTopicScanStats,
+  updateBillRecord,
+  scanBillTopics,
+  type FlaggedBill,
+} from '@/hooks/useTopicReview';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -21,19 +28,6 @@ const ALL_TOPICS = [
   'Education', 'Civil Rights', 'Government', 'Social Programs', 'Technology', 'Judicial'
 ];
 
-interface FlaggedBill {
-  id: string;
-  name: string;
-  topic: string;
-  additional_topics: string[] | null;
-  topic_flag: string;
-  ai_detected_topics: string[] | null;
-  omnibus_type: string | null;
-  summary: string | null;
-  latest_action_date: string | null;
-  reviewed_at: string | null;
-}
-
 export default function TopicReviewPanel() {
   const queryClient = useQueryClient();
   const [selectedBill, setSelectedBill] = useState<FlaggedBill | null>(null);
@@ -49,115 +43,37 @@ export default function TopicReviewPanel() {
   const stopScanRef = useRef(false);
 
   // Fetch flagged bills from bills table (already deduplicated)
-  const { data: flaggedBills, isLoading, refetch } = useQuery({
-    queryKey: ['flagged-bills', filterType],
-    queryFn: async () => {
-      let query = supabase
-        .from('bills')
-        .select('id, name, topic, additional_topics, topic_flag, ai_detected_topics, omnibus_type, summary, latest_action_date, reviewed_at')
-        .not('topic_flag', 'is', null)
-        .is('reviewed_at', null)
-        .order('latest_action_date', { ascending: false })
-        .limit(200);
-      
-      if (filterType !== 'all') {
-        query = query.eq('topic_flag', filterType);
-      }
-      
-      const { data, error } = await query;
-      if (error) throw error;
-      
-      return (data || []) as FlaggedBill[];
-    }
-  });
+  const { data: flaggedBills, isLoading, refetch } = useFlaggedBills(filterType);
 
   // Fetch stats
-  const { data: stats } = useQuery({
-    queryKey: ['topic-review-stats'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('bills')
-        .select('topic_flag')
-        .not('topic_flag', 'is', null)
-        .is('reviewed_at', null);
-      
-      if (error) throw error;
-      
-      const counts = {
-        total: data?.length || 0,
-        multi_topic: data?.filter(d => d.topic_flag === 'multi_topic_detected').length || 0,
-        mismatch: data?.filter(d => d.topic_flag === 'possible_mismatch').length || 0,
-        omnibus: data?.filter(d => d.topic_flag === 'omnibus_detected').length || 0,
-        omnibus_major: data?.filter(d => d.topic_flag === 'omnibus_major').length || 0,
-      };
-      return counts;
-    }
-  });
+  const { data: stats } = useTopicReviewStats();
 
   // Fetch count of bills needing AI scan
-  const { data: scanStats, refetch: refetchScanStats } = useQuery({
-    queryKey: ['topic-scan-stats'],
-    queryFn: async () => {
-      // Bills that need initial scanning (have summary but no ai_detected_topics)
-      const { count: needsScan } = await supabase
-        .from('bills')
-        .select('id', { count: 'exact', head: true })
-        .not('summary', 'is', null)
-        .neq('summary', '')
-        .neq('summary', '[NO_SUMMARY]')
-        .is('reviewed_at', null)
-        .or('ai_detected_topics.is.null,ai_detected_topics.eq.{}');
-      
-      // Bills that can be force-rescanned (already scanned but not reviewed)
-      const { count: canRescan } = await supabase
-        .from('bills')
-        .select('id', { count: 'exact', head: true })
-        .not('summary', 'is', null)
-        .neq('summary', '')
-        .neq('summary', '[NO_SUMMARY]')
-        .is('reviewed_at', null)
-        .not('ai_detected_topics', 'is', null)
-        .filter('ai_detected_topics', 'neq', '{}');
-      
-      // Flagged bills count (for targeted rescan)
-      const { count: flaggedCount } = await supabase
-        .from('bills')
-        .select('id', { count: 'exact', head: true })
-        .not('topic_flag', 'is', null)
-        .is('reviewed_at', null);
-      
-      return { needsScan: needsScan || 0, canRescan: canRescan || 0, flaggedCount: flaggedCount || 0 };
-    }
-  });
+  const { data: scanStats, refetch: refetchScanStats } = useTopicScanStats();
 
   // Update bill mutation - updates the bill record directly
   const updateBill = useMutation({
-    mutationFn: async ({ 
-      billId, 
-      topic, 
-      additionalTopics, 
-      action 
-    }: { 
+    mutationFn: async ({
+      billId,
+      topic,
+      additionalTopics,
+      action
+    }: {
       billId: string;
-      topic?: string; 
-      additionalTopics?: string[]; 
-      action: 'save' | 'approve' | 'dismiss' 
+      topic?: string;
+      additionalTopics?: string[];
+      action: 'save' | 'approve' | 'dismiss'
     }) => {
       const updates: Record<string, unknown> = {
         reviewed_at: new Date().toISOString(),
         topic_flag: 'admin_reviewed',
       };
-      
+
       if (topic) updates.topic = topic;
       if (additionalTopics !== undefined) updates.additional_topics = additionalTopics;
-      
+
       // Update the bill record directly
-      const { error } = await supabase
-        .from('bills')
-        .update(updates)
-        .eq('id', billId);
-        
-      if (error) throw error;
+      await updateBillRecord(billId, updates);
       return { billId };
     },
     onMutate: async ({ billId }) => {
@@ -213,17 +129,12 @@ export default function TopicReviewPanel() {
     
     while (hasMore && !stopScanRef.current) {
       try {
-        const response = await supabase.functions.invoke('scan-bill-topics', {
-          body: { 
-            batchSize: BATCH_SIZE, 
-            forceRescan: mode === 'force' || mode === 'flagged',
-            flaggedOnly: mode === 'flagged'
-          }
+        const result = await scanBillTopics({
+          batchSize: BATCH_SIZE,
+          forceRescan: mode === 'force' || mode === 'flagged',
+          flaggedOnly: mode === 'flagged'
         });
-        
-        if (response.error) throw response.error;
-        
-        const result = response.data;
+
         totalScanned += result.scanned || 0;
         totalFlagged += result.flagged || 0;
         
@@ -264,11 +175,7 @@ export default function TopicReviewPanel() {
   // Rescan single bill with AI
   const rescanBill = useMutation({
     mutationFn: async (billId: string) => {
-      const response = await supabase.functions.invoke('scan-bill-topics', {
-        body: { bill_id: billId, forceRescan: true }
-      });
-      if (response.error) throw response.error;
-      return response.data;
+      return scanBillTopics({ bill_id: billId, forceRescan: true });
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['flagged-bills'] });
@@ -292,19 +199,14 @@ export default function TopicReviewPanel() {
       }
       
       const [primaryTopic, ...additionalTopics] = bill.ai_detected_topics;
-      
+
       // Update the bill record directly
-      const { error } = await supabase
-        .from('bills')
-        .update({
-          topic: primaryTopic,
-          additional_topics: additionalTopics,
-          topic_flag: 'admin_reviewed',
-          reviewed_at: new Date().toISOString(),
-        })
-        .eq('id', bill.id);
-        
-      if (error) throw error;
+      await updateBillRecord(bill.id, {
+        topic: primaryTopic,
+        additional_topics: additionalTopics,
+        topic_flag: 'admin_reviewed',
+        reviewed_at: new Date().toISOString(),
+      });
       return { billId: bill.id };
     },
     onMutate: async (bill) => {

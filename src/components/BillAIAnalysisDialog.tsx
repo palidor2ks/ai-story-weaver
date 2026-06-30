@@ -11,7 +11,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Loader2, ExternalLink, AlertTriangle, BookOpen, RefreshCw, X, Globe, ThumbsUp, ThumbsDown } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { invokeEdgeFunction } from '@/lib/edgeFunctions';
 import { ShareAIAnalysisButton } from '@/components/ShareAIAnalysisButton';
 
 export interface BillAnalysis {
@@ -111,7 +111,7 @@ export const BillAIAnalysisDialog = ({
     setIsLoading(true);
     setError(null);
     try {
-      const { data, error: fnError } = await supabase.functions.invoke('ai-bill-analysis', {
+      const { data, error: fnError } = await invokeEdgeFunction('ai-bill-analysis', {
         body: {
           bill_id: billId ?? null,
           bill_type: billType ?? null,

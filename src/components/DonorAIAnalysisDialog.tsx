@@ -12,7 +12,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Loader2, ExternalLink, AlertTriangle, Database, Globe, BookOpen, RefreshCw, X } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { invokeEdgeFunction } from '@/lib/edgeFunctions';
 import { ShareAIAnalysisButton } from '@/components/ShareAIAnalysisButton';
 
 export interface DonorAnalysis {
@@ -99,7 +99,7 @@ export const DonorAIAnalysisDialog = ({ id, name, type, cycle, profileHref, trig
     setIsLoading(true);
     setError(null);
 
-    const invokeOnce = () => supabase.functions.invoke('ai-donor-analysis', {
+    const invokeOnce = () => invokeEdgeFunction('ai-donor-analysis', {
       body: { donor_id: id, donor_name: name, donor_type: type, cycle, force_refresh: force },
     });
 

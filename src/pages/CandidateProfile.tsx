@@ -57,11 +57,11 @@ import { OfficialAvatar } from '@/components/OfficialAvatar';
 import { VotingRecordSection, topicNameToId } from '@/components/VotingRecordSection';
 import { ShareProfileButton } from '@/components/ShareProfileButton';
 import { toast } from 'sonner';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useDonorCauses, getDonorCause } from '@/hooks/useDonorCauses';
 import { CauseBadge } from '@/components/CauseBadge';
-import { supabase } from '@/integrations/supabase/client';
+import { useDonorAliasNames } from '@/hooks/useDonorAliasNames';
 
 const normalizeDistrictLabel = (district: string | null | undefined) => {
   const normalized = district?.toString().trim();
@@ -189,28 +189,7 @@ export const CandidateProfile = () => {
     );
   }, [donors]);
 
-  const { data: donorAliasNameMap } = useQuery({
-    queryKey: ['candidate-donor-alias-names', donorAliasLookupInputs],
-    enabled: donorAliasLookupInputs.length > 0,
-    staleTime: 5 * 60 * 1000,
-    queryFn: async () => {
-      const names = Array.from(new Set(donorAliasLookupInputs.map(d => d.name)));
-      const types = Array.from(new Set(donorAliasLookupInputs.map(d => d.type)));
-      const { data, error } = await supabase
-        .from('donor_alias_members')
-        .select('donor_name, donor_type, donor_aliases!inner(canonical_name, is_active)')
-        .in('donor_name', names)
-        .in('donor_type', types);
-      if (error) throw error;
-
-      const map = new Map<string, string>();
-      for (const row of (data ?? []) as Array<{ donor_name: string; donor_type: string; donor_aliases?: { canonical_name?: string; is_active?: boolean } }>) {
-        if (!row.donor_aliases?.is_active || !row.donor_aliases?.canonical_name) continue;
-        map.set(`${row.donor_name.trim().toUpperCase()}|${row.donor_type}`, row.donor_aliases.canonical_name);
-      }
-      return map;
-    },
-  });
+  const { data: donorAliasNameMap } = useDonorAliasNames(donorAliasLookupInputs);
   const { data: votes = [] } = useCandidateVotes(id);
   const alignmentPercent = useMemo(() => {
     if (!candidate || !votes.length) return null;

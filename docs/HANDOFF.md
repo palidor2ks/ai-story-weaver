@@ -29,6 +29,232 @@ expenditures **For** (green) and **Against** (red) in a single box.
 **Next**
 None required. (Pre-existing Step 2 front-door refactor remains the open thread below.)
 
+## 2026-06-28 — Refactor Step 2 (cont.): auth front door + 4 auth/mixed files
+
+**What & why**
+Migrated the `supabase.auth.*` callers. New `src/lib/auth.ts` is the front door for auth.
+
+**The change** (branch `claude/image-prompt-implementation-navk5j`, extends PR #627)
+- New `src/lib/auth.ts`: `updateUserPassword`, `resendSignupVerification`, `refreshSession`,
+  `getCurrentUser`, `signInWithGoogle` (redirects baked in, behavior identical).
+- `ChangePasswordDialog`, `VerifyEmail` → auth helpers (pure auth).
+- `CandidatePositions` → new `useUserQuizAnswersForComparison` (getUser + quiz_answers read
+  moved into the hook).
+- `Poll` → new `submitPollResponse` data fn in `usePolls.ts` + `signInWithGoogle`.
+- All 4 dropped from the eslint allowlist (now **22 files remaining**).
+
+**State** (verified)
+`bunx tsc --noEmit` 0 · `bun run lint` 0 errors (155 warnings) · `bun run build` ✓ ·
+`bun test` 146/146. No behavior change.
+
+**Next**
+22 left: admin read/write dialogs+cards (CandidateAnswersDialog, DonorAliasesPanel,
+CivicOfficialsPanel, CommitteeBreakdown, BillSummaryDashboard, BulkAnswerValidation,
+VendorRefundsPanel, AdminUserDetailDialog, CandidateAnswersPopover, IngestStatusPanel,
+BackfillAnswersControl, the two import-history components w/ undo RPCs), `SocialHandles`,
+`TikTokConnect`, `XComposer`, pages `PartyProfile`/`PoliticianDashboard`/`UserProfile`
+(1065 LOC, invokes+getUser+writes), `ShareProfileButton`, `BadgeAwardToast`, `AvatarUpload`
+(storage). Sweep in batches; delete the ratchet grandfather clause when empty.
+
+## 2026-06-28 — Refactor Step 2 (cont.): 5 read screens behind query hooks
+
+**What & why**
+Next front-door batch — read-only screens. New/extended hooks; each screen drops its direct
+client import and leaves the allowlist.
+
+**The change** (branch `claude/image-prompt-implementation-navk5j`, fresh PR off main)
+- `src/hooks/useQuizAnswers.ts`: added `useUserAnswerCount` (AdminUserProfileView),
+  `useUserAnswersWithDetails` (RepresentativeComparisonCard), `useUserAnswersWithQuestions`
+  (PartyComparisonCard).
+- New `src/hooks/usePartyAnswers.ts` (PartyComparisonCard), `src/hooks/useIssues.ts`
+  (`useIssuesTopics`/`useIssuesPolls` → Issues), `src/hooks/useCommitteeIeTotals.ts`
+  (Committees).
+- Removed the dead `Topic`/`Poll` interfaces from Issues. Allowlist: **~26 files remaining**.
+
+**State** (verified)
+`bunx tsc --noEmit` 0 · `bun run lint` 0 errors (155 warnings) · `bun run build` ✓ ·
+`bun test` 146/146. No behavior change.
+
+**Next**
+Remaining ~26: admin read/write dialogs+cards (CandidateAnswersDialog, DonorAliasesPanel,
+CivicOfficialsPanel, CommitteeBreakdown, BillSummaryDashboard, BulkAnswerValidation,
+VendorRefundsPanel, the two import-history components w/ undo RPCs, …), pages PartyProfile/
+PoliticianDashboard, ShareProfileButton, AvatarUpload (storage), and the `supabase.auth.*`
+files (ChangePasswordDialog, VerifyEmail, Poll, UserProfile, CandidatePositions — want a
+small auth helper). Sweep in batches; delete the ratchet grandfather clause when empty.
+
+## 2026-06-28 — Refactor Step 2 (cont.): consolidate quiz_answers reads (4 files)
+
+**What & why**
+Next batch of the front-door sweep. Three screens ran the same `quiz_answers` read; pulled
+them into a shared hook, and removed a dead import.
+
+**The change** (branch `claude/image-prompt-implementation-navk5j`)
+- New `src/hooks/useQuizAnswers.ts`: one `fetchAnsweredQuestionIds` shared by
+  `useAnsweredQuestions` (QuizLibrary) and `useQuizAnswers` (Quiz) — **distinct query keys
+  preserved** (`['answered_questions', uid]` / `['quiz_answers', uid]`), because
+  `useProfile` invalidates both; plus `useRecentAnsweredQuestionIds` for Feed's deduped
+  recent-answers query.
+- `QuizLibrary`, `Quiz`, `Feed` migrated; `AIFeedback` had a **dead** client import (never
+  used) — removed. All 4 dropped from the eslint allowlist (now **30 files remaining**).
+
+**State** (verified)
+`bunx tsc --noEmit` 0 · `bun run lint` 0 errors (155 warnings) · `bun run build` ✓ ·
+`bun test` 146/146. No behavior change.
+
+**Next**
+30 left: read/write `.from()` files (admin dialogs/cards, PartyProfile, PoliticianDashboard,
+Committees, Issues, etc.), `supabase.auth.*` files (ChangePasswordDialog, VerifyEmail, Poll,
+UserProfile, CandidatePositions — want a small auth helper), and `AvatarUpload` (storage).
+Sweep in batches; delete the ratchet grandfather clause when empty.
+
+## 2026-06-28 — Refactor Step 2 (cont.): edge-function front door (invokeEdgeFunction, 20 files)
+
+**What & why**
+Swept the invoke-only grandfathered files. Added a single seam for edge-function calls so
+components/pages stop importing the Supabase client just to call `functions.invoke`.
+
+**The change** (branch `claude/image-prompt-implementation-navk5j`, extends PR #626)
+- New `src/lib/edgeFunctions.ts`: `invokeEdgeFunction(name, options?)` — one front door for
+  `supabase.functions.invoke`. Generic defaults to `any` to match supabase-js's own
+  `invoke<T = any>`, so callers reading `data.foo` behave identically.
+- Migrated **20 invoke-only files** onto it: the 4 AI-analysis dialogs (candidate/bill/
+  recipient/donor) + 16 others (AddressAutocomplete, PositionsMatchList, VerificationBadges,
+  admin AnswerCoveragePanel/Bulk*/CommitteeTopicsPanel/IndependentExpenditure* cards/
+  LocalOfficialsImportPanel, Admin, QuizResults, Unsubscribe, SocialComposer, TikTok/X
+  OAuth connect callbacks). Each dropped its client import; removed from the eslint allowlist
+  (now **34 files remaining**).
+
+**Gotcha for next time**
+The invoke-only detector must catch **multi-line** `await supabase\n  .from(...)`. Files with
+those (ShareProfileButton, BillSummaryDashboard, CivicOfficialsPanel, CommitteeBreakdown,
+SocialHandles, BackfillAnswersControl) are NOT invoke-only — they need read/write hooks and
+were deliberately left for a later batch. Also: `supabase.functions.invoke<T>(...)` call sites
+need the helper's generic (handled).
+
+**State** (verified)
+`bunx tsc --noEmit` 0 · `bun run lint` 0 errors (155 warnings) · `bun run build` ✓ ·
+`bun test` 146/146. No behavior change.
+
+**Next**
+Remaining 34: a mix of `.from()`/auth/storage files (dialogs, cards, pages). Includes the 6
+mixed files noted above + auth-using files (ChangePasswordDialog, AIFeedback, VerifyEmail use
+`supabase.auth.*`). Migrate reads→query hooks, writes→mutation hooks/data fns, auth→a small
+auth helper/context. Sweep in batches; delete the ratchet grandfather clause when empty.
+
+## 2026-06-28 — Refactor Step 2 (cont.): migrate the 3 heavy mutation panels
+
+**What & why**
+Migrated the three heaviest mixed read+write admin panels — the highest-risk remaining
+Step 2 work. Reads → query hooks; multi-step writes/RPCs/edge-invokes → mutation hooks or
+plain data fns; useMutation wrappers + handlers kept in the components where their callbacks
+drive component state (spinners, optimistic edits, dialog/progress).
+
+**The change** (branch `claude/image-prompt-implementation-navk5j`)
+- `CommitteeAliasesPanel` → `src/hooks/useCommitteeAliases.ts` (2 queries + 4 mutations +
+  `classifyCommitteeTopic` invoke fn). Hook added to no-explicit-any warn list (untyped
+  committee_aliases/external_pacs tables, `(supabase as any)`).
+- `QuestionManagementPanel` → `src/hooks/useQuestionManagement.ts` (2 queries +
+  create/update data fns incl. the change-notification fan-out + bulk
+  `generateQuizQuestion`/`insertGeneratedQuestion`).
+- `SocialPosts` → `src/hooks/useSocialPosts.ts` (5 queries + 9 data fns for edge invokes
+  and table writes). Hook in warn list (untyped `stat_payload`).
+- Each removed from the `eslint.config.js` import allowlist (now **55 files remaining**).
+
+**State** (verified)
+`bun run lint` 0 errors (155 warnings) · `bunx tsc --noEmit` 0 · `bun run build` ✓ ·
+`bun test` 146/146. No behavior change. NOTE: not yet pushed / no PR opened yet at time of
+writing — push the branch and open a draft PR.
+
+**Next**
+The remaining ~55 grandfathered files are mostly small (1–3 calls each): AI-analysis dialogs,
+ShareProfileButton, Quiz/QuizResults, Committees, Feed, Issues, Unsubscribe, VerifyEmail, the
+social connect callbacks, etc. Sweep them in batches, removing each from the allowlist, until
+the list is empty (then the ratchet's grandfather clause can be deleted entirely).
+
+## 2026-06-28 — Refactor Step 2 (cont.): migrate TopicReviewPanel + DonorImportPanel
+
+**What & why**
+Continuing the front-door migration with the two larger mixed read+write admin panels.
+Both have mutations/RPCs/invokes tightly coupled to component state, so reads became query
+hooks and the raw Supabase calls became plain data fns, keeping the orchestration
+(useMutation callbacks, the imperative batch loop) in the component.
+
+**The change** (branch `claude/image-prompt-implementation-navk5j`, extends PR #624)
+- `TopicReviewPanel` → `src/hooks/useTopicReview.ts`: 3 query hooks
+  (`useFlaggedBills`, `useTopicReviewStats`, `useTopicScanStats`) + `updateBillRecord`
+  and `scanBillTopics` data fns. The `useMutation` wrappers stay in the panel (optimistic
+  updates keyed on `filterType`, per-row spinner state). Deduped the two identical
+  bills-update sites onto `updateBillRecord`.
+- `DonorImportPanel` → `src/lib/donorImport.ts`: the browser-driven batch importer isn't
+  react-query, so its 6 calls became plain async helpers (session cancel/complete, committee
+  mappings, contribution count, candidate lookup, and `invokeImportFecReceiptsCsv` which
+  returns the raw `{data,error}` for the cycle-mismatch flow). Dropped an `as any[]` cast.
+- Removed both from the `eslint.config.js` allowlist (now **58 files remaining**).
+
+**State** (verified)
+`bun run lint` 0 errors (155 warnings) · `bunx tsc --noEmit` 0 · `bun run build` ✓ ·
+`bun test` 146/146. No behavior change.
+
+**Next**
+Heaviest mutation panels (`CommitteeAliasesPanel`, `QuestionManagementPanel`, `SocialPosts`),
+then the remaining smaller grandfathered files (dialogs, cards, other pages). Remove each
+from the allowlist as migrated.
+
+## 2026-06-28 — Refactor Step 2 (cont.): migrate 3 admin panels (reads + mutations)
+
+**What & why**
+Continuing the front-door migration. The audit's "admin read-heavy" panels turned out to
+contain writes/RPCs — and clearing a file from the allowlist requires moving ALL its
+Supabase usage (the guard bans the client import outright). So these moved reads AND
+mutations into hooks. Did the three smaller, self-contained panels first.
+
+**The change** (branch `claude/image-prompt-implementation-navk5j`, extends PR #624)
+- `HiddenStatesPanel` → `src/hooks/useHiddenStatesAdmin.ts` (2 queries + toggle/bulk
+  mutations; moved the `STATES` list; dropped an `(e: any)` → `Error`).
+- `DuplicatePersonsPanel` → `src/hooks/useDuplicatePersons.ts` (2 queries + 4 RPC mutations
+  with shared invalidation helper).
+- `AdminUsersPanel` → `src/hooks/useAdminUsers.ts` (3 queries + a plain `setUserAdminRole`
+  data fn; the `useMutation` wrapper stays in the panel because its `onMutate`/`onSettled`
+  set the per-row pending state — keeps that UX identical).
+- Removed all three from the `eslint.config.js` allowlist (now **60 files remaining**).
+
+**State** (verified)
+`bun run lint` 0 errors (156 warnings, one fewer after the `any` removal) ·
+`bunx tsc --noEmit` 0 · `bun run build` ✓ · `bun test` 146/146. No behavior change.
+
+**Next**
+Remaining mixed read+write admin panels, smaller first: `TopicReviewPanel`,
+`DonorImportPanel`, then the heaviest (`CommitteeAliasesPanel`, `QuestionManagementPanel`,
+`SocialPosts`). Pattern proven: queries → hooks, mutations → mutation hooks (or plain data
+fn when callbacks drive component state). Remove each from the allowlist as migrated.
+
+## 2026-06-28 — Refactor Step 2 (cont.): migrate the 3 read-only user-facing pages
+
+**What & why**
+Continuing the front-door migration after the ratchet landed. Moved the read-only,
+user-facing pages' inline Supabase queries into hooks, one commit per file, removing each
+from the eslint allowlist. All pure extraction — query keys, filters, and logic verbatim.
+
+**The change** (branch `claude/image-prompt-implementation-navk5j`)
+- `CandidateProfile` → `src/hooks/useDonorAliasNames.ts` (the `donor_alias_members` lookup).
+- `TopSpenders` → `src/hooks/useTopSpenders.ts` (`useTopSpenders`, `useIECycles`,
+  `useTopSpendersRaised`, `useTopSpendersCauses` + the `resolveDisplayNames` helper).
+- `DonorProfile` → `src/hooks/useDonorProfile.ts` (7 interdependent hooks: donor record,
+  alias info, name variations, donor records, contributions, active committee aliases, PAC
+  contributors + shared row types).
+- Each removed from the `eslint.config.js` allowlist (now **63 files remaining**).
+
+**State** (verified)
+`bun run lint` 0 errors (157 pre-existing `any` warnings) · `bunx tsc --noEmit` 0 ·
+`bun run build` ✓ · `bun test` 146/146. No functionality changed.
+
+**Next**
+Admin read-heavy panels (`TopicReviewPanel`, `HiddenStatesPanel`, `DuplicatePersonsPanel`,
+`AdminUsersPanel`, `DonorImportPanel`), then the admin mutation panels
+(`CommitteeAliasesPanel`, `QuestionManagementPanel`, `SocialPosts`) last — those need
+`useMutation` + cache invalidation. Remove each from the allowlist as migrated.
+
 ## 2026-06-28 — Refactor Step 2 (proof PR): data front-door ratchet + ComparePanel migrated
 
 **What & why**

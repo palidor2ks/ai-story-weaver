@@ -10,8 +10,7 @@ import { QuizAnswer, TopicScore } from '@/types';
 import { ArrowRight, ArrowLeft, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { useQuizAnswers } from '@/hooks/useQuizAnswers';
 import { useAuth } from '@/context/AuthContext';
 import { shuffleArray, calculateQuizScore } from '@/lib/score';
 import { logBadgeEvent } from '@/lib/badges';
@@ -31,19 +30,7 @@ export const Quiz = () => {
   const upsertAnswer = useUpsertQuizAnswer();
 
   // Fetch user's existing answers to filter out already answered questions
-  const { data: existingAnswers = [], isLoading: answersLoading } = useQuery({
-    queryKey: ['quiz_answers', user?.id],
-    queryFn: async () => {
-      if (!user) return [];
-      const { data, error } = await supabase
-        .from('quiz_answers')
-        .select('question_id')
-        .eq('user_id', user.id);
-      if (error) throw error;
-      return data.map(a => a.question_id);
-    },
-    enabled: !!user,
-  });
+  const { data: existingAnswers = [], isLoading: answersLoading } = useQuizAnswers(user?.id);
 
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [showResults, setShowResults] = useState(false);

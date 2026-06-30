@@ -26,8 +26,7 @@ import {
   Users,
   Building2,
 } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { useUserAnswerCount } from '@/hooks/useQuizAnswers';
 
 export default function AdminUserProfileView() {
   const { userId = '' } = useParams<{ userId: string }>();
@@ -43,18 +42,7 @@ export default function AdminUserProfileView() {
   const { data: civicData, isLoading: civicLoading } = useCivicOfficials(profile?.address);
 
   // Quiz answer count
-  const { data: answerCount } = useQuery({
-    queryKey: ['admin', 'user-answer-count', userId],
-    enabled: !!userId,
-    queryFn: async () => {
-      const { count, error } = await supabase
-        .from('quiz_answers')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', userId);
-      if (error) throw error;
-      return count ?? 0;
-    },
-  });
+  const { data: answerCount } = useUserAnswerCount(userId);
 
   const allOfficialIds = useMemo(() => {
     const ids: string[] = [];

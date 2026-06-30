@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from '@/lib/edgeFunctions';
 import { useAdminRole } from "@/hooks/useAdminRole";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -63,7 +63,7 @@ export default function XConnectCallback() {
 
     (async () => {
       try {
-        const { data: res, error } = await supabase.functions.invoke("x-oauth-callback", {
+        const { data: res, error } = await invokeEdgeFunction("x-oauth-callback", {
           body: { code, state },
         });
         if (error) throw await describeFnError(error);

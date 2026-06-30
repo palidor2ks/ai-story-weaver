@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { KeyRound, Eye, EyeOff, Lock } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { updateUserPassword } from '@/lib/auth';
 import { toast } from 'sonner';
 
 export const ChangePasswordDialog = () => {
@@ -37,9 +37,7 @@ export const ChangePasswordDialog = () => {
     setIsLoading(true);
 
     try {
-      const { error } = await supabase.auth.updateUser({
-        password: formData.newPassword,
-      });
+      const { error } = await updateUserPassword(formData.newPassword);
 
       if (error) throw error;
 

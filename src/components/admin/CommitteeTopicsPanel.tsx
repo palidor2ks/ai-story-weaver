@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { invokeEdgeFunction } from '@/lib/edgeFunctions';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -82,7 +82,7 @@ const AssignmentsTab = () => {
   const handleClassifyUnassigned = async () => {
     setRunning(true);
     try {
-      const { data, error } = await supabase.functions.invoke('classify-committee-topic', { body: { limit: 50 } });
+      const { data, error } = await invokeEdgeFunction('classify-committee-topic', { body: { limit: 50 } });
       if (error) throw error;
       toast.success(data?.queued ? `Queued ${data.queued} committees` : `Classified ${data?.processed ?? 0}`);
       if (!data?.queued) {
@@ -97,7 +97,7 @@ const AssignmentsTab = () => {
 
   const handleClassifyOne = async (fecId: string) => {
     try {
-      const { error } = await supabase.functions.invoke('classify-committee-topic', {
+      const { error } = await invokeEdgeFunction('classify-committee-topic', {
         body: { fec_committee_ids: [fecId], force: true },
       });
       if (error) throw error;

@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Loader2, RefreshCw } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { invokeEdgeFunction } from '@/lib/edgeFunctions';
 import { toast } from 'sonner';
 import { formatCompactCurrency } from '@/lib/utils';
 
@@ -29,7 +29,7 @@ export function BulkDonorSyncCard() {
     setLastResult(null);
     const toastId = toast.loading(`Syncing donors for ${limit} candidates (cycle ${cycle})…`);
     try {
-      const { data, error } = await supabase.functions.invoke('sync-all-donors', {
+      const { data, error } = await invokeEdgeFunction('sync-all-donors', {
         body: { cycle, limit },
       });
       if (error) throw error;

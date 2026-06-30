@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { MapPin, Loader2, CheckCircle2, AlertCircle, Search } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { invokeEdgeFunction } from '@/lib/edgeFunctions';
 import { cn } from '@/lib/utils';
 
 interface AddressDetails {
@@ -80,7 +80,7 @@ export const AddressAutocomplete = ({
     setError(null);
 
     try {
-      const { data, error: fnError } = await supabase.functions.invoke('validate-address', {
+      const { data, error: fnError } = await invokeEdgeFunction('validate-address', {
         body: { address: value },
       });
 
