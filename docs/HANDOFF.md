@@ -5,6 +5,33 @@
 > which you changed code, config, or docs, append a new entry to the TOP using the template below.
 > The SessionStart hook auto-prints the top entry, so keep it accurate.
 
+## 2026-06-29 — Refactor Step 2 (cont.): 4 admin read panels/dialogs
+
+**What & why**
+Next front-door batch — admin read-heavy panels/dialogs (extends PR #628).
+
+**The change** (branch `claude/image-prompt-implementation-navk5j`)
+- New `src/lib/importHistory.ts`: `fetchDonorImportSessions`/`undoDonorImport`,
+  `fetchIeImportSessions`/`undoIeImport` (raw results; IE table/RPC `as any` casts kept here
+  with eslint-disable). `DonorImportHistory` + `IndependentExpenditureImportHistory` use it.
+- New `src/hooks/useCandidateIngest.ts`: `useCandidateIngestStatus`/`useCandidateIngestCounts`
+  (+ exported `IngestRow`, `REFRESH_MS`) → `IngestStatusPanel`.
+- New `src/hooks/useAdminUserDetail.ts`: the 5-way `Promise.all` aggregate →
+  `AdminUserDetailDialog`.
+- All 4 dropped from the eslint allowlist (now **15 files remaining**); the two untyped-table
+  modules joined the no-explicit-any warn list.
+
+**State** (verified)
+`bunx tsc --noEmit` 0 · `bun run lint` 0 errors (154 warnings) · `bun run build` ✓ ·
+`bun test` 146/146. No behavior change.
+
+**Next**
+15 left: admin `BackfillAnswersControl`, `BillSummaryDashboard`, `BulkAnswerValidation`,
+`CandidateAnswersDialog`, `CandidateAnswersPopover`, `CivicOfficialsPanel`, `CommitteeBreakdown`,
+`DonorAliasesPanel`, `VendorRefundsPanel`, `SocialHandles`; pages `PartyProfile`,
+`PoliticianDashboard`, `UserProfile` (1065 LOC); `ShareProfileButton`; `AvatarUpload` (storage).
+Delete the ratchet grandfather clause when empty.
+
 ## 2026-06-29 — Refactor Step 2 (cont.): social-connect pages + BadgeAwardToast
 
 **What & why**
