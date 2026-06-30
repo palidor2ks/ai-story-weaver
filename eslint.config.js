@@ -99,8 +99,6 @@ export default tseslint.config(
     // its entry here. When this list is empty, the front-door migration is done.
     files: [
       "src/components/AvatarUpload.tsx",
-      "src/components/ShareProfileButton.tsx",
-      "src/components/admin/BackfillAnswersControl.tsx",
       "src/components/admin/BillSummaryDashboard.tsx",
       "src/components/admin/BulkAnswerValidation.tsx",
       "src/components/admin/CandidateAnswersDialog.tsx",
@@ -109,8 +107,6 @@ export default tseslint.config(
       "src/components/admin/CommitteeBreakdown.tsx",
       "src/components/admin/DonorAliasesPanel.tsx",
       "src/components/admin/VendorRefundsPanel.tsx",
-      "src/pages/PartyProfile.tsx",
-      "src/pages/PoliticianDashboard.tsx",
       "src/pages/UserProfile.tsx",
       "src/pages/admin/SocialHandles.tsx",
     ],
