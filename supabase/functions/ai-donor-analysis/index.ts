@@ -2,6 +2,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import {
   callGeminiGrounded,
+  GeminiQuotaError,
   resolveGroundedSources,
   getGoogleAIKey,
 } from "../_shared/gemini-research.ts";
@@ -394,6 +395,10 @@ Output ONLY a JSON object, no prose. Use this exact schema:
     const saved = await writeCache(cacheKey, responseBody, "gemini");
     return json({ ...responseBody, cached: false, updated_at: saved?.updated_at });
   } catch (e) {
+    if (e instanceof GeminiQuotaError) {
+      console.warn("ai-donor-analysis: Google AI quota exceeded");
+      return json({ error: "AI analysis temporarily unavailable (quota limit). Please try again later." }, 429);
+    }
     console.error("ai-donor-analysis error", e);
     return json(
       { error: e instanceof Error ? e.message : "Unknown error" },
